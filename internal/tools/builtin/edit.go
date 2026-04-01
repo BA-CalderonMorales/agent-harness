@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/fs"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
-// FileEditTool performs string-replace edits on files.
+// FileEditTool performs string-replace edits on files with stale-write protection.
 var FileEditTool = tools.NewTool(tools.Tool{
 	Name:        "edit",
-	Description: "Edit a file by replacing one string with another. The old_string must match exactly.",
+	Description: "Edit a file by replacing one string with another. The old_string must match exactly. Protected against concurrent modifications.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
@@ -26,16 +26,21 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 	},
 	Capabilities: tools.CapabilityFlags{
-		IsEnabled:         func() bool { return true },
-		IsConcurrencySafe: func(map[string]any) bool { return false }, // File edits are serial
-		IsReadOnly:        func(map[string]any) bool { return false },
-		IsDestructive:     func(map[string]any) bool { return false },
+		IsEnabled:             func() bool { return true },
+		IsConcurrencySafe:     func(map[string]any) bool { return false }, // File edits are serial
+		IsReadOnly:            func(map[string]any) bool { return false },
+		IsDestructive:         func(map[string]any) bool { return false },
+		InterruptBehavior:     func() string { return "cancel" }, // Edits can be cancelled
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		path := getString(input, "file_path")
 		oldStr := getString(input, "old_string")
 		if path == "" || oldStr == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path and old_string are required"}
+		}
+		// UNC path security
+		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
+			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
 		}
 		return tools.ValidationResult{Valid: true}
 	},
@@ -58,16 +63,32 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 
 		// Stale write protection: check if file was modified since last read
-		info, err := os.Stat(path)
-		if err == nil {
-			// In a full implementation, compare against cached mtime/hash
-			_ = info.ModTime()
+		if err := fs.DefaultStaleTracker.CheckStale(path); err != nil {
+			return tools.ToolResult{}, fmt.Errorf("stale write detected: %w. The file may have been modified by another process. Please re-read and try again.", err)
 		}
 
 		updated := strings.Replace(content, oldStr, newStr, 1)
-		if err := os.WriteFile(path, []byte(updated), 0644); err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
+		
+		// Write atomically: write to temp file then rename
+		tempPath := path + ".tmp"
+		if err := os.WriteFile(tempPath, []byte(updated), 0644); err != nil {
+			return tools.ToolResult{}, fmt.Errorf("failed to write temp file: %w", err)
 		}
+		
+		if err := os.Rename(tempPath, path); err != nil {
+			// Try to clean up temp file
+			os.Remove(tempPath)
+			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
+		}
+
+		// Update stale tracker with new content
+		info, _ := os.Stat(path)
+		if info != nil {
+			fs.DefaultStaleTracker.RecordRead(path, []byte(updated), info)
+		}
+
+		// Invalidate read cache for this file
+		fs.DefaultCache.InvalidatePath(path)
 
 		return tools.ToolResult{Data: fmt.Sprintf("Edited %s successfully", path)}, nil
 	},
@@ -83,10 +104,3 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		return "Editing file"
 	},
 })
-
-// fileReadState tracks file metadata for stale-write protection.
-type fileReadState struct {
-	Path    string
-	Mtime   time.Time
-	Content string
-}

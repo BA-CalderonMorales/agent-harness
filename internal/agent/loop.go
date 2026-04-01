@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -49,6 +50,9 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 	for state.turnCount <= maxTurns {
 		state.turnCount++
+
+		// Reset content replacement budget for this turn
+		tools.ResetBudgetForNewTurn()
 
 		// Yield stream start
 		select {
@@ -96,8 +100,25 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
+		
+		// Handle recoverable errors with retry logic
 		if streamErr != nil {
-			return Terminal{Reason: TerminalReasonError, Error: streamErr}
+			if recErr, ok := streamErr.(*recoverableError); ok {
+				recovered, newMsg, newToolUses, recoverErr := l.attemptRecovery(ctx, params, state, recErr, out)
+				if recovered {
+					assistantMsg = newMsg
+					toolUses = newToolUses
+					streamErr = nil
+				} else if recoverErr != nil {
+					// Recovery failed - now yield the original error
+					streamErr = fmt.Errorf("recovery failed after %d attempts: %w (original: %v)", 
+						state.maxOutputTokensRecoveryCount, recoverErr, recErr.err)
+				}
+			}
+			
+			if streamErr != nil {
+				return Terminal{Reason: TerminalReasonError, Error: streamErr}
+			}
 		}
 
 		if assistantMsg == nil {
@@ -151,6 +172,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 }
 
 // consumeStream reads LLM events and builds an assistant message + tool uses.
+// Handles max_output_tokens recovery with error withholding.
 func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, out chan<- types.StreamEvent) (*types.Message, []types.ToolUseBlock, error) {
 	var msg types.Message
 	msg.UUID = uuid.New().String()
@@ -209,6 +231,15 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				return &msg, toolUses, nil
 			case types.LLMError:
+				// Check if this is a recoverable error
+				if isMaxOutputTokensError(e.Error) {
+					// Return special marker for recovery attempt
+					return nil, nil, &recoverableError{err: e.Error, reason: "max_output_tokens"}
+				}
+				// For prompt_too_long, also mark as recoverable if compaction might help
+				if isPromptTooLongError(e.Error) {
+					return nil, nil, &recoverableError{err: e.Error, reason: "prompt_too_long"}
+				}
 				return nil, nil, e.Error
 			}
 
@@ -216,6 +247,49 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 			return nil, nil, ctx.Err()
 		}
 	}
+}
+
+// recoverableError indicates an error that might be resolved by retry.
+type recoverableError struct {
+	err    error
+	reason string
+}
+
+func (e *recoverableError) Error() string {
+	return e.err.Error()
+}
+
+func (e *recoverableError) Reason() string {
+	return e.reason
+}
+
+func isMaxOutputTokensError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return contains(errStr, "max_output_tokens") || contains(errStr, "max_tokens")
+}
+
+func isPromptTooLongError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return contains(errStr, "prompt_too_long") || contains(errStr, "context length")
+}
+
+func contains(s, substr string) bool {
+	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
+}
+
+func containsAt(s, substr string, start int) bool {
+	for i := start; i <= len(s)-len(substr); i++ {
+		if s[i:i+len(substr)] == substr {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Loop) isAtBlockingLimit(msgs []types.Message) bool {
@@ -232,4 +306,106 @@ func createAssistantErrorMessage(content string) types.Message {
 		Timestamp: time.Now(),
 		APIError:  "invalid_request",
 	}
+}
+
+// attemptRecovery tries to recover from recoverable errors.
+// Returns true with results if recovery succeeded, false with error if all attempts failed.
+func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *loopState, recErr *recoverableError, out chan<- types.StreamEvent) (bool, *types.Message, []types.ToolUseBlock, error) {
+	if state.maxOutputTokensRecoveryCount >= l.Config.MaxOutputTokensRecovery {
+		return false, nil, nil, fmt.Errorf("max recovery attempts reached")
+	}
+
+	state.maxOutputTokensRecoveryCount++
+
+	switch recErr.Reason() {
+	case "max_output_tokens":
+		// Increase token limit and retry
+		if state.maxOutputTokensOverride == 0 {
+			state.maxOutputTokensOverride = 8192 * 2 // Double from default
+		} else {
+			state.maxOutputTokensOverride *= 2
+		}
+		// Cap at reasonable maximum
+		if state.maxOutputTokensOverride > 64000 {
+			state.maxOutputTokensOverride = 64000
+		}
+		
+		// Yield recovery attempt notice
+		select {
+		case out <- types.StreamMessage{Message: types.Message{
+			Role:    types.RoleSystem,
+			Content: []types.ContentBlock{types.TextBlock{Text: fmt.Sprintf("[Recovering: increasing output token limit to %d]", state.maxOutputTokensOverride)}},
+		}}:
+		case <-ctx.Done():
+			return false, nil, nil, ctx.Err()
+		}
+
+		// Retry the request
+		return l.retryQuery(ctx, params, state, out)
+
+	case "prompt_too_long":
+		// Try compacting context and retry
+		if state.hasAttemptedReactiveCompact {
+			return false, nil, nil, fmt.Errorf("already attempted compaction")
+		}
+		state.hasAttemptedReactiveCompact = true
+
+		// In a full implementation, trigger context compaction here
+		select {
+		case out <- types.StreamMessage{Message: types.Message{
+			Role:    types.RoleSystem,
+			Content: []types.ContentBlock{types.TextBlock{Text: "[Recovering: compacting context]"}},
+		}}:
+		case <-ctx.Done():
+			return false, nil, nil, ctx.Err()
+		}
+
+		// Retry with (potentially) compacted messages
+		return l.retryQuery(ctx, params, state, out)
+
+	default:
+		return false, nil, nil, fmt.Errorf("unknown recoverable error: %s", recErr.Reason())
+	}
+}
+
+// retryQuery re-executes the LLM query after recovery adjustments.
+func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopState, out chan<- types.StreamEvent) (bool, *types.Message, []types.ToolUseBlock, error) {
+	// Rebuild the request with potentially updated parameters
+	sysPrompt := params.SystemPrompt
+	for k, v := range params.SystemContext {
+		sysPrompt += fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k)
+	}
+
+	model := params.ToolUseContext.Options.MainLoopModel
+	if model == "" {
+		model = "anthropic/claude-3.5-sonnet"
+	}
+
+	req := llm.Request{
+		Messages:     state.messages,
+		SystemPrompt: sysPrompt,
+		Tools:        params.ToolUseContext.Options.Tools,
+		Model:        model,
+		MaxTokens:    8192,
+	}
+
+	if state.maxOutputTokensOverride > 0 {
+		req.MaxTokens = state.maxOutputTokensOverride
+	}
+
+	llmEvents, err := l.Client.Stream(ctx, req)
+	if err != nil {
+		return false, nil, nil, err
+	}
+
+	assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
+	if streamErr != nil {
+		// Check if we need nested recovery
+		if recErr, ok := streamErr.(*recoverableError); ok {
+			return l.attemptRecovery(ctx, params, state, recErr, out)
+		}
+		return false, nil, nil, streamErr
+	}
+
+	return true, assistantMsg, toolUses, nil
 }

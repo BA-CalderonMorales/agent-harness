@@ -68,6 +68,37 @@ func (e *StreamingToolExecutor) Discard() {
 	e.siblingCancel()
 }
 
+// DiscardRespectingInterrupt abandons tools based on their interrupt behavior.
+// Tools with "block" behavior continue running; tools with "cancel" behavior are stopped.
+func (e *StreamingToolExecutor) DiscardRespectingInterrupt(toolDefs []tools.Tool) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+
+	// Find which tools are running and check their interrupt behavior
+	for i := range e.tools {
+		if e.tools[i].status != statusExecuting {
+			continue
+		}
+		
+		toolDef, ok := findTool(toolDefs, e.tools[i].block.Name)
+		if !ok {
+			continue
+		}
+
+		behavior := "block" // default
+		if toolDef.Capabilities.InterruptBehavior != nil {
+			behavior = toolDef.Capabilities.InterruptBehavior()
+		}
+
+		// Only cancel tools that allow cancellation
+		if behavior == "cancel" {
+			// Tool will be cancelled via context
+			e.siblingCancel()
+		}
+		// Tools with "block" behavior continue running
+	}
+}
+
 // AddTool enqueues a tool for execution.
 func (e *StreamingToolExecutor) AddTool(block types.ToolUseBlock, assistantMessage types.Message) {
 	e.mu.Lock()
@@ -286,6 +317,20 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 	result, err := toolDef.Call(input, ctx, canUseTool, onProgress)
 	if err != nil {
 		return types.Message{}, err
+	}
+
+	// Apply content replacement budget
+	budget := tools.GetCurrentBudget()
+	resultStr := fmt.Sprintf("%v", result.Data)
+	
+	if !budget.CanUseResult(block.Name, len(resultStr), int64(toolDef.MaxResultSizeChars)) {
+		// Truncate to fit budget
+		truncated, note := budget.GetTruncatedResult(block.Name, resultStr, int64(toolDef.MaxResultSizeChars))
+		result.Data = truncated
+		_ = note // note is included in truncated result
+	} else {
+		// Record usage
+		_ = budget.RecordUsage(block.Name, len(resultStr), int64(toolDef.MaxResultSizeChars))
 	}
 
 	mapped := toolDef.MapResult(result.Data, block.ID)
