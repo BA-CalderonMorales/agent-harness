@@ -46,6 +46,8 @@ func main() {
 	registry.RegisterBuiltIn(builtin.AgentTool)
 	registry.RegisterBuiltIn(builtin.WebFetchTool)
 	registry.RegisterBuiltIn(builtin.WebSearchTool)
+	registry.RegisterBuiltIn(builtin.EnterPlanModeTool)
+	registry.RegisterBuiltIn(builtin.ExitPlanModeTool)
 
 	permCtx := permissions.EmptyContext()
 	canUseTool := func(toolName string, input map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
