@@ -16,6 +16,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools/builtin"
+	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -26,6 +27,8 @@ var (
 )
 
 func main() {
+	useTUI := len(os.Args) > 1 && os.Args[1] == "--tui"
+
 	cfg := config.Load()
 	fileCfg, _ := config.LoadFile(config.DefaultConfigPath())
 	if fileCfg.Provider != "" {
@@ -38,6 +41,11 @@ func main() {
 	if cfg.APIKey == "" {
 		fmt.Fprintln(os.Stderr, "Error: Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY")
 		os.Exit(1)
+	}
+
+	if useTUI {
+		runTUI(cfg)
+		return
 	}
 
 	fmt.Printf("agent-harness %s\nModel: %s\nType 'exit' to quit.\n\n", Version, cfg.Model)
@@ -62,6 +70,9 @@ func main() {
 	registry.RegisterBuiltIn(builtin.WebSearchTool)
 	registry.RegisterBuiltIn(builtin.EnterPlanModeTool)
 	registry.RegisterBuiltIn(builtin.ExitPlanModeTool)
+	registry.RegisterBuiltIn(builtin.ExportTool)
+	registry.RegisterBuiltIn(builtin.SearchTranscriptTool)
+	registry.RegisterBuiltIn(builtin.SettingsTool)
 
 	cmdRegistry := commands.NewRegistry()
 	for _, cmd := range commands.BuiltInCommands() {
@@ -207,7 +218,7 @@ func main() {
 
 func buildSystemPrompt() string {
 	return `You are Agent Harness, a helpful coding assistant.
-You have access to tools: bash, read, write, edit, notebook_edit, rewind, glob, grep, ask_user_question, todo_write, agent, web_fetch, web_search, enter_plan_mode, exit_plan_mode.
+You have access to tools: bash, read, write, edit, notebook_edit, rewind, glob, grep, ask_user_question, todo_write, agent, web_fetch, web_search, search_transcript, export, settings, enter_plan_mode, exit_plan_mode.
 When editing files, ensure old_string matches exactly.
 When running bash commands, respect the user's system.
 Use plan mode for complex multi-step tasks.
@@ -223,4 +234,9 @@ func renderMessage(msg types.Message) {
 			fmt.Printf("\n[Using tool: %s]\n", b.Name)
 		}
 	}
+}
+
+func runTUI(cfg config.Config) {
+	fmt.Println("TUI mode not yet fully implemented. Run without --tui for CLI mode.")
+	_ = ui.NewModel(nil, nil)
 }
