@@ -39,6 +39,10 @@ func main() {
 	registry.RegisterBuiltIn(builtin.BashTool)
 	registry.RegisterBuiltIn(builtin.FileReadTool)
 	registry.RegisterBuiltIn(builtin.FileEditTool)
+	registry.RegisterBuiltIn(builtin.GlobTool)
+	registry.RegisterBuiltIn(builtin.GrepTool)
+	registry.RegisterBuiltIn(builtin.AskUserQuestionTool)
+	registry.RegisterBuiltIn(builtin.TodoWriteTool)
 
 	permCtx := permissions.EmptyContext()
 	canUseTool := func(toolName string, input map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
