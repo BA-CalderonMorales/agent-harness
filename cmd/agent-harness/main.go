@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/permissions"
@@ -25,6 +26,14 @@ var (
 
 func main() {
 	cfg := config.Load()
+	fileCfg, _ := config.LoadFile(config.DefaultConfigPath())
+	if fileCfg.Provider != "" {
+		cfg.Provider = fileCfg.Provider
+	}
+	if fileCfg.Model != "" {
+		cfg.Model = fileCfg.Model
+	}
+
 	if cfg.APIKey == "" {
 		fmt.Fprintln(os.Stderr, "Error: Set OPENROUTER_API_KEY or ANTHROPIC_API_KEY")
 		os.Exit(1)
@@ -34,11 +43,13 @@ func main() {
 
 	client := llm.NewHTTPClient(cfg.Provider, cfg.APIKey)
 	loop := agent.NewLoop(client)
+	costTracker := agent.NewCostTracker()
 
 	registry := tools.NewRegistry()
 	registry.RegisterBuiltIn(builtin.BashTool)
 	registry.RegisterBuiltIn(builtin.FileReadTool)
 	registry.RegisterBuiltIn(builtin.FileEditTool)
+	registry.RegisterBuiltIn(builtin.FileWriteTool)
 	registry.RegisterBuiltIn(builtin.GlobTool)
 	registry.RegisterBuiltIn(builtin.GrepTool)
 	registry.RegisterBuiltIn(builtin.AskUserQuestionTool)
@@ -48,6 +59,11 @@ func main() {
 	registry.RegisterBuiltIn(builtin.WebSearchTool)
 	registry.RegisterBuiltIn(builtin.EnterPlanModeTool)
 	registry.RegisterBuiltIn(builtin.ExitPlanModeTool)
+
+	cmdRegistry := commands.NewRegistry()
+	for _, cmd := range commands.BuiltInCommands() {
+		cmdRegistry.Register(cmd)
+	}
 
 	permCtx := permissions.EmptyContext()
 	canUseTool := func(toolName string, input map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
@@ -83,7 +99,46 @@ func main() {
 		if input == "" {
 			continue
 		}
+
+		// Handle slash commands
+		if cmdName, args, ok := commands.Parse(input); ok {
+			cmd, found := cmdRegistry.Find(cmdName)
+			if found {
+				result, cmdErr := cmd.Handler(args)
+				if cmdErr != nil {
+					fmt.Printf("Error: %v\n", cmdErr)
+					continue
+				}
+				switch result {
+				case "history_cleared":
+					messages = nil
+					fmt.Println("History cleared.")
+				case "compact_triggered":
+					fmt.Println("Compact triggered (placeholder).")
+				case "exit_requested":
+					fmt.Println("Goodbye.")
+					fmt.Println(costTracker.Summary())
+					return
+				case "help_displayed":
+					fmt.Println("Available commands:")
+					for _, c := range cmdRegistry.All() {
+						fmt.Printf("  /%-12s %s\n", c.Name, c.Description)
+					}
+				default:
+					if strings.HasPrefix(result, "model_changed:") {
+						cfg.Model = strings.TrimPrefix(result, "model_changed:")
+						fmt.Printf("Model changed to %s\n", cfg.Model)
+					}
+				}
+				continue
+			}
+			fmt.Printf("Unknown command: /%s\n", cmdName)
+			continue
+		}
+
 		if input == "exit" || input == "quit" {
+			fmt.Println("Goodbye.")
+			fmt.Println(costTracker.Summary())
 			break
 		}
 
@@ -122,6 +177,7 @@ func main() {
 			case types.StreamMessage:
 				renderMessage(e.Message)
 				messages = append(messages, e.Message)
+
 			case types.ProgressMessage:
 				fmt.Printf("\r[%s] %s\n", e.ToolUseID, e.Type)
 			case types.StreamRequestStart:
@@ -134,9 +190,10 @@ func main() {
 
 func buildSystemPrompt() string {
 	return `You are Agent Harness, a helpful coding assistant.
-You have access to tools: bash, read, edit.
+You have access to tools: bash, read, write, edit, glob, grep, ask_user_question, todo_write, agent, web_fetch, web_search, enter_plan_mode, exit_plan_mode.
 When editing files, ensure old_string matches exactly.
-When running bash commands, respect the user's system.`
+When running bash commands, respect the user's system.
+Use plan mode for complex multi-step tasks.`
 }
 
 func renderMessage(msg types.Message) {
