@@ -3,15 +3,17 @@ package builtin
 import (
 	"fmt"
 	"os"
+	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/fs"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
-// FileWriteTool creates or overwrites a file.
+// FileWriteTool creates or overwrites a file with stale-write protection.
 var FileWriteTool = tools.NewTool(tools.Tool{
 	Name:        "write",
-	Description: "Write content to a file. Creates the file if it does not exist.",
+	Description: "Write content to a file. Creates the file if it does not exist. Protected against concurrent modifications.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
@@ -23,14 +25,20 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		}
 	},
 	Capabilities: tools.CapabilityFlags{
-		IsEnabled:         func() bool { return true },
-		IsConcurrencySafe: func(map[string]any) bool { return false },
-		IsReadOnly:        func(map[string]any) bool { return false },
-		IsDestructive:     func(map[string]any) bool { return true },
+		IsEnabled:             func() bool { return true },
+		IsConcurrencySafe:     func(map[string]any) bool { return false },
+		IsReadOnly:            func(map[string]any) bool { return false },
+		IsDestructive:         func(map[string]any) bool { return true },
+		InterruptBehavior:     func() string { return "cancel" },
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
-		if getString(input, "file_path") == "" {
+		path := getString(input, "file_path")
+		if path == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path is required"}
+		}
+		// UNC path security
+		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
+			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
 		}
 		return tools.ValidationResult{Valid: true}
 	},
@@ -41,9 +49,32 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		path := getString(input, "file_path")
 		content := getString(input, "content")
 
-		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
+		// Check if file exists - if so, apply stale-write protection
+		_, err := os.Stat(path)
+		if err == nil {
+			if err := fs.DefaultStaleTracker.CheckStale(path); err != nil {
+				return tools.ToolResult{}, fmt.Errorf("stale write detected: %w. The file may have been modified by another process. Please re-read and try again.", err)
+			}
 		}
+
+		// Atomic write: temp file then rename
+		tempPath := path + ".tmp"
+		if err := os.WriteFile(tempPath, []byte(content), 0644); err != nil {
+			return tools.ToolResult{}, fmt.Errorf("failed to write temp file: %w", err)
+		}
+
+		if err := os.Rename(tempPath, path); err != nil {
+			os.Remove(tempPath)
+			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
+		}
+
+		// Update stale tracker and invalidate cache
+		info, _ := os.Stat(path)
+		if info != nil {
+			fs.DefaultStaleTracker.RecordRead(path, []byte(content), info)
+		}
+		fs.DefaultCache.InvalidatePath(path)
+
 		return tools.ToolResult{Data: fmt.Sprintf("Wrote %s (%d bytes)", path, len(content))}, nil
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {

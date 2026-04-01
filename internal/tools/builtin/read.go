@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/fs"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
@@ -18,10 +19,10 @@ var blockedDevicePaths = map[string]bool{
 	"/dev/fd/0": true, "/dev/fd/1": true, "/dev/fd/2": true,
 }
 
-// FileReadTool reads files from disk.
+// FileReadTool reads files from disk with caching support.
 var FileReadTool = tools.NewTool(tools.Tool{
 	Name:        "read",
-	Description: "Read the contents of a file. Supports text, images, and PDFs.",
+	Description: "Read the contents of a file. Supports text, images, and PDFs. Uses caching to preserve prompt cache tokens.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
@@ -47,8 +48,13 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if blockedDevicePaths[path] {
 			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
 		}
-		if strings.HasPrefix(path, "\\") || strings.HasPrefix(path, "//") {
-			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported"}
+		// UNC path security: reject SMB/NTLM credential leak vectors
+		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
+			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
+		}
+		// Block /proc/*/fd paths
+		if strings.HasPrefix(path, "/proc/") && strings.Contains(path, "/fd/") {
+			return tools.ValidationResult{Valid: false, Message: "Reading process file descriptors is not allowed"}
 		}
 		return tools.ValidationResult{Valid: true}
 	},
@@ -59,14 +65,32 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		path := getString(input, "file_path")
 		path = resolveScreenshotPath(path)
 
+		offset := int(getFloat(input, "offset"))
+		limit := int(getFloat(input, "limit"))
+
+		// Get file info for cache key and stale tracking
+		info, err := os.Stat(path)
+		if err != nil {
+			return tools.ToolResult{}, fmt.Errorf("failed to stat file: %w", err)
+		}
+
+		// Check cache first
+		cacheKey := fs.MakeKey(path, offset, limit, info)
+		if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
+			// Record this read for stale-write protection
+			fs.DefaultStaleTracker.RecordRead(path, []byte(cached), info)
+			return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
+				// Mark as cached read in context
+				return ctx
+			}}, nil
+		}
+
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to read file: %w", err)
 		}
 
 		content := string(data)
-		offset := int(getFloat(input, "offset"))
-		limit := int(getFloat(input, "limit"))
 
 		if offset > 0 || limit > 0 {
 			lines := strings.Split(content, "\n")
@@ -85,6 +109,12 @@ var FileReadTool = tools.NewTool(tools.Tool{
 				content = ""
 			}
 		}
+
+		// Record read for stale-write protection
+		fs.DefaultStaleTracker.RecordRead(path, data, info)
+
+		// Cache the result
+		fs.DefaultCache.Set(cacheKey, content)
 
 		return tools.ToolResult{Data: content}, nil
 	},
