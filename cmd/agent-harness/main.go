@@ -13,6 +13,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/permissions"
+	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools/builtin"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -50,6 +51,8 @@ func main() {
 	registry.RegisterBuiltIn(builtin.FileReadTool)
 	registry.RegisterBuiltIn(builtin.FileEditTool)
 	registry.RegisterBuiltIn(builtin.FileWriteTool)
+	registry.RegisterBuiltIn(builtin.NotebookEditTool)
+	registry.RegisterBuiltIn(builtin.RewindTool)
 	registry.RegisterBuiltIn(builtin.GlobTool)
 	registry.RegisterBuiltIn(builtin.GrepTool)
 	registry.RegisterBuiltIn(builtin.AskUserQuestionTool)
@@ -159,9 +162,23 @@ func main() {
 			AbortController: context.Background(),
 		}
 
+		// Load project memory files
+		memoryLoader := agent.NewMemoryLoader()
+		memories, _ := memoryLoader.LoadForDirectory(cfg.WorkingDirectory)
+		sysPrompt := buildSystemPrompt()
+		for _, mem := range memories {
+			sysPrompt += mem.FormatSystemPrompt()
+		}
+
+		// Load skills
+		skillReg, _ := skills.LoadFromDirectory(".agent-harness/skills")
+		for _, sk := range skillReg.All() {
+			sysPrompt += sk.FormatPrompt()
+		}
+
 		params := agent.QueryParams{
 			Messages:       messages,
-			SystemPrompt:   buildSystemPrompt(),
+			SystemPrompt:   sysPrompt,
 			CanUseTool:     canUseTool,
 			ToolUseContext: toolCtx,
 		}
@@ -190,10 +207,11 @@ func main() {
 
 func buildSystemPrompt() string {
 	return `You are Agent Harness, a helpful coding assistant.
-You have access to tools: bash, read, write, edit, glob, grep, ask_user_question, todo_write, agent, web_fetch, web_search, enter_plan_mode, exit_plan_mode.
+You have access to tools: bash, read, write, edit, notebook_edit, rewind, glob, grep, ask_user_question, todo_write, agent, web_fetch, web_search, enter_plan_mode, exit_plan_mode.
 When editing files, ensure old_string matches exactly.
 When running bash commands, respect the user's system.
-Use plan mode for complex multi-step tasks.`
+Use plan mode for complex multi-step tasks.
+Use rewind to undo file operations if needed.`
 }
 
 func renderMessage(msg types.Message) {
