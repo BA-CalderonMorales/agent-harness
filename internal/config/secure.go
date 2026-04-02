@@ -18,10 +18,8 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"syscall"
 
 	"golang.org/x/crypto/argon2"
-	"golang.org/x/term"
 )
 
 const (
@@ -267,17 +265,6 @@ func (cm *CredentialManager) decrypt(ciphertext, nonce []byte) ([]byte, error) {
 // deriveKey derives a 32-byte key from password using Argon2id
 func deriveKey(password string, salt []byte) []byte {
 	return argon2.IDKey([]byte(password), salt, 3, 64*1024, 4, 32)
-}
-
-// PromptPassword prompts for a password with masking
-func PromptPassword(prompt string) (string, error) {
-	fmt.Print(prompt)
-	password, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
-	if err != nil {
-		return "", err
-	}
-	return string(password), nil
 }
 
 // PromptNewPassword prompts for a new password with confirmation

@@ -138,18 +138,34 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			for _, tu := range toolUses {
 				executor.AddTool(tu, *assistantMsg)
 			}
-			results, execErr := executor.GetRemainingResults(ctx)
-			if execErr != nil {
-				// Log but continue; individual tool errors are in results
-				_ = execErr
-			}
-			for _, msg := range results {
-				state.messages = append(state.messages, msg)
-				select {
-				case out <- types.StreamMessage{Message: msg}:
-				case <-ctx.Done():
-					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
+
+			// Consume events until all tools are done
+			done := make(chan struct{})
+			go func() {
+				defer close(done)
+				for ev := range executor.Events() {
+					select {
+					case out <- ev:
+					case <-ctx.Done():
+						return
+					}
+					
+					// Update session messages for final results
+					if sm, ok := ev.(types.StreamMessage); ok {
+						l.mu.Lock()
+						state.messages = append(state.messages, sm.Message)
+						l.mu.Unlock()
+					}
 				}
+			}()
+
+			// Wait for completion
+			_, execErr := executor.GetRemainingResults(ctx)
+			executor.Close()
+			<-done
+			
+			if execErr != nil {
+				_ = execErr
 			}
 		} else {
 			// Batch execution

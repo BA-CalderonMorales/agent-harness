@@ -37,9 +37,11 @@ type StreamRenderer struct {
 
 // ToolInfo tracks active tool execution
 type ToolInfo struct {
-	Name        string
-	Description string
-	StartTime   time.Time
+	ID             string
+	Name           string
+	Description    string
+	StartTime      time.Time
+	LatestProgress string
 }
 
 // NewStreamRenderer creates a new stream renderer with animation support
@@ -105,7 +107,7 @@ func (sr *StreamRenderer) UpdateThinking() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	if !sr.isThinking {
+	if !sr.isThinking && len(sr.toolStack) == 0 {
 		return
 	}
 	
@@ -118,10 +120,23 @@ func (sr *StreamRenderer) UpdateThinking() {
 	sr.kaomojiIdx = (sr.kaomojiIdx + 1) % len(KaomojiFrames)
 	frame := KaomojiFrames[sr.kaomojiIdx]
 	
-	// Move up one line and update the kaomoji
-	fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
-		DimStyle.Render(frame),
-		DimStyle.Render("thinking..."))
+	if len(sr.toolStack) > 0 {
+		// Update the last tool's progress line
+		lastTool := sr.toolStack[len(sr.toolStack)-1]
+		progress := lastTool.LatestProgress
+		if progress == "" {
+			progress = "running..."
+		}
+		
+		fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
+			DimStyle.Render(frame),
+			DimStyle.Render(Truncate(progress, 60)))
+	} else {
+		// Move up one line and update the kaomoji
+		fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
+			DimStyle.Render(frame),
+			DimStyle.Render("thinking..."))
+	}
 }
 
 // PrintAgentOutput prints agent text output
@@ -144,12 +159,13 @@ func (sr *StreamRenderer) PrintAgentOutput(text string) {
 }
 
 // PrintToolStart indicates a tool is starting with visual feedback
-func (sr *StreamRenderer) PrintToolStart(toolName, description string) {
+func (sr *StreamRenderer) PrintToolStart(toolID, toolName, description string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
 	action := FormatToolAction(toolName, description)
 	toolInfo := ToolInfo{
+		ID:          toolID,
 		Name:        toolName,
 		Description: description,
 		StartTime:   time.Now(),
@@ -165,14 +181,41 @@ func (sr *StreamRenderer) PrintToolStart(toolName, description string) {
 		DimStyle.Render("running..."))
 }
 
-// PrintToolComplete indicates a tool completed successfully
-func (sr *StreamRenderer) PrintToolComplete(toolName string, result string) {
+// HandleProgress updates the latest progress for a tool
+func (sr *StreamRenderer) HandleProgress(toolUseID string, data any) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	// Pop from stack
-	if len(sr.toolStack) > 0 {
-		sr.toolStack = sr.toolStack[:len(sr.toolStack)-1]
+	msg := fmt.Sprintf("%v", data)
+	// Truncate and clean message for display
+	msg = strings.TrimSpace(msg)
+	msg = strings.ReplaceAll(msg, "\n", " ")
+	
+	for i := range sr.toolStack {
+		if sr.toolStack[i].ID == toolUseID {
+			sr.toolStack[i].LatestProgress = msg
+			break
+		}
+	}
+}
+
+// PrintToolComplete indicates a tool completed successfully
+func (sr *StreamRenderer) PrintToolComplete(toolUseID string, result string) {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	
+	// Find and remove from stack
+	var toolName string
+	for i, t := range sr.toolStack {
+		if t.ID == toolUseID {
+			toolName = t.Name
+			sr.toolStack = append(sr.toolStack[:i], sr.toolStack[i+1:]...)
+			break
+		}
+	}
+	
+	if toolName == "" {
+		return
 	}
 	
 	// Clear the spinner line and show success
@@ -188,13 +231,22 @@ func (sr *StreamRenderer) PrintToolComplete(toolName string, result string) {
 }
 
 // PrintToolError shows a tool error with clear indication
-func (sr *StreamRenderer) PrintToolError(toolName string, err error) {
+func (sr *StreamRenderer) PrintToolError(toolUseID string, err error) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	// Pop from stack
-	if len(sr.toolStack) > 0 {
-		sr.toolStack = sr.toolStack[:len(sr.toolStack)-1]
+	// Find and remove from stack
+	var toolName string
+	for i, t := range sr.toolStack {
+		if t.ID == toolUseID {
+			toolName = t.Name
+			sr.toolStack = append(sr.toolStack[:i], sr.toolStack[i+1:]...)
+			break
+		}
+	}
+	
+	if toolName == "" {
+		return
 	}
 	
 	// Clear the spinner line and show error

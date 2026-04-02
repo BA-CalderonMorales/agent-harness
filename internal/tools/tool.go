@@ -27,7 +27,7 @@ type Progress struct {
 }
 
 // OnProgress is the callback signature for tool progress.
-type OnProgress func(Progress)
+type OnProgress func(data any)
 
 // CanUseToolFn is the permission checker injected by the agent loop.
 type CanUseToolFn func(toolName string, input map[string]any, ctx Context) (PermissionDecision, error)
