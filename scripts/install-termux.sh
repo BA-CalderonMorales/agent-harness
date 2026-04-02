@@ -37,7 +37,7 @@ check_deps() {
 # get latest version from github
 get_latest_version() {
     log_info "fetching latest release..."
-    version=$(curl -fssl "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4 || echo "")
+    version=$(curl -fsSL "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4 || echo "")
     if [ -z "$version" ]; then
         log_warn "could not fetch version, using main branch"
         version="main"
