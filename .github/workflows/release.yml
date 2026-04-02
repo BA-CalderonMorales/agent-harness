@@ -83,7 +83,7 @@ jobs:
           CGO_ENABLED: 0
         run: |
           mkdir -p dist
-          ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.GitSHA=${{ github.sha }}"
+          ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.GitTag=${{ steps.version.outputs.VERSION }} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.GitSHA=${{ github.sha }}"
           go build -trimpath -ldflags="$ldflags" -o "dist/agent-harness-${{ matrix.suffix }}" ./cmd/agent-harness
 
       - name: Create archive (Unix)
