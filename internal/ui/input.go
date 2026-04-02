@@ -108,7 +108,16 @@ func (le *LineEditor) ReadLine() (*ReadOutcome, error) {
 		return nil, err
 	}
 
-	editor := m.(*LineEditor)
+	// type assert to value type (bubbletea returns value, not pointer)
+	editor, ok := m.(LineEditor)
+	if !ok {
+		// try pointer type as fallback
+		if editorPtr, ok := m.(*LineEditor); ok {
+			editor = *editorPtr
+		} else {
+			return nil, fmt.Errorf("unexpected model type: %T", m)
+		}
+	}
 	if editor.exitReq {
 		return &ReadOutcome{Exit: true}, nil
 	}
