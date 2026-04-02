@@ -7,6 +7,7 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
+	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -16,6 +17,7 @@ func NewLoop(client llm.Client) *Loop {
 	return &Loop{
 		Client: client,
 		Config: DefaultLoopConfig(),
+		UI:     ui.NewHandler(),
 	}
 }
 
@@ -50,6 +52,11 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 	for state.turnCount <= maxTurns {
 		state.turnCount++
+
+		// 1. Task Start
+		if state.turnCount == 2 { // first iteration
+			l.UI.Status("◆", "Starting task...")
+		}
 
 		// Reset content replacement budget for this turn
 		tools.ResetBudgetForNewTurn()
@@ -94,12 +101,15 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		// Call LLM
+		l.UI.SpinnerStart("thinking")
 		llmEvents, err := l.Client.Stream(ctx, req)
 		if err != nil {
+			l.UI.SpinnerStop()
 			return Terminal{Reason: TerminalReasonError, Error: err}
 		}
 
 		assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
+		l.UI.SpinnerStop()
 		
 		// Handle recoverable errors with retry logic
 		if streamErr != nil {
@@ -136,6 +146,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		if l.Config.StreamingToolExecution {
 			executor := NewStreamingToolExecutor(params.ToolUseContext.Options.Tools, params.CanUseTool, params.ToolUseContext)
 			for _, tu := range toolUses {
+				l.UI.Status("→", fmt.Sprintf("executing %s...", tu.Name))
 				executor.AddTool(tu, *assistantMsg)
 			}
 
@@ -155,6 +166,13 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 						l.mu.Lock()
 						state.messages = append(state.messages, sm.Message)
 						l.mu.Unlock()
+
+						// 2. Success/Error Status
+						if sm.Message.APIError != "" {
+							l.UI.Status("✗", fmt.Sprintf("tool failed: %s", sm.Message.APIError))
+						} else {
+							l.UI.Status("✓", "tool executed successfully")
+						}
 					}
 				}
 			}()
