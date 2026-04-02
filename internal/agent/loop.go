@@ -2,12 +2,12 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
-	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -17,7 +17,6 @@ func NewLoop(client llm.Client) *Loop {
 	return &Loop{
 		Client: client,
 		Config: DefaultLoopConfig(),
-		UI:     ui.NewHandler(),
 	}
 }
 
@@ -54,9 +53,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		state.turnCount++
 
 		// 1. Task Start
-		if state.turnCount == 2 { // first iteration
-			l.UI.Status("◆", "Starting task...")
-		}
+		// (UI handled by stream renderer in caller)
 
 		// Reset content replacement budget for this turn
 		tools.ResetBudgetForNewTurn()
@@ -101,15 +98,12 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		// Call LLM
-		l.UI.SpinnerStart("thinking")
 		llmEvents, err := l.Client.Stream(ctx, req)
 		if err != nil {
-			l.UI.SpinnerStop()
 			return Terminal{Reason: TerminalReasonError, Error: err}
 		}
 
 		assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
-		l.UI.SpinnerStop()
 		
 		// Handle recoverable errors with retry logic
 		if streamErr != nil {
@@ -146,7 +140,6 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		if l.Config.StreamingToolExecution {
 			executor := NewStreamingToolExecutor(params.ToolUseContext.Options.Tools, params.CanUseTool, params.ToolUseContext)
 			for _, tu := range toolUses {
-				l.UI.Status("→", fmt.Sprintf("executing %s...", tu.Name))
 				executor.AddTool(tu, *assistantMsg)
 			}
 
@@ -166,13 +159,6 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 						l.mu.Lock()
 						state.messages = append(state.messages, sm.Message)
 						l.mu.Unlock()
-
-						// 2. Success/Error Status
-						if sm.Message.APIError != "" {
-							l.UI.Status("✗", fmt.Sprintf("tool failed: %s", sm.Message.APIError))
-						} else {
-							l.UI.Status("✓", "tool executed successfully")
-						}
 					}
 				}
 			}()
@@ -215,6 +201,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 
 	var currentText string
 	var pendingToolUse *types.ToolUseBlock
+	var toolInputBuffer string
 	var toolUses []types.ToolUseBlock
 
 	for {
@@ -222,6 +209,12 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 		case ev, ok := <-events:
 			if !ok {
 				if pendingToolUse != nil {
+					if toolInputBuffer != "" {
+						var input map[string]any
+						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
+							pendingToolUse.Input = input
+						}
+					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 				}
@@ -242,13 +235,31 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 			case types.LLMToolUseDelta:
 				if pendingToolUse == nil {
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
+					toolInputBuffer = ""
+				} else if pendingToolUse.ID != e.ID {
+					if toolInputBuffer != "" {
+						var input map[string]any
+						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
+							pendingToolUse.Input = input
+						}
+					}
+					msg.Content = append(msg.Content, *pendingToolUse)
+					toolUses = append(toolUses, *pendingToolUse)
+					
+					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
+					toolInputBuffer = ""
 				}
-				// In a real implementation, we'd incrementally parse JSON.
-				// For the pattern, we accumulate and parse on stop.
+				toolInputBuffer += e.Delta
 			case types.LLMMessageStop:
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
 				if pendingToolUse != nil {
+					if toolInputBuffer != "" {
+						var input map[string]any
+						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
+							pendingToolUse.Input = input
+						}
+					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 					pendingToolUse = nil

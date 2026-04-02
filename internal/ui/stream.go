@@ -76,12 +76,12 @@ func (sr *StreamRenderer) StartThinking(context string) {
 	// Print thinking indicator with kaomoji
 	frame := KaomojiFrames[0]
 	if context != "" {
-		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s\n", 
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s", 
 			DimStyle.Render(context),
 			DimStyle.Render(frame),
 			DimStyle.Render("thinking..."))
 	} else {
-		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s\n", 
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s", 
 			DimStyle.Render("Processing..."),
 			DimStyle.Render(frame),
 			DimStyle.Render("thinking..."))
@@ -92,14 +92,14 @@ func (sr *StreamRenderer) StartThinking(context string) {
 func (sr *StreamRenderer) StopThinking() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if !sr.isThinking {
 		return
 	}
-	
+
 	sr.isThinking = false
-	// Clear the thinking lines
-	fmt.Fprint(sr.out, "\033[2A\033[K\033[K\n\033[K")
+	// Clear the spinner line and the thinking indicator
+	fmt.Fprint(sr.out, "\r\033[K\033[1A\r\033[K")
 }
 
 // UpdateThinking updates the thinking animation frame
@@ -128,12 +128,13 @@ func (sr *StreamRenderer) UpdateThinking() {
 			progress = "running..."
 		}
 		
-		fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
+		// Use \r and \033[K for cleaner single-line updates
+		fmt.Fprintf(sr.out, "\r\033[K   %s %s", 
 			DimStyle.Render(frame),
 			DimStyle.Render(Truncate(progress, 60)))
 	} else {
-		// Move up one line and update the kaomoji
-		fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
+		// Update the kaomoji on the current line
+		fmt.Fprintf(sr.out, "\r\033[K   %s %s", 
 			DimStyle.Render(frame),
 			DimStyle.Render("thinking..."))
 	}

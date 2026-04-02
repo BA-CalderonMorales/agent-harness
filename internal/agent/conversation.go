@@ -71,18 +71,19 @@ func ClassifyInput(input string) ConversationType {
 			return ConvQuestion
 		}
 	}
+
+	// Check for task indicators FIRST (before casual conversation)
+	// This ensures that "Fix the bug, thanks!" is treated as a task.
+	for _, pattern := range taskIndicators {
+		if pattern.MatchString(trimmed) {
+			return ConvTask
+		}
+	}
 	
 	// Check for casual conversation
 	for _, pattern := range casualPatterns {
 		if pattern.MatchString(trimmed) {
 			return ConvCasual
-		}
-	}
-	
-	// Check for task indicators
-	for _, pattern := range taskIndicators {
-		if pattern.MatchString(trimmed) {
-			return ConvTask
 		}
 	}
 	
