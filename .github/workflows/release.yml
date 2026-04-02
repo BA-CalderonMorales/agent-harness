@@ -29,11 +29,12 @@ jobs:
             goos: linux
             goarch: amd64
             suffix: linux-amd64
-          # Linux ARM64
+          # Linux ARM64 (with CGO for Termux compatibility)
           - os: ubuntu-latest
             goos: linux
             goarch: arm64
             suffix: linux-arm64
+            cgo: 1
           # macOS AMD64 (Intel)
           - os: macos-latest
             goos: darwin
@@ -80,7 +81,7 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-          CGO_ENABLED: 0
+          CGO_ENABLED: ${{ matrix.cgo || 0 }}
         run: |
           mkdir -p dist
           ldflags="-s -w -X main.Version=${{ steps.version.outputs.VERSION }} -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X main.GitSHA=${{ github.sha }}"
