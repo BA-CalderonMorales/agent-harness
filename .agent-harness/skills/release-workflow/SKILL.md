@@ -40,7 +40,15 @@ git push origin develop
 git tag -a vX.X.X -m "Release vX.X.X - Brief description"
 git push origin vX.X.X  # <-- CRITICAL: This triggers GitHub Actions
 
-# Step 8: Monitor the release
+# Step 8: Sync Main (Final Step)
+git checkout main
+git merge develop
+git push origin main
+
+# Step 9: Return to Develop
+git checkout develop
+
+# Step 10: Monitor the release
 gh run watch  # or check GitHub Actions UI
 ```
 
@@ -109,6 +117,8 @@ Use this before every release:
 - [ ] Tag created: `git tag -a vX.X.X -m "Release vX.X.X"`
 - [ ] Tag pushed to origin: `git push origin vX.X.X`
 - [ ] Verify tag on remote: `git ls-remote --tags origin | grep vX.X.X`
+- [ ] Sync Main: `git checkout main && git merge develop && git push origin main`
+- [ ] Return to Develop: `git checkout develop`
 - [ ] GitHub Actions workflow triggered (check Actions tab)
 - [ ] All matrix builds succeed
 - [ ] Release created with artifacts
