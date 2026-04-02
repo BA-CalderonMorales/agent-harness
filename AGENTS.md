@@ -74,6 +74,32 @@ var MyTool = tools.NewTool(tools.Tool{
 Skill loaded from: `.agent-harness/skills/termux-mobile-dev/SKILL.md`
 - Release workflow: `.agent-harness/skills/release-workflow/SKILL.md`
 
+## Conversation Flow
+
+The agent uses a dual-path system for handling user input:
+
+### Fast Path (Conversational)
+Greetings and simple questions get immediate responses without LLM calls:
+
+```go
+if agent.IsConversational(input) {
+    return app.handleConversationalMessage(input)  // No API call
+}
+```
+
+Examples: "Hello", "Hi", "What can you do?", "Thanks!"
+
+### Full Path (Task-Based)
+Work requests use the full agent loop with tools:
+
+```go
+return app.handleTaskMessage(input)  // Full agent loop with tools
+```
+
+Examples: "Create a file", "Fix the bug", "Search for TODOs"
+
+See `docs/conversation_flow.md` for full details.
+
 ## Workspace Integration (buckets/usr)
 
 For cross-repo workspace access, binaries and scripts are symlinked or placed in:

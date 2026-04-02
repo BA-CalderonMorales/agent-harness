@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	Version   = "0.0.18"
+	Version   = "0.0.19"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -439,17 +439,78 @@ func (app *App) processMessage(input string) error {
 	// Just add a newline for visual separation
 	fmt.Println()
 
+	// Validate and normalize input (especially important for Termux)
+	validator := ui.NewTermuxValidator()
+	normalizedInput, valid := validator.ValidateInput(input)
+	if !valid {
+		return fmt.Errorf("invalid input")
+	}
+
 	// Add user message to session
 	userMsg := types.Message{
 		UUID:      generateUUID(),
 		Role:      types.RoleUser,
-		Content:   []types.ContentBlock{types.TextBlock{Text: input}},
+		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
 		Timestamp: time.Now(),
 	}
 	app.session.AddMessage(userMsg)
 
-	// Build system prompt
-	sysPrompt := app.buildSystemPrompt()
+	// Check if this is a conversational message (greeting, simple question, etc.)
+	// For these, we use a simpler flow without tool overhead
+	if agent.IsConversational(normalizedInput) {
+		return app.handleConversationalMessage(normalizedInput)
+	}
+
+	// For task-based messages, use the full agent loop with tools
+	return app.handleTaskMessage(normalizedInput)
+}
+
+// handleConversationalMessage handles greetings and simple conversation without tools
+func (app *App) handleConversationalMessage(input string) error {
+	// Show brief thinking indicator
+	app.streamRenderer.StartThinking("")
+	
+	// Generate appropriate response based on conversation type
+	convType := agent.ClassifyInput(input)
+	var response string
+	
+	switch convType {
+	case agent.ConvGreeting:
+		response = agent.GetGreetingResponse()
+	case agent.ConvQuestion:
+		response = agent.GetCapabilityResponse()
+	case agent.ConvCasual:
+		response = agent.GetCasualResponse(input)
+	default:
+		response = "I'm here to help. What would you like to work on?"
+	}
+	
+	// Stop thinking indicator
+	app.streamRenderer.StopThinking()
+	
+	// Output the response
+	fmt.Println(response)
+	fmt.Println()
+	
+	// Add to session
+	assistantMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleAssistant,
+		Content:   []types.ContentBlock{types.TextBlock{Text: response}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(assistantMsg)
+	
+	// Track the turn
+	app.costTracker.CompleteTurn()
+	
+	return nil
+}
+
+// handleTaskMessage handles work-related messages using the full agent loop with tools
+func (app *App) handleTaskMessage(input string) error {
+	// Build enhanced system prompt
+	sysPrompt := app.buildEnhancedSystemPrompt()
 
 	// Create tool context
 	toolCtx := tools.Context{
@@ -598,27 +659,38 @@ func (app *App) processMessage(input string) error {
 }
 
 func (app *App) buildSystemPrompt() string {
-	prompt := `You are ` + ui.PersonaName + `, a helpful coding assistant.
-You have access to tools for bash, file operations, search, and more.
-Respect the user's workspace and permissions.
-When editing files, ensure old_string matches exactly.
-Use plan mode for complex multi-step tasks.`
+	return app.buildEnhancedSystemPrompt()
+}
 
-	// Add git context if available
+// buildEnhancedSystemPrompt creates a comprehensive system prompt with clear guidance
+func (app *App) buildEnhancedSystemPrompt() string {
+	// Build git context string
+	gitContext := ""
 	if app.gitContext != nil && app.gitContext.IsRepo {
-		prompt += fmt.Sprintf("\n\nWorking in git repository: %s", app.gitContext.Root)
+		gitContext = fmt.Sprintf("Working in git repository: %s", app.gitContext.Root)
 		if app.gitContext.Branch != "" {
-			prompt += fmt.Sprintf(" (branch: %s)", app.gitContext.Branch)
+			gitContext += fmt.Sprintf(" (branch: %s)", app.gitContext.Branch)
 		}
 	}
 
 	// Load skills
-	skillReg, _ := skills.LoadFromDirectory(".agent-harness/skills")
-	for _, sk := range skillReg.All() {
-		prompt += sk.FormatPrompt()
+	var skillPrompts []string
+	skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
+	if err == nil {
+		for _, sk := range skillReg.All() {
+			skillPrompts = append(skillPrompts, sk.FormatPrompt())
+		}
 	}
 
-	return prompt
+	config := agent.SystemPromptConfig{
+		PersonaName:      ui.PersonaName,
+		GitContext:       gitContext,
+		PermissionMode:   app.config.PermissionMode.String(),
+		WorkingDirectory: app.cwd,
+		Skills:           skillPrompts,
+	}
+
+	return agent.BuildSystemPrompt(config)
 }
 
 func (app *App) renderMessage(msg types.Message) {
