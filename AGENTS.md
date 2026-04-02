@@ -72,6 +72,7 @@ var MyTool = tools.NewTool(tools.Tool{
 - See `docs/os/termux/ui_ux_fixes.md` for detailed UI/UX patches
 
 Skill loaded from: `.agent-harness/skills/termux-mobile-dev/SKILL.md`
+- Release workflow: `.agent-harness/skills/release-workflow/SKILL.md`
 
 ## Workspace Integration (buckets/usr)
 
