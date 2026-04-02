@@ -37,7 +37,7 @@ check_deps() {
 # get latest version from github
 get_latest_version() {
     log_info "fetching latest release..."
-    version=$(curl -fssl "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -op '"tag_name": "\k[^"+' || echo "")
+    version=$(curl -fssl "https://api.github.com/repos/$repo/releases/latest" 2>/dev/null | grep -o '"tag_name": "[^"]*"' | cut -d'"' -f4 || echo "")
     if [ -z "$version" ]; then
         log_warn "could not fetch version, using main branch"
         version="main"
@@ -58,7 +58,7 @@ build_from_source() {
     
     log_info "building agent-harness..."
     cd "$temp"
-    go build -ldflags "-s -w -x main.version=$version" -o "$temp/$binary_name" ./cmd/agent-harness
+    go build -ldflags "-s -w -X main.Version=$version" -o "$temp/$binary_name" ./cmd/agent-harness
     
     log_info "installing to $install_dir..."
     mv "$temp/$binary_name" "$install_dir/$binary_name"
@@ -75,7 +75,7 @@ build_local() {
     if [ -d "$repo_root/.git" ]; then
         log_info "building from local source..."
         cd "$repo_root"
-        go build -ldflags "-s -w -x main.version=local" -o "$install_dir/$binary_name" ./cmd/agent-harness
+        go build -ldflags "-s -w -X main.Version=local" -o "$install_dir/$binary_name" ./cmd/agent-harness
         chmod +x "$install_dir/$binary_name"
         log_success "installed $binary_name from local source"
         return 0
