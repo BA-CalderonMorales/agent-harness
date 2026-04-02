@@ -24,9 +24,10 @@ import (
 )
 
 var (
-	Version   = "0.0.11"
+	Version   = "0.0.15"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
+	GitTag    = "unknown"
 )
 
 // App holds the application state
@@ -82,6 +83,9 @@ func run() error {
 		
 		fmt.Printf("agent-harness %s\n", Version)
 		fmt.Printf("  Build type: %s\n", buildType)
+		if GitTag != "unknown" && GitTag != "" && GitTag != "none" {
+			fmt.Printf("  Tag: %s\n", GitTag)
+		}
 		if BuildTime != "unknown" && BuildTime != "" {
 			fmt.Printf("  Built: %s\n", BuildTime)
 		}
