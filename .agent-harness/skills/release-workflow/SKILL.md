@@ -199,3 +199,5 @@ Follow semantic versioning:
 **For this project (pre-1.0):**
 - Bump minor for UX changes, new features
 - Bump patch for bug fixes
+
+**CRITICAL:** The agent will intentionally assume all releases are **patch** version bumps. If a **major** or **minor** upgrade is required, the user must explicitly request it.
