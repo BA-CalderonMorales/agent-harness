@@ -105,11 +105,11 @@ pkg/
   sandbox/                  # Safety checks
 ```
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation.
+See [docs/architecture.md](docs/architecture.md) for detailed documentation.
 
 ## Documentation
 
-- [Architecture](docs/ARCHITECTURE.md) — Pattern implementations
+- [Architecture](docs/architecture.md) — Pattern implementations
 - [Edge Cases](docs/edgecases.md) — Non-obvious behaviors
 
 ## Building from Source

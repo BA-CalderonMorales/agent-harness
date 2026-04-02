@@ -156,9 +156,19 @@ Content...
 Content...
 ```
 
+### Lowercase Filenames
+
+**ALL LOWERCASE** filenames for all documentation files in the repo. The only exceptions are the root `README.md` and `AGENTS.md` which follow GitHub convention.
+
+- `docs/install.md` not `docs/INSTALL.md`
+- `docs/parity.md` not `docs/PARITY.md`
+- `docs/usage.md` not `docs/USAGE.md`
+
+**Why**: Consistency. Lowercase is easier to type and avoids case-sensitivity issues across platforms.
+
 ## Docs
 
 - `docs/architecture.md` - System design
 - `docs/edgecases.md` - Edge cases and quirks
-- `docs/TERMUX_EDGE_CASES.md` - Termux portability notes
+- `docs/termux_edge_cases.md` - Termux portability notes
 - `docs/services-features.md` - Gated capabilities
