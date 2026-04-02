@@ -6,6 +6,7 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
+	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -52,6 +53,7 @@ type QueryResult struct {
 type Loop struct {
 	Client llm.Client
 	Config LoopConfig
+	UI     *ui.Handler
 	mu     sync.Mutex
 }
 

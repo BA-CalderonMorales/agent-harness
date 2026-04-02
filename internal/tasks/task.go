@@ -53,6 +53,25 @@ type StateBase struct {
 	OutputFile   string
 	OutputOffset int64
 	Notified     bool
+	Events       []Event
+}
+
+// Event captures a discrete event in the task's history.
+type Event struct {
+	Timestamp time.Time `json:"timestamp"`
+	Type      string    `json:"type"` // "thought", "tool_call", "observation", "error"
+	Content   string    `json:"content"`
+	Metadata  map[string]any `json:"metadata,omitempty"`
+}
+
+// AddEvent records a new event into the task's state.
+func (s *StateBase) AddEvent(eventType, content string, metadata map[string]any) {
+	s.Events = append(s.Events, Event{
+		Timestamp: time.Now(),
+		Type:      eventType,
+		Content:   content,
+		Metadata:  metadata,
+	})
 }
 
 // Task is the interface for all task kinds.
