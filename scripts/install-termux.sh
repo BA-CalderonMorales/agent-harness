@@ -86,7 +86,11 @@ build_local() {
 setup_shell_integration() {
     log_info "setting up shell integration..."
     
-    # create wrapper function for 'ah' alias
+    # NOTE: The 'ah' function should already be defined in .bashrc
+    # This function is kept for backwards compatibility but doesn't add
+    # duplicates. The comprehensive 'ah' function with all features
+    # should be managed manually or through dotfiles.
+    
     local shell_rc=""
     if [ -n "$BASH_VERSION" ]; then
         shell_rc="$HOME/.bashrc"
@@ -94,22 +98,18 @@ setup_shell_integration() {
         shell_rc="$HOME/.zshrc"
     fi
     
+    # Only add simple alias if no 'ah' function exists
     if [ -n "$shell_rc" ] && [ -f "$shell_rc" ]; then
-        # check if already added
-        if ! grep -q "agent-harness workspace" "$shell_rc" 2>/dev/null; then
+        if ! grep -q "^ah()" "$shell_rc" 2>/dev/null; then
             cat >> "$shell_rc" << 'eof'
 
-# agent harness workspace shortcut
-ah() {
-    if [ $# -eq 0 ]; then
-        agent-harness
-    else
-        agent-harness "$@"
-    fi
-}
+# agent harness shortcut (minimal - add full function from docs if needed)
+alias ah='agent-harness'
 eof
-            log_success "added 'ah' function to $shell_rc"
+            log_success "added 'ah' alias to $shell_rc"
             log_info "run 'source $shell_rc' to apply changes"
+        else
+            log_info "'ah' function already exists in $shell_rc"
         fi
     fi
 }

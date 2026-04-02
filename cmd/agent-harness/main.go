@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
@@ -52,6 +53,42 @@ func main() {
 }
 
 func run() error {
+	// Parse flags first (before anything else)
+	var showVersion bool
+	var showHelp bool
+	flag.BoolVar(&showVersion, "version", false, "Show version information")
+	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
+	flag.BoolVar(&showHelp, "help", false, "Show help")
+	flag.BoolVar(&showHelp, "h", false, "Show help (shorthand)")
+	
+	// Custom usage message
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
+		fmt.Fprintf(os.Stderr, "Agent Harness - AI-powered coding assistant\n\n")
+		fmt.Fprintf(os.Stderr, "Options:\n")
+		fmt.Fprintf(os.Stderr, "  -v, --version    Show version information\n")
+		fmt.Fprintf(os.Stderr, "  -h, --help       Show this help message\n")
+		fmt.Fprintf(os.Stderr, "\nFor more information: https://github.com/BA-CalderonMorales/agent-harness\n")
+	}
+	
+	flag.Parse()
+	
+	if showVersion {
+		fmt.Printf("agent-harness version %s\n", Version)
+		if BuildTime != "unknown" {
+			fmt.Printf("  Built: %s\n", BuildTime)
+		}
+		if GitSHA != "unknown" {
+			fmt.Printf("  Git: %s\n", GitSHA)
+		}
+		return nil
+	}
+	
+	if showHelp {
+		flag.Usage()
+		return nil
+	}
+	
 	// Get current directory
 	cwd, err := os.Getwd()
 	if err != nil {
