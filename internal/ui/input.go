@@ -1,5 +1,5 @@
-// Rich input handling with history, vim-like editing, and completions
-// Inspired by claw-code's LineEditor
+// Rich input handling with contextual awareness
+// Seamless conversation flow - the interface disappears
 
 package ui
 
@@ -11,37 +11,8 @@ import (
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	"golang.org/x/term"
 )
-
-// EditorMode represents the current editor mode
-type EditorMode int
-
-const (
-	ModePlain EditorMode = iota
-	ModeInsert
-	ModeNormal
-	ModeVisual
-	ModeCommand
-)
-
-func (m EditorMode) String() string {
-	switch m {
-	case ModePlain:
-		return "PLAIN"
-	case ModeInsert:
-		return "INSERT"
-	case ModeNormal:
-		return "NORMAL"
-	case ModeVisual:
-		return "VISUAL"
-	case ModeCommand:
-		return "COMMAND"
-	default:
-		return "UNKNOWN"
-	}
-}
 
 // ReadOutcome represents the result of reading a line
 type ReadOutcome struct {
@@ -50,22 +21,19 @@ type ReadOutcome struct {
 	Exit   bool
 }
 
-// LineEditor provides rich input with history and vim-like editing
+// LineEditor provides rich input with history and completions
 type LineEditor struct {
 	prompt         string
 	completions    []string
 	history        []string
 	historyIndex   int
 	historyBackup  string
-	vimEnabled     bool
-	mode           EditorMode
 	textarea       textarea.Model
 	width          int
 	height         int
 	done           bool
 	cancelled      bool
 	exitReq        bool
-	showMode       bool
 	termWidth      int
 	isTermux       bool
 }
@@ -80,26 +48,16 @@ func NewLineEditor(prompt string, completions []string) *LineEditor {
 	ta.Prompt = ""
 
 	// Detect Termux environment
-	isTermux := os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("HOME"), "com.termux")
+	isTermux := DetectTermux()
 
 	return &LineEditor{
 		prompt:      prompt,
 		completions: completions,
 		history:     make([]string, 0),
-		mode:        ModeInsert,
 		textarea:    ta,
-		vimEnabled:  false,
-		showMode:    false,
 		termWidth:   80,
 		isTermux:    isTermux,
 	}
-}
-
-// EnableVim enables vim keybindings
-func (le *LineEditor) EnableVim() {
-	le.vimEnabled = true
-	le.mode = ModeInsert
-	le.showMode = true
 }
 
 // ReadLine reads a line from the user
@@ -156,16 +114,16 @@ func (le *LineEditor) readLineSimple() (*ReadOutcome, error) {
 func (le *LineEditor) readLineTermux() (*ReadOutcome, error) {
 	// Print prompt without special characters that might render weird
 	fmt.Print(le.prompt)
-	
+
 	reader := bufio.NewReader(os.Stdin)
 	var input strings.Builder
-	
+
 	for {
 		ch, _, err := reader.ReadRune()
 		if err != nil {
 			return &ReadOutcome{Exit: true}, nil
 		}
-		
+
 		switch ch {
 		case '\n', '\r':
 			line := input.String()
@@ -303,12 +261,6 @@ func (le LineEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			le.textarea.InsertString("\n")
 			return le, nil
 
-		case tea.KeyEsc:
-			if le.vimEnabled {
-				le.mode = ModeNormal
-				return le, nil
-			}
-
 		case tea.KeyTab:
 			le.handleTabCompletion()
 			return le, nil
@@ -320,41 +272,6 @@ func (le LineEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyDown:
 			le.historyDown()
 			return le, nil
-		}
-
-		// Handle vim keys when enabled
-		if le.vimEnabled && le.mode == ModeNormal {
-			switch msg.String() {
-			case "i":
-				le.mode = ModeInsert
-				return le, nil
-			case "a":
-				le.mode = ModeInsert
-				return le, nil
-			case "I":
-				le.mode = ModeInsert
-				le.textarea.CursorStart()
-				return le, nil
-			case "A":
-				le.mode = ModeInsert
-				le.textarea.CursorEnd()
-				return le, nil
-			case "v":
-				le.mode = ModeVisual
-				return le, nil
-			case ":":
-				le.mode = ModeCommand
-				return le, nil
-			case "0", "^":
-				le.textarea.CursorStart()
-				return le, nil
-			case "$":
-				le.textarea.CursorEnd()
-				return le, nil
-			case "dd":
-				le.textarea.Reset()
-				return le, nil
-			}
 		}
 	}
 
@@ -374,37 +291,14 @@ func (le LineEditor) View() string {
 
 	var b strings.Builder
 
-	// Render mode indicator if vim is enabled
-	prompt := le.prompt
-	if le.showMode && le.vimEnabled {
-		modeStyle := lipgloss.NewStyle().
-			Background(lipgloss.Color("#3b82f6")).
-			Foreground(lipgloss.Color("#ffffff")).
-			Bold(true).
-			Padding(0, 1)
-		prompt = modeStyle.Render(le.mode.String()) + " " + le.prompt
-	}
-
 	// Update textarea prompt
-	le.textarea.Prompt = prompt
+	le.textarea.Prompt = le.prompt
 
 	b.WriteString(le.textarea.View())
 
 	// Add help text at bottom
-	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666"))
-
-	if le.vimEnabled {
-		b.WriteString("\n")
-		if le.mode == ModeNormal {
-			b.WriteString(helpStyle.Render("i=insert · :cmd · v=visual · hjkl=move · dd=clear"))
-		} else if le.mode == ModeInsert {
-			b.WriteString(helpStyle.Render("Esc=normal · Ctrl+C=cancel · Enter=submit"))
-		}
-	} else {
-		b.WriteString("\n")
-		b.WriteString(helpStyle.Render("Ctrl+C=cancel · Enter=submit · ↑↓=history · Tab=complete"))
-	}
+	b.WriteString("\n")
+	b.WriteString(DimStyle.Render("ctrl+c: cancel • enter: submit • ↑↓: history • tab: complete"))
 
 	return b.String()
 }
@@ -430,7 +324,6 @@ func (le *LineEditor) handleTabCompletion() {
 	}
 
 	// Simple: just use first match
-	// In a full implementation, cycle through matches
 	le.textarea.SetValue(matches[0])
 	le.textarea.CursorEnd()
 }
@@ -510,4 +403,127 @@ func (le *LineEditor) GetHistory() []string {
 func (le *LineEditor) SetHistory(history []string) {
 	le.history = make([]string, len(history))
 	copy(le.history, history)
+}
+
+// SmartPrompt provides a contextual prompt that adapts to session state
+type SmartPrompt struct {
+	basePrompt      string
+	contextProvider func() string
+	history         []string
+	historyIdx      int
+}
+
+// NewSmartPrompt creates a contextual prompt
+func NewSmartPrompt() *SmartPrompt {
+	return &SmartPrompt{
+		basePrompt: "◆",
+		history:    make([]string, 0),
+		historyIdx: -1,
+	}
+}
+
+// SetContextProvider sets a function that provides context for the prompt
+func (sp *SmartPrompt) SetContextProvider(fn func() string) {
+	sp.contextProvider = fn
+}
+
+// Render returns the full prompt string
+func (sp *SmartPrompt) Render() string {
+	context := ""
+	if sp.contextProvider != nil {
+		context = sp.contextProvider()
+	}
+
+	if context != "" {
+		return fmt.Sprintf("%s %s ", DimStyle.Render(context), sp.basePrompt)
+	}
+
+	return sp.basePrompt + " "
+}
+
+// AddToHistory adds an entry to history
+func (sp *SmartPrompt) AddToHistory(entry string) {
+	entry = strings.TrimSpace(entry)
+	if entry == "" {
+		return
+	}
+
+	// Avoid duplicates at the end
+	if len(sp.history) > 0 && sp.history[len(sp.history)-1] == entry {
+		return
+	}
+
+	sp.history = append(sp.history, entry)
+	sp.historyIdx = -1
+}
+
+// HistoryUp moves up in history
+func (sp *SmartPrompt) HistoryUp(current string) (string, bool) {
+	if len(sp.history) == 0 {
+		return "", false
+	}
+
+	if sp.historyIdx == -1 {
+		// Save current input before going to history
+		// (would need to be passed in or stored)
+	}
+
+	if sp.historyIdx < len(sp.history)-1 {
+		sp.historyIdx++
+		return sp.history[len(sp.history)-1-sp.historyIdx], true
+	}
+
+	return "", false
+}
+
+// HistoryDown moves down in history
+func (sp *SmartPrompt) HistoryDown() (string, bool) {
+	if sp.historyIdx <= 0 {
+		sp.historyIdx = -1
+		return "", false
+	}
+
+	sp.historyIdx--
+	return sp.history[len(sp.history)-1-sp.historyIdx], true
+}
+
+// ContextualInput combines input reading with smart prompts
+type ContextualInput struct {
+	editor     *LineEditor
+	prompt     *SmartPrompt
+	completions []string
+}
+
+// NewContextualInput creates a new contextual input handler
+func NewContextualInput(completions []string) *ContextualInput {
+	prompt := NewSmartPrompt()
+	return &ContextualInput{
+		editor:      NewLineEditor(prompt.Render(), completions),
+		prompt:      prompt,
+		completions: completions,
+	}
+}
+
+// SetContextProvider sets the context provider for the prompt
+func (ci *ContextualInput) SetContextProvider(fn func() string) {
+	ci.prompt.SetContextProvider(fn)
+	// Update the editor's prompt
+	ci.editor.prompt = ci.prompt.Render()
+}
+
+// ReadInput reads input with contextual awareness
+func (ci *ContextualInput) ReadInput() (*ReadOutcome, error) {
+	// Update prompt before reading
+	ci.editor.prompt = ci.prompt.Render()
+	
+	outcome, err := ci.editor.ReadLine()
+	if err != nil {
+		return nil, err
+	}
+	
+	if outcome != nil && !outcome.Cancel && !outcome.Exit && outcome.Text != "" {
+		ci.prompt.AddToHistory(outcome.Text)
+	}
+	
+	return outcome, nil
 }

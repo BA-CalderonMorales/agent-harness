@@ -5,7 +5,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
@@ -24,7 +23,7 @@ import (
 )
 
 var (
-	Version   = "0.0.10"
+	Version   = "0.0.11"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 )
@@ -42,11 +41,12 @@ type App struct {
 	loop           *agent.Loop
 	gitContext     *git.Context
 	cwd            string
+	streamRenderer *ui.StreamRenderer
 }
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "\nError: %v\n", err)
+		fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.ErrorStyle.Render("Error:"), err)
 		os.Exit(1)
 	}
 }
@@ -59,7 +59,10 @@ func run() error {
 	}
 
 	// Initialize app
-	app := &App{cwd: cwd}
+	app := &App{
+		cwd:            cwd,
+		streamRenderer: ui.NewStreamRenderer(),
+	}
 
 	// Load layered configuration
 	loader := config.NewLayeredLoader(cwd)
@@ -74,7 +77,7 @@ func run() error {
 	if credManager.HasSecureCredentials() {
 		secureCfg, err := credManager.LoadSecure()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to load secure credentials: %v\n", err)
+			fmt.Fprintf(os.Stderr, "%s %v\n", ui.WarningStyle.Render("Warning:"), err)
 		} else {
 			app.secureConfig = secureCfg
 			// Override config with secure credentials
@@ -92,7 +95,7 @@ func run() error {
 
 	// Check for legacy credentials and migrate
 	if app.config.APIKey == "" && credManager.HasLegacyCredentials() {
-		fmt.Println("Found existing credentials in legacy format.")
+		fmt.Println(ui.InfoStyle.Render("Found existing credentials in legacy format."))
 		secureCfg, err := credManager.MigrateFromLegacy()
 		if err != nil {
 			fmt.Printf("Migration failed: %v\n", err)
@@ -310,38 +313,28 @@ func (app *App) initSlashCommands() {
 }
 
 func (app *App) printWelcome() {
-	fmt.Println()
-	fmt.Println(ui.HeaderStyle.Render("╔════════════════════════════════════════════════════════════╗"))
-	fmt.Println(ui.HeaderStyle.Render("║     Agent Harness                                          ║"))
-	fmt.Printf( "%s %s\n", ui.HeaderStyle.Render("║"), ui.DimStyle.Render(fmt.Sprintf("Version %s", Version)))
-	fmt.Println(ui.HeaderStyle.Render("╚════════════════════════════════════════════════════════════╝"))
-	fmt.Println()
-	fmt.Printf("Model: %s\n", app.session.Model)
-	fmt.Printf("Permissions: %s\n", app.config.PermissionMode.String())
-	
+	gitInfo := &ui.GitInfo{}
 	if app.gitContext != nil && app.gitContext.IsRepo {
-		fmt.Printf("Workspace: %s\n", app.gitContext.FormatStatus())
+		gitInfo.IsRepo = true
+		gitInfo.Root = app.gitContext.Root
+		gitInfo.Branch = app.gitContext.Branch
 	}
-	
-	fmt.Println()
-	fmt.Println("Type /help for available commands, or enter your message.")
-	fmt.Println()
+
+	fmt.Print(ui.WelcomeScreen(Version, app.session.Model, app.config.PermissionMode.String(), gitInfo))
 }
 
 func (app *App) runREPL() error {
-	// Create line editor with Termux-optimized prompt
-	prompt := "> "
-	editor := ui.NewLineEditor(prompt, app.cmdRegistry.GetCompletions())
+	// Create contextual input handler
+	inputHandler := ui.NewContextualInput(app.cmdRegistry.GetCompletions())
 
 	for {
-		outcome, err := editor.ReadLine()
+		outcome, err := inputHandler.ReadInput()
 		if err != nil {
 			return fmt.Errorf("input error: %w", err)
 		}
 
 		if outcome.Exit {
-			fmt.Println("\nGoodbye.")
-			fmt.Println(app.costTracker.Summary())
+			fmt.Print(ui.RenderGoodbye(app.costTracker.Summary()))
 			return nil
 		}
 
@@ -362,8 +355,7 @@ func (app *App) runREPL() error {
 				continue
 			}
 			if commands.IsQuit(result) {
-				fmt.Println("\nGoodbye.")
-				fmt.Println(app.costTracker.Summary())
+				fmt.Print(ui.RenderGoodbye(app.costTracker.Summary()))
 				return nil
 			}
 			fmt.Println(result)
@@ -378,6 +370,9 @@ func (app *App) runREPL() error {
 }
 
 func (app *App) processMessage(input string) error {
+	// Echo user input
+	app.streamRenderer.PrintUserMessage(input)
+
 	// Add user message to session
 	userMsg := types.Message{
 		UUID:      generateUUID(),
@@ -446,6 +441,9 @@ func (app *App) processMessage(input string) error {
 		return permissions.Evaluate(t, toolInput, permCtx), nil
 	}
 
+	// Show thinking indicator
+	app.streamRenderer.StartThinking("")
+
 	// Query the agent
 	params := agent.QueryParams{
 		Messages:       app.session.Messages,
@@ -456,14 +454,24 @@ func (app *App) processMessage(input string) error {
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
+		app.streamRenderer.StopThinking()
 		return err
 	}
 
 	// Process stream
 	var responseMsg *types.Message
+	var hasOutput bool
+
 	for event := range stream {
 		switch e := event.(type) {
 		case types.StreamMessage:
+			// First message - stop thinking and start output
+			if !hasOutput {
+				app.streamRenderer.StopThinking()
+				hasOutput = true
+				fmt.Println() // Newline before response
+			}
+
 			if responseMsg == nil {
 				responseMsg = &e.Message
 				app.renderMessage(e.Message)
@@ -479,10 +487,14 @@ func (app *App) processMessage(input string) error {
 			app.session.AddMessage(e.Message)
 
 		case types.ProgressMessage:
-			fmt.Printf("\r[%s] %s", e.ToolUseID, e.Type)
+			// Show tool progress
+			app.streamRenderer.PrintProgress(fmt.Sprintf("[%s] %s", e.ToolUseID, e.Type))
 		}
 	}
-	fmt.Println()
+
+	if hasOutput {
+		fmt.Println() // Final newline after response
+	}
 
 	// Complete the turn for cost tracking
 	app.costTracker.CompleteTurn()
@@ -490,7 +502,7 @@ func (app *App) processMessage(input string) error {
 	// Auto-save session periodically
 	if app.session.Turns%5 == 0 {
 		if path, err := app.sessionManager.SaveCurrent(); err == nil {
-			fmt.Printf(ui.DimStyle.Render("\n  [Session auto-saved: %s]\n"), filepath.Base(path))
+			fmt.Println(ui.RenderAutoSave(path))
 		}
 	}
 
@@ -498,7 +510,7 @@ func (app *App) processMessage(input string) error {
 }
 
 func (app *App) buildSystemPrompt() string {
-	prompt := `You are Agent Harness, a helpful coding assistant.
+	prompt := `You are ` + ui.PersonaName + `, a helpful coding assistant.
 You have access to tools for bash, file operations, search, and more.
 Respect the user's workspace and permissions.
 When editing files, ensure old_string matches exactly.
@@ -527,14 +539,15 @@ func (app *App) renderMessage(msg types.Message) {
 		case types.TextBlock:
 			fmt.Print(b.Text)
 		case types.ToolUseBlock:
-			fmt.Printf("\n\n%s\n", ui.DimStyle.Render(fmt.Sprintf("[Using tool: %s]", b.Name)))
+			// Show tool use
+			fmt.Printf("\n%s\n", ui.RenderToolUse(b.Name, ""))
 		}
 	}
 }
 
 func (app *App) getStatusReport() string {
 	meta := app.session.GetMetadata()
-	
+
 	projectRoot := ""
 	gitBranch := ""
 	if app.gitContext != nil && app.gitContext.IsRepo {
@@ -555,19 +568,17 @@ func (app *App) getStatusReport() string {
 
 func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println()
-	fmt.Println(ui.HeaderStyle.Render("╔════════════════════════════════════════════════════════════╗"))
-	fmt.Println(ui.HeaderStyle.Render("║     Agent Harness - Secure Initial Setup                   ║"))
-	fmt.Println(ui.HeaderStyle.Render("╚════════════════════════════════════════════════════════════╝"))
+	fmt.Println(ui.HeaderStyle.Render("  Welcome to " + ui.PersonaName))
 	fmt.Println()
-	fmt.Println("No API credentials found. Let's set them up securely.")
+	fmt.Println("  Let's get you set up securely.")
 	fmt.Println()
 
 	// Provider selection using simple input for Termux compatibility
-	fmt.Println("Choose an API provider:")
-	fmt.Println("  1) OpenRouter (recommended)")
-	fmt.Println("  2) OpenAI")
-	fmt.Println("  3) Anthropic")
-	fmt.Print("Enter choice (1-3) [1]: ")
+	fmt.Println("  Choose an API provider:")
+	fmt.Println("    1) OpenRouter (recommended)")
+	fmt.Println("    2) OpenAI")
+	fmt.Println("    3) Anthropic")
+	fmt.Print("  Enter choice (1-3) [1]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	choice, err := reader.ReadString('\n')
@@ -586,11 +597,11 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Println()
-	fmt.Printf("Selected: %s\n", app.config.Provider)
+	fmt.Printf("  Selected: %s\n", app.config.Provider)
 	fmt.Println()
 
 	// API key input with masking
-	fmt.Printf("Enter your %s API key: ", app.config.Provider)
+	fmt.Printf("  Enter your %s API key: ", app.config.Provider)
 	apiKey, err := config.PromptPassword("")
 	if err != nil {
 		return fmt.Errorf("failed to read API key: %w", err)
@@ -613,7 +624,7 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 		defaultModel = "claude-3-5-sonnet-20241022"
 	}
 
-	fmt.Printf("Model [%s]: ", defaultModel)
+	fmt.Printf("  Model [%s]: ", defaultModel)
 	model, err := reader.ReadString('\n')
 	if err != nil {
 		model = ""
@@ -626,8 +637,8 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Println()
-	fmt.Println("Credentials will be encrypted with a master password.")
-	fmt.Println("You'll need this password each time you start agent-harness.")
+	fmt.Println("  Credentials will be encrypted with a master password.")
+	fmt.Println("  You'll need this password each time you start agent-harness.")
 	fmt.Println()
 
 	// Save securely
@@ -642,12 +653,10 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Println()
-	fmt.Println(ui.HeaderStyle.Render("╔════════════════════════════════════════════════════════════╗"))
-	fmt.Println(ui.HeaderStyle.Render("║  " + ui.RenderSuccess("Credentials saved securely") + "                              ║"))
-	fmt.Println(ui.HeaderStyle.Render("║                                                            ║"))
-	fmt.Println(ui.HeaderStyle.Render("║  Encryption: AES-256-GCM with Argon2id                     ║"))
-	fmt.Println(ui.HeaderStyle.Render("║  File permissions: 0600 (user read/write only)             ║"))
-	fmt.Println(ui.HeaderStyle.Render("╚════════════════════════════════════════════════════════════╝"))
+	fmt.Println("  " + ui.RenderSuccess("Credentials saved securely"))
+	fmt.Println()
+	fmt.Println(ui.DimStyle.Render("  Encryption: AES-256-GCM with Argon2id"))
+	fmt.Println(ui.DimStyle.Render("  File permissions: 0600 (user read/write only)"))
 	fmt.Println()
 
 	return nil
