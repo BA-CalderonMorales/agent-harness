@@ -1,5 +1,5 @@
 // Formatted output rendering with professional presentation
-// Designed for clarity, scannability, and delight
+// Clean visual language: ◆ → ✓ ✗ (no emojis)
 
 package ui
 
@@ -54,7 +54,7 @@ var (
 		Italic(true)
 )
 
-// Markers for lists and status
+// Markers for lists and status - ASCII only, no emojis
 var (
 	CurrentMarker   = lipgloss.NewStyle().Foreground(lipgloss.Color("#3b82f6")).Bold(true).Render("●")
 	AvailableMarker = lipgloss.NewStyle().Foreground(lipgloss.Color("#666666")).Render("○")
@@ -93,22 +93,21 @@ func RenderError(message string) string {
 
 // RenderWarning renders a warning indicator
 func RenderWarning(message string) string {
-	return WarningStyle.Render("⚠ " + message)
+	return WarningStyle.Render("! " + message)
 }
 
 // RenderInfo renders an info indicator
 func RenderInfo(message string) string {
-	return InfoStyle.Render("ℹ " + message)
+	return InfoStyle.Render("i " + message)
 }
 
-// RenderUserInput renders user input in the chat flow
+// RenderUserInput renders user input with diamond indicator
 func RenderUserInput(text string) string {
-	return fmt.Sprintf("\n%s %s\n", UserStyle.Render("◆"), text)
+	return fmt.Sprintf("\n◆ %s\n", text)
 }
 
-// RenderAgentResponse renders agent response in the chat flow
+// RenderAgentResponse renders agent response
 func RenderAgentResponse(text string) string {
-	// Don't add extra newlines if text already has them
 	if strings.HasPrefix(text, "\n") {
 		return text
 	}
@@ -118,18 +117,18 @@ func RenderAgentResponse(text string) string {
 // RenderToolUse renders a tool use indicator
 func RenderToolUse(toolName, description string) string {
 	action := FormatToolAction(toolName, description)
-	return fmt.Sprintf("%s %s", DimStyle.Render("→"), DimStyle.Render(action))
+	return fmt.Sprintf("→ %s", DimStyle.Render(action))
 }
 
-// RenderToolResult renders a tool result (compact for success, verbose for errors)
+// RenderToolResult renders a tool result
 func RenderToolResult(success bool, summary string) string {
 	if success {
 		if summary != "" {
-			return fmt.Sprintf("  %s %s", SuccessStyle.Render("✓"), DimStyle.Render(summary))
+			return fmt.Sprintf("  ✓ %s", DimStyle.Render(summary))
 		}
 		return fmt.Sprintf("  %s", SuccessStyle.Render("✓"))
 	}
-	return fmt.Sprintf("  %s %s", ErrorStyle.Render("✗"), ErrorStyle.Render(summary))
+	return fmt.Sprintf("  ✗ %s", ErrorStyle.Render(summary))
 }
 
 // WelcomeScreen renders the contextual welcome screen
@@ -189,7 +188,7 @@ type GitInfo struct {
 	Root      string
 	Branch    string
 	Tag       string
-	BuildType string // "release" or "dev"
+	BuildType string
 }
 
 // RenderStatusReport renders a comprehensive status report
@@ -363,10 +362,10 @@ func RenderHelp(commands map[string]string) string {
 	
 	// Group commands by category
 	categories := map[string][]string{
-		"Session": {"/help", "/status", "/clear", "/compact", "/session", "/export"},
+		"Session":  {"/help", "/status", "/clear", "/compact", "/session", "/export"},
 		"Settings": {"/model", "/permissions", "/config"},
-		"Info": {"/cost", "/diff", "/version"},
-		"Exit": {"/quit", "/exit"},
+		"Info":     {"/cost", "/diff", "/version"},
+		"Exit":     {"/quit", "/exit"},
 	}
 	
 	for category, cmds := range categories {
@@ -399,7 +398,7 @@ func RenderGoodbye(costSummary string) string {
 
 // RenderSuggestion renders a contextual suggestion
 func RenderSuggestion(text string) string {
-	return fmt.Sprintf("  %s %s", DimStyle.Render("Tip:"), DimStyle.Render(text))
+	return fmt.Sprintf("  tip: %s", DimStyle.Render(text))
 }
 
 // RenderAutoSave renders an auto-save notification
@@ -423,7 +422,7 @@ func RenderSeparator() string {
 func RenderConversationTurn(userInput, agentResponse string, toolsUsed []string) string {
 	var lines []string
 	
-	// User input
+	// User input with diamond
 	lines = append(lines, RenderUserInput(userInput))
 	
 	// Tool uses (if any)
@@ -444,10 +443,10 @@ type Spinner struct {
 	index  int
 }
 
-// NewSpinner creates a new spinner with Unicode frames
+// NewSpinner creates a new spinner with Braille frames
 func NewSpinner() *Spinner {
 	return &Spinner{
-		frames: []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"},
+		frames: BrailleFrames,
 		index:  0,
 	}
 }
@@ -564,7 +563,7 @@ func FormatBytes(bytes int64) string {
 
 // DetectTermux detects if running in Termux environment
 func DetectTermux() bool {
-	return os.Getenv("TERMUX_VERSION") != "" || 
+	return os.Getenv("TERMUX_VERSION") != "" ||
 		strings.Contains(os.Getenv("HOME"), "com.termux")
 }
 

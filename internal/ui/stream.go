@@ -1,5 +1,5 @@
 // Stream rendering for real-time agent output
-// Creates that "streaming" feel even with discrete events
+// Polished animations inspired by Terminal Jarvis ADK and Claude Code
 
 package ui
 
@@ -12,22 +12,42 @@ import (
 	"time"
 )
 
-// StreamRenderer handles real-time output rendering
-type StreamRenderer struct {
-	out        io.Writer
-	mu         sync.Mutex
-	isThinking bool
-	lastLine   string
-	spinner    *Spinner
-	toolStack  []string
+// Kaomoji spinner frames for personality
+var KaomojiFrames = []string{
+	"┌( >_<)┘",
+	"└( >_<)┐",
 }
 
-// NewStreamRenderer creates a new stream renderer
+// Braille spinner frames for standard operations
+var BrailleFrames = []string{
+	"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏",
+}
+
+// StreamRenderer handles real-time output rendering with polished animations
+type StreamRenderer struct {
+	out           io.Writer
+	mu            sync.Mutex
+	isThinking    bool
+	thinkingStart time.Time
+	spinnerIdx    int
+	toolStack     []ToolInfo
+	kaomojiIdx    int
+	lastFrameTime time.Time
+}
+
+// ToolInfo tracks active tool execution
+type ToolInfo struct {
+	Name        string
+	Description string
+	StartTime   time.Time
+}
+
+// NewStreamRenderer creates a new stream renderer with animation support
 func NewStreamRenderer() *StreamRenderer {
 	return &StreamRenderer{
-		out:       os.Stdout,
-		spinner:   NewSpinner(),
-		toolStack: make([]string, 0),
+		out:           os.Stdout,
+		toolStack:     make([]ToolInfo, 0),
+		lastFrameTime: time.Now(),
 	}
 }
 
@@ -38,7 +58,7 @@ func (sr *StreamRenderer) SetOutput(w io.Writer) {
 	sr.out = w
 }
 
-// StartThinking shows the agent is thinking/working with animated spinner
+// StartThinking shows the agent is thinking with animated kaomoji
 func (sr *StreamRenderer) StartThinking(context string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -48,25 +68,63 @@ func (sr *StreamRenderer) StartThinking(context string) {
 	}
 	
 	sr.isThinking = true
+	sr.thinkingStart = time.Now()
+	sr.kaomojiIdx = 0
 	
-	// Show animated thinking indicator with spinner
-	frame := sr.spinner.Next()
-	indicator := GetRandomThinkingIndicator()
+	// Print thinking indicator with kaomoji
+	frame := KaomojiFrames[0]
 	if context != "" {
-		fmt.Fprintf(sr.out, "\n%s %s\n", DimStyle.Render(frame), DimStyle.Render(context))
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s\n", 
+			DimStyle.Render(context),
+			DimStyle.Render(frame),
+			DimStyle.Render("thinking..."))
 	} else {
-		fmt.Fprintf(sr.out, "\n%s %s\n", DimStyle.Render(frame), DimStyle.Render(indicator))
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s\n", 
+			DimStyle.Render("Processing..."),
+			DimStyle.Render(frame),
+			DimStyle.Render("thinking..."))
 	}
 }
 
-// StopThinking stops the thinking indicator
+// StopThinking stops the thinking indicator and clears the line
 func (sr *StreamRenderer) StopThinking() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
+	
+	if !sr.isThinking {
+		return
+	}
+	
 	sr.isThinking = false
+	// Clear the thinking lines
+	fmt.Fprint(sr.out, "\033[2A\033[K\033[K\n\033[K")
 }
 
-// PrintAgentOutput prints agent text output with natural flow
+// UpdateThinking updates the thinking animation frame
+func (sr *StreamRenderer) UpdateThinking() {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	
+	if !sr.isThinking {
+		return
+	}
+	
+	// Only update every 200ms
+	if time.Since(sr.lastFrameTime) < 200*time.Millisecond {
+		return
+	}
+	sr.lastFrameTime = time.Now()
+	
+	sr.kaomojiIdx = (sr.kaomojiIdx + 1) % len(KaomojiFrames)
+	frame := KaomojiFrames[sr.kaomojiIdx]
+	
+	// Move up one line and update the kaomoji
+	fmt.Fprintf(sr.out, "\033[1A\033[K   %s %s\n", 
+		DimStyle.Render(frame),
+		DimStyle.Render("thinking..."))
+}
+
+// PrintAgentOutput prints agent text output
 func (sr *StreamRenderer) PrintAgentOutput(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -85,18 +143,26 @@ func (sr *StreamRenderer) PrintAgentOutput(text string) {
 	}
 }
 
-// PrintToolStart indicates a tool is starting
+// PrintToolStart indicates a tool is starting with visual feedback
 func (sr *StreamRenderer) PrintToolStart(toolName, description string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
 	action := FormatToolAction(toolName, description)
-	sr.toolStack = append(sr.toolStack, toolName)
+	toolInfo := ToolInfo{
+		Name:        toolName,
+		Description: description,
+		StartTime:   time.Now(),
+	}
+	sr.toolStack = append(sr.toolStack, toolInfo)
 	
-	// Compact, professional tool indication
-	fmt.Fprintf(sr.out, "\n%s %s\n", 
-		DimStyle.Render("→"),
-		DimStyle.Render(action))
+	// Print tool start with arrow indicator
+	fmt.Fprintf(sr.out, "\n→ %s\n", DimStyle.Render(action))
+	
+	// Show kaomoji spinner on next line
+	fmt.Fprintf(sr.out, "   %s %s\n", 
+		DimStyle.Render(KaomojiFrames[0]),
+		DimStyle.Render("running..."))
 }
 
 // PrintToolComplete indicates a tool completed successfully
@@ -109,17 +175,19 @@ func (sr *StreamRenderer) PrintToolComplete(toolName string, result string) {
 		sr.toolStack = sr.toolStack[:len(sr.toolStack)-1]
 	}
 	
-	// Only show completion for significant operations
-	if len(result) > 100 || strings.Contains(result, "error") {
-		status := SuccessStyle.Render("✓")
-		if strings.Contains(strings.ToLower(result), "error") {
-			status = ErrorStyle.Render("✗")
-		}
-		fmt.Fprintf(sr.out, "  %s\n", status)
+	// Clear the spinner line and show success
+	action := FormatToolAction(toolName, "")
+	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n", 
+		SuccessStyle.Render("✓"),
+		DimStyle.Render(action))
+	
+	// Show result summary if significant
+	if len(result) > 0 && len(result) < 100 {
+		fmt.Fprintf(sr.out, "   %s\n", DimStyle.Render(Truncate(result, 80)))
 	}
 }
 
-// PrintToolError shows a tool error
+// PrintToolError shows a tool error with clear indication
 func (sr *StreamRenderer) PrintToolError(toolName string, err error) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -129,18 +197,27 @@ func (sr *StreamRenderer) PrintToolError(toolName string, err error) {
 		sr.toolStack = sr.toolStack[:len(sr.toolStack)-1]
 	}
 	
-	fmt.Fprintf(sr.out, "  %s %s\n", 
+	// Clear the spinner line and show error
+	action := FormatToolAction(toolName, "")
+	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n", 
 		ErrorStyle.Render("✗"),
-		ErrorStyle.Render(err.Error()))
+		ErrorStyle.Render(action))
+	
+	if err != nil {
+		fmt.Fprintf(sr.out, "   %s\n", ErrorStyle.Render(err.Error()))
+	}
 }
 
-// PrintProgress shows ongoing progress for long operations
+// PrintProgress shows ongoing progress with animation
 func (sr *StreamRenderer) PrintProgress(message string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	frame := sr.spinner.Next()
-	fmt.Fprintf(sr.out, "\r%s %s", 
+	// Update spinner index
+	sr.spinnerIdx = (sr.spinnerIdx + 1) % len(BrailleFrames)
+	frame := BrailleFrames[sr.spinnerIdx]
+	
+	fmt.Fprintf(sr.out, "\r   %s %s", 
 		DimStyle.Render(frame),
 		DimStyle.Render(message))
 }
@@ -150,18 +227,15 @@ func (sr *StreamRenderer) ClearProgress() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	fmt.Fprintf(sr.out, "\r\033[K") // Clear line
+	fmt.Fprintf(sr.out, "\r\033[K")
 }
 
-// PrintUserMessage shows the user's input (for echo)
+// PrintUserMessage shows the user's input with diamond indicator
 func (sr *StreamRenderer) PrintUserMessage(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	// Compact user indicator
-	fmt.Fprintf(sr.out, "\n%s %s\n", 
-		UserStyle.Render("◆"),
-		UserStyle.Render(text))
+	fmt.Fprintf(sr.out, "\n◆ %s\n", text)
 }
 
 // PrintSeparator prints a subtle separator
@@ -186,8 +260,8 @@ func (sr *StreamRenderer) PrintSuggestion(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 	
-	fmt.Fprintf(sr.out, "  %s %s\n",
-		DimStyle.Render("💡"),
+	fmt.Fprintf(sr.out, "   %s %s\n",
+		DimStyle.Render("tip:"),
 		DimStyle.Render(text))
 }
 
@@ -201,7 +275,7 @@ func (sr *StreamRenderer) Flush() {
 	}
 }
 
-// IsThinking returns whether the agent is currently "thinking"
+// IsThinking returns whether the agent is currently thinking
 func (sr *StreamRenderer) IsThinking() bool {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -215,6 +289,13 @@ func (sr *StreamRenderer) HasActiveTools() bool {
 	return len(sr.toolStack) > 0
 }
 
+// GetActiveToolCount returns the number of active tools
+func (sr *StreamRenderer) GetActiveToolCount() int {
+	sr.mu.Lock()
+	defer sr.mu.Unlock()
+	return len(sr.toolStack)
+}
+
 // GetTerminalSize attempts to get terminal dimensions
 func GetTerminalSize() (width, height int, err error) {
 	// Simplified - in a full implementation, use term.GetSize
@@ -223,26 +304,24 @@ func GetTerminalSize() (width, height int, err error) {
 
 // AnimatedText provides typewriter-like text output
 type AnimatedText struct {
-	out    io.Writer
-	delay  time.Duration
+	out   io.Writer
+	delay time.Duration
 }
 
 // NewAnimatedText creates animated text output
 func NewAnimatedText() *AnimatedText {
 	return &AnimatedText{
 		out:   os.Stdout,
-		delay: 1 * time.Millisecond, // Very fast, almost imperceptible
+		delay: 1 * time.Millisecond,
 	}
 }
 
-// Print prints text with a subtle animation effect
+// Print prints text (no animation for now)
 func (at *AnimatedText) Print(text string) {
-	// For now, just print directly
-	// In a full implementation, this could animate
 	fmt.Fprint(at.out, text)
 }
 
-// Sprint returns the animated string
+// Sprint returns the string
 func (at *AnimatedText) Sprint(text string) string {
 	return text
 }
