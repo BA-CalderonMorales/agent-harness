@@ -108,6 +108,69 @@ go test -race ./...
 
 ## Critical Rules
 
+### Tool Calling Must Work Flawlessly
+
+Tool execution is the core value proposition. Any UX improvements must not regress tool functionality.
+
+**Requirements:**
+1. **Tool parsing**: LLM output must be parsed correctly every time
+2. **Validation**: Input schema validation must catch errors before execution
+3. **Execution**: Tools must execute with proper timeout and cancellation
+4. **Feedback**: User must see what tool is running and its status
+5. **Recovery**: Failed tools must not crash the session
+
+**Visual Feedback Standards:**
+```
+→ tool-name: <what it's doing>
+  ┌( >_<)┘  <spinner while running>
+✓ tool-name: <result summary>
+```
+
+**No Regressions Allowed:**
+- All existing tools must continue to work
+- Permission checks must not be bypassed
+- Error handling must be preserved
+- Streaming responses must not break
+
+### Visual UX Standards
+
+Based on lessons from Terminal Jarvis ADK and Claude Code:
+
+**Status Indicators (Always Use):**
+- `◆` - Acknowledgment / start
+- `→` - Action in progress
+- `✓` - Success
+- `✗` - Error
+- `?` - Needs input
+
+**Spinner Animation (Kaomoji Style):**
+```
+┌( >_<)┘  Frame 1
+└( >_<)┐  Frame 2
+```
+
+**Never Repeat User Input:**
+```
+# Bad
+User: Can you analyze my projects?
+AI: Can you analyze my projects? Let me think...
+
+# Good
+◆ Analyzing projects...
+→ scanning ~/projects...
+  found 18 directories
+```
+
+**Tool Execution Flow:**
+```
+◆ Starting: brief description
+
+→ read: loading file.go
+  ┌( >_<)┘  reading...
+
+✓ read: 145 lines loaded
+```
+
 ### Zero Emojis Policy
 
 **NO EMOJIS** in any root-level `.md` files or documentation. This is non-negotiable.

@@ -1,5 +1,5 @@
 // Persona defines the agent's character and voice
-// This creates a consistent, friendly, and professional tone
+// Professional, concise, and helpful - no fluff, no cringe
 
 package ui
 
@@ -14,84 +14,58 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
-// SpinnerVerbs are playful loading messages inspired by Claude Code
+// SpinnerVerbs are concise loading messages
 var SpinnerVerbs = []string{
-	"Thinking",
-	"Processing",
-	"Exploring",
 	"Analyzing",
-	"Crafting",
-	"Considering",
+	"Processing",
 	"Computing",
-	"Synthesizing",
-	"Reasoning",
-	"Pondering",
 	"Evaluating",
-	"Constructing",
-	"Formulating",
-	"Generating",
-	"Orchestrating",
-	"Deciphering",
-	"Contemplating",
-	"Examining",
-	"Investigating",
-	"Designing",
-	"Architecting",
-	"Sculpting",
-	"Weaving",
-	"Forging",
-	"Curating",
-	"Refining",
-	"Polishing",
-	"Assembling",
-	"Composing",
-	"Developing",
+	"Checking",
+	"Building",
+	"Searching",
+	"Reading",
+	"Writing",
+	"Updating",
 }
 
 // ActionNouns for tool execution descriptions
 var ActionNouns = []string{
-	"the code",
-	"the files",
-	"the structure",
-	"the logic",
-	"the patterns",
-	"the solution",
-	"the approach",
-	"the details",
-	"the architecture",
-	"the implementation",
+	"files",
+	"code",
+	"structure",
+	"dependencies",
+	"configuration",
 }
 
-// ThinkingIndicators show the agent is working on something complex
+// ThinkingIndicators show the agent is working - brief and professional
 var ThinkingIndicators = []string{
-	"Let me think about this...",
-	"Hmm, let me see...",
-	"Working on it...",
-	"Give me a moment...",
-	"Let me analyze this...",
-	"Figuring this out...",
-	"Processing your request...",
-	"On it...",
+	"Thinking...",
+	"Working...",
+	"Processing...",
 }
 
-// GreetingTemplates for contextual welcome messages
+// GreetingTemplates for contextual welcome messages - professional only
 var GreetingTemplates = []string{
 	"Ready to help you build something great.",
-	"Let's make some progress today.",
 	"What are we working on?",
 	"Here to help you code.",
 	"Ready when you are.",
 	"Let's get things done.",
 }
 
-// CompletionPhrases for when work is done
+// CompletionPhrases for when work is done - brief and clean
 var CompletionPhrases = []string{
 	"Done.",
-	"All set.",
-	"Finished.",
 	"Complete.",
 	"Ready.",
-	"There you go.",
+	"Finished.",
+}
+
+// StartupMessages - brief acknowledgments (no emojis, no cringe)
+var StartupMessages = []string{
+	"Analyzing request...",
+	"Processing...",
+	"Working on it...",
 }
 
 // GetRandomSpinnerVerb returns a random loading verb
@@ -114,6 +88,11 @@ func GetRandomCompletion() string {
 	return CompletionPhrases[rand.Intn(len(CompletionPhrases))]
 }
 
+// GetRandomStartupMessage returns a brief startup acknowledgment
+func GetRandomStartupMessage() string {
+	return StartupMessages[rand.Intn(len(StartupMessages))]
+}
+
 // FormatToolAction creates a human-readable tool description
 func FormatToolAction(toolName string, description string) string {
 	// Clean up the tool name
@@ -124,7 +103,7 @@ func FormatToolAction(toolName string, description string) string {
 		return fmt.Sprintf("%s %s", name, description)
 	}
 	
-	// Default descriptions based on tool type
+	// Default descriptions based on tool type - concise and clear
 	switch name {
 	case "read":
 		return "Reading file"
@@ -139,11 +118,11 @@ func FormatToolAction(toolName string, description string) string {
 	case "grep":
 		return "Searching code"
 	case "web search":
-		return "Searching the web"
+		return "Searching web"
 	case "web fetch":
 		return "Fetching page"
 	case "agent":
-		return "Delegating to specialist"
+		return "Delegating task"
 	default:
 		return fmt.Sprintf("Using %s", name)
 	}

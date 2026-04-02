@@ -435,9 +435,8 @@ func (app *App) runREPL() error {
 }
 
 func (app *App) processMessage(input string) error {
-	// Note: We don't echo user input here - the input handler already 
-	// displayed it with the prompt (◆). Echoing again causes double output.
-	// Just add a newline for visual separation.
+	// User input is already shown by the input handler with ◆ indicator
+	// Just add a newline for visual separation
 	fmt.Println()
 
 	// Add user message to session
@@ -508,8 +507,23 @@ func (app *App) processMessage(input string) error {
 		return permissions.Evaluate(t, toolInput, permCtx), nil
 	}
 
-	// Show thinking indicator
-	app.streamRenderer.StartThinking("")
+	// Show thinking indicator with context
+	app.streamRenderer.StartThinking("Thinking...")
+
+	// Start a goroutine to animate the thinking indicator
+	thinkingCtx, cancelThinking := context.WithCancel(context.Background())
+	go func() {
+		ticker := time.NewTicker(200 * time.Millisecond)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-ticker.C:
+				app.streamRenderer.UpdateThinking()
+			case <-thinkingCtx.Done():
+				return
+			}
+		}
+	}()
 
 	// Query the agent
 	params := agent.QueryParams{
@@ -521,6 +535,7 @@ func (app *App) processMessage(input string) error {
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
+		cancelThinking()
 		app.streamRenderer.StopThinking()
 		return err
 	}
@@ -532,11 +547,11 @@ func (app *App) processMessage(input string) error {
 	for event := range stream {
 		switch e := event.(type) {
 		case types.StreamMessage:
-			// First message - stop thinking and start output
+			// First message - stop thinking animation and start output
 			if !hasOutput {
+				cancelThinking()
 				app.streamRenderer.StopThinking()
 				hasOutput = true
-				fmt.Println() // Newline before response
 			}
 
 			if responseMsg == nil {
@@ -554,13 +569,19 @@ func (app *App) processMessage(input string) error {
 			app.session.AddMessage(e.Message)
 
 		case types.ProgressMessage:
-			// Show tool progress
-			app.streamRenderer.PrintProgress(fmt.Sprintf("[%s] %s", e.ToolUseID, e.Type))
+			// Tool progress updates - animate active tools
+			if app.streamRenderer.HasActiveTools() {
+				app.streamRenderer.UpdateThinking()
+			}
 		}
 	}
 
 	if hasOutput {
 		fmt.Println() // Final newline after response
+	} else {
+		// No output received, make sure thinking is stopped
+		cancelThinking()
+		app.streamRenderer.StopThinking()
 	}
 
 	// Complete the turn for cost tracking
