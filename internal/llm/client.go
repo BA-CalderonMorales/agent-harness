@@ -25,7 +25,10 @@ type HTTPClient struct {
 // NewHTTPClient creates an LLM client from environment/config.
 func NewHTTPClient(provider, apiKey string) *HTTPClient {
 	baseURL := "https://openrouter.ai/api/v1"
-	if provider == "anthropic" {
+	switch provider {
+	case "openai":
+		baseURL = "https://api.openai.com/v1"
+	case "anthropic":
 		baseURL = "https://api.anthropic.com/v1"
 	}
 	return &HTTPClient{

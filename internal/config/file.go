@@ -8,14 +8,15 @@ import (
 
 // FileConfig represents settings loaded from disk.
 type FileConfig struct {
-	Provider         string            `json:"provider,omitempty"`
-	Model            string            `json:"model,omitempty"`
-	WorkingDirectory string            `json:"working_directory,omitempty"`
-	Verbose          bool              `json:"verbose,omitempty"`
-	AlwaysAllow      []string          `json:"always_allow,omitempty"`
-	AlwaysDeny       []string          `json:"always_deny,omitempty"`
+	Provider         string               `json:"provider,omitempty"`
+	APIKey           string               `json:"api_key,omitempty"`
+	Model            string               `json:"model,omitempty"`
+	WorkingDirectory string               `json:"working_directory,omitempty"`
+	Verbose          bool                 `json:"verbose,omitempty"`
+	AlwaysAllow      []string             `json:"always_allow,omitempty"`
+	AlwaysDeny       []string             `json:"always_deny,omitempty"`
 	McpServers       map[string]McpServer `json:"mcp_servers,omitempty"`
-	CustomEnv        map[string]string `json:"custom_env,omitempty"`
+	CustomEnv        map[string]string    `json:"custom_env,omitempty"`
 }
 
 // McpServer describes an MCP server configuration.
@@ -52,7 +53,8 @@ func (c *FileConfig) Save(path string) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(data, '\n'), 0644)
+	// Use secure permissions (0600) even for legacy config to limit exposure
+	return os.WriteFile(path, append(data, '\n'), 0600)
 }
 
 // DefaultConfigPath returns the default configuration file path.
