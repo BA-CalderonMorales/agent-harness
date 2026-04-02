@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	Version   = "0.0.21"
+	Version   = "0.0.22"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -575,6 +575,8 @@ func (app *App) handleTaskMessage(input string) error {
 
 	// Start a goroutine to animate the thinking indicator
 	thinkingCtx, cancelThinking := context.WithCancel(context.Background())
+	defer cancelThinking()
+
 	go func() {
 		ticker := time.NewTicker(200 * time.Millisecond)
 		defer ticker.Stop()
@@ -598,7 +600,6 @@ func (app *App) handleTaskMessage(input string) error {
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
-		cancelThinking()
 		app.streamRenderer.StopThinking()
 		return err
 	}
@@ -612,7 +613,6 @@ func (app *App) handleTaskMessage(input string) error {
 		case types.StreamMessage:
 			// First message - stop thinking animation and start output
 			if !hasOutput {
-				cancelThinking()
 				app.streamRenderer.StopThinking()
 				hasOutput = true
 			}
@@ -644,7 +644,6 @@ func (app *App) handleTaskMessage(input string) error {
 		fmt.Println() // Final newline after response
 	} else {
 		// No output received, make sure thinking is stopped
-		cancelThinking()
 		app.streamRenderer.StopThinking()
 	}
 
