@@ -38,7 +38,7 @@ func (sr *StreamRenderer) SetOutput(w io.Writer) {
 	sr.out = w
 }
 
-// StartThinking shows the agent is thinking/working
+// StartThinking shows the agent is thinking/working with animated spinner
 func (sr *StreamRenderer) StartThinking(context string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
@@ -49,12 +49,13 @@ func (sr *StreamRenderer) StartThinking(context string) {
 	
 	sr.isThinking = true
 	
-	// Show a thinking indicator
+	// Show animated thinking indicator with spinner
+	frame := sr.spinner.Next()
 	indicator := GetRandomThinkingIndicator()
 	if context != "" {
-		fmt.Fprintf(sr.out, "\n%s %s\n", DimStyle.Render("⋯"), DimStyle.Render(context))
+		fmt.Fprintf(sr.out, "\n%s %s\n", DimStyle.Render(frame), DimStyle.Render(context))
 	} else {
-		fmt.Fprintf(sr.out, "\n%s\n", DimStyle.Render(indicator))
+		fmt.Fprintf(sr.out, "\n%s %s\n", DimStyle.Render(frame), DimStyle.Render(indicator))
 	}
 }
 

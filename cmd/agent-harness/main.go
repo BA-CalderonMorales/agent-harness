@@ -74,11 +74,18 @@ func run() error {
 	flag.Parse()
 	
 	if showVersion {
-		fmt.Printf("agent-harness version %s\n", Version)
-		if BuildTime != "unknown" {
+		// Determine build type
+		buildType := "release"
+		if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
+			buildType = "local dev"
+		}
+		
+		fmt.Printf("agent-harness %s\n", Version)
+		fmt.Printf("  Build type: %s\n", buildType)
+		if BuildTime != "unknown" && BuildTime != "" {
 			fmt.Printf("  Built: %s\n", BuildTime)
 		}
-		if GitSHA != "unknown" {
+		if GitSHA != "unknown" && GitSHA != "" {
 			fmt.Printf("  Git: %s\n", GitSHA)
 		}
 		return nil
@@ -356,6 +363,23 @@ func (app *App) printWelcome() {
 		gitInfo.Root = app.gitContext.Root
 		gitInfo.Branch = app.gitContext.Branch
 	}
+	
+	// Detect build type
+	if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
+		gitInfo.BuildType = "dev"
+	} else {
+		gitInfo.BuildType = "release"
+	}
+	
+	// Try to get current git tag if in dev mode
+	if gitInfo.BuildType == "dev" && gitInfo.IsRepo {
+		// Look for tag in version string (e.g., "dev-main-d3ded56")
+		parts := strings.Split(Version, "-")
+		if len(parts) >= 3 {
+			// Last part might be sha, check if we're on a tag
+			gitInfo.Tag = parts[1] // branch name as tag indicator
+		}
+	}
 
 	fmt.Print(ui.WelcomeScreen(Version, app.session.Model, app.config.PermissionMode.String(), gitInfo))
 }
@@ -407,8 +431,10 @@ func (app *App) runREPL() error {
 }
 
 func (app *App) processMessage(input string) error {
-	// Echo user input
-	app.streamRenderer.PrintUserMessage(input)
+	// Note: We don't echo user input here - the input handler already 
+	// displayed it with the prompt (◆). Echoing again causes double output.
+	// Just add a newline for visual separation.
+	fmt.Println()
 
 	// Add user message to session
 	userMsg := types.Message{
