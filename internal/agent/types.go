@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"sync"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
@@ -51,6 +52,7 @@ type QueryResult struct {
 type Loop struct {
 	Client llm.Client
 	Config LoopConfig
+	mu     sync.Mutex
 }
 
 // LoopConfig tunes loop behavior.

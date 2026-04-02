@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	Version   = "0.0.19"
+	Version   = "0.0.20"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -631,6 +631,7 @@ func (app *App) handleTaskMessage(input string) error {
 
 		case types.ProgressMessage:
 			// Tool progress updates - animate active tools
+			app.streamRenderer.HandleProgress(e.ToolUseID, e.Data)
 			if app.streamRenderer.HasActiveTools() {
 				app.streamRenderer.UpdateThinking()
 			}
@@ -699,8 +700,11 @@ func (app *App) renderMessage(msg types.Message) {
 		case types.TextBlock:
 			fmt.Print(b.Text)
 		case types.ToolUseBlock:
-			// Show tool use
-			fmt.Printf("\n%s\n", ui.RenderToolUse(b.Name, ""))
+			// Show tool use start with animation
+			app.streamRenderer.PrintToolStart(b.ID, b.Name, "")
+		case types.ToolResultBlock:
+			// Show tool completion
+			app.streamRenderer.PrintToolComplete(b.ToolUseID, b.Content)
 		}
 	}
 }

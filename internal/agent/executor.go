@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -43,6 +44,7 @@ type StreamingToolExecutor struct {
 	discarded       bool
 	mu              sync.Mutex
 	progressCond    *sync.Cond
+	events          chan types.StreamEvent
 }
 
 // NewStreamingToolExecutor creates a new executor.
@@ -53,11 +55,22 @@ func NewStreamingToolExecutor(toolDefs []tools.Tool, canUseTool tools.CanUseTool
 		canUseTool:      canUseTool,
 		toolDefinitions: toolDefs,
 		toolUseContext:  ctx,
-		siblingCtx:     siblingCtx,
-		siblingCancel:  cancel,
+		siblingCtx:      siblingCtx,
+		siblingCancel:   cancel,
+		events:          make(chan types.StreamEvent, 16),
 	}
 	e.progressCond = sync.NewCond(&e.mu)
 	return e
+}
+
+// Events returns the stream of tool events (progress and results).
+func (e *StreamingToolExecutor) Events() <-chan types.StreamEvent {
+	return e.events
+}
+
+// Close closes the events channel. Should be called when all tools are done.
+func (e *StreamingToolExecutor) Close() {
+	close(e.events)
 }
 
 // Discard abandons all pending and in-progress tools.
@@ -215,7 +228,17 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 	}
 	ctx.AbortController = toolCtx
 
-	result, err := runSingleTool(ctx, t.block, t.assistantMessage, e.toolDefinitions, e.canUseTool, nil)
+	// Progress handler
+	onProgress := func(data any) {
+		e.events <- types.ProgressMessage{
+			ToolUseID: t.block.ID,
+			Type:      "progress",
+			Data:      data,
+			Timestamp: time.Now(),
+		}
+	}
+
+	result, err := runSingleTool(ctx, t.block, t.assistantMessage, e.toolDefinitions, e.canUseTool, onProgress)
 
 	e.mu.Lock()
 	defer e.mu.Unlock()
@@ -227,16 +250,22 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 		return
 	}
 
+	var finalMsg types.Message
 	if err != nil {
-		t.results = []types.Message{e.makeErrorMessage(t.block.ID, t.assistantMessage, err.Error())}
+		finalMsg = e.makeErrorMessage(t.block.ID, t.assistantMessage, err.Error())
+		t.results = []types.Message{finalMsg}
 		if isBashTool(t.block.Name) {
 			e.hasErrored = true
 			e.siblingCancel()
 		}
 	} else {
-		t.results = []types.Message{result}
+		finalMsg = result
+		t.results = []types.Message{finalMsg}
 	}
 	t.status = statusCompleted
+
+	// Stream the final result event
+	e.events <- types.StreamMessage{Message: finalMsg}
 }
 
 func (e *StreamingToolExecutor) makeErrorMessage(toolUseID string, assistantMsg types.Message, text string) types.Message {
