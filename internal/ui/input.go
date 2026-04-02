@@ -12,6 +12,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"golang.org/x/term"
 )
 
 // EditorMode represents the current editor mode
@@ -65,6 +66,8 @@ type LineEditor struct {
 	cancelled      bool
 	exitReq        bool
 	showMode       bool
+	termWidth      int
+	isTermux       bool
 }
 
 // NewLineEditor creates a new line editor
@@ -76,6 +79,9 @@ func NewLineEditor(prompt string, completions []string) *LineEditor {
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
 
+	// Detect Termux environment
+	isTermux := os.Getenv("TERMUX_VERSION") != "" || strings.Contains(os.Getenv("HOME"), "com.termux")
+
 	return &LineEditor{
 		prompt:      prompt,
 		completions: completions,
@@ -84,6 +90,8 @@ func NewLineEditor(prompt string, completions []string) *LineEditor {
 		textarea:    ta,
 		vimEnabled:  false,
 		showMode:    false,
+		termWidth:   80,
+		isTermux:    isTermux,
 	}
 }
 
@@ -101,7 +109,12 @@ func (le *LineEditor) ReadLine() (*ReadOutcome, error) {
 		return le.readLineSimple()
 	}
 
-	// Use bubbletea for rich input
+	// For Termux/mobile, use simple line reading for better compatibility
+	if le.isTermux {
+		return le.readLineTermux()
+	}
+
+	// Use bubbletea for rich input on desktop
 	p := tea.NewProgram(le, tea.WithAltScreen())
 	m, err := p.Run()
 	if err != nil {
@@ -137,6 +150,109 @@ func (le *LineEditor) readLineSimple() (*ReadOutcome, error) {
 	}
 	line = strings.TrimRight(line, "\r\n")
 	return &ReadOutcome{Text: line}, nil
+}
+
+// readLineTermux provides Termux-optimized input
+func (le *LineEditor) readLineTermux() (*ReadOutcome, error) {
+	// Print prompt without special characters that might render weird
+	fmt.Print(le.prompt)
+	
+	reader := bufio.NewReader(os.Stdin)
+	var input strings.Builder
+	
+	for {
+		ch, _, err := reader.ReadRune()
+		if err != nil {
+			return &ReadOutcome{Exit: true}, nil
+		}
+		
+		switch ch {
+		case '\n', '\r':
+			line := input.String()
+			le.addToHistory(line)
+			return &ReadOutcome{Text: line}, nil
+		case '\x03': // Ctrl+C
+			if input.Len() == 0 {
+				return &ReadOutcome{Exit: true}, nil
+			}
+			fmt.Println("^C")
+			return &ReadOutcome{Cancel: true}, nil
+		case '\x04': // Ctrl+D
+			if input.Len() == 0 {
+				return &ReadOutcome{Exit: true}, nil
+			}
+		case '\x7f', '\b': // Backspace
+			if input.Len() > 0 {
+				str := input.String()
+				input.Reset()
+				// Remove last rune
+				runes := []rune(str)
+				if len(runes) > 0 {
+					input.WriteString(string(runes[:len(runes)-1]))
+					// Clear line and rewrite
+					fmt.Print("\r\033[K") // Clear to end of line
+					fmt.Print(le.prompt + input.String())
+				}
+			}
+		case '\x09': // Tab
+			// Simple tab completion for slash commands
+			value := input.String()
+			if strings.HasPrefix(value, "/") {
+				for _, c := range le.completions {
+					if strings.HasPrefix(c, value) && c != value {
+						// Complete to this command
+						input.Reset()
+						input.WriteString(c)
+						fmt.Print("\r\033[K")
+						fmt.Print(le.prompt + c)
+						break
+					}
+				}
+			}
+		case '\x1b': // Escape sequence (arrow keys, etc)
+			// Try to read the rest of the escape sequence
+			next, _, err := reader.ReadRune()
+			if err != nil {
+				continue
+			}
+			if next == '[' {
+				// CSI sequence
+				cmd, _, err := reader.ReadRune()
+				if err != nil {
+					continue
+				}
+				switch cmd {
+				case 'A': // Up arrow - history up
+					if len(le.history) > 0 && le.historyIndex < len(le.history)-1 {
+						le.historyIndex++
+						le.historyBackup = input.String()
+						input.Reset()
+						idx := len(le.history) - 1 - le.historyIndex
+						input.WriteString(le.history[idx])
+						fmt.Print("\r\033[K")
+						fmt.Print(le.prompt + input.String())
+					}
+				case 'B': // Down arrow - history down
+					if le.historyIndex > 0 {
+						le.historyIndex--
+						input.Reset()
+						idx := len(le.history) - 1 - le.historyIndex
+						input.WriteString(le.history[idx])
+					} else if le.historyIndex == 0 {
+						le.historyIndex = -1
+						input.Reset()
+						input.WriteString(le.historyBackup)
+					}
+					fmt.Print("\r\033[K")
+					fmt.Print(le.prompt + input.String())
+				}
+			}
+		default:
+			// Regular character
+			input.WriteRune(ch)
+			fmt.Print(string(ch))
+		}
+	}
 }
 
 // Init implements tea.Model
@@ -214,7 +330,6 @@ func (le LineEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return le, nil
 			case "a":
 				le.mode = ModeInsert
-				// CursorRight not available in this version
 				return le, nil
 			case "I":
 				le.mode = ModeInsert
@@ -229,18 +344,6 @@ func (le LineEditor) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return le, nil
 			case ":":
 				le.mode = ModeCommand
-				return le, nil
-			case "h":
-				// CursorLeft not available in this version
-				return le, nil
-			case "l":
-				// CursorRight not available in this version
-				return le, nil
-			case "j":
-				le.historyUp()
-				return le, nil
-			case "k":
-				le.historyDown()
 				return le, nil
 			case "0", "^":
 				le.textarea.CursorStart()
@@ -386,14 +489,14 @@ func (le *LineEditor) addToHistory(entry string) {
 	le.historyIndex = -1
 }
 
-// isTerminal checks if stdin/stdout are terminals
+// isTerminal checks if stdin/stdout are terminals using proper detection
 func isTerminal() bool {
 	return isatty(os.Stdin.Fd()) && isatty(os.Stdout.Fd())
 }
 
 func isatty(fd uintptr) bool {
-	// Simple check - in production use proper terminal detection
-	return true
+	_, _, err := term.GetSize(int(fd))
+	return err == nil
 }
 
 // GetHistory returns the current history
