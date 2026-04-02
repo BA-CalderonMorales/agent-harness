@@ -24,11 +24,12 @@ import (
 )
 
 var (
-	Version   = "0.0.20"
+	Version   = "0.0.21"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
 )
+
 
 // App holds the application state
 type App struct {
@@ -207,6 +208,7 @@ func (app *App) registerTools() {
 	app.toolRegistry.RegisterBuiltIn(builtin.NotebookEditTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.RewindTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.GlobTool)
+	app.toolRegistry.RegisterBuiltIn(builtin.LsRecursiveTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.GrepTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.AskUserQuestionTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.TodoWriteTool)
