@@ -2,8 +2,6 @@
 
 > Patterns and conventions for working on this codebase.
 
----
-
 ## Quick Reference
 
 ```
@@ -21,8 +19,6 @@ cd ~/projects/agent-harness && ./scripts/run-termux.sh
 # Or from buckets/usr/bin (workspace-level access)
 ~/buckets/usr/bin/agent-harness
 ```
-
----
 
 ## Key Patterns
 
@@ -62,15 +58,11 @@ var MyTool = tools.NewTool(tools.Tool{
 
 **Atomic writes** - temp file + rename pattern.
 
----
-
 ## Security
 
 - UNC paths (`//server`) rejected (prevent NTLM leaks)
 - Device paths (`/dev/zero`, `/proc/*/fd/*`) blocked
 - Bash uses `exec.LookPath("sh")` for portability
-
----
 
 ## Termux-Specific
 
@@ -80,8 +72,6 @@ var MyTool = tools.NewTool(tools.Tool{
 - TUI mode may have mobile keyboard issues - prefer CLI
 
 Skill loaded from: `.agent-harness/skills/termux-mobile-dev/SKILL.md`
-
----
 
 ## Workspace Integration (buckets/usr)
 
@@ -98,8 +88,6 @@ This creates a Unix-like hierarchy at the workspace level for tools that need to
 Current entries:
 - `~/buckets/usr/bin/agent-harness` - Launcher for agent-harness
 
----
-
 ## Testing
 
 ```bash
@@ -107,22 +95,16 @@ go test ./...
 go test -race ./...
 ```
 
----
-
 ## Build Tags
 
 - `kairos` - Autonomous mode
 - `context_collapse` - Advanced context restructuring
-
----
 
 ## Code Style
 
 - Go 1.21+, standard import grouping
 - Wrap errors: `fmt.Errorf("...: %w", err)`
 - Exported: `PascalCase`, internal: `camelCase`
-
----
 
 ## Critical Rules
 
@@ -139,7 +121,40 @@ go test -race ./...
 **Before**: `### 🔐 Secure Credential Storage`
 **After**: `### Secure Credential Storage`
 
+### Section Titles Over Horizontal Rules
+
+**NO HORIZONTAL RULES** (`---`) as section separators in markdown files. Use proper heading hierarchy instead.
+
+- H1 (`#`) for document title
+- H2 (`##`) for major sections
+- H3 (`###`) for subsections
+- H4 (`####`) if needed for deeper nesting
+
+**Why**: Horizontal rules are visual clutter. Proper heading hierarchy creates structure and feeds TOC generation.
+
+**Before**:
+```markdown
+## Features
+
+### Feature A
+Content...
+
 ---
+
+### Feature B
+Content...
+```
+
+**After**:
+```markdown
+## Features
+
+### Feature A
+Content...
+
+### Feature B
+Content...
+```
 
 ## Docs
 

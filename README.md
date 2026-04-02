@@ -4,8 +4,6 @@ A clean-room, pattern-derived agent harness for building coding agents.
 
 > This project captures architectural patterns from production agentic coding tools and reimplements them in Go, with first-class support for OpenRouter and other OpenAI-compatible endpoints.
 
----
-
 ## Purpose
 
 `agent-harness` exists to teach the community how to build professional-grade coding agents. It derives the **domain patterns** that make agentic coding work:
@@ -20,8 +18,6 @@ A clean-room, pattern-derived agent harness for building coding agents.
 8. Git integration for workspace context
 9. Cost tracking with model-specific pricing
 10. MCP integration (extension point)
-
----
 
 ## Quick Start
 
@@ -71,8 +67,6 @@ ah
 - `/export` — Export conversation to file
 - `/quit` — Exit the application
 
----
-
 ## Features
 
 ### Secure Credential Storage
@@ -90,8 +84,6 @@ ah
 - **read-only**: Only read/search tools allowed
 - **workspace-write**: Most tools allowed, dangerous ones ask
 - **danger-full-access**: All tools run without confirmation
-
----
 
 ## Architecture
 
@@ -115,14 +107,10 @@ pkg/
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation.
 
----
-
 ## Documentation
 
 - [Architecture](docs/ARCHITECTURE.md) — Pattern implementations
 - [Edge Cases](docs/edgecases.md) — Non-obvious behaviors
-
----
 
 ## Building from Source
 
@@ -130,13 +118,9 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for detailed documentation.
 go build -o agent-harness ./cmd/agent-harness
 ```
 
----
-
 ## License
 
 MIT
-
----
 
 ## Acknowledgments
 
