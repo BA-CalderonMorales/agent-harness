@@ -1,6 +1,7 @@
 package sandbox
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 )
@@ -75,7 +76,9 @@ func isUnder(path, dir string) bool {
 }
 
 func getHome() string {
-	// In a real implementation, use os.UserHomeDir()
-	// Kept minimal here
-	return "/data/data/com.termux/files/home"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+	return home
 }
