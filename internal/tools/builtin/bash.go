@@ -39,6 +39,15 @@ var BashTool = tools.NewTool(tools.Tool{
 		return tools.ValidationResult{Valid: true}
 	},
 	CheckPermissions: func(input map[string]any, ctx tools.Context) tools.PermissionDecision {
+		cmd, _ := input["command"].(string)
+		if detectDestructive(input) {
+			return tools.PermissionDecision{
+				Behavior: tools.Ask,
+				Message:  "Command '" + cmd + "' is potentially destructive. Do you want to continue?",
+				UpdatedInput: input,
+			}
+		}
+		// Default to allow if not explicitly dangerous, but the engine will still wrap this.
 		return tools.PermissionDecision{Behavior: tools.Allow, UpdatedInput: input}
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
