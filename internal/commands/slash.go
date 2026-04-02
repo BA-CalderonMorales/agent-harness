@@ -97,7 +97,7 @@ func (sr *SlashRegistry) GetHelp() string {
 
 	// Group commands by category
 	categories := map[string][]string{
-		"Session":    {"help", "status", "clear", "compact", "session"},
+		"Session":    {"help", "status", "clear", "compact", "session", "quit", "exit"},
 		"Settings":   {"model", "permissions", "config", "memory"},
 		"Output":     {"cost", "diff", "export", "version"},
 		"Tools":      {"agents", "skills"},
