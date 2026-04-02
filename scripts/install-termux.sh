@@ -8,7 +8,7 @@ set -e
 
 repo="ba-calderonmorales/agent-harness"
 binary_name="agent-harness"
-install_dir="${install_dir:-$prefix/bin}"
+install_dir="${INSTALL_DIR:-$PREFIX/bin}"
 
 # colors
 red='\033[0;31m'
@@ -70,7 +70,7 @@ build_from_source() {
 
 # quick build from local source (if in repo)
 build_local() {
-    local repo_root="$home/projects/agent-harness"
+    local repo_root="$HOME/projects/agent-harness"
     
     if [ -d "$repo_root/.git" ]; then
         log_info "building from local source..."
@@ -88,10 +88,10 @@ setup_shell_integration() {
     
     # create wrapper function for 'ah' alias
     local shell_rc=""
-    if [ -n "$bash_version" ]; then
-        shell_rc="$home/.bashrc"
-    elif [ -n "$zsh_version" ]; then
-        shell_rc="$home/.zshrc"
+    if [ -n "$BASH_VERSION" ]; then
+        shell_rc="$HOME/.bashrc"
+    elif [ -n "$ZSH_VERSION" ]; then
+        shell_rc="$HOME/.zshrc"
     fi
     
     if [ -n "$shell_rc" ] && [ -f "$shell_rc" ]; then
