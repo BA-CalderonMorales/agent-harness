@@ -69,7 +69,7 @@ var MyTool = tools.NewTool(tools.Tool{
 - Build: `go build -o ./build/agent-harness ./cmd/agent-harness`
 - /tmp is restricted - use project-local dirs
 - Shell at `$PREFIX/bin/sh` (Android-compatible)
-- TUI mode may have mobile keyboard issues - prefer CLI
+- See `docs/os/termux/ui_ux_fixes.md` for detailed UI/UX patches
 
 Skill loaded from: `.agent-harness/skills/termux-mobile-dev/SKILL.md`
 
@@ -170,5 +170,6 @@ Content...
 
 - `docs/architecture.md` - System design
 - `docs/edgecases.md` - Edge cases and quirks
-- `docs/termux_edge_cases.md` - Termux portability notes
+- `docs/termux_edge_cases.md` - Termux portability notes (legacy)
 - `docs/services-features.md` - Gated capabilities
+- `docs/os/termux/ui_ux_fixes.md` - Termux UI/UX implementation details

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -328,8 +329,9 @@ func (app *App) printWelcome() {
 }
 
 func (app *App) runREPL() error {
-	// Create line editor
-	editor := ui.NewLineEditor("> ", app.cmdRegistry.GetCompletions())
+	// Create line editor with Termux-optimized prompt
+	prompt := "> "
+	editor := ui.NewLineEditor(prompt, app.cmdRegistry.GetCompletions())
 
 	for {
 		outcome, err := editor.ReadLine()
@@ -560,15 +562,19 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println("No API credentials found. Let's set them up securely.")
 	fmt.Println()
 
-	// Provider selection (simplified)
+	// Provider selection using simple input for Termux compatibility
 	fmt.Println("Choose an API provider:")
 	fmt.Println("  1) OpenRouter (recommended)")
 	fmt.Println("  2) OpenAI")
 	fmt.Println("  3) Anthropic")
 	fmt.Print("Enter choice (1-3) [1]: ")
 
-	var choice string
-	fmt.Scanln(&choice)
+	reader := bufio.NewReader(os.Stdin)
+	choice, err := reader.ReadString('\n')
+	if err != nil {
+		return fmt.Errorf("failed to read choice: %w", err)
+	}
+	choice = strings.TrimSpace(choice)
 
 	switch choice {
 	case "2":
@@ -608,8 +614,11 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Printf("Model [%s]: ", defaultModel)
-	var model string
-	fmt.Scanln(&model)
+	model, err := reader.ReadString('\n')
+	if err != nil {
+		model = ""
+	}
+	model = strings.TrimSpace(model)
 	if model != "" {
 		app.config.Model = model
 	} else {

@@ -5,6 +5,7 @@ import (
 
 	"github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"os"
 )
 
 // Styles for the TUI.
@@ -44,14 +45,22 @@ type Model struct {
 	quitting   bool
 	onSubmit   func(string) // callback when user submits input
 	onQuit     func()       // callback when user quits
+	isTermux   bool
+	termWidth  int
 }
 
 // NewModel creates a new TUI model.
 func NewModel(onSubmit func(string), onQuit func()) Model {
+	// Detect Termux environment
+	isTermux := os.Getenv("TERMUX_VERSION") != "" || 
+		strings.Contains(os.Getenv("HOME"), "com.termux")
+
 	return Model{
-		messages: make([]Message, 0),
-		onSubmit: onSubmit,
-		onQuit:   onQuit,
+		messages:  make([]Message, 0),
+		onSubmit:  onSubmit,
+		onQuit:    onQuit,
+		isTermux:  isTermux,
+		termWidth: 80,
 	}
 }
 
@@ -110,13 +119,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.input = m.input[:len(m.input)-1]
 			}
 
+		case tea.KeyRunes:
+			// Handle actual character input - runes are printable characters
+			m.input += string(msg.Runes)
+
+		case tea.KeySpace:
+			m.input += " "
+
 		default:
-			m.input += msg.String()
+			// For other keys, only add if they represent actual characters
+			// and are not control characters
+			if len(msg.Runes) > 0 {
+				for _, r := range msg.Runes {
+					if r >= 32 && r < 127 {
+						m.input += string(r)
+					}
+				}
+			}
 		}
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.termWidth = msg.Width
 	}
 
 	return m, nil
@@ -141,13 +166,22 @@ func (m Model) View() string {
 		b.WriteString("\n\n")
 	}
 
-	// Input prompt
-	b.WriteString(userStyle.Render("> "))
+	// Input prompt - use simple clean prompt for Termux
+	if m.isTermux {
+		b.WriteString(userStyle.Render("> "))
+	} else {
+		b.WriteString(userStyle.Render("> "))
+	}
 	b.WriteString(m.input)
 
 	// Help line
 	b.WriteString("\n")
-	b.WriteString(helpStyle.Render("esc: quit | enter: send"))
+	if m.isTermux {
+		// Simpler help for mobile
+		b.WriteString(helpStyle.Render("ctrl+c: quit | enter: send"))
+	} else {
+		b.WriteString(helpStyle.Render("esc: quit | enter: send"))
+	}
 
 	return b.String()
 }
