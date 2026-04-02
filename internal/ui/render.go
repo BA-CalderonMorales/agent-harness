@@ -136,9 +136,22 @@ func RenderToolResult(success bool, summary string) string {
 func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) string {
 	var lines []string
 	
-	// Header with persona
+	// Determine build display
+	buildType := "release"
+	if gitContext != nil && gitContext.BuildType != "" {
+		buildType = gitContext.BuildType
+	}
+	if strings.Contains(version, "dev") || strings.Contains(version, "local") {
+		buildType = "dev"
+	}
+	
+	// Header with persona and version
 	lines = append(lines, "")
-	lines = append(lines, HeaderStyle.Render(fmt.Sprintf("  %s %s", PersonaName, DimStyle.Render(version))))
+	versionDisplay := version
+	if buildType == "dev" {
+		versionDisplay = fmt.Sprintf("%s [dev]", version)
+	}
+	lines = append(lines, HeaderStyle.Render(fmt.Sprintf("  %s %s", PersonaName, DimStyle.Render(versionDisplay))))
 	
 	// Context-aware greeting
 	greeting := fmt.Sprintf("  %s %s", TimeOfDayGreeting(), GetRandomGreeting())
@@ -151,8 +164,13 @@ func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) s
 		fmt.Sprintf("permissions: %s", permissionMode),
 	}
 	
+	// Add git context if available
 	if gitContext != nil && gitContext.IsRepo {
-		statusParts = append(statusParts, fmt.Sprintf("repo: %s", gitContext.Branch))
+		gitInfo := gitContext.Branch
+		if gitContext.Tag != "" {
+			gitInfo = fmt.Sprintf("%s@%s", gitContext.Branch, gitContext.Tag)
+		}
+		statusParts = append(statusParts, fmt.Sprintf("repo: %s", gitInfo))
 	}
 	
 	lines = append(lines, "  "+DimStyle.Render(strings.Join(statusParts, " • ")))
@@ -167,9 +185,11 @@ func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) s
 
 // GitInfo holds git context for rendering
 type GitInfo struct {
-	IsRepo bool
-	Root   string
-	Branch string
+	IsRepo    bool
+	Root      string
+	Branch    string
+	Tag       string
+	BuildType string // "release" or "dev"
 }
 
 // RenderStatusReport renders a comprehensive status report
