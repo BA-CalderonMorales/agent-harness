@@ -65,17 +65,21 @@
 
 ## 5. Permission Decision Stack
 
-**Pattern:** Layered, fail-closed permission evaluation.
+**Pattern:** Layered, fail-closed permission evaluation with mode-based controls.
 
-**Location:** `internal/permissions/engine.go`
+**Location:** `internal/permissions/engine.go`, `internal/config/layered.go`
 
 **Stack (top to bottom):**
-1. Blanket deny rules
-2. Blanket allow rules
-3. Always-ask rules
-4. Mode transformations (`dontAsk`, `bypassPermissions`, `auto`)
-5. Tool-specific `CheckPermissions()`
-6. Default: ask
+1. Permission Mode (read-only / workspace-write / danger-full-access)
+2. Always-allow / Always-deny lists from config
+3. Mode transformations (`auto`, `bypassPermissions`)
+4. Tool-specific `CheckPermissions()`
+5. Default: ask
+
+**Permission Modes:**
+- `read-only`: Only read/search tools allowed (bash/write/edit blocked)
+- `workspace-write`: Most tools allowed, dangerous ones require confirmation
+- `danger-full-access`: All tools run without confirmation
 
 ---
 
@@ -97,12 +101,17 @@
 
 **Pattern:** Three independent strategies for managing context window pressure.
 
-**Location:** `internal/contextmgr/compact.go`
+**Location:** `internal/contextmgr/compact.go`, `internal/state/session.go`
 
 **Layers:**
-1. **AutoCompact** — summarizes older messages when token threshold exceeded
+1. **Session Compaction** — removes older messages, preserves recent context
 2. **SnipCompact** — removes zombie messages and stale compact boundaries
 3. **ContextCollapse** — advanced restructuring (extension point, no-op in base)
+
+**CompactionConfig:**
+- `MaxMessages`: Maximum messages before compaction triggers
+- `MaxEstimatedTokens`: Token threshold for compaction
+- `PreserveRecent`: Always keep this many recent messages
 
 ---
 
@@ -120,77 +129,130 @@
 
 ---
 
-## 9. State Store
+## 9. State Store & Session Management
 
-**Pattern:** Thread-safe generic state with snapshot and update semantics.
+**Pattern:** Thread-safe session persistence with JSON serialization.
 
-**Location:** `internal/state/state.go`
+**Location:** `internal/state/state.go`, `internal/state/session.go`
 
 **Key Design Decisions:**
-- `Store` is a `map[string]any` protected by `sync.RWMutex`
-- `Update()` applies a transformation function
-- `AppState` adds concrete fields: permission mode, model, file history
-- `FileHistory` supports undo/rewind operations
+- `Session` struct tracks messages, model, turns, and metadata
+- `SessionManager` handles save/load lifecycle
+- Auto-save every 5 turns
+- Compaction reduces token usage while preserving context
+- Sessions stored in `~/.agent-harness/sessions/`
 
 ---
 
-## 10. Session Persistence
+## 10. Secure Credential Storage
 
-**Pattern:** Append-only JSONL log with durability tiers.
+**Pattern:** AES-256-GCM encryption with Argon2id key derivation.
 
-**Location:** `internal/state/persistence.go`
+**Location:** `internal/config/secure.go`
 
 **Key Design Decisions:**
-- User messages: blocking write + `fsync`
-- Assistant messages: buffered write (fire-and-forget)
-- Corrupted lines are skipped on read
-- Output files are tracked per task for resume
+- Master password required on startup
+- Argon2id for secure key derivation (resistant to GPU attacks)
+- AES-256-GCM for authenticated encryption
+- File permissions 0600 (user read/write only)
+- Atomic file writes prevent corruption
+- Automatic migration from legacy plaintext configs
 
 ---
 
-## 11. LLM Client Abstraction
+## 11. Layered Configuration
+
+**Pattern:** Configuration layers with precedence: user → project → local.
+
+**Location:** `internal/config/layered.go`
+
+**Layers:**
+1. **User**: `~/.agent-harness/settings.json`
+2. **Project**: `./.agent-harness/settings.json`
+3. **Local**: `./.agent-harness/settings.local.json` (gitignored)
+
+**Features:**
+- JSON-based with deep merge semantics
+- Environment variable overrides
+- MCP server configuration
+- Permission mode defaults
+- Always allow/deny lists
+
+---
+
+## 12. LLM Client Abstraction
 
 **Pattern:** Provider-agnostic streaming client with OpenAI-compatible API mapping.
 
 **Location:** `internal/llm/client.go`
 
 **Key Design Decisions:**
-- Supports OpenRouter and Anthropic endpoints
+- Supports OpenRouter, OpenAI, and Anthropic endpoints
 - SSE parsing for streaming responses
 - Tool calls mapped to OpenAI function-call format
-- Anthropic `thinking` blocks passed through `extra_body`
+- Cost tracking per model with usage estimation
 
 ---
 
-## 12. MCP Integration Stub
+## 13. Slash Command System
 
-**Pattern:** Pluggable Model Context Protocol server manager.
+**Pattern:** Rich command system with history, completion, and formatted output.
 
-**Location:** `internal/services/mcp/mcp.go`
+**Location:** `internal/commands/slash.go`, `internal/ui/`
 
 **Key Design Decisions:**
-- Transport abstraction: `stdio`, `sse`, `http`, `ws`
-- Connection lifecycle: `Connect -> List Tools -> CallTool -> Disconnect`
-- Tool definitions dynamically registered from server schema
-- Full implementation is an extension point
+- Commands parsed from `/name args...` format
+- Tab completion for command names
+- History navigation (up/down arrows)
+- Vim mode support (normal/insert/visual)
+- Formatted output with lipgloss styles
+
+**Available Commands:**
+- `/help` — Show available commands
+- `/status` — Session and workspace status
+- `/clear` — Clear session history
+- `/compact` — Compact session to reduce tokens
+- `/cost` — Show token usage and estimated cost
+- `/model` — Show/change current model
+- `/permissions` — Show/change permission mode
+- `/config` — Show configuration
+- `/diff` — Show git diff
+- `/export` — Export conversation to file
+- `/session` — List/load saved sessions
+- `/version` — Show version information
+- `/quit`, `/exit` — Exit application
 
 ---
 
-## 13. Slash Command Registry
+## 14. Git Integration
 
-**Pattern:** Commands are parsed from user input (`/name args...`) and dispatched via registry.
+**Pattern:** Automatic git context detection for workspace awareness.
 
-**Location:** `internal/commands/commands.go`
+**Location:** `pkg/git/context.go`
 
 **Key Design Decisions:**
-- Commands support aliases
-- `Parse()` extracts name and args from raw input
-- Handlers return structured results, not side effects directly
-- Built-ins: `/clear`, `/compact`, `/model`, `/help`, `/exit`
+- Auto-detects repository root, branch, and commit
+- Shows uncommitted changes indicator
+- `/diff` command displays workspace changes
+- Remote URL detection for context
 
 ---
 
-## 14. Message Utilities
+## 15. Cost Tracking
+
+**Pattern:** Per-turn and cumulative cost estimation.
+
+**Location:** `internal/agent/cost.go`
+
+**Key Design Decisions:**
+- Model-specific pricing (Claude, GPT-4, etc.)
+- Token counting per turn
+- Cumulative cost across session
+- Formatted cost reports via `/cost` command
+
+---
+
+## 16. Message Utilities
 
 **Pattern:** Normalization, sanitization, and boundary tracking for API-bound messages.
 
@@ -204,7 +266,7 @@
 
 ---
 
-## 15. Plan Mode
+## 17. Plan Mode
 
 **Pattern:** Explicit mode where the agent must outline its approach before acting.
 
@@ -217,7 +279,7 @@
 
 ---
 
-## 16. Sandbox & Safety
+## 18. Sandbox & Safety
 
 **Pattern:** Path restrictions and dangerous command detection.
 
@@ -230,20 +292,7 @@
 
 ---
 
-## 17. Git Operations
-
-**Pattern:** Abstracted git commands via `os/exec`.
-
-**Location:** `pkg/git/git.go`
-
-**Key Design Decisions:**
-- `Repo` struct encapsulates path
-- Operations use `git -C <path>` for safety
-- Methods return errors, not panics
-
----
-
-## 18. Bash Execution
+## 19. Bash Execution
 
 **Pattern:** Shell command execution with timeout and context cancellation.
 
@@ -256,26 +305,125 @@
 
 ---
 
+## 20. Docker Deployment (Optional)
+
+**Pattern:** Multi-platform Docker images for containerized deployment.
+
+**Location:** `Dockerfile`
+
+### Building Docker Images Locally
+
+```bash
+# Build for current platform
+docker build -t agent-harness:latest .
+
+# Build for multiple platforms (requires buildx)
+docker buildx create --use
+docker buildx build --platform linux/amd64,linux/arm64 -t agent-harness:latest .
+```
+
+### Enabling Docker in CI/CD
+
+The release workflow includes a commented-out Docker job. To enable it in your fork:
+
+1. **Repository Settings** → **Actions** → **General**
+2. Under "Workflow permissions", select **"Read and write permissions"**
+3. Go to **Packages** → **Package settings**
+4. Enable **"Inherit access from source repository"**
+5. Uncomment the docker job in `.github/workflows/release.yml`
+
+### Docker Job Configuration
+
+```yaml
+docker:
+  needs: release
+  runs-on: ubuntu-latest
+  if: startsWith(github.ref, 'refs/tags/v')
+  steps:
+    - uses: actions/checkout@v4
+    - uses: docker/setup-buildx-action@v3
+    - uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+    
+    - name: Get lowercase repo name
+      id: repo
+      run: |
+        REPO=$(echo "${{ github.repository }}" | tr '[:upper:]' '[:lower:]')
+        echo "IMAGE_NAME=$REPO" >> $GITHUB_OUTPUT
+    
+    - uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: true
+        tags: |
+          ghcr.io/${{ steps.repo.outputs.IMAGE_NAME }}:latest
+          ghcr.io/${{ steps.repo.outputs.IMAGE_NAME }}:${{ VERSION }}
+```
+
+### Running with Docker
+
+```bash
+# Run interactively
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
+  ghcr.io/ba-calderonmorales/agent-harness:latest
+
+# Run with persistent config
+docker run -it --rm \
+  -v $(pwd):/workspace \
+  -v ~/.agent-harness:/home/agent/.agent-harness \
+  ghcr.io/ba-calderonmorales/agent-harness:latest
+```
+
+---
+
 ## Directory Map
 
 ```
 cmd/agent-harness/          # CLI entrypoint
 internal/
-  agent/                    # Core loop + streaming executor
+  agent/                    # Core loop + streaming executor + cost tracking
   commands/                 # Slash command registry
-  config/                   # Environment/config loading
+  config/                   # Layered config + secure credential storage
   contextmgr/               # Compaction strategies
   llm/                      # LLM client abstraction
   permissions/              # Permission stack + classifier
   services/mcp/             # MCP manager stub
-  state/                    # In-memory store + persistence
+  state/                    # Session management + persistence
   tasks/                    # Task lifecycle registry
   tools/                    # Tool descriptor + registry
   tools/builtin/            # Built-in tool implementations
+  ui/                       # Input handling + rendering
 pkg/
   bash/                     # Shell execution
-  git/                      # Git operations
+  git/                      # Git operations + context
   messages/                 # Message formatting
   sandbox/                  # Safety checks
   types/                    # Shared domain types
+docs/                       # Documentation
+scripts/                    # Install scripts
 ```
+
+---
+
+## Release Pipeline
+
+**Pattern:** Multi-OS CD workflow with GitHub Releases.
+
+**Location:** `.github/workflows/release.yml`
+
+**Platforms:**
+- Linux: amd64, arm64
+- macOS: amd64 (Intel), arm64 (Apple Silicon)
+- Windows: amd64, arm64
+
+**Artifacts:**
+- Tar.gz archives (Unix)
+- Zip archives (Windows)
+- SHA256 checksums
+- Install scripts for curl-based installation
