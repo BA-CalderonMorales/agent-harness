@@ -124,6 +124,23 @@ go test -race ./...
 
 ---
 
+## Critical Rules
+
+### Zero Emojis Policy
+
+**NO EMOJIS** in any root-level `.md` files or documentation. This is non-negotiable.
+
+- README.md: Plain text only
+- AGENTS.md: Plain text only
+- docs/*.md: Plain text only
+
+**Why**: Professional documentation should not rely on pictographic characters. Use words, not symbols.
+
+**Before**: `### 🔐 Secure Credential Storage`
+**After**: `### Secure Credential Storage`
+
+---
+
 ## Docs
 
 - `docs/architecture.md` - System design
