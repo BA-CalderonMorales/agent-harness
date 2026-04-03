@@ -17,11 +17,17 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// ChatDelegate handles chat actions
+// Message types for async communication
 // ---------------------------------------------------------------------------
-type ChatDelegate interface {
-	OnSubmit(text string)
-	OnCommand(command string)
+
+// UserSubmitMsg is sent when user submits a message (non-blocking)
+type UserSubmitMsg struct {
+	Text string
+}
+
+// UserCommandMsg is sent when user enters a slash command
+type UserCommandMsg struct {
+	Command string
 }
 
 // ---------------------------------------------------------------------------
@@ -54,9 +60,6 @@ type ChatModel struct {
 
 	// Model info
 	model string
-
-	// Delegate
-	delegate ChatDelegate
 }
 
 // NewChatModel creates a new chat model.
@@ -82,11 +85,6 @@ func NewChatModel() ChatModel {
 		messages: make([]ChatMessage, 0),
 		focused:  true,
 	}
-}
-
-// SetDelegate sets the chat delegate.
-func (m *ChatModel) SetDelegate(delegate ChatDelegate) {
-	m.delegate = delegate
 }
 
 // SetModel sets the model name.
@@ -141,23 +139,22 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Handle slash commands
-			trimmed := strings.TrimSpace(input)
-			if strings.HasPrefix(trimmed, "/") {
-				if m.delegate != nil {
-					m.delegate.OnCommand(trimmed)
-				}
-			} else {
-				// Regular message
-				m.AddMessage("user", input)
-				if m.delegate != nil {
-					m.delegate.OnSubmit(input)
-				}
-			}
-
+			// Clear input immediately
 			m.textarea.SetValue("")
 			m.textarea.SetHeight(3)
-			return m, nil
+
+			// Add user message locally
+			m.AddMessage("user", input)
+
+			// Return command for async processing (non-blocking)
+			if strings.HasPrefix(input, "/") {
+				return m, func() tea.Msg {
+					return UserCommandMsg{Command: input}
+				}
+			}
+			return m, func() tea.Msg {
+				return UserSubmitMsg{Text: input}
+			}
 
 		case tea.KeyCtrlC:
 			// Allow Ctrl+C to propagate for quit
@@ -170,7 +167,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	// -------------------------------------------------------------------------
-	// Streaming messages - these are the key to fixing the responsive issue
+	// Streaming messages from agent loop
 	// -------------------------------------------------------------------------
 	case StreamStartMsg:
 		m.streaming = true
@@ -195,6 +192,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StreamErrorMsg:
 		m.AddMessage("system", fmt.Sprintf("Error: %s", msg.Error))
 		m.streaming = false
+		m.streamText = ""
 		m.refreshViewport()
 
 	case StreamDoneMsg:

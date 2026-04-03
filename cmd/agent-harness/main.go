@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	Version   = "0.0.28"
+	Version   = "0.0.29"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -275,8 +275,13 @@ func (app *App) initSlashCommands() {
 func (app *App) runTUIMode() error {
 	tuiApp := tui.NewApp()
 
-	// Set up delegates
-	tuiApp.SetChatDelegate(&TUIChatDelegate{app: app, tuiApp: tuiApp})
+	// Set up handlers (non-blocking)
+	tuiApp.SetUserSubmitHandler(func(text string, ta tui.App) {
+		app.handleUserSubmit(text, &ta)
+	})
+	tuiApp.SetUserCommandHandler(func(cmd string, ta tui.App) {
+		app.handleUserCommand(cmd, &ta)
+	})
 	tuiApp.SetSessionsDelegate(&TUIsessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&TUISettingsDelegate{app: app, tuiApp: tuiApp})
 
@@ -288,27 +293,47 @@ func (app *App) runTUIMode() error {
 	return tui.Run(tuiApp)
 }
 
-// TUIChatDelegate connects TUI chat to the app
-type TUIChatDelegate struct {
-	app    *App
-	tuiApp *tui.App
+// handleUserSubmit handles user message submission (runs in goroutine)
+func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
+	validator := ui.NewTermuxValidator()
+	normalizedInput, valid := validator.ValidateInput(text)
+	if !valid {
+		tuiApp.Send(tui.StreamErrorMsg{Error: "Invalid input"})
+		return
+	}
+
+	userMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleUser,
+		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(userMsg)
+
+	if agent.IsConversational(normalizedInput) {
+		app.handleConversationalMessageAsync(normalizedInput, tuiApp)
+	} else {
+		app.handleTaskMessageAsync(normalizedInput, tuiApp)
+	}
 }
 
-func (d *TUIChatDelegate) OnSubmit(text string) {
-	d.app.processMessage(text, d.tuiApp)
-}
-
-func (d *TUIChatDelegate) OnCommand(command string) {
-	if result, handled, err := d.app.cmdRegistry.Handle(command); handled {
+// handleUserCommand handles slash commands (runs in goroutine)
+func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
+	if result, handled, err := app.cmdRegistry.Handle(command); handled {
 		if err != nil {
-			d.tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+			tuiApp.Send(tui.StreamErrorMsg{Error: err.Error()})
 			return
 		}
 		if result != "" {
-			d.tuiApp.AddMessage("system", result)
+			tuiApp.Send(tui.StreamMessageMsg{
+				Message: types.Message{
+					Role:    types.RoleSystem,
+					Content: []types.ContentBlock{types.TextBlock{Text: result}},
+				},
+			})
 		}
 	} else {
-		d.tuiApp.AddMessage("system", fmt.Sprintf("Unknown command: %s", command))
+		tuiApp.Send(tui.StreamErrorMsg{Error: fmt.Sprintf("Unknown command: %s", command)})
 	}
 }
 
@@ -425,33 +450,8 @@ func (app *App) getSettings() []tui.Setting {
 	}
 }
 
-func (app *App) processMessage(input string, tuiApp *tui.App) {
-	validator := ui.NewTermuxValidator()
-	normalizedInput, valid := validator.ValidateInput(input)
-	if !valid {
-		tuiApp.AddMessage("system", "Invalid input")
-		return
-	}
-
-	tuiApp.AddMessage("user", normalizedInput)
-
-	userMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleUser,
-		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(userMsg)
-
-	if agent.IsConversational(normalizedInput) {
-		app.handleConversationalMessage(normalizedInput, tuiApp)
-	} else {
-		app.handleTaskMessage(normalizedInput, tuiApp)
-	}
-}
-
-func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
-	tuiApp.SetThinking(true, "")
+func (app *App) handleConversationalMessageAsync(input string, tuiApp *tui.App) {
+	tuiApp.Send(tui.StreamStartMsg{Prompt: input})
 
 	convType := agent.ClassifyInput(input)
 	var response string
@@ -467,8 +467,18 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 		response = "I'm here to help. What would you like to work on?"
 	}
 
-	tuiApp.SetThinking(false, "")
-	tuiApp.AddMessage("assistant", response)
+	// Small delay to show thinking state
+	time.Sleep(100 * time.Millisecond)
+
+	tuiApp.Send(tui.StreamMessageMsg{
+		Message: types.Message{
+			UUID:      generateUUID(),
+			Role:      types.RoleAssistant,
+			Content:   []types.ContentBlock{types.TextBlock{Text: response}},
+			Timestamp: time.Now(),
+		},
+	})
+	tuiApp.Send(tui.StreamDoneMsg{})
 
 	assistantMsg := types.Message{
 		UUID:      generateUUID(),
@@ -480,9 +490,8 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 	app.costTracker.CompleteTurn()
 }
 
-// handleTaskMessage processes a task message through the agent loop.
-// It uses async message passing to keep the TUI responsive during streaming.
-func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
+// handleTaskMessageAsync processes a task message through the agent loop asynchronously.
+func (app *App) handleTaskMessageAsync(input string, tuiApp *tui.App) {
 	// Send stream start message to TUI
 	tuiApp.Send(tui.StreamStartMsg{Prompt: input})
 
@@ -543,35 +552,33 @@ func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
 		return
 	}
 
-	// Process stream asynchronously and send messages to TUI
-	go func() {
-		var currentText strings.Builder
+	// Process stream and send messages to TUI
+	var currentText strings.Builder
 
-		for event := range stream {
-			switch e := event.(type) {
-			case types.StreamMessage:
-				// Extract text content
-				for _, block := range e.Message.Content {
-					if text, ok := block.(types.TextBlock); ok {
-						currentText.WriteString(text.Text)
-						tuiApp.Send(tui.StreamChunkMsg{Text: text.Text})
-					}
+	for event := range stream {
+		switch e := event.(type) {
+		case types.StreamMessage:
+			// Extract text content
+			for _, block := range e.Message.Content {
+				if text, ok := block.(types.TextBlock); ok {
+					currentText.WriteString(text.Text)
+					tuiApp.Send(tui.StreamChunkMsg{Text: text.Text})
 				}
-				app.session.AddMessage(e.Message)
 			}
+			app.session.AddMessage(e.Message)
 		}
+	}
 
-		// Signal completion
-		tuiApp.Send(tui.StreamDoneMsg{TurnCount: app.session.Turns})
-		app.costTracker.CompleteTurn()
+	// Signal completion
+	tuiApp.Send(tui.StreamDoneMsg{TurnCount: app.session.Turns})
+	app.costTracker.CompleteTurn()
 
-		// Auto-save every 5 turns
-		if app.session.Turns%5 == 0 {
-			if path, err := app.sessionManager.SaveCurrent(); err == nil {
-				tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
-			}
+	// Auto-save every 5 turns
+	if app.session.Turns%5 == 0 {
+		if path, err := app.sessionManager.SaveCurrent(); err == nil {
+			tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
 		}
-	}()
+	}
 }
 
 func (app *App) buildSystemPrompt() string {
