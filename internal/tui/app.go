@@ -291,6 +291,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// -------------------------------------------------------------------------
 	// Streaming messages from agent loop - forward to chat
+	// These are handled HERE ONLY to avoid double-processing
 	// -------------------------------------------------------------------------
 	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg:
 		chatModel, cmd := a.chatModel.Update(msg)
@@ -300,10 +301,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Continue listening for more messages
 		cmds = append(cmds, a.listenForMessages())
+		// Return early - do NOT delegate to active view (would cause duplicates)
+		return a, tea.Batch(cmds...)
 	}
 
 	// -------------------------------------------------------------------------
-	// Delegate to active view
+	// Delegate to active view (non-streaming messages only)
 	// -------------------------------------------------------------------------
 	var cmd tea.Cmd
 	switch a.activeView {

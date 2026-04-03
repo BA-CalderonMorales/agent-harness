@@ -558,14 +558,36 @@ func (app *App) handleTaskMessageAsync(input string, tuiApp *tui.App) {
 	for event := range stream {
 		switch e := event.(type) {
 		case types.StreamMessage:
-			// Extract text content
+			// Handle different content block types
 			for _, block := range e.Message.Content {
-				if text, ok := block.(types.TextBlock); ok {
-					currentText.WriteString(text.Text)
-					tuiApp.Send(tui.StreamChunkMsg{Text: text.Text})
+				switch b := block.(type) {
+				case types.TextBlock:
+					currentText.WriteString(b.Text)
+					tuiApp.Send(tui.StreamChunkMsg{Text: b.Text})
+				case types.ToolUseBlock:
+					// Show tool being called
+					toolMsg := fmt.Sprintf("[Using tool: %s]", b.Name)
+					tuiApp.Send(tui.StreamChunkMsg{Text: "\n" + toolMsg + "\n"})
+				case types.ToolResultBlock:
+					// Show tool result (truncated for display)
+					resultPreview := b.Content
+					if len(resultPreview) > 100 {
+						resultPreview = resultPreview[:100] + "..."
+					}
+					status := "✓"
+					if b.IsError {
+						status = "✗"
+					}
+					resultMsg := fmt.Sprintf("[%s Result: %s]", status, resultPreview)
+					tuiApp.Send(tui.StreamChunkMsg{Text: resultMsg + "\n"})
 				}
 			}
 			app.session.AddMessage(e.Message)
+		case types.ProgressMessage:
+			// Show tool execution progress
+			if data, ok := e.Data.(string); ok && data != "" {
+				tuiApp.Send(tui.StreamChunkMsg{Text: fmt.Sprintf("[Progress: %s]", data)})
+			}
 		}
 	}
 
