@@ -294,6 +294,8 @@ func (app *App) runTUIMode() error {
 }
 
 // handleUserSubmit handles user message submission (runs in goroutine)
+// ALL messages go through the full agent loop - no conversational shortcuts.
+// This ensures the LLM always has context and can use tools when appropriate.
 func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	validator := ui.NewTermuxValidator()
 	normalizedInput, valid := validator.ValidateInput(text)
@@ -310,11 +312,9 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	}
 	app.session.AddMessage(userMsg)
 
-	if agent.IsConversational(normalizedInput) {
-		app.handleConversationalMessageAsync(normalizedInput, tuiApp)
-	} else {
-		app.handleTaskMessageAsync(normalizedInput, tuiApp)
-	}
+	// ALWAYS use the full agent loop - even for greetings.
+	// The LLM decides how to respond based on the system prompt.
+	app.handleAgentLoopAsync(normalizedInput, tuiApp)
 }
 
 // handleUserCommand handles slash commands (runs in goroutine)
@@ -445,46 +445,10 @@ func (app *App) getSettings() []tui.Setting {
 	}
 }
 
-// handleConversationalMessageAsync handles conversational responses via async messages
-// This runs in a goroutine and MUST use tuiApp.Send() for all UI updates
-func (app *App) handleConversationalMessageAsync(input string, tuiApp *tui.App) {
-	// Signal start through message channel (not direct manipulation)
-	tuiApp.Send(tui.AgentStartMsg{Timestamp: time.Now()})
-
-	convType := agent.ClassifyInput(input)
-	var response string
-
-	switch convType {
-	case agent.ConvGreeting:
-		response = agent.GetGreetingResponse()
-	case agent.ConvQuestion:
-		response = agent.GetCapabilityResponse()
-	case agent.ConvCasual:
-		response = agent.GetCasualResponse(input)
-	default:
-		response = "I'm here to help. What would you like to work on?"
-	}
-
-	// Add to session
-	assistantMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleAssistant,
-		Content:   []types.ContentBlock{types.TextBlock{Text: response}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(assistantMsg)
-	app.costTracker.CompleteTurn()
-
-	// Send completion through message channel
-	tuiApp.Send(tui.AgentDoneMsg{
-		FullResponse: response,
-		Timestamp:    time.Now(),
-	})
-}
-
-// handleTaskMessageAsync handles task responses via async messages
-// This runs in a goroutine and MUST use tuiApp.Send() for all UI updates
-func (app *App) handleTaskMessageAsync(input string, tuiApp *tui.App) {
+// handleAgentLoopAsync runs the FULL agent loop for ALL user input.
+// No more "fast path" - even greetings go through the LLM with tool access.
+// This makes the agent truly agentic: it decides how to respond based on context.
+func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 	// Signal start through message channel
 	tuiApp.Send(tui.AgentStartMsg{Timestamp: time.Now()})
 
