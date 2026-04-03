@@ -360,6 +360,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case QuitMsg:
 		return a, tea.Quit
+
+	// -------------------------------------------------------------------------
+	// Clear chat request - handle globally so it works from any view
+	// -------------------------------------------------------------------------
+	case ClearChatMsg:
+		chatModel, cmd := a.chatModel.Update(msg)
+		a.chatModel = chatModel.(ChatModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		return a, tea.Batch(cmds...)
 	}
 
 	// -------------------------------------------------------------------------
@@ -668,6 +679,7 @@ func (a *App) SetModels(models []ModelItem) {
 func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 	noArgCommands := map[string]bool{
 		"/help":          true,
+		"/status":        true,
 		"/clear":         true,
 		"/compact":       true,
 		"/cost":          true,
@@ -678,6 +690,9 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 		"/quit":          true,
 		"/exit":          true,
 		"/current-model": true,
+		"/reset":         true,
+		"/agents":        true,
+		"/skills":        true,
 	}
 
 	cmdName := selected.Command
