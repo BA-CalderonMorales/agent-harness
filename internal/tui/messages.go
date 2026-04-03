@@ -51,3 +51,6 @@ type openCommandPaletteMsg struct{}
 
 // openModelPickerMsg signals the model picker should open
 type openModelPickerMsg struct{}
+
+// ClearChatMsg signals the chat should be cleared
+type ClearChatMsg struct{}

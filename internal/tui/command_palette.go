@@ -49,10 +49,12 @@ func NewCommandPalette() CommandPaletteModel {
 func getAgentHarnessCommands() []commandInfo {
 	return []commandInfo{
 		{Command: "/help", Description: "Show available commands", Category: "Session"},
+		{Command: "/status", Description: "Show session status", Category: "Session"},
 		{Command: "/clear", Description: "Clear chat history", Category: "Session"},
 		{Command: "/compact", Description: "Compact session to reduce tokens", Category: "Session"},
 		{Command: "/export", Args: "[path]", Description: "Export conversation to file", Category: "Session"},
 		{Command: "/session", Args: "[list|load <id>]", Description: "Manage sessions", Category: "Session"},
+		{Command: "/reset", Description: "Reset agent harness (destructive)", Category: "Session"},
 		{Command: "/quit", Description: "Exit application", Category: "Session"},
 		{Command: "/exit", Description: "Exit application (alias)", Category: "Session"},
 
@@ -63,7 +65,9 @@ func getAgentHarnessCommands() []commandInfo {
 		{Command: "/version", Description: "Show version", Category: "System"},
 		{Command: "/config", Description: "Show configuration", Category: "System"},
 		{Command: "/permissions", Args: "[mode]", Description: "Show or change permission mode", Category: "System"},
-		{Command: "/memory", Description: "Show memory info", Category: "System"},
+		{Command: "/memory", Description: "Show session memory info", Category: "System"},
+		{Command: "/agents", Description: "Show available agents", Category: "Tools"},
+		{Command: "/skills", Description: "Show available skills", Category: "Tools"},
 	}
 }
 

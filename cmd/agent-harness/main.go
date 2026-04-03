@@ -6,6 +6,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -27,7 +28,7 @@ import (
 )
 
 var (
-	Version   = "0.0.37"
+	Version   = "0.0.39"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -220,11 +221,16 @@ func (app *App) initSlashCommands() {
 	app.cmdRegistry.Register("help", "Show available commands",
 		commands.HelpHandler(app.cmdRegistry))
 
+	app.cmdRegistry.Register("status", "Show session status",
+		commands.StatusHandler(func() string {
+			return app.sessionManager.FormatSessionReport()
+		}))
+
 	app.cmdRegistry.Register("clear", "Clear the session history",
 		commands.ClearHandler(func() error {
 			app.session = app.session.Clear()
 			return nil
-		}))
+		}, nil))
 
 	app.cmdRegistry.Register("compact", "Compact session to reduce token usage",
 		commands.CompactHandler(func() (string, error) {
@@ -270,8 +276,141 @@ func (app *App) initSlashCommands() {
 			return path, nil
 		}))
 
+	app.cmdRegistry.Register("session", "Manage sessions",
+		commands.SessionHandler(
+			func() string {
+				sessions, err := app.sessionManager.ListSessions()
+				if err != nil {
+					return fmt.Sprintf("Error listing sessions: %v", err)
+				}
+				if len(sessions) == 0 {
+					return "No saved sessions."
+				}
+				var lines []string
+				lines = append(lines, "Saved sessions:")
+				for _, s := range sessions {
+					active := ""
+					if s.ID == app.session.ID {
+						active = " (active)"
+					}
+					lines = append(lines, fmt.Sprintf("  %s - %d messages, %d turns%s", s.ID[:8], s.MessageCount, s.Turns, active))
+				}
+				return strings.Join(lines, "\n")
+			},
+			func(id string) error {
+				session, err := app.sessionManager.LoadSession(id)
+				if err != nil {
+					return err
+				}
+				app.session = session
+				return nil
+			},
+		))
+
+	app.cmdRegistry.Register("diff", "Show git diff",
+		commands.DiffHandler(func() string {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "Not in a git repository."
+			}
+			return git.FormatDiff()
+		}))
+
+	app.cmdRegistry.Register("version", "Show version",
+		commands.VersionHandler(Version, fmt.Sprintf("Built: %s Git: %s", BuildTime, GitSHA)))
+
+	app.cmdRegistry.Register("config", "Show configuration",
+		commands.ConfigHandler(func() string {
+			if app.config == nil {
+				return "No configuration loaded."
+			}
+			return app.config.GetConfigReport()
+		}))
+
+	app.cmdRegistry.Register("permissions", "Show or change permission mode",
+		commands.PermissionsHandler(
+			func() string { return app.config.PermissionMode.String() },
+			func(m string) error {
+				mode, err := config.ParsePermissionMode(m)
+				if err != nil {
+					return err
+				}
+				app.config.PermissionMode = mode
+				return nil
+			},
+			func() string {
+				if app.config == nil {
+					return "No configuration loaded."
+				}
+				return app.config.GetPermissionReport()
+			},
+		))
+
+	app.cmdRegistry.Register("memory", "Show session memory info",
+		commands.MemoryHandler(func() string {
+			return app.sessionManager.FormatSessionReport()
+		}))
+
+	app.cmdRegistry.Register("agents", "Show available agents",
+		commands.AgentsHandler(func(args string) string {
+			return "Available agents:\n  default  Standard agent with full tool access\n  okabe    Experimental reasoning agent"
+		}))
+
+	app.cmdRegistry.Register("skills", "Show available skills",
+		commands.SkillsHandler(func(args string) string {
+			skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
+			if err != nil {
+				return fmt.Sprintf("No skills loaded: %v", err)
+			}
+			skillsList := skillReg.All()
+			if len(skillsList) == 0 {
+				return "No skills available in .agent-harness/skills"
+			}
+			var lines []string
+			lines = append(lines, "Available skills:")
+			for _, sk := range skillsList {
+				desc := sk.Description
+				if len(desc) > 60 {
+					desc = desc[:57] + "..."
+				}
+				lines = append(lines, fmt.Sprintf("  %-24s %s", sk.Name, desc))
+			}
+			return strings.Join(lines, "\n")
+		}))
+
+	app.cmdRegistry.Register("reset", "Reset agent harness (delete credentials and all sessions)",
+		commands.ResetHandler(func() error {
+			credManager := config.NewCredentialManager()
+			if err := credManager.ClearSecureConfig(); err != nil {
+				return fmt.Errorf("failed to clear credentials: %w", err)
+			}
+			sessions, err := app.sessionManager.ListSessions()
+			if err != nil {
+				return fmt.Errorf("failed to list sessions: %w", err)
+			}
+			for _, s := range sessions {
+				path := filepath.Join(app.sessionManager.GetSessionsDir(), s.ID+".json")
+				_ = os.Remove(path)
+			}
+			app.session = app.session.Clear()
+			return nil
+		}))
+
 	app.cmdRegistry.Register("quit", "Exit the application", commands.QuitHandler())
 	app.cmdRegistry.Register("exit", "Exit the application", commands.QuitHandler())
+}
+
+func (app *App) initSlashCommandsForTUI(tuiApp *tui.App) {
+	// Re-register clear with TUI chat clearing so the viewport actually empties
+	app.cmdRegistry.Register("clear", "Clear the session history",
+		commands.ClearHandler(
+			func() error {
+				app.session = app.session.Clear()
+				return nil
+			},
+			func() {
+				tuiApp.Send(tui.ClearChatMsg{})
+			},
+		))
 }
 
 // ---------------------------------------------------------------------------
@@ -280,6 +419,9 @@ func (app *App) initSlashCommands() {
 
 func (app *App) runTUIMode() error {
 	tuiApp := tui.NewApp()
+
+	// Re-register slash commands that need TUI integration
+	app.initSlashCommandsForTUI(tuiApp)
 
 	// Set up handlers (non-blocking)
 	tuiApp.SetUserSubmitHandler(func(text string, ta tui.App) {
@@ -333,6 +475,11 @@ func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
 			return
 		}
 		if commands.IsQuit(result) {
+			tuiApp.Send(tui.QuitMsg{})
+			return
+		}
+		if commands.IsReset(result) {
+			tuiApp.AddMessage("system", "Agent Harness has been reset. Encrypted credentials and all session data have been deleted. The application will now exit.")
 			tuiApp.Send(tui.QuitMsg{})
 			return
 		}

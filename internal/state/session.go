@@ -321,6 +321,11 @@ func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 	return sessions, nil
 }
 
+// GetSessionsDir returns the sessions directory
+func (sm *SessionManager) GetSessionsDir() string {
+	return sm.sessionsDir
+}
+
 // GetDefaultSessionPath returns the path for auto-save sessions
 func (sm *SessionManager) GetDefaultSessionPath() string {
 	if sm.current == nil {
