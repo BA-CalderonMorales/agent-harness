@@ -39,12 +39,13 @@ type ChatDelegate interface {
 // ChatMessage represents a message in the chat
 // ---------------------------------------------------------------------------
 type ChatMessage struct {
-	Role         string
-	Content      string
-	Timestamp    time.Time
-	IsTool       bool
-	ToolName     string
-	ResponseTime time.Duration // Time taken to generate this response
+	Role            string
+	Content         string
+	Timestamp       time.Time
+	IsTool          bool
+	ToolName        string
+	ToolDisplayName string // User-friendly display name for the tool
+	ResponseTime    time.Duration // Time taken to generate this response
 }
 
 // ---------------------------------------------------------------------------
@@ -233,7 +234,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case AgentToolStartMsg:
 		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
-		m.AddToolMessage(msg.ToolName, fmt.Sprintf("Using %s...", msg.ToolName))
+		displayName := msg.DisplayName
+		if displayName == "" {
+			displayName = msg.ToolName
+		}
+		m.AddToolMessage(msg.ToolName, displayName, fmt.Sprintf("Using %s...", displayName))
 		return m, nil
 
 	case AgentToolDoneMsg:
@@ -351,13 +356,17 @@ func (m *ChatModel) AddMessage(role, content string) {
 }
 
 // AddToolMessage adds a tool message to the chat.
-func (m *ChatModel) AddToolMessage(toolName, content string) {
+func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
+	if toolDisplayName == "" {
+		toolDisplayName = toolName
+	}
 	msg := ChatMessage{
-		Role:      "tool",
-		Content:   content,
-		Timestamp: time.Now(),
-		IsTool:    true,
-		ToolName:  toolName,
+		Role:            "tool",
+		Content:         content,
+		Timestamp:       time.Now(),
+		IsTool:          true,
+		ToolName:        toolName,
+		ToolDisplayName: toolDisplayName,
 	}
 	m.messages = append(m.messages, msg)
 	m.refreshViewport()
@@ -592,8 +601,12 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 	var b strings.Builder
 
-	// Tool header
-	toolHeader := ToolCallStyle.Render(fmt.Sprintf("[%s]", msg.ToolName))
+	// Tool header - use display name if available, fall back to tool name
+	displayName := msg.ToolDisplayName
+	if displayName == "" {
+		displayName = msg.ToolName
+	}
+	toolHeader := ToolCallStyle.Render(fmt.Sprintf("[%s]", displayName))
 	b.WriteString(toolHeader)
 	b.WriteString("\n")
 

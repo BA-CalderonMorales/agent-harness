@@ -17,6 +17,50 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
+// getToolDisplayName returns a user-friendly display name for a tool
+func getToolDisplayName(toolName string) string {
+	switch toolName {
+	case "bash", "BashTool":
+		return "Shell"
+	case "read", "ReadTool":
+		return "Read File"
+	case "write", "WriteTool":
+		return "Write File"
+	case "edit", "EditTool":
+		return "Edit File"
+	case "glob", "GlobTool":
+		return "Find Files"
+	case "grep", "GrepTool":
+		return "Search"
+	case "webfetch", "WebFetchTool":
+		return "Fetch URL"
+	case "websearch", "WebSearchTool":
+		return "Web Search"
+	case "agent", "AgentTool":
+		return "Agent"
+	case "ask", "AskTool":
+		return "Ask"
+	case "todo", "TodoTool":
+		return "Todo"
+	case "note", "NotebookTool":
+		return "Notebook"
+	case "plan", "PlanTool":
+		return "Plan"
+	case "settings", "SettingsTool":
+		return "Settings"
+	case "export", "ExportTool":
+		return "Export"
+	case "rewind", "RewindTool":
+		return "Rewind"
+	default:
+		// Capitalize first letter as fallback
+		if len(toolName) > 0 {
+			return strings.ToUpper(toolName[:1]) + toolName[1:]
+		}
+		return toolName
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Agent Messages - Sent from async operations back to the TUI
 // ---------------------------------------------------------------------------
@@ -49,9 +93,10 @@ type AgentErrorMsg struct {
 
 // AgentToolStartMsg signals a tool is being invoked
 type AgentToolStartMsg struct {
-	ToolID   string
-	ToolName string
-	Input    map[string]any
+	ToolID      string
+	ToolName    string
+	DisplayName string
+	Input       map[string]any
 }
 
 // AgentToolDoneMsg signals a tool has completed
@@ -173,9 +218,10 @@ func StreamingAgentQuery(params AgentQueryParams, updateChan chan<- tea.Msg) tea
 					case types.ToolUseBlock:
 						toolCallCount++
 						updateChan <- AgentToolStartMsg{
-							ToolID:   b.ID,
-							ToolName: b.Name,
-							Input:    b.Input,
+							ToolID:      b.ID,
+							ToolName:    b.Name,
+							DisplayName: getToolDisplayName(b.Name),
+							Input:       b.Input,
 						}
 
 					case types.ToolResultBlock:
