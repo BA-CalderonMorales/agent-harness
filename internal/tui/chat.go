@@ -315,6 +315,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.AddMessage("system", fmt.Sprintf("Error: %v", msg.Error))
 		m.streamBuffer = ""
 		return m, nil
+
+	case ClearChatMsg:
+		m.messages = make([]ChatMessage, 0)
+		m.streamBuffer = ""
+		m.thinking = false
+		m.refreshViewport()
+		return m, nil
 	}
 
 	// Update viewport for all other message types
