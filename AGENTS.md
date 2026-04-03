@@ -263,3 +263,38 @@ Content...
 - `docs/termux_edge_cases.md` - Termux portability notes (legacy)
 - `docs/services-features.md` - Gated capabilities
 - `docs/os/termux/ui_ux_fixes.md` - Termux UI/UX implementation details
+
+## Release Tag Retention
+
+**NEVER DELETE RELEASE TAGS**. Tags are part of the project's permanent history.
+
+### Why Keep All Tags
+
+1. **Audit trail**: Tags mark when specific versions were released
+2. **Bug reports**: Users may reference old versions when reporting issues
+3. **Bisecting**: Developers need tags to find when regressions were introduced
+4. **History**: Deleted tags create gaps in the release timeline
+
+### What to Do Instead
+
+If a release has issues:
+1. Fix the issue on `develop`
+2. Bump the version
+3. Create a new tag with an incremented version number
+4. Document the fix in the release notes
+
+### Example
+
+```bash
+# Bad - deleting a tag
+git push --delete origin v0.0.28
+git tag -d v0.0.28
+
+# Good - keeping history and releasing fix
+# v0.0.28 had a bug
+# Fix it on develop...
+git tag -a v0.0.29 -m "Fix bug from v0.0.28"
+git push origin v0.0.29
+```
+
+Both v0.0.28 and v0.0.29 exist in history. Users can see the progression.
