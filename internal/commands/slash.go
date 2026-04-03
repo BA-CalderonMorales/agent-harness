@@ -97,8 +97,9 @@ func (sr *SlashRegistry) GetHelp() string {
 
 	// Group commands by category
 	categories := map[string][]string{
-		"Session":    {"help", "status", "clear", "compact", "session", "quit", "exit"},
-		"Settings":   {"model", "permissions", "config", "memory"},
+		"Session":    {"help", "status", "clear", "compact", "session", "reset", "quit", "exit"},
+		"Model":      {"model", "current-model"},
+		"Settings":   {"permissions", "config", "memory"},
 		"Output":     {"cost", "diff", "export", "version"},
 		"Tools":      {"agents", "skills"},
 	}
@@ -148,14 +149,17 @@ func StatusHandler(getStatus func() string) SlashHandler {
 	}
 }
 
-// ClearHandler clears the session
-func ClearHandler(clearFn func() error) SlashHandler {
+// ClearHandler clears the session and optionally the TUI chat
+func ClearHandler(clearFn func() error, clearChatFn func()) SlashHandler {
 	return func(args string) (string, error) {
 		if args != "--confirm" && args != "-y" {
 			return "clear: confirmation required; rerun with /clear --confirm", nil
 		}
 		if err := clearFn(); err != nil {
 			return "", err
+		}
+		if clearChatFn != nil {
+			clearChatFn()
 		}
 		return "Session cleared.", nil
 	}
@@ -308,6 +312,24 @@ func SessionHandler(listSessions func() string, loadSession func(id string) erro
 		}
 		return "Usage: /session [list|load <id>]", nil
 	}
+}
+
+// ResetHandler handles resetting agent harness
+func ResetHandler(resetFn func() error) SlashHandler {
+	return func(args string) (string, error) {
+		if args != "--confirm" && args != "-y" {
+			return "reset: WARNING - this will delete your encrypted credentials and ALL session history. This action cannot be undone. Rerun with /reset --confirm to proceed.", nil
+		}
+		if err := resetFn(); err != nil {
+			return "", err
+		}
+		return "__RESET__", nil
+	}
+}
+
+// IsReset checks if the result is a reset command
+func IsReset(result string) bool {
+	return result == "__RESET__"
 }
 
 // QuitHandler handles quitting
