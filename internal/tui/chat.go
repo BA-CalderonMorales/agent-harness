@@ -5,11 +5,13 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/lipgloss"
 )
 
@@ -85,6 +87,48 @@ type ToolUseBlock struct {
 	Name string
 }
 
+// markdownRenderer is a lazy-initialized glamour renderer for markdown
+var (
+	markdownRenderer     *glamour.TermRenderer
+	markdownRendererOnce sync.Once
+	markdownRendererErr  error
+)
+
+// getMarkdownRenderer returns a shared glamour renderer instance
+func getMarkdownRenderer() (*glamour.TermRenderer, error) {
+	markdownRendererOnce.Do(func() {
+		markdownRenderer, markdownRendererErr = glamour.NewTermRenderer(
+			glamour.WithAutoStyle(),
+			glamour.WithWordWrap(0), // We'll handle wrapping separately
+		)
+	})
+	return markdownRenderer, markdownRendererErr
+}
+
+// renderMarkdown converts markdown text to ANSI-styled text
+func renderMarkdown(content string, width int) string {
+	if strings.TrimSpace(content) == "" {
+		return content
+	}
+
+	renderer, err := getMarkdownRenderer()
+	if err != nil {
+		// Fallback to plain text if renderer fails
+		return content
+	}
+
+	// Render markdown to ANSI
+	rendered, err := renderer.Render(content)
+	if err != nil {
+		return content
+	}
+
+	// Trim trailing newline that glamour adds
+	rendered = strings.TrimSuffix(rendered, "\n")
+
+	return rendered
+}
+
 // NewChatModel creates a new chat model.
 func NewChatModel() ChatModel {
 	ta := textarea.New()
@@ -153,6 +197,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		if !m.focused {
 			return m, nil
+		}
+
+		// Open command palette when "/" is typed in empty input
+		if msg.String() == "/" && m.textarea.Value() == "" {
+			return m, func() tea.Msg { return openCommandPaletteMsg{} }
 		}
 
 		switch msg.Type {
@@ -569,8 +618,9 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content with left border
-	content := MessageBubbleUser.Width(m.width - 4).Render(msg.Content)
+	// Content - render markdown for rich formatting
+	renderedContent := renderMarkdown(msg.Content, m.width-4)
+	content := MessageBubbleUser.Width(m.width - 4).Render(renderedContent)
 	b.WriteString(content)
 
 	return b.String()
@@ -591,8 +641,9 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content with left border
-	content := MessageBubbleAssistant.Width(m.width - 4).Render(msg.Content)
+	// Content - render markdown for rich formatting (code blocks, bold, italic, etc.)
+	renderedContent := renderMarkdown(msg.Content, m.width-4)
+	content := MessageBubbleAssistant.Width(m.width - 4).Render(renderedContent)
 	b.WriteString(content)
 
 	return b.String()

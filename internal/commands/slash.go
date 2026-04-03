@@ -175,6 +175,13 @@ func CostHandler(getCost func() string) SlashHandler {
 	}
 }
 
+// CurrentModelHandler shows the current model
+func CurrentModelHandler(getModel func() string) SlashHandler {
+	return func(args string) (string, error) {
+		return fmt.Sprintf("Current model: %s", getModel()), nil
+	}
+}
+
 // ModelHandler handles model switching
 func ModelHandler(getModel func() string, setModel func(string) error, listModels func() []string) SlashHandler {
 	return func(args string) (string, error) {

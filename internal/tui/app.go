@@ -54,9 +54,11 @@ type App struct {
 	settingsModel SettingsModel
 
 	// UI state
-	showHelp    bool
-	helpModel   Help
-	tabActivity [viewCount]bool
+	showHelp       bool
+	helpModel      Help
+	commandPalette CommandPaletteModel
+	modelPicker    ModelPickerModel
+	tabActivity    [viewCount]bool
 
 	// Status
 	statusMessage string
@@ -73,13 +75,15 @@ type App struct {
 // NewApp creates the root app model.
 func NewApp() *App {
 	return &App{
-		activeView:    viewChat,
-		mode:          ModeInsert,
-		chatModel:     NewChatModel(),
-		sessionsModel: NewSessionsModel(),
-		settingsModel: NewSettingsModel(),
-		helpModel:     NewHelp(),
-		msgChan:       make(chan tea.Msg, 64),
+		activeView:     viewChat,
+		mode:           ModeInsert,
+		chatModel:      NewChatModel(),
+		sessionsModel:  NewSessionsModel(),
+		settingsModel:  NewSettingsModel(),
+		helpModel:      NewHelp(),
+		commandPalette: NewCommandPalette(),
+		modelPicker:    NewModelPicker(),
+		msgChan:        make(chan tea.Msg, 64),
 	}
 }
 
@@ -145,8 +149,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Global keys
 	// -------------------------------------------------------------------------
 	case tea.KeyMsg:
-		// Help toggle
-		if msg.String() == "?" && !a.showHelp {
+		// Help toggle — only in normal mode to avoid interfering with typing
+		if msg.String() == "?" && !a.showHelp && a.mode == ModeNormal {
 			a.showHelp = true
 			a.helpModel.Open(a.width, a.height, "")
 			return a, nil
@@ -160,6 +164,31 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, nil
 			}
 			return a, nil
+		}
+
+		// When command palette is open, delegate to it
+		if a.commandPalette.IsShowing() {
+			closed, cmd := a.commandPalette.Update(msg)
+			if closed {
+				if selected := a.commandPalette.SelectedCommand(); selected != nil {
+					return a.handlePaletteSelection(selected)
+				}
+			}
+			return a, cmd
+		}
+
+		// When model picker is open, delegate to it
+		if a.modelPicker.IsShowing() {
+			closed, cmd := a.modelPicker.Update(msg)
+			if closed {
+				if selected := a.modelPicker.SelectedModel(); selected != nil {
+					cmdText := "/model " + selected.ID
+					if a.onUserCommand != nil {
+						go a.onUserCommand(cmdText, a)
+					}
+				}
+			}
+			return a, cmd
 		}
 
 		switch msg.Type {
@@ -311,6 +340,26 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, a.listenForMessages())
 		// Return early - do NOT delegate to active view (would cause duplicates)
 		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
+	// Command palette open request
+	// -------------------------------------------------------------------------
+	case openCommandPaletteMsg:
+		a.commandPalette.Open(a.width, a.height)
+		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Model picker open request
+	// -------------------------------------------------------------------------
+	case openModelPickerMsg:
+		a.modelPicker.Open(a.width, a.height)
+		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Quit request
+	// -------------------------------------------------------------------------
+	case QuitMsg:
+		return a, tea.Quit
 	}
 
 	// -------------------------------------------------------------------------
@@ -351,6 +400,14 @@ func (a App) View() string {
 	tabBar := a.renderTabBar()
 	content := a.renderActiveView()
 	statusBar := a.renderStatusBar()
+
+	// Render overlays on top (they fill the screen via lipgloss.Place)
+	if a.commandPalette.IsShowing() {
+		return a.commandPalette.View(a.width, a.height)
+	}
+	if a.modelPicker.IsShowing() {
+		return a.modelPicker.View(a.width, a.height)
+	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
 }
@@ -418,10 +475,7 @@ func (a App) renderStatusBar() string {
 	parts = append(parts, " "+status+" Agent Harness")
 
 	// Middle: Model info
-	model := a.chatModel.GetModel()
-	if model == "" {
-		model = "default"
-	}
+	model := ShortenModelName(a.chatModel.GetModel())
 	parts = append(parts, StatusLabel.Render("model:"+model))
 
 	// Right: Help hints and mode
@@ -600,6 +654,91 @@ func (a *App) RefreshSessions(sessions []SessionInfo) {
 // SetSettings sets the settings list.
 func (a *App) SetSettings(settings []Setting) {
 	a.settingsModel.SetSettings(settings)
+}
+
+// SetModels sets the available models for the model picker.
+func (a *App) SetModels(models []ModelItem) {
+	a.modelPicker.SetModels(models)
+}
+
+// handlePaletteSelection handles a command selected from the palette.
+// Commands with no arguments are executed immediately.
+// /model with no args opens the model picker.
+// Everything else is inserted into the input with a trailing space.
+func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
+	noArgCommands := map[string]bool{
+		"/help":          true,
+		"/clear":         true,
+		"/compact":       true,
+		"/cost":          true,
+		"/diff":          true,
+		"/version":       true,
+		"/config":        true,
+		"/memory":        true,
+		"/quit":          true,
+		"/exit":          true,
+		"/current-model": true,
+	}
+
+	cmdName := selected.Command
+	if noArgCommands[cmdName] {
+		if a.onUserCommand != nil {
+			go a.onUserCommand(cmdName, *a)
+		}
+		return *a, nil
+	}
+
+	if cmdName == "/model" && selected.Args == "" {
+		a.modelPicker.Open(a.width, a.height)
+		return *a, nil
+	}
+
+	a.chatModel.SetInput(cmdName + " ")
+	return *a, nil
+}
+
+// ShortenModelName returns a compact display name for a model.
+func ShortenModelName(model string) string {
+	if model == "" {
+		return "default"
+	}
+
+	tag := ""
+	if idx := strings.LastIndex(model, ":"); idx != -1 {
+		tag = model[idx+1:]
+		model = model[:idx]
+	}
+
+	parts := strings.SplitN(model, "/", 2)
+	if len(parts) == 2 {
+		provider := parts[0]
+		rest := parts[1]
+		segments := strings.Split(rest, "-")
+
+		short := ""
+		for i := len(segments) - 1; i >= 0; i-- {
+			s := segments[i]
+			if strings.ContainsAny(s, "0123456789") {
+				if len(s) > len(short) || (len(s) == len(short) && strings.HasSuffix(s, "b")) {
+					short = s
+				}
+			}
+		}
+		if short == "" {
+			short = segments[len(segments)-1]
+		}
+
+		result := provider + "..." + short
+		if tag != "" {
+			result += "(" + tag + ")"
+		}
+		return result
+	}
+
+	if len(model) > 20 {
+		return model[:17] + "..."
+	}
+	return model
 }
 
 // ---------------------------------------------------------------------------
