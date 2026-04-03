@@ -244,8 +244,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinking = false
 		m.streaming = false
 		// Finalize the streaming message
-		if m.streamBuffer != "" {
-			m.finalizeStreamingMessage(m.streamBuffer)
+		// For streamed responses, use streamBuffer. For direct responses, use FullResponse
+		finalContent := m.streamBuffer
+		if finalContent == "" && msg.FullResponse != "" {
+			finalContent = msg.FullResponse
+		}
+		if finalContent != "" {
+			m.finalizeStreamingMessage(finalContent)
 		}
 		m.streamBuffer = ""
 		return m, nil
@@ -500,9 +505,18 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 // finalizeStreamingMessage finalizes the streaming message
 func (m *ChatModel) finalizeStreamingMessage(content string) {
 	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
+		// Update existing assistant message
 		m.messages[len(m.messages)-1].Content = content
 		m.messages[len(m.messages)-1].Timestamp = time.Now()
 		m.messages[len(m.messages)-1].ResponseTime = m.elapsed
+	} else {
+		// Create new assistant message (for non-streamed responses)
+		m.messages = append(m.messages, ChatMessage{
+			Role:         "assistant",
+			Content:      content,
+			Timestamp:    time.Now(),
+			ResponseTime: m.elapsed,
+		})
 	}
 	m.refreshViewport()
 }
