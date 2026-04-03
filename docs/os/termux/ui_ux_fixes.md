@@ -117,6 +117,46 @@ TERMUX_VERSION=0.118 ./build/agent-harness
 - `cmd/agent-harness/main.go` - Main entry point with Termux-aware setup
 - `docs/termux_edge_cases.md` - General Termux portability notes
 
+## TUI Mobile Optimizations
+
+### Question Mark Help Guard (internal/tui/app.go)
+
+**Problem**: Typing `?` while composing a question in the chat input triggered the help overlay, making it impossible to ask the model questions that contain `?`.
+
+**Solution**: The `?` help shortcut is now restricted to normal mode only. When the user is in insert mode (actively typing), `?` is passed through to the textarea normally.
+
+### Command Palette for Slash Commands (internal/tui/command_palette.go)
+
+**Problem**: Typing long slash commands on a mobile keyboard is error-prone and slow.
+
+**Solution**: Pressing `/` in an empty chat input opens an interactive command palette. Features:
+- Fuzzy search by command name, description, or category
+- `j`/`k` or arrow keys to navigate
+- `Enter` to select
+- `Tab` to auto-complete the first match
+- `Esc` or `q` to cancel
+
+**Selection behavior**:
+- No-argument commands (e.g., `/quit`, `/clear`, `/help`) execute immediately
+- `/model` with no arguments opens the model picker
+- All other commands are inserted into the input with a trailing space for argument entry
+
+### Model Picker (internal/tui/model_picker.go)
+
+**Problem**: Remembering exact model IDs on mobile is impractical.
+
+**Solution**: An interactive model picker lists available models for the configured provider. The user can filter by name or provider and select with `Enter`.
+
+### Status Bar Model Shortening (internal/tui/app.go)
+
+**Problem**: Full model names like `nvidia/nemotron-3-super-120b-a12b:free` overflow the narrow status bar on mobile screens.
+
+**Solution**: `ShortenModelName` compresses model IDs to a compact form (e.g., `nvidia...120b(free)`) so the status bar remains readable.
+
+### Current Model Command (internal/commands/slash.go)
+
+**Solution**: Added `/current-model` slash command to quickly display the active model without opening settings.
+
 ## Future Improvements
 
 1. **Soft Keyboard Support**: Consider integrating with Termux's soft keyboard API

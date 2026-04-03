@@ -256,6 +256,9 @@ func (app *App) initSlashCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("current-model", "Show the current model",
+		commands.CurrentModelHandler(func() string { return app.session.Model }))
+
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(path string) (string, error) {
 			if path == "" {
@@ -293,6 +296,7 @@ func (app *App) runTUIMode() error {
 	tuiApp.AddMessage("system", fmt.Sprintf("Agent Harness %s - Type /help for commands", Version))
 	tuiApp.RefreshSessions(app.getSessionInfos())
 	tuiApp.SetSettings(app.getSettings())
+	tuiApp.SetModels(app.getModelItems())
 
 	return tui.Run(tuiApp)
 }
@@ -326,6 +330,10 @@ func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
 	if result, handled, err := app.cmdRegistry.Handle(command); handled {
 		if err != nil {
 			tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+			return
+		}
+		if commands.IsQuit(result) {
+			tuiApp.Send(tui.QuitMsg{})
 			return
 		}
 		if result != "" {
@@ -464,6 +472,45 @@ func (app *App) getSettings() []tui.Setting {
 			Options:     []string{"read-only", "workspace-write", "danger-full-access"},
 		},
 	}
+}
+
+func (app *App) getModelItems() []tui.ModelItem {
+	// Return models appropriate for the current provider
+	provider := app.config.Provider
+	if provider == "" {
+		provider = "openrouter"
+	}
+
+	var items []tui.ModelItem
+	switch provider {
+	case "openai":
+		items = []tui.ModelItem{
+			{ID: "gpt-4o", Name: "GPT-4o", Provider: "openai", ContextLen: 128000, IsDefault: app.session.Model == "gpt-4o"},
+			{ID: "gpt-4o-mini", Name: "GPT-4o Mini", Provider: "openai", ContextLen: 128000, IsDefault: app.session.Model == "gpt-4o-mini"},
+			{ID: "gpt-4-turbo", Name: "GPT-4 Turbo", Provider: "openai", ContextLen: 128000, IsDefault: app.session.Model == "gpt-4-turbo"},
+			{ID: "gpt-3.5-turbo", Name: "GPT-3.5 Turbo", Provider: "openai", ContextLen: 16385, IsDefault: app.session.Model == "gpt-3.5-turbo"},
+		}
+	case "anthropic":
+		items = []tui.ModelItem{
+			{ID: "claude-3-5-sonnet-20241022", Name: "Claude 3.5 Sonnet", Provider: "anthropic", ContextLen: 200000, IsDefault: app.session.Model == "claude-3-5-sonnet-20241022"},
+			{ID: "claude-3-opus-20240229", Name: "Claude 3 Opus", Provider: "anthropic", ContextLen: 200000, IsDefault: app.session.Model == "claude-3-opus-20240229"},
+			{ID: "claude-3-haiku-20240307", Name: "Claude 3 Haiku", Provider: "anthropic", ContextLen: 200000, IsDefault: app.session.Model == "claude-3-haiku-20240307"},
+		}
+	default:
+		// openrouter and fallback
+		items = []tui.ModelItem{
+			{ID: "nvidia/nemotron-3-super-120b-a12b:free", Name: "Nemotron 3 Super 120B (free)", Provider: "openrouter", ContextLen: 128000, IsDefault: app.session.Model == "nvidia/nemotron-3-super-120b-a12b:free"},
+			{ID: "anthropic/claude-3.5-sonnet", Name: "Claude 3.5 Sonnet", Provider: "openrouter", ContextLen: 200000, IsDefault: app.session.Model == "anthropic/claude-3.5-sonnet"},
+			{ID: "openai/gpt-4o", Name: "GPT-4o", Provider: "openrouter", ContextLen: 128000, IsDefault: app.session.Model == "openai/gpt-4o"},
+			{ID: "openai/gpt-4o-mini", Name: "GPT-4o Mini", Provider: "openrouter", ContextLen: 128000, IsDefault: app.session.Model == "openai/gpt-4o-mini"},
+			{ID: "meta-llama/llama-3.1-70b-instruct", Name: "Llama 3.1 70B", Provider: "openrouter", ContextLen: 131072, IsDefault: app.session.Model == "meta-llama/llama-3.1-70b-instruct"},
+			{ID: "meta-llama/llama-3.1-8b-instruct", Name: "Llama 3.1 8B", Provider: "openrouter", ContextLen: 131072, IsDefault: app.session.Model == "meta-llama/llama-3.1-8b-instruct"},
+			{ID: "google/gemini-pro-1.5", Name: "Gemini Pro 1.5", Provider: "openrouter", ContextLen: 2097152, IsDefault: app.session.Model == "google/gemini-pro-1.5"},
+			{ID: "mistralai/mistral-large", Name: "Mistral Large", Provider: "openrouter", ContextLen: 128000, IsDefault: app.session.Model == "mistralai/mistral-large"},
+		}
+	}
+
+	return items
 }
 
 // handleAgentLoopAsync runs the FULL agent loop for ALL user input.

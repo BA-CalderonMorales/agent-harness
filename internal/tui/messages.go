@@ -42,3 +42,12 @@ type AgentResponseMsg struct {
 	Role    string
 	Content string
 }
+
+// QuitMsg signals the TUI should exit
+type QuitMsg struct{}
+
+// openCommandPaletteMsg signals the command palette should open
+type openCommandPaletteMsg struct{}
+
+// openModelPickerMsg signals the model picker should open
+type openModelPickerMsg struct{}
