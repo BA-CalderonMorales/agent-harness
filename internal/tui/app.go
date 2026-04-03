@@ -4,7 +4,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -62,23 +61,36 @@ type App struct {
 	// Status
 	statusMessage string
 	statusType    string // "info", "success", "error", "warning"
+
+	// External message channel for async updates
+	msgChan chan tea.Msg
+
+	// Handlers for user actions (set by main.go)
+	onUserSubmit  func(string, App)
+	onUserCommand func(string, App)
 }
 
 // NewApp creates the root app model.
 func NewApp() *App {
 	return &App{
-		activeView: viewChat,
-		mode:       ModeInsert,
-		chatModel:  NewChatModel(),
+		activeView:    viewChat,
+		mode:          ModeInsert,
+		chatModel:     NewChatModel(),
 		sessionsModel: NewSessionsModel(),
 		settingsModel: NewSettingsModel(),
-		helpModel:    NewHelp(),
+		helpModel:     NewHelp(),
+		msgChan:       make(chan tea.Msg, 64),
 	}
 }
 
-// SetChatDelegate sets the chat message handler delegate.
-func (a *App) SetChatDelegate(delegate ChatDelegate) {
-	a.chatModel.SetDelegate(delegate)
+// SetUserSubmitHandler sets the handler for user message submissions.
+func (a *App) SetUserSubmitHandler(handler func(string, App)) {
+	a.onUserSubmit = handler
+}
+
+// SetUserCommandHandler sets the handler for slash commands.
+func (a *App) SetUserCommandHandler(handler func(string, App)) {
+	a.onUserCommand = handler
 }
 
 // SetSessionsDelegate sets the sessions handler delegate.
@@ -91,13 +103,32 @@ func (a *App) SetSettingsDelegate(delegate SettingsDelegate) {
 	a.settingsModel.SetDelegate(delegate)
 }
 
+// Send sends a message to the TUI from external goroutines.
+// This is the key method that enables async agent loop integration.
+func (a *App) Send(msg tea.Msg) {
+	select {
+	case a.msgChan <- msg:
+	default:
+		// Channel full, drop message (shouldn't happen with buffer)
+	}
+}
+
 // Init initializes the TUI.
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
 		a.chatModel.Init(),
 		a.sessionsModel.Init(),
 		a.settingsModel.Init(),
+		// Start listening for external messages
+		a.listenForMessages(),
 	)
+}
+
+// listenForMessages creates a command that listens for external messages.
+func (a App) listenForMessages() tea.Cmd {
+	return func() tea.Msg {
+		return <-a.msgChan
+	}
 }
 
 // Update handles messages and user input.
@@ -237,11 +268,45 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StatusMsg:
 		a.statusMessage = msg.Text
 		a.statusType = msg.Type
-		return a, nil
+		// Continue listening for more messages
+		cmds = append(cmds, a.listenForMessages())
+
+	// -------------------------------------------------------------------------
+	// User submission (non-blocking) - spawn handler in goroutine
+	// -------------------------------------------------------------------------
+	case UserSubmitMsg:
+		if a.onUserSubmit != nil {
+			// Spawn handler in goroutine to avoid blocking Update loop
+			go a.onUserSubmit(msg.Text, a)
+		}
+
+	// -------------------------------------------------------------------------
+	// User command (non-blocking) - spawn handler in goroutine
+	// -------------------------------------------------------------------------
+	case UserCommandMsg:
+		if a.onUserCommand != nil {
+			// Spawn handler in goroutine to avoid blocking Update loop
+			go a.onUserCommand(msg.Command, a)
+		}
+
+	// -------------------------------------------------------------------------
+	// Streaming messages from agent loop - forward to chat
+	// These are handled HERE ONLY to avoid double-processing
+	// -------------------------------------------------------------------------
+	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg:
+		chatModel, cmd := a.chatModel.Update(msg)
+		a.chatModel = chatModel.(ChatModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		// Continue listening for more messages
+		cmds = append(cmds, a.listenForMessages())
+		// Return early - do NOT delegate to active view (would cause duplicates)
+		return a, tea.Batch(cmds...)
 	}
 
 	// -------------------------------------------------------------------------
-	// Delegate to active view
+	// Delegate to active view (non-streaming messages only)
 	// -------------------------------------------------------------------------
 	var cmd tea.Cmd
 	switch a.activeView {
@@ -337,50 +402,48 @@ func (a App) renderActiveView() string {
 // ---------------------------------------------------------------------------
 
 func (a App) renderStatusBar() string {
-	// Connection indicator (placeholder - can be connected to real status)
-	conn := StatusOnline.Render("[ready]")
+	// Build simple status bar with proper spacing
+	var parts []string
 
-	left := fmt.Sprintf(" %s Agent Harness", conn)
+	// Left: Status and app name
+	status := StatusOnline.Render("[ready]")
+	parts = append(parts, " "+status+" Agent Harness")
 
-	// Model info from chat model
+	// Middle: Model info
 	model := a.chatModel.GetModel()
 	if model == "" {
 		model = "default"
 	}
-	mid := StatusLabel.Render(fmt.Sprintf("model:%s", model))
+	parts = append(parts, StatusLabel.Render("model:"+model))
 
-	// Mode indicator
-	modeStr := StatusHintStyle.Render("[typing]")
+	// Right: Help hints and mode
+	modeStr := "[typing]"
 	if a.mode == ModeNormal {
-		modeStr = WarningStyle.Render("[navigate]")
+		modeStr = "[navigate]"
+	}
+	rightParts := []string{
+		StatusHintStyle.Render("Tab: views"),
+		StatusHintStyle.Render("?: help"),
+		StatusHintStyle.Render("Ctrl+C: quit"),
+		modeStr,
+	}
+	right := strings.Join(rightParts, "  ")
+	if a.mode == ModeNormal {
+		right = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
+	} else {
+		right = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + StatusHintStyle.Render(modeStr)
+	}
+	parts = append(parts, right)
+
+	// Join with flexible spacing
+	content := strings.Join(parts, "  ")
+
+	// If too wide for terminal, use minimal version
+	if lipgloss.Width(content) > a.width-4 {
+		content = " " + status + "  " + model + "  Ctrl+C: quit"
 	}
 
-	right := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + modeStr
-
-	// StatusBarStyle has Padding(0,1) which adds 2 chars
-	contentW := a.width - 2
-	leftW := lipgloss.Width(left)
-	midW := lipgloss.Width(mid)
-	rightW := lipgloss.Width(right)
-
-	// Adjust for narrow terminals
-	if leftW+midW+rightW > contentW {
-		right = StatusHintStyle.Render("Ctrl+C: quit")
-		rightW = lipgloss.Width(right)
-	}
-	if leftW+midW+rightW > contentW {
-		right = ""
-		rightW = 0
-	}
-
-	gap := contentW - leftW - midW - rightW
-	if gap < 0 {
-		gap = 0
-	}
-
-	bar := left + strings.Repeat(" ", gap/2) + mid + strings.Repeat(" ", gap-gap/2) + right
-
-	return StatusBarStyle.Width(a.width).Render(bar)
+	return StatusBarStyle.Width(a.width).Render(content)
 }
 
 // ---------------------------------------------------------------------------
@@ -546,6 +609,7 @@ type StatusMsg struct {
 
 // Run starts the TUI application and returns when it exits.
 func Run(app *App) error {
+	// Use AltScreen for proper TUI experience (like lumina-bot)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
