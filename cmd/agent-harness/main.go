@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
@@ -25,7 +27,7 @@ import (
 )
 
 var (
-	Version   = "0.0.31"
+	Version   = "0.0.35"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -284,6 +286,7 @@ func (app *App) runTUIMode() error {
 	})
 	tuiApp.SetSessionsDelegate(&TUIsessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&TUISettingsDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetChatDelegate(&TUIChatDelegate{app: app, tuiApp: tuiApp})
 
 	// Initial data
 	tuiApp.AddMessage("system", fmt.Sprintf("Agent Harness %s - Type /help for commands", Version))
@@ -394,6 +397,23 @@ func (d *TUISettingsDelegate) OnSettingReset() {
 
 func (d *TUISettingsDelegate) OnSettingReload() {
 	d.tuiApp.SetSettings(d.app.getSettings())
+}
+
+// TUIChatDelegate connects TUI chat to the app
+type TUIChatDelegate struct {
+	app    *App
+	tuiApp *tui.App
+}
+
+func (d *TUIChatDelegate) OnSubmit(text string) tea.Cmd {
+	return func() tea.Msg {
+		d.app.handleUserSubmit(text, d.tuiApp)
+		return nil
+	}
+}
+
+func (d *TUIChatDelegate) OnCommand(command string) {
+	d.app.handleUserCommand(command, d.tuiApp)
 }
 
 func (app *App) getSessionInfos() []tui.SessionInfo {

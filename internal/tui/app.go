@@ -103,6 +103,11 @@ func (a *App) SetSettingsDelegate(delegate SettingsDelegate) {
 	a.settingsModel.SetDelegate(delegate)
 }
 
+// SetChatDelegate sets the chat handler delegate.
+func (a *App) SetChatDelegate(delegate ChatDelegate) {
+	a.chatModel.SetDelegate(delegate)
+}
+
 // Send sends a message to the TUI from external goroutines.
 // This is the key method that enables async agent loop integration.
 func (a *App) Send(msg tea.Msg) {
