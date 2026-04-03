@@ -1,4 +1,5 @@
 // Chat view with rich message display and input handling
+// Inspired by lumina-bot's streaming integration
 
 package tui
 
@@ -7,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+	"github.com/charmbracelet/bubbles/cursor"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -43,10 +46,14 @@ type ChatModel struct {
 	textarea textarea.Model
 	focused  bool
 
-	// State
-	thinking    bool
-	thinkingText string
-	model       string
+	// Streaming state
+	streaming    bool
+	streamText   string
+	streamStart  time.Time
+	streamChunks int
+
+	// Model info
+	model string
 
 	// Delegate
 	delegate ChatDelegate
@@ -59,8 +66,13 @@ func NewChatModel() ChatModel {
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
-	ta.Placeholder = "Type a message..."
+	ta.Placeholder = "Type a message... (/help for commands)"
 	ta.Focus()
+
+	// Steady cursor - no blink for better performance in Termux
+	ta.Cursor.SetMode(cursor.CursorStatic)
+	ta.Cursor.Style = lipgloss.NewStyle().Background(ColorPrimary)
+	ta.Cursor.TextStyle = lipgloss.NewStyle().Background(ColorPrimary).Foreground(ColorSurface)
 
 	vp := viewport.New(80, 20)
 
@@ -89,9 +101,7 @@ func (m ChatModel) GetModel() string {
 
 // Init initializes the chat model.
 func (m ChatModel) Init() tea.Cmd {
-	return tea.Batch(
-		textarea.Blink,
-	)
+	return textarea.Blink
 }
 
 // Update handles messages.
@@ -102,21 +112,18 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-
-		// Reserve space for input area (4 lines)
-		inputHeight := 4
-		vpHeight := msg.Height - inputHeight
-		if vpHeight < 5 {
-			vpHeight = 5
-		}
-
-		m.viewport.Width = msg.Width
-		m.viewport.Height = vpHeight
-		m.textarea.SetWidth(msg.Width - 4)
-
-		m.refreshViewport()
+		m.recalcLayout()
 
 	case tea.KeyMsg:
+		if m.streaming {
+			// Allow Ctrl+C to cancel streaming
+			if msg.Type == tea.KeyCtrlC {
+				return m, nil
+			}
+			// Block other input while streaming
+			return m, nil
+		}
+
 		if !m.focused {
 			return m, nil
 		}
@@ -129,7 +136,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			input := m.textarea.Value()
+			input := strings.TrimSpace(m.textarea.Value())
 			if input == "" {
 				return m, nil
 			}
@@ -149,7 +156,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			m.textarea.SetValue("")
-			m.refreshViewport()
+			m.textarea.SetHeight(3)
 			return m, nil
 
 		case tea.KeyCtrlC:
@@ -157,10 +164,43 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Update textarea
+		// Update textarea for normal input
 		newTA, cmd := m.textarea.Update(msg)
 		m.textarea = newTA
 		cmds = append(cmds, cmd)
+
+	// -------------------------------------------------------------------------
+	// Streaming messages - these are the key to fixing the responsive issue
+	// -------------------------------------------------------------------------
+	case StreamStartMsg:
+		m.streaming = true
+		m.streamText = ""
+		m.streamChunks = 0
+		m.streamStart = time.Now()
+		m.refreshViewport()
+
+	case StreamChunkMsg:
+		m.streamText += msg.Text
+		m.streamChunks++
+		m.refreshViewport()
+
+	case StreamMessageMsg:
+		// Complete message received - add it to the chat
+		for _, block := range msg.Message.Content {
+			if textBlock, ok := block.(types.TextBlock); ok {
+				m.AddMessage("assistant", textBlock.Text)
+			}
+		}
+
+	case StreamErrorMsg:
+		m.AddMessage("system", fmt.Sprintf("Error: %s", msg.Error))
+		m.streaming = false
+		m.refreshViewport()
+
+	case StreamDoneMsg:
+		m.streaming = false
+		m.streamText = ""
+		m.refreshViewport()
 	}
 
 	// Update viewport
@@ -171,25 +211,38 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+// recalcLayout recalculates layout based on current dimensions
+func (m *ChatModel) recalcLayout() {
+	inputHeight := 4 // textarea + border + hint line
+	vpHeight := m.height - inputHeight
+	if vpHeight < 5 {
+		vpHeight = 5
+	}
+
+	m.viewport.Width = m.width
+	m.viewport.Height = vpHeight
+	m.textarea.SetWidth(m.width - 4)
+
+	m.refreshViewport()
+}
+
 // View renders the chat.
 func (m ChatModel) View() string {
 	if m.width == 0 || m.height == 0 {
 		return "  Initializing chat..."
 	}
 
-	// Calculate heights with minimums
+	// Calculate heights
 	inputHeight := 3
-	if m.thinking {
+	if m.streaming {
 		inputHeight = 4
 	}
-	
-	// Ensure minimum height for viewport
-	vpHeight := m.height - inputHeight - 1 // -1 for separator
+
+	vpHeight := m.height - inputHeight - 1
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
 
-	// Ensure viewport has correct dimensions
 	m.viewport.Width = m.width
 	m.viewport.Height = vpHeight
 
@@ -197,27 +250,19 @@ func (m ChatModel) View() string {
 	var sections []string
 
 	// Viewport for messages
-	vpContent := m.viewport.View()
-	if strings.TrimSpace(vpContent) == "" {
-		vpContent = HelpDimStyle.Render("  No messages yet. Start chatting!")
-	}
-	
-	// Constrain viewport to calculated height
-	vpRendered := lipgloss.NewStyle().
-		Height(vpHeight).
-		MaxHeight(vpHeight).
-		Render(vpContent)
-	sections = append(sections, vpRendered)
+	sections = append(sections, m.viewport.View())
 
 	// Separator line
 	sep := SeparatorStyle.Render(strings.Repeat("─", m.width))
 	sections = append(sections, sep)
 
-	// Input area (fixed height)
+	// Input area
 	var inputSection string
 	prompt := PromptStyle.Render("◆ ")
-	if m.thinking {
-		inputSection = prompt + m.textarea.View() + "\n" + SpinnerRender(m.thinkingText)
+	if m.streaming {
+		elapsed := time.Since(m.streamStart).Seconds()
+		status := fmt.Sprintf(" thinking... (%.1fs, %d chunks)", elapsed, m.streamChunks)
+		inputSection = prompt + m.textarea.View() + "\n" + SpinnerStyle.Render(status)
 	} else {
 		inputSection = prompt + m.textarea.View()
 	}
@@ -279,10 +324,11 @@ func (m *ChatModel) ClearInput() {
 
 // SetThinking sets the thinking state.
 func (m *ChatModel) SetThinking(thinking bool, text string) {
-	m.thinking = thinking
-	m.thinkingText = text
-	if text == "" {
-		m.thinkingText = "Thinking..."
+	m.streaming = thinking
+	if thinking {
+		m.streamStart = time.Now()
+		m.streamChunks = 0
+		m.streamText = ""
 	}
 }
 
@@ -324,6 +370,12 @@ func (m *ChatModel) refreshViewport() {
 		content.WriteString("\n\n")
 	}
 
+	// Show streaming content if active
+	if m.streaming && m.streamText != "" {
+		content.WriteString(m.renderStreamingMessage())
+		content.WriteString("\n\n")
+	}
+
 	m.viewport.SetContent(content.String())
 	m.viewport.GotoBottom()
 }
@@ -347,14 +399,14 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	var b strings.Builder
 
 	// Header
-	header := UserPromptStyle.Render("You")
+	header := UserPromptStyle.Render("  You")
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content with left border
+	// Content
 	content := MessageBubbleUser.Width(m.width - 4).Render(msg.Content)
 	b.WriteString(content)
 
@@ -365,14 +417,14 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	var b strings.Builder
 
 	// Header
-	header := AssistantStyle.Render("Agent")
+	header := AssistantStyle.Render("  Agent")
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content with left border
+	// Content
 	content := MessageBubbleAssistant.Width(m.width - 4).Render(msg.Content)
 	b.WriteString(content)
 
@@ -383,16 +435,34 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 	var b strings.Builder
 
 	// Tool header
-	toolHeader := ToolCallStyle.Render(fmt.Sprintf("[%s]", msg.ToolName))
+	toolHeader := ToolCallStyle.Render(fmt.Sprintf("  [%s]", msg.ToolName))
 	b.WriteString(toolHeader)
 	b.WriteString("\n")
 
 	// Content
-	b.WriteString(HelpDimStyle.Render(Truncate(msg.Content, m.width-4)))
+	content := HelpDimStyle.Render(Truncate(msg.Content, m.width-6))
+	b.WriteString("  " + content)
 
 	return b.String()
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
-	return SystemMessageStyle.Render(msg.Content)
+	return SystemMessageStyle.Width(m.width - 4).Render(msg.Content)
+}
+
+func (m ChatModel) renderStreamingMessage() string {
+	var b strings.Builder
+
+	// Header with spinner
+	elapsed := time.Since(m.streamStart).Seconds()
+	header := AssistantStyle.Render("  Agent") +
+		StreamingStyle.Render(fmt.Sprintf("  thinking... (%.1fs)", elapsed))
+	b.WriteString(header)
+	b.WriteString("\n")
+
+	// Streaming content
+	content := MessageBubbleAssistant.Width(m.width - 4).Render(m.streamText + "▌")
+	b.WriteString(content)
+
+	return b.String()
 }
