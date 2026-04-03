@@ -14,6 +14,20 @@ import (
 )
 
 // ---------------------------------------------------------------------------
+// Message types for async communication
+// ---------------------------------------------------------------------------
+
+// UserSubmitMsg is sent when user submits a message (non-blocking)
+type UserSubmitMsg struct {
+	Text string
+}
+
+// UserCommandMsg is sent when user enters a slash command
+type UserCommandMsg struct {
+	Command string
+}
+
+// ---------------------------------------------------------------------------
 // ChatDelegate handles chat actions
 // ---------------------------------------------------------------------------
 type ChatDelegate interface {

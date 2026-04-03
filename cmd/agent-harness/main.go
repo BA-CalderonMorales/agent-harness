@@ -277,8 +277,13 @@ func (app *App) initSlashCommands() {
 func (app *App) runTUIMode() error {
 	tuiApp := tui.NewApp()
 
-	// Set up delegates
-	tuiApp.SetChatDelegate(&TUIChatDelegate{app: app, tuiApp: tuiApp})
+	// Set up handlers (non-blocking)
+	tuiApp.SetUserSubmitHandler(func(text string, ta tui.App) {
+		app.handleUserSubmit(text, &ta)
+	})
+	tuiApp.SetUserCommandHandler(func(cmd string, ta tui.App) {
+		app.handleUserCommand(cmd, &ta)
+	})
 	tuiApp.SetSessionsDelegate(&TUIsessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&TUISettingsDelegate{app: app, tuiApp: tuiApp})
 
@@ -290,27 +295,42 @@ func (app *App) runTUIMode() error {
 	return tui.Run(tuiApp)
 }
 
-// TUIChatDelegate connects TUI chat to the app
-type TUIChatDelegate struct {
-	app    *App
-	tuiApp *tui.App
+// handleUserSubmit handles user message submission (runs in goroutine)
+func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
+	validator := ui.NewTermuxValidator()
+	normalizedInput, valid := validator.ValidateInput(text)
+	if !valid {
+		tuiApp.Send(tui.StreamErrorMsg{Error: "Invalid input"})
+		return
+	}
+
+	userMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleUser,
+		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(userMsg)
+
+	if agent.IsConversational(normalizedInput) {
+		app.handleConversationalMessage(normalizedInput, tuiApp)
+	} else {
+		app.handleTaskMessage(normalizedInput, tuiApp)
+	}
 }
 
-func (d *TUIChatDelegate) OnSubmit(text string) tea.Cmd {
-	return d.app.processMessageAsync(text, d.tuiApp)
-}
-
-func (d *TUIChatDelegate) OnCommand(command string) {
-	if result, handled, err := d.app.cmdRegistry.Handle(command); handled {
+// handleUserCommand handles slash commands (runs in goroutine)
+func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
+	if result, handled, err := app.cmdRegistry.Handle(command); handled {
 		if err != nil {
-			d.tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+			tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
 			return
 		}
 		if result != "" {
-			d.tuiApp.AddMessage("system", result)
+			tuiApp.AddMessage("system", result)
 		}
 	} else {
-		d.tuiApp.AddMessage("system", fmt.Sprintf("Unknown command: %s", command))
+		tuiApp.AddMessage("system", fmt.Sprintf("Unknown command: %s", command))
 	}
 }
 
@@ -615,12 +635,33 @@ func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
 				tuiApp.SetThinking(false, "")
 				hasResponse = true
 			}
+			// Handle different content block types
 			for _, block := range e.Message.Content {
-				if text, ok := block.(types.TextBlock); ok {
-					responseText.WriteString(text.Text)
+				switch b := block.(type) {
+				case types.TextBlock:
+					responseText.WriteString(b.Text)
+				case types.ToolUseBlock:
+					// Show tool being called
+					tuiApp.AddMessage("system", fmt.Sprintf("[Using tool: %s]", b.Name))
+				case types.ToolResultBlock:
+					// Show tool result (truncated for display)
+					preview := b.Content
+					if len(preview) > 100 {
+						preview = preview[:100] + "..."
+					}
+					status := "✓"
+					if b.IsError {
+						status = "✗"
+					}
+					tuiApp.AddMessage("system", fmt.Sprintf("[%s Result: %s]", status, preview))
 				}
 			}
 			app.session.AddMessage(e.Message)
+		case types.ProgressMessage:
+			// Show tool execution progress
+			if data, ok := e.Data.(string); ok && data != "" {
+				tuiApp.AddMessage("system", fmt.Sprintf("[Progress: %s]", data))
+			}
 		}
 	}
 
