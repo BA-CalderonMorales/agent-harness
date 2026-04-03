@@ -134,6 +134,9 @@ var (
 			Foreground(ColorTextDim).
 			Italic(true)
 
+	SpinnerStyle = lipgloss.NewStyle().
+			Foreground(ColorInfo)
+
 	TimestampStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 

@@ -25,7 +25,7 @@ import (
 )
 
 var (
-	Version   = "0.0.25"
+	Version   = "0.0.28"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -480,8 +480,11 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 	app.costTracker.CompleteTurn()
 }
 
+// handleTaskMessage processes a task message through the agent loop.
+// It uses async message passing to keep the TUI responsive during streaming.
 func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
-	tuiApp.SetThinking(true, "Thinking...")
+	// Send stream start message to TUI
+	tuiApp.Send(tui.StreamStartMsg{Prompt: input})
 
 	sysPrompt := app.buildSystemPrompt()
 
@@ -536,42 +539,39 @@ func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
-		tuiApp.SetThinking(false, "")
-		tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+		tuiApp.Send(tui.StreamErrorMsg{Error: err.Error()})
 		return
 	}
 
-	var responseText strings.Builder
-	var hasResponse bool
+	// Process stream asynchronously and send messages to TUI
+	go func() {
+		var currentText strings.Builder
 
-	for event := range stream {
-		switch e := event.(type) {
-		case types.StreamMessage:
-			if !hasResponse {
-				tuiApp.SetThinking(false, "")
-				hasResponse = true
-			}
-			for _, block := range e.Message.Content {
-				if text, ok := block.(types.TextBlock); ok {
-					responseText.WriteString(text.Text)
+		for event := range stream {
+			switch e := event.(type) {
+			case types.StreamMessage:
+				// Extract text content
+				for _, block := range e.Message.Content {
+					if text, ok := block.(types.TextBlock); ok {
+						currentText.WriteString(text.Text)
+						tuiApp.Send(tui.StreamChunkMsg{Text: text.Text})
+					}
 				}
+				app.session.AddMessage(e.Message)
 			}
-			app.session.AddMessage(e.Message)
 		}
-	}
 
-	if hasResponse && responseText.String() != "" {
-		tuiApp.AddMessage("assistant", responseText.String())
-	}
+		// Signal completion
+		tuiApp.Send(tui.StreamDoneMsg{TurnCount: app.session.Turns})
+		app.costTracker.CompleteTurn()
 
-	tuiApp.SetThinking(false, "")
-	app.costTracker.CompleteTurn()
-
-	if app.session.Turns%5 == 0 {
-		if path, err := app.sessionManager.SaveCurrent(); err == nil {
-			tuiApp.ShowStatus(fmt.Sprintf("Auto-saved to %s", path), "info")
+		// Auto-save every 5 turns
+		if app.session.Turns%5 == 0 {
+			if path, err := app.sessionManager.SaveCurrent(); err == nil {
+				tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
+			}
 		}
-	}
+	}()
 }
 
 func (app *App) buildSystemPrompt() string {

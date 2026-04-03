@@ -62,17 +62,21 @@ type App struct {
 	// Status
 	statusMessage string
 	statusType    string // "info", "success", "error", "warning"
+
+	// External message channel for async updates
+	msgChan chan tea.Msg
 }
 
 // NewApp creates the root app model.
 func NewApp() *App {
 	return &App{
-		activeView: viewChat,
-		mode:       ModeInsert,
-		chatModel:  NewChatModel(),
+		activeView:    viewChat,
+		mode:          ModeInsert,
+		chatModel:     NewChatModel(),
 		sessionsModel: NewSessionsModel(),
 		settingsModel: NewSettingsModel(),
-		helpModel:    NewHelp(),
+		helpModel:     NewHelp(),
+		msgChan:       make(chan tea.Msg, 64),
 	}
 }
 
@@ -91,13 +95,32 @@ func (a *App) SetSettingsDelegate(delegate SettingsDelegate) {
 	a.settingsModel.SetDelegate(delegate)
 }
 
+// Send sends a message to the TUI from external goroutines.
+// This is the key method that enables async agent loop integration.
+func (a *App) Send(msg tea.Msg) {
+	select {
+	case a.msgChan <- msg:
+	default:
+		// Channel full, drop message (shouldn't happen with buffer)
+	}
+}
+
 // Init initializes the TUI.
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
 		a.chatModel.Init(),
 		a.sessionsModel.Init(),
 		a.settingsModel.Init(),
+		// Start listening for external messages
+		a.listenForMessages(),
 	)
+}
+
+// listenForMessages creates a command that listens for external messages.
+func (a App) listenForMessages() tea.Cmd {
+	return func() tea.Msg {
+		return <-a.msgChan
+	}
 }
 
 // Update handles messages and user input.
@@ -237,7 +260,20 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StatusMsg:
 		a.statusMessage = msg.Text
 		a.statusType = msg.Type
-		return a, nil
+		// Continue listening for more messages
+		cmds = append(cmds, a.listenForMessages())
+
+	// -------------------------------------------------------------------------
+	// Streaming messages from agent loop - forward to chat
+	// -------------------------------------------------------------------------
+	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg:
+		chatModel, cmd := a.chatModel.Update(msg)
+		a.chatModel = chatModel.(ChatModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		// Continue listening for more messages
+		cmds = append(cmds, a.listenForMessages())
 	}
 
 	// -------------------------------------------------------------------------
@@ -546,6 +582,7 @@ type StatusMsg struct {
 
 // Run starts the TUI application and returns when it exits.
 func Run(app *App) error {
+	// Use AltScreen for proper TUI experience (like lumina-bot)
 	p := tea.NewProgram(app, tea.WithAltScreen())
 	_, err := p.Run()
 	return err
