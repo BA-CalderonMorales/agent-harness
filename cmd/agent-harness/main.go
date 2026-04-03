@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	tea "github.com/charmbracelet/bubbletea"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
@@ -294,8 +296,8 @@ type TUIChatDelegate struct {
 	tuiApp *tui.App
 }
 
-func (d *TUIChatDelegate) OnSubmit(text string) {
-	d.app.processMessage(text, d.tuiApp)
+func (d *TUIChatDelegate) OnSubmit(text string) tea.Cmd {
+	return d.app.processMessageAsync(text, d.tuiApp)
 }
 
 func (d *TUIChatDelegate) OnCommand(command string) {
@@ -450,6 +452,34 @@ func (app *App) processMessage(input string, tuiApp *tui.App) {
 	}
 }
 
+// processMessageAsync returns a tea.Cmd for async agent processing
+func (app *App) processMessageAsync(input string, tuiApp *tui.App) tea.Cmd {
+	validator := ui.NewTermuxValidator()
+	normalizedInput, valid := validator.ValidateInput(input)
+	if !valid {
+		return func() tea.Msg {
+			return tui.AgentErrorMsg{Error: fmt.Errorf("invalid input"), Timestamp: time.Now()}
+		}
+	}
+
+	// Add user message immediately
+	userMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleUser,
+		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(userMsg)
+
+	// For conversational messages, return immediate response
+	if agent.IsConversational(normalizedInput) {
+		return app.handleConversationalMessageAsync(normalizedInput)
+	}
+
+	// For task messages, return async command
+	return app.handleTaskMessageAsync(normalizedInput)
+}
+
 func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 	tuiApp.SetThinking(true, "")
 
@@ -478,6 +508,40 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 	}
 	app.session.AddMessage(assistantMsg)
 	app.costTracker.CompleteTurn()
+}
+
+// handleConversationalMessageAsync returns a command for conversational responses
+func (app *App) handleConversationalMessageAsync(input string) tea.Cmd {
+	return func() tea.Msg {
+		convType := agent.ClassifyInput(input)
+		var response string
+
+		switch convType {
+		case agent.ConvGreeting:
+			response = agent.GetGreetingResponse()
+		case agent.ConvQuestion:
+			response = agent.GetCapabilityResponse()
+		case agent.ConvCasual:
+			response = agent.GetCasualResponse(input)
+		default:
+			response = "I'm here to help. What would you like to work on?"
+		}
+
+		// Add to session
+		assistantMsg := types.Message{
+			UUID:      generateUUID(),
+			Role:      types.RoleAssistant,
+			Content:   []types.ContentBlock{types.TextBlock{Text: response}},
+			Timestamp: time.Now(),
+		}
+		app.session.AddMessage(assistantMsg)
+		app.costTracker.CompleteTurn()
+
+		return tui.AgentDoneMsg{
+			FullResponse: response,
+			Timestamp:    time.Now(),
+		}
+	}
 }
 
 func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
@@ -570,6 +634,93 @@ func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
 	if app.session.Turns%5 == 0 {
 		if path, err := app.sessionManager.SaveCurrent(); err == nil {
 			tuiApp.ShowStatus(fmt.Sprintf("Auto-saved to %s", path), "info")
+		}
+	}
+}
+
+// handleTaskMessageAsync returns a command for async task processing
+func (app *App) handleTaskMessageAsync(input string) tea.Cmd {
+	return func() tea.Msg {
+		sysPrompt := app.buildSystemPrompt()
+
+		toolCtx := tools.Context{
+			Options: tools.Options{
+				MainLoopModel: app.session.Model,
+				Tools:         app.toolRegistry.FilterEnabled(),
+				Debug:         false,
+			},
+			AbortController: context.Background(),
+		}
+
+		canUseTool := func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
+			t, ok := app.toolRegistry.FindToolByName(toolName)
+			if !ok {
+				return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
+			}
+
+			switch app.config.PermissionMode {
+			case config.PermissionReadOnly:
+				if !isReadOnlyTool(toolName) {
+					return tools.PermissionDecision{
+						Behavior: tools.Deny,
+						Message:  fmt.Sprintf("Permission denied: %s", toolName),
+					}, nil
+				}
+			case config.PermissionWorkspaceWrite:
+				if isDangerousTool(toolName) {
+					return tools.PermissionDecision{
+						Behavior: tools.Ask,
+						Message:  fmt.Sprintf("Confirm: %s", toolName),
+					}, nil
+				}
+			}
+
+			for _, allowed := range app.config.AlwaysAllow {
+				if allowed == toolName {
+					return tools.PermissionDecision{Behavior: tools.Allow}, nil
+				}
+			}
+
+			permCtx := permissions.EmptyContext()
+			return permissions.Evaluate(t, toolInput, permCtx), nil
+		}
+
+		params := agent.QueryParams{
+			Messages:       app.session.Messages,
+			SystemPrompt:   sysPrompt,
+			CanUseTool:     canUseTool,
+			ToolUseContext: toolCtx,
+		}
+
+		stream, err := app.loop.Query(context.Background(), params)
+		if err != nil {
+			return tui.AgentErrorMsg{Error: err, Timestamp: time.Now()}
+		}
+
+		var responseText strings.Builder
+		toolCallCount := 0
+
+		for event := range stream {
+			switch e := event.(type) {
+			case types.StreamMessage:
+				for _, block := range e.Message.Content {
+					switch b := block.(type) {
+					case types.TextBlock:
+						responseText.WriteString(b.Text)
+					case types.ToolUseBlock:
+						toolCallCount++
+					}
+				}
+				app.session.AddMessage(e.Message)
+			}
+		}
+
+		app.costTracker.CompleteTurn()
+
+		return tui.AgentDoneMsg{
+			FullResponse: responseText.String(),
+			ToolCalls:    toolCallCount,
+			Timestamp:    time.Now(),
 		}
 	}
 }

@@ -17,7 +17,7 @@ import (
 // ChatDelegate handles chat actions
 // ---------------------------------------------------------------------------
 type ChatDelegate interface {
-	OnSubmit(text string)
+	OnSubmit(text string) tea.Cmd
 	OnCommand(command string)
 }
 
@@ -44,12 +44,23 @@ type ChatModel struct {
 	focused  bool
 
 	// State
-	thinking    bool
+	thinking     bool
 	thinkingText string
-	model       string
+	model        string
+	
+	// Streaming state
+	streaming     bool
+	streamBuffer  string
+	currentTool   *ToolUseBlock
 
 	// Delegate
 	delegate ChatDelegate
+}
+
+// ToolUseBlock represents an active tool invocation
+type ToolUseBlock struct {
+	ID   string
+	Name string
 }
 
 // NewChatModel creates a new chat model.
@@ -144,7 +155,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Regular message
 				m.AddMessage("user", input)
 				if m.delegate != nil {
-					m.delegate.OnSubmit(input)
+					cmd := m.delegate.OnSubmit(input)
+					m.textarea.SetValue("")
+					m.refreshViewport()
+					return m, cmd
 				}
 			}
 
@@ -161,9 +175,53 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newTA, cmd := m.textarea.Update(msg)
 		m.textarea = newTA
 		cmds = append(cmds, cmd)
+
+	// -------------------------------------------------------------------------
+	// Async agent messages - real-time streaming
+	// -------------------------------------------------------------------------
+	case AgentStartMsg:
+		m.thinking = true
+		m.thinkingText = "Thinking..."
+		m.streaming = true
+		m.streamBuffer = ""
+		return m, nil
+
+	case AgentChunkMsg:
+		if m.streaming {
+			m.streamBuffer += msg.Text
+			// Update or create the streaming assistant message
+			m.updateOrCreateStreamingMessage(m.streamBuffer)
+		}
+		return m, nil
+
+	case AgentToolStartMsg:
+		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
+		m.AddToolMessage(msg.ToolName, fmt.Sprintf("Using %s...", msg.ToolName))
+		return m, nil
+
+	case AgentToolDoneMsg:
+		m.currentTool = nil
+		return m, nil
+
+	case AgentDoneMsg:
+		m.thinking = false
+		m.streaming = false
+		// Finalize the streaming message
+		if m.streamBuffer != "" {
+			m.finalizeStreamingMessage(m.streamBuffer)
+		}
+		m.streamBuffer = ""
+		return m, nil
+
+	case AgentErrorMsg:
+		m.thinking = false
+		m.streaming = false
+		m.AddMessage("system", fmt.Sprintf("Error: %v", msg.Error))
+		m.streamBuffer = ""
+		return m, nil
 	}
 
-	// Update viewport
+	// Update viewport for all other message types
 	newVP, cmd := m.viewport.Update(msg)
 	m.viewport = newVP
 	cmds = append(cmds, cmd)
@@ -313,6 +371,32 @@ func (m *ChatModel) GotoTop() {
 // GotoBottom scrolls to bottom.
 func (m *ChatModel) GotoBottom() {
 	m.viewport.GotoBottom()
+}
+
+// updateOrCreateStreamingMessage updates the last assistant message or creates one
+func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
+	// Check if the last message is an assistant message we're streaming into
+	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
+		// Update existing streaming message
+		m.messages[len(m.messages)-1].Content = content
+	} else {
+		// Create new streaming message
+		m.messages = append(m.messages, ChatMessage{
+			Role:      "assistant",
+			Content:   content,
+			Timestamp: time.Now(),
+		})
+	}
+	m.refreshViewport()
+}
+
+// finalizeStreamingMessage finalizes the streaming message
+func (m *ChatModel) finalizeStreamingMessage(content string) {
+	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
+		m.messages[len(m.messages)-1].Content = content
+		m.messages[len(m.messages)-1].Timestamp = time.Now()
+	}
+	m.refreshViewport()
 }
 
 // refreshViewport refreshes the viewport content.
