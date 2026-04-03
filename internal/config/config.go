@@ -29,7 +29,7 @@ func Load() Config {
 	if model == "" {
 		switch provider {
 		case "openrouter":
-			model = "anthropic/claude-3.5-sonnet"
+			model = "nvidia/nemotron-3-super-120b-a12b:free"
 		case "openai":
 			model = "gpt-4o"
 		case "anthropic":

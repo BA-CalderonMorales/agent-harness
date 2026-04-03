@@ -82,7 +82,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		// Determine model
 		model := params.ToolUseContext.Options.MainLoopModel
 		if model == "" {
-			model = "anthropic/claude-3.5-sonnet" // OpenRouter default
+			model = "nvidia/nemotron-3-super-120b-a12b:free" // OpenRouter default
 		}
 
 		req := llm.Request{
@@ -423,7 +423,7 @@ func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopSt
 
 	model := params.ToolUseContext.Options.MainLoopModel
 	if model == "" {
-		model = "anthropic/claude-3.5-sonnet"
+		model = "nvidia/nemotron-3-super-120b-a12b:free"
 	}
 
 	req := llm.Request{
