@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
@@ -300,7 +298,7 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	validator := ui.NewTermuxValidator()
 	normalizedInput, valid := validator.ValidateInput(text)
 	if !valid {
-		tuiApp.Send(tui.StreamErrorMsg{Error: "Invalid input"})
+		tuiApp.Send(tui.AgentErrorMsg{Error: fmt.Errorf("invalid input"), Timestamp: time.Now()})
 		return
 	}
 
@@ -313,9 +311,9 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	app.session.AddMessage(userMsg)
 
 	if agent.IsConversational(normalizedInput) {
-		app.handleConversationalMessage(normalizedInput, tuiApp)
+		app.handleConversationalMessageAsync(normalizedInput, tuiApp)
 	} else {
-		app.handleTaskMessage(normalizedInput, tuiApp)
+		app.handleTaskMessageAsync(normalizedInput, tuiApp)
 	}
 }
 
@@ -447,61 +445,11 @@ func (app *App) getSettings() []tui.Setting {
 	}
 }
 
-func (app *App) processMessage(input string, tuiApp *tui.App) {
-	validator := ui.NewTermuxValidator()
-	normalizedInput, valid := validator.ValidateInput(input)
-	if !valid {
-		tuiApp.AddMessage("system", "Invalid input")
-		return
-	}
-
-	tuiApp.AddMessage("user", normalizedInput)
-
-	userMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleUser,
-		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(userMsg)
-
-	if agent.IsConversational(normalizedInput) {
-		app.handleConversationalMessage(normalizedInput, tuiApp)
-	} else {
-		app.handleTaskMessage(normalizedInput, tuiApp)
-	}
-}
-
-// processMessageAsync returns a tea.Cmd for async agent processing
-func (app *App) processMessageAsync(input string, tuiApp *tui.App) tea.Cmd {
-	validator := ui.NewTermuxValidator()
-	normalizedInput, valid := validator.ValidateInput(input)
-	if !valid {
-		return func() tea.Msg {
-			return tui.AgentErrorMsg{Error: fmt.Errorf("invalid input"), Timestamp: time.Now()}
-		}
-	}
-
-	// Add user message immediately
-	userMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleUser,
-		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(userMsg)
-
-	// For conversational messages, return immediate response
-	if agent.IsConversational(normalizedInput) {
-		return app.handleConversationalMessageAsync(normalizedInput)
-	}
-
-	// For task messages, return async command
-	return app.handleTaskMessageAsync(normalizedInput)
-}
-
-func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
-	tuiApp.SetThinking(true, "")
+// handleConversationalMessageAsync handles conversational responses via async messages
+// This runs in a goroutine and MUST use tuiApp.Send() for all UI updates
+func (app *App) handleConversationalMessageAsync(input string, tuiApp *tui.App) {
+	// Signal start through message channel (not direct manipulation)
+	tuiApp.Send(tui.AgentStartMsg{Timestamp: time.Now()})
 
 	convType := agent.ClassifyInput(input)
 	var response string
@@ -517,9 +465,7 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 		response = "I'm here to help. What would you like to work on?"
 	}
 
-	tuiApp.SetThinking(false, "")
-	tuiApp.AddMessage("assistant", response)
-
+	// Add to session
 	assistantMsg := types.Message{
 		UUID:      generateUUID(),
 		Role:      types.RoleAssistant,
@@ -528,44 +474,19 @@ func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
 	}
 	app.session.AddMessage(assistantMsg)
 	app.costTracker.CompleteTurn()
+
+	// Send completion through message channel
+	tuiApp.Send(tui.AgentDoneMsg{
+		FullResponse: response,
+		Timestamp:    time.Now(),
+	})
 }
 
-// handleConversationalMessageAsync returns a command for conversational responses
-func (app *App) handleConversationalMessageAsync(input string) tea.Cmd {
-	return func() tea.Msg {
-		convType := agent.ClassifyInput(input)
-		var response string
-
-		switch convType {
-		case agent.ConvGreeting:
-			response = agent.GetGreetingResponse()
-		case agent.ConvQuestion:
-			response = agent.GetCapabilityResponse()
-		case agent.ConvCasual:
-			response = agent.GetCasualResponse(input)
-		default:
-			response = "I'm here to help. What would you like to work on?"
-		}
-
-		// Add to session
-		assistantMsg := types.Message{
-			UUID:      generateUUID(),
-			Role:      types.RoleAssistant,
-			Content:   []types.ContentBlock{types.TextBlock{Text: response}},
-			Timestamp: time.Now(),
-		}
-		app.session.AddMessage(assistantMsg)
-		app.costTracker.CompleteTurn()
-
-		return tui.AgentDoneMsg{
-			FullResponse: response,
-			Timestamp:    time.Now(),
-		}
-	}
-}
-
-func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
-	tuiApp.SetThinking(true, "Thinking...")
+// handleTaskMessageAsync handles task responses via async messages
+// This runs in a goroutine and MUST use tuiApp.Send() for all UI updates
+func (app *App) handleTaskMessageAsync(input string, tuiApp *tui.App) {
+	// Signal start through message channel
+	tuiApp.Send(tui.AgentStartMsg{Timestamp: time.Now()})
 
 	sysPrompt := app.buildSystemPrompt()
 
@@ -620,148 +541,57 @@ func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
-		tuiApp.SetThinking(false, "")
-		tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+		tuiApp.Send(tui.AgentErrorMsg{Error: err, Timestamp: time.Now()})
 		return
 	}
 
 	var responseText strings.Builder
-	var hasResponse bool
+	toolCallCount := 0
 
 	for event := range stream {
 		switch e := event.(type) {
 		case types.StreamMessage:
-			if !hasResponse {
-				tuiApp.SetThinking(false, "")
-				hasResponse = true
-			}
-			// Handle different content block types
 			for _, block := range e.Message.Content {
 				switch b := block.(type) {
 				case types.TextBlock:
+					// Send each chunk for real-time streaming display
+					tuiApp.Send(tui.AgentChunkMsg{
+						Text:      b.Text,
+						Timestamp: time.Now(),
+					})
 					responseText.WriteString(b.Text)
 				case types.ToolUseBlock:
-					// Show tool being called
-					tuiApp.AddMessage("system", fmt.Sprintf("[Using tool: %s]", b.Name))
+					toolCallCount++
+					tuiApp.Send(tui.AgentToolStartMsg{
+						ToolID:   b.ID,
+						ToolName: b.Name,
+						Input:    b.Input,
+					})
 				case types.ToolResultBlock:
-					// Show tool result (truncated for display)
-					preview := b.Content
-					if len(preview) > 100 {
-						preview = preview[:100] + "..."
-					}
-					status := "✓"
-					if b.IsError {
-						status = "✗"
-					}
-					tuiApp.AddMessage("system", fmt.Sprintf("[%s Result: %s]", status, preview))
+					tuiApp.Send(tui.AgentToolDoneMsg{
+						ToolID:  b.ToolUseID,
+						Success: !b.IsError,
+						Output:  fmt.Sprintf("%v", b.Content),
+					})
 				}
 			}
 			app.session.AddMessage(e.Message)
-		case types.ProgressMessage:
-			// Show tool execution progress
-			if data, ok := e.Data.(string); ok && data != "" {
-				tuiApp.AddMessage("system", fmt.Sprintf("[Progress: %s]", data))
-			}
 		}
 	}
 
-	if hasResponse && responseText.String() != "" {
-		tuiApp.AddMessage("assistant", responseText.String())
-	}
-
-	tuiApp.SetThinking(false, "")
 	app.costTracker.CompleteTurn()
 
+	// Signal completion
+	tuiApp.Send(tui.AgentDoneMsg{
+		FullResponse: responseText.String(),
+		ToolCalls:    toolCallCount,
+		Timestamp:    time.Now(),
+	})
+
+	// Auto-save check
 	if app.session.Turns%5 == 0 {
 		if path, err := app.sessionManager.SaveCurrent(); err == nil {
-			tuiApp.ShowStatus(fmt.Sprintf("Auto-saved to %s", path), "info")
-		}
-	}
-}
-
-// handleTaskMessageAsync returns a command for async task processing
-func (app *App) handleTaskMessageAsync(input string) tea.Cmd {
-	return func() tea.Msg {
-		sysPrompt := app.buildSystemPrompt()
-
-		toolCtx := tools.Context{
-			Options: tools.Options{
-				MainLoopModel: app.session.Model,
-				Tools:         app.toolRegistry.FilterEnabled(),
-				Debug:         false,
-			},
-			AbortController: context.Background(),
-		}
-
-		canUseTool := func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
-			t, ok := app.toolRegistry.FindToolByName(toolName)
-			if !ok {
-				return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
-			}
-
-			switch app.config.PermissionMode {
-			case config.PermissionReadOnly:
-				if !isReadOnlyTool(toolName) {
-					return tools.PermissionDecision{
-						Behavior: tools.Deny,
-						Message:  fmt.Sprintf("Permission denied: %s", toolName),
-					}, nil
-				}
-			case config.PermissionWorkspaceWrite:
-				if isDangerousTool(toolName) {
-					return tools.PermissionDecision{
-						Behavior: tools.Ask,
-						Message:  fmt.Sprintf("Confirm: %s", toolName),
-					}, nil
-				}
-			}
-
-			for _, allowed := range app.config.AlwaysAllow {
-				if allowed == toolName {
-					return tools.PermissionDecision{Behavior: tools.Allow}, nil
-				}
-			}
-
-			permCtx := permissions.EmptyContext()
-			return permissions.Evaluate(t, toolInput, permCtx), nil
-		}
-
-		params := agent.QueryParams{
-			Messages:       app.session.Messages,
-			SystemPrompt:   sysPrompt,
-			CanUseTool:     canUseTool,
-			ToolUseContext: toolCtx,
-		}
-
-		stream, err := app.loop.Query(context.Background(), params)
-		if err != nil {
-			return tui.AgentErrorMsg{Error: err, Timestamp: time.Now()}
-		}
-
-		var responseText strings.Builder
-		toolCallCount := 0
-
-		for event := range stream {
-			switch e := event.(type) {
-			case types.StreamMessage:
-				for _, block := range e.Message.Content {
-					switch b := block.(type) {
-					case types.TextBlock:
-						responseText.WriteString(b.Text)
-					case types.ToolUseBlock:
-						toolCallCount++
-					}
-				}
-				app.session.AddMessage(e.Message)
-			}
-		}
-
-		app.costTracker.CompleteTurn()
-
-		return tui.AgentDoneMsg{
-			FullResponse: responseText.String(),
-			ToolCalls:    toolCallCount,
-			Timestamp:    time.Now(),
+			tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
 		}
 	}
 }
