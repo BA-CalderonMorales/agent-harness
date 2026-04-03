@@ -198,6 +198,41 @@ AI: Can you analyze my projects? Let me think...
 ✓ read: 145 lines loaded
 ```
 
+## Response Time Tracking
+
+The TUI includes real-time response time tracking inspired by lumina-bot:
+
+### Timer Display (During Generation)
+```
+◆ <user input>
+
+┌( >_<)┘ thinking (2.3s)          <- Live elapsed time
+┌( >_<)┘ streaming (4.1s | 12 chunks)  <- With chunk count
+```
+
+### Response Time (After Completion)
+```
+Agent 14:32:05 (6.2s)             <- Total response time shown
+<response content>
+```
+
+### Implementation Details
+- Timer starts when `AgentStartMsg` is received
+- Updates every 100ms via `tea.Tick` command
+- Tracks chunk count for streaming responses
+- Elapsed time captured in `ChatMessage.ResponseTime`
+- Displayed in assistant message header after completion
+
+### State Management
+```go
+type ChatModel struct {
+    startTime    time.Time     // When request started
+    elapsed      time.Duration // Current elapsed time
+    timerRunning bool          // Is timer active
+    chunkCount   int           // Number of chunks received
+}
+```
+
 ### Zero Emojis Policy
 
 **NO EMOJIS** in any root-level `.md` files or documentation. This is non-negotiable.
