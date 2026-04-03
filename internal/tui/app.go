@@ -270,6 +270,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.statusType = msg.Type
 		// Continue listening for more messages
 		cmds = append(cmds, a.listenForMessages())
+		// Return early - status is handled at app level
+		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
 	// User submission (non-blocking) - spawn handler in goroutine
@@ -293,7 +295,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Streaming messages from agent loop - forward to chat
 	// These are handled HERE ONLY to avoid double-processing
 	// -------------------------------------------------------------------------
-	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg:
+	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg,
+		AgentStartMsg, AgentChunkMsg, AgentToolStartMsg, AgentToolDoneMsg, AgentDoneMsg, AgentErrorMsg:
 		chatModel, cmd := a.chatModel.Update(msg)
 		a.chatModel = chatModel.(ChatModel)
 		if cmd != nil {
