@@ -27,7 +27,7 @@ import (
 )
 
 var (
-	Version   = "0.0.35"
+	Version   = "0.0.36"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -191,7 +191,7 @@ func (app *App) initSession() error {
 
 	model := app.config.Model
 	if model == "" {
-		model = "anthropic/claude-3.5-sonnet"
+		model = "nvidia/nemotron-3-super-120b-a12b:free"
 	}
 	app.session = sessionManager.CreateSession(model)
 	app.costTracker = agent.NewCostTracker()
@@ -248,6 +248,7 @@ func (app *App) initSlashCommands() {
 			},
 			func() []string {
 				return []string{
+					"nvidia/nemotron-3-super-120b-a12b:free",
 					"claude-3-5-sonnet-20241022",
 					"gpt-4o",
 					"gpt-4o-mini",
@@ -780,7 +781,7 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println("  " + ui.RenderSuccess("API key received"))
 	fmt.Println()
 
-	defaultModel := "anthropic/claude-3.5-sonnet"
+	defaultModel := "nvidia/nemotron-3-super-120b-a12b:free"
 	if app.config.Provider == "openai" {
 		defaultModel = "gpt-4o"
 	} else if app.config.Provider == "anthropic" {
