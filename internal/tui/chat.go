@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 )
 
 // ---------------------------------------------------------------------------
@@ -172,31 +173,57 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // View renders the chat.
 func (m ChatModel) View() string {
-	if m.width == 0 {
-		return "Loading..."
+	if m.width == 0 || m.height == 0 {
+		return "  Initializing chat..."
 	}
 
-	var b strings.Builder
+	// Calculate heights with minimums
+	inputHeight := 3
+	if m.thinking {
+		inputHeight = 4
+	}
+	
+	// Ensure minimum height for viewport
+	vpHeight := m.height - inputHeight - 1 // -1 for separator
+	if vpHeight < 5 {
+		vpHeight = 5
+	}
+
+	// Ensure viewport has correct dimensions
+	m.viewport.Width = m.width
+	m.viewport.Height = vpHeight
+
+	// Build the view
+	var sections []string
 
 	// Viewport for messages
-	b.WriteString(m.viewport.View())
-
-	// Separator
-	b.WriteString(SeparatorStyle.Render(strings.Repeat("─", m.width)))
-	b.WriteString("\n")
-
-	// Input area
-	prompt := PromptStyle.Render("◆ ")
-	input := m.textarea.View()
-	b.WriteString(prompt + input)
-
-	// Thinking indicator
-	if m.thinking {
-		b.WriteString("\n")
-		b.WriteString(SpinnerRender(m.thinkingText))
+	vpContent := m.viewport.View()
+	if strings.TrimSpace(vpContent) == "" {
+		vpContent = HelpDimStyle.Render("  No messages yet. Start chatting!")
 	}
+	
+	// Constrain viewport to calculated height
+	vpRendered := lipgloss.NewStyle().
+		Height(vpHeight).
+		MaxHeight(vpHeight).
+		Render(vpContent)
+	sections = append(sections, vpRendered)
 
-	return b.String()
+	// Separator line
+	sep := SeparatorStyle.Render(strings.Repeat("─", m.width))
+	sections = append(sections, sep)
+
+	// Input area (fixed height)
+	var inputSection string
+	prompt := PromptStyle.Render("◆ ")
+	if m.thinking {
+		inputSection = prompt + m.textarea.View() + "\n" + SpinnerRender(m.thinkingText)
+	} else {
+		inputSection = prompt + m.textarea.View()
+	}
+	sections = append(sections, inputSection)
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
 // Focus focuses the chat input.
