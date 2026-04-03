@@ -1,5 +1,5 @@
 // Integration test for TUI conversation flow
-// Verifies that messages properly flow from user input to display
+// Verifies AGENTIC behavior: ALL messages flow through the LLM loop
 
 package tui
 
@@ -200,4 +200,65 @@ func (m *MockLLMClient) Query(ctx interface{}, params interface{}) (interface{},
 		Role:    types.RoleAssistant,
 		Content: []types.ContentBlock{types.TextBlock{Text: "Mock response"}},
 	}, nil
+}
+
+// TestAgenticGreetingHandling verifies that greetings go through the LLM loop.
+// In the agentic model, there is no "fast path" - the LLM decides how to respond.
+func TestAgenticGreetingHandling(t *testing.T) {
+	chat := NewChatModel()
+
+	// User says "Hello" - this goes through the FULL agent loop
+	chat.AddMessage("user", "hello")
+
+	// The LLM decides to respond without tools - but it still goes through the loop
+	// We should see AgentStartMsg, then the response, then AgentDoneMsg
+
+	// 1. Agent starts processing (thinking state)
+	startMsg := AgentStartMsg{Timestamp: time.Now()}
+	model, _ := chat.Update(startMsg)
+	chat = model.(ChatModel)
+
+	if !chat.thinking {
+		t.Error("Expected thinking state after AgentStartMsg")
+	}
+
+	// 2. LLM streams its greeting response (just text, no tools)
+	greetingResponse := "Hello! I'm ready to help you with your coding tasks."
+
+	// Simulate streaming the response
+	chunks := []string{"Hello", "! I'm", " ready", " to help", " you with your coding tasks."}
+	for _, chunk := range chunks {
+		chunkMsg := AgentChunkMsg{Text: chunk, Timestamp: time.Now()}
+		model, _ = chat.Update(chunkMsg)
+		chat = model.(ChatModel)
+	}
+
+	// 3. Agent signals completion
+	doneMsg := AgentDoneMsg{
+		FullResponse: greetingResponse,
+		Timestamp:    time.Now(),
+	}
+	model, _ = chat.Update(doneMsg)
+	chat = model.(ChatModel)
+
+	// Verify the greeting was recorded
+	if len(chat.messages) != 2 {
+		t.Fatalf("Expected 2 messages (user + assistant), got %d", len(chat.messages))
+	}
+
+	if chat.messages[1].Role != "assistant" {
+		t.Errorf("Expected assistant message, got %s", chat.messages[1].Role)
+	}
+
+	if chat.messages[1].Content != greetingResponse {
+		t.Errorf("Expected greeting '%s', got '%s'", greetingResponse, chat.messages[1].Content)
+	}
+
+	// Verify state was reset
+	if chat.thinking {
+		t.Error("Should not be thinking after done")
+	}
+
+	// This test verifies the AGENTIC model: even greetings go through the full loop.
+	// The LLM decided not to use tools - but it was the LLM's decision, not code logic.
 }

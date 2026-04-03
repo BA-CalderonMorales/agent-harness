@@ -76,29 +76,34 @@ Skill loaded from: `.agent-harness/skills/termux-mobile-dev/SKILL.md`
 
 ## Conversation Flow
 
-The agent uses a dual-path system for handling user input:
+The agent uses a unified agentic loop for ALL user input. There is no "fast path" that bypasses the LLM.
 
-### Fast Path (Conversational)
-Greetings and simple questions get immediate responses without LLM calls:
-
-```go
-if agent.IsConversational(input) {
-    return app.handleConversationalMessage(input)  // No API call
-}
-```
-
-Examples: "Hello", "Hi", "What can you do?", "Thanks!"
-
-### Full Path (Task-Based)
-Work requests use the full agent loop with tools:
+### Agentic Model (Unified Path)
+EVERY user message enters the full agent loop (`agent.Loop.Query`). The LLM decides how to respond:
 
 ```go
-return app.handleTaskMessage(input)  // Full agent loop with tools
+// ALL messages go through the agent loop
+app.handleAgentLoopAsync(input, tuiApp)  // Full LLM + tools
 ```
 
-Examples: "Create a file", "Fix the bug", "Search for TODOs"
+For a greeting like "Hello":
+1. User message added to session
+2. LLM receives: system prompt + user message
+3. LLM decides: "This is just a greeting → respond warmly, no tools"
+4. Assistant response streamed back to user
 
-See `docs/conversation_flow.md` for full details.
+For a task like "List all Go files":
+1. User message added to session
+2. LLM receives: system prompt + user message
+3. LLM decides: "They want to list files → use bash tool"
+4. Tool call executed, result returned to LLM
+5. Final response streamed to user
+
+### Why This Matters
+
+**Before (Fast Path):** Code decided if input was "conversational" and gave canned responses. The LLM never saw greetings, so it had no context of the conversation history.
+
+**After (Agentic):** The LLM sees every message. It maintains full conversation context. It decides when to use tools. This feels truly agentic, not like a chatbot with scripted responses.
 
 ## Workspace Integration (buckets/usr)
 
