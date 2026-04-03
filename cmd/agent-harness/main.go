@@ -18,18 +18,18 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools/builtin"
+	"github.com/BA-CalderonMorales/agent-harness/internal/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 var (
-	Version   = "0.0.24"
+	Version   = "0.0.25"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
 )
-
 
 // App holds the application state
 type App struct {
@@ -44,92 +44,108 @@ type App struct {
 	loop           *agent.Loop
 	gitContext     *git.Context
 	cwd            string
-	streamRenderer *ui.StreamRenderer
 }
 
 func main() {
 	if err := run(); err != nil {
-		fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.ErrorStyle.Render("Error:"), err)
+		fmt.Fprintf(os.Stderr, "\n%s %v\n", ui.RenderError(err.Error()), "")
 		os.Exit(1)
 	}
 }
 
 func run() error {
-	// Parse flags first (before anything else)
-	var showVersion bool
-	var showHelp bool
-	flag.BoolVar(&showVersion, "version", false, "Show version information")
-	flag.BoolVar(&showVersion, "v", false, "Show version information (shorthand)")
+	var showVersion, showHelp, useTUI bool
+	flag.BoolVar(&showVersion, "version", false, "Show version")
+	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showHelp, "h", false, "Show help (shorthand)")
-	
-	// Custom usage message
+	flag.BoolVar(&useTUI, "tui", true, "Use TUI mode (default: true)")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Agent Harness - AI-powered coding assistant\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
-		fmt.Fprintf(os.Stderr, "  -v, --version    Show version information\n")
-		fmt.Fprintf(os.Stderr, "  -h, --help       Show this help message\n")
-		fmt.Fprintf(os.Stderr, "\nFor more information: https://github.com/BA-CalderonMorales/agent-harness\n")
+		fmt.Fprintf(os.Stderr, "  -v, --version    Show version\n")
+		fmt.Fprintf(os.Stderr, "  -h, --help       Show help\n")
+		fmt.Fprintf(os.Stderr, "  --tui=true       Use TUI mode (default)\n")
+		fmt.Fprintf(os.Stderr, "  --tui=false      Use CLI mode\n")
+		fmt.Fprintf(os.Stderr, "\nFor more: https://github.com/BA-CalderonMorales/agent-harness\n")
 	}
-	
+
 	flag.Parse()
-	
+
 	if showVersion {
-		// Determine build type
-		buildType := "release"
-		if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
-			buildType = "local dev"
-		}
-		
-		fmt.Printf("agent-harness %s\n", Version)
-		fmt.Printf("  Build type: %s\n", buildType)
-		if GitTag != "unknown" && GitTag != "" && GitTag != "none" {
-			fmt.Printf("  Tag: %s\n", GitTag)
-		}
-		if BuildTime != "unknown" && BuildTime != "" {
-			fmt.Printf("  Built: %s\n", BuildTime)
-		}
-		if GitSHA != "unknown" && GitSHA != "" {
-			fmt.Printf("  Git: %s\n", GitSHA)
-		}
+		printVersion()
 		return nil
 	}
-	
+
 	if showHelp {
 		flag.Usage()
 		return nil
 	}
-	
-	// Get current directory
+
 	cwd, err := os.Getwd()
 	if err != nil {
 		return fmt.Errorf("failed to get current directory: %w", err)
 	}
 
-	// Initialize app
-	app := &App{
-		cwd:            cwd,
-		streamRenderer: ui.NewStreamRenderer(),
+	app := &App{cwd: cwd}
+
+	if err := app.loadConfig(); err != nil {
+		return err
 	}
 
-	// Load layered configuration
-	loader := config.NewLayeredLoader(cwd)
+	if err := app.initSession(); err != nil {
+		return err
+	}
+
+	app.gitContext, _ = git.GetContext()
+	app.initTools()
+
+	app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
+	app.loop = agent.NewLoop(app.client)
+
+	app.initSlashCommands()
+
+	if useTUI {
+		return app.runTUIMode()
+	}
+	return app.runCLIMode()
+}
+
+func printVersion() {
+	buildType := "release"
+	if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
+		buildType = "dev"
+	}
+	fmt.Printf("agent-harness %s\n", Version)
+	fmt.Printf("  Build type: %s\n", buildType)
+	if GitTag != "unknown" && GitTag != "" {
+		fmt.Printf("  Tag: %s\n", GitTag)
+	}
+	if BuildTime != "unknown" && BuildTime != "" {
+		fmt.Printf("  Built: %s\n", BuildTime)
+	}
+	if GitSHA != "unknown" && GitSHA != "" {
+		fmt.Printf("  Git: %s\n", GitSHA)
+	}
+}
+
+func (app *App) loadConfig() error {
+	loader := config.NewLayeredLoader(app.cwd)
 	layeredConfig, err := loader.Load()
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 	app.config = layeredConfig
 
-	// Try to load secure credentials
 	credManager := config.NewCredentialManager()
 	if credManager.HasSecureCredentials() {
 		secureCfg, err := credManager.LoadSecure()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "%s %v\n", ui.WarningStyle.Render("Warning:"), err)
+			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
 		} else {
 			app.secureConfig = secureCfg
-			// Override config with secure credentials
 			if secureCfg.Provider != "" {
 				app.config.Provider = secureCfg.Provider
 			}
@@ -142,9 +158,8 @@ func run() error {
 		}
 	}
 
-	// Check for legacy credentials and migrate
 	if app.config.APIKey == "" && credManager.HasLegacyCredentials() {
-		fmt.Println(ui.InfoStyle.Render("Found existing credentials in legacy format."))
+		fmt.Println("Found existing credentials in legacy format.")
 		secureCfg, err := credManager.MigrateFromLegacy()
 		if err != nil {
 			fmt.Printf("Migration failed: %v\n", err)
@@ -156,21 +171,22 @@ func run() error {
 		}
 	}
 
-	// Interactive setup if still no API key
 	if app.config.APIKey == "" {
 		if err := app.interactiveSetup(credManager); err != nil {
 			return fmt.Errorf("setup failed: %w", err)
 		}
 	}
 
-	// Initialize session manager
+	return nil
+}
+
+func (app *App) initSession() error {
 	sessionManager, err := state.NewSessionManager()
 	if err != nil {
 		return fmt.Errorf("failed to initialize session manager: %w", err)
 	}
 	app.sessionManager = sessionManager
 
-	// Create or load session
 	model := app.config.Model
 	if model == "" {
 		model = "anthropic/claude-3.5-sonnet"
@@ -179,82 +195,47 @@ func run() error {
 	app.costTracker = agent.NewCostTracker()
 	app.costTracker.SetModel(model)
 
-	// Initialize git context
-	app.gitContext, _ = git.GetContext()
-
-	// Initialize tool registry
-	app.toolRegistry = tools.NewRegistry()
-	app.registerTools()
-
-	// Initialize LLM client
-	app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
-	app.loop = agent.NewLoop(app.client)
-
-	// Initialize slash commands
-	app.initSlashCommands()
-
-	// Print welcome
-	app.printWelcome()
-
-	// Main REPL loop
-	return app.runREPL()
+	return nil
 }
 
-func (app *App) registerTools() {
+func (app *App) initTools() {
+	app.toolRegistry = tools.NewRegistry()
 	app.toolRegistry.RegisterBuiltIn(builtin.BashTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.FileReadTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.FileEditTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.FileWriteTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.NotebookEditTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.RewindTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.GlobTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.LsRecursiveTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.GrepTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.AskUserQuestionTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.TodoWriteTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.AgentTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebFetchTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebSearchTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.EnterPlanModeTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.ExitPlanModeTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.ExportTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.SearchTranscriptTool)
-	app.toolRegistry.RegisterBuiltIn(builtin.SettingsTool)
 }
 
 func (app *App) initSlashCommands() {
 	app.cmdRegistry = commands.NewSlashRegistry()
 
-	// Help
 	app.cmdRegistry.Register("help", "Show available commands",
 		commands.HelpHandler(app.cmdRegistry))
 
-	// Status
-	app.cmdRegistry.Register("status", "Show session and workspace status",
-		commands.StatusHandler(app.getStatusReport))
-
-	// Clear
 	app.cmdRegistry.Register("clear", "Clear the session history",
 		commands.ClearHandler(func() error {
 			app.session = app.session.Clear()
 			return nil
 		}))
 
-	// Compact
 	app.cmdRegistry.Register("compact", "Compact session to reduce token usage",
 		commands.CompactHandler(func() (string, error) {
 			result := app.session.Compact(state.DefaultCompactionConfig())
 			app.session = result.CompactedSession
-			return ui.RenderCompactReport(result.RemovedCount, result.KeptCount, result.Skipped), nil
+			return fmt.Sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
 
-	// Cost
 	app.cmdRegistry.Register("cost", "Show token usage and cost",
 		commands.CostHandler(func() string {
 			return app.costTracker.FormatReport()
 		}))
 
-	// Model
 	app.cmdRegistry.Register("model", "Show or change the current model",
 		commands.ModelHandler(
 			func() string { return app.session.Model },
@@ -266,53 +247,12 @@ func (app *App) initSlashCommands() {
 			func() []string {
 				return []string{
 					"claude-3-5-sonnet-20241022",
-					"claude-3-5-haiku-20241022",
-					"claude-3-opus-20240229",
 					"gpt-4o",
 					"gpt-4o-mini",
 				}
 			},
 		))
 
-	// Permissions
-	app.cmdRegistry.Register("permissions", "Show or change permission mode",
-		commands.PermissionsHandler(
-			func() string { return app.config.PermissionMode.String() },
-			func(m string) error {
-				mode, err := config.ParsePermissionMode(m)
-				if err != nil {
-					return err
-				}
-				app.config.PermissionMode = mode
-				return nil
-			},
-			func() string {
-				modes := []struct {
-					Name        string
-					Description string
-					Current     bool
-				}{
-					{"read-only", "Read/search tools only", app.config.PermissionMode == config.PermissionReadOnly},
-					{"workspace-write", "Edit files inside the workspace", app.config.PermissionMode == config.PermissionWorkspaceWrite},
-					{"danger-full-access", "Unrestricted tool access", app.config.PermissionMode == config.PermissionDangerFullAccess},
-				}
-				return ui.RenderPermissionsReport(app.config.PermissionMode.String(), modes)
-			},
-		))
-
-	// Config
-	app.cmdRegistry.Register("config", "Show configuration",
-		commands.ConfigHandler(func() string {
-			return app.config.GetConfigReport()
-		}))
-
-	// Diff
-	app.cmdRegistry.Register("diff", "Show git diff of workspace changes",
-		commands.DiffHandler(func() string {
-			return git.FormatDiff()
-		}))
-
-	// Export
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(path string) (string, error) {
 			if path == "" {
@@ -324,74 +264,363 @@ func (app *App) initSlashCommands() {
 			return path, nil
 		}))
 
-	// Session
-	app.cmdRegistry.Register("session", "Manage sessions",
-		commands.SessionHandler(
-			func() string {
-				sessions, err := app.sessionManager.ListSessions()
-				if err != nil {
-					return fmt.Sprintf("Error listing sessions: %v", err)
-				}
-				if len(sessions) == 0 {
-					return "No saved sessions found."
-				}
-				var lines []string
-				lines = append(lines, "Saved sessions:")
-				for _, s := range sessions {
-					lines = append(lines, fmt.Sprintf("  %s - %d messages, %d turns (%s)",
-						s.ID[:8], s.MessageCount, s.Turns, s.UpdatedAt.Format("2006-01-02")))
-				}
-				return strings.Join(lines, "\n")
-			},
-			func(id string) error {
-				session, err := app.sessionManager.LoadSession(id)
-				if err != nil {
-					return err
-				}
-				app.session = session
-				return nil
-			},
-		))
-
-	// Version
-	app.cmdRegistry.Register("version", "Show version information",
-		commands.VersionHandler(Version, fmt.Sprintf("Build: %s (%s)", BuildTime, GitSHA)))
-
-	// Quit
 	app.cmdRegistry.Register("quit", "Exit the application", commands.QuitHandler())
 	app.cmdRegistry.Register("exit", "Exit the application", commands.QuitHandler())
 }
 
-func (app *App) printWelcome() {
+// ---------------------------------------------------------------------------
+// TUI Mode
+// ---------------------------------------------------------------------------
+
+func (app *App) runTUIMode() error {
+	tuiApp := tui.NewApp()
+
+	// Set up delegates
+	tuiApp.SetChatDelegate(&TUIChatDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetSessionsDelegate(&TUIsessionsDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetSettingsDelegate(&TUISettingsDelegate{app: app, tuiApp: tuiApp})
+
+	// Initial data
+	tuiApp.AddMessage("system", fmt.Sprintf("Agent Harness %s - Type /help for commands", Version))
+	tuiApp.RefreshSessions(app.getSessionInfos())
+	tuiApp.SetSettings(app.getSettings())
+
+	return tui.Run(tuiApp)
+}
+
+// TUIChatDelegate connects TUI chat to the app
+type TUIChatDelegate struct {
+	app    *App
+	tuiApp *tui.App
+}
+
+func (d *TUIChatDelegate) OnSubmit(text string) {
+	d.app.processMessage(text, d.tuiApp)
+}
+
+func (d *TUIChatDelegate) OnCommand(command string) {
+	if result, handled, err := d.app.cmdRegistry.Handle(command); handled {
+		if err != nil {
+			d.tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+			return
+		}
+		if result != "" {
+			d.tuiApp.AddMessage("system", result)
+		}
+	} else {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Unknown command: %s", command))
+	}
+}
+
+// TUIsessionsDelegate connects TUI sessions to the app
+type TUIsessionsDelegate struct {
+	app    *App
+	tuiApp *tui.App
+}
+
+func (d *TUIsessionsDelegate) OnSessionSelect(id string) {
+	session, err := d.app.sessionManager.LoadSession(id)
+	if err != nil {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Failed to load session: %v", err))
+		return
+	}
+	d.app.session = session
+	d.tuiApp.AddMessage("system", fmt.Sprintf("Loaded session %s", id[:8]))
+	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+}
+
+func (d *TUIsessionsDelegate) OnSessionDelete(id string) {
+	// TODO: Implement
+	d.tuiApp.AddMessage("system", "Session deletion not yet implemented")
+}
+
+func (d *TUIsessionsDelegate) OnSessionExport(id string) {
+	path := fmt.Sprintf("session-%s.json", id[:8])
+	if err := d.app.session.SaveToFile(path); err != nil {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Failed to export: %v", err))
+		return
+	}
+	d.tuiApp.AddMessage("system", fmt.Sprintf("Exported to %s", path))
+}
+
+func (d *TUIsessionsDelegate) OnSessionLoad() {
+	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+}
+
+// TUISettingsDelegate connects TUI settings to the app
+type TUISettingsDelegate struct {
+	app    *App
+	tuiApp *tui.App
+}
+
+func (d *TUISettingsDelegate) OnSettingChange(key, value string) {
+	switch key {
+	case "model":
+		d.app.session.Model = value
+		d.app.costTracker.SetModel(value)
+	case "provider":
+		d.app.config.Provider = value
+	case "permissions":
+		if mode, err := config.ParsePermissionMode(value); err == nil {
+			d.app.config.PermissionMode = mode
+		}
+	}
+	d.tuiApp.SetSettings(d.app.getSettings())
+}
+
+func (d *TUISettingsDelegate) OnSettingReset() {
+	d.tuiApp.AddMessage("system", "Reset to defaults not implemented")
+}
+
+func (d *TUISettingsDelegate) OnSettingReload() {
+	d.tuiApp.SetSettings(d.app.getSettings())
+}
+
+func (app *App) getSessionInfos() []tui.SessionInfo {
+	sessions, err := app.sessionManager.ListSessions()
+	if err != nil {
+		return nil
+	}
+
+	var infos []tui.SessionInfo
+	for _, s := range sessions {
+		infos = append(infos, tui.SessionInfo{
+			ID:           s.ID,
+			Title:        fmt.Sprintf("Session %s", s.ID[:8]),
+			MessageCount: s.MessageCount,
+			Turns:        s.Turns,
+			CreatedAt:    s.CreatedAt,
+			UpdatedAt:    s.UpdatedAt,
+			Model:        s.Model,
+			IsActive:     s.ID == app.session.ID,
+		})
+	}
+	return infos
+}
+
+func (app *App) getSettings() []tui.Setting {
+	return []tui.Setting{
+		{
+			Key:         "model",
+			Label:       "Model",
+			Value:       app.session.Model,
+			Description: "The AI model to use",
+			Type:        "string",
+		},
+		{
+			Key:         "provider",
+			Label:       "Provider",
+			Value:       app.config.Provider,
+			Description: "API provider",
+			Type:        "string",
+		},
+		{
+			Key:         "permissions",
+			Label:       "Permission Mode",
+			Value:       app.config.PermissionMode.String(),
+			Description: "Tool permission level",
+			Type:        "choice",
+			Options:     []string{"read-only", "workspace-write", "danger-full-access"},
+		},
+	}
+}
+
+func (app *App) processMessage(input string, tuiApp *tui.App) {
+	validator := ui.NewTermuxValidator()
+	normalizedInput, valid := validator.ValidateInput(input)
+	if !valid {
+		tuiApp.AddMessage("system", "Invalid input")
+		return
+	}
+
+	tuiApp.AddMessage("user", normalizedInput)
+
+	userMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleUser,
+		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(userMsg)
+
+	if agent.IsConversational(normalizedInput) {
+		app.handleConversationalMessage(normalizedInput, tuiApp)
+	} else {
+		app.handleTaskMessage(normalizedInput, tuiApp)
+	}
+}
+
+func (app *App) handleConversationalMessage(input string, tuiApp *tui.App) {
+	tuiApp.SetThinking(true, "")
+
+	convType := agent.ClassifyInput(input)
+	var response string
+
+	switch convType {
+	case agent.ConvGreeting:
+		response = agent.GetGreetingResponse()
+	case agent.ConvQuestion:
+		response = agent.GetCapabilityResponse()
+	case agent.ConvCasual:
+		response = agent.GetCasualResponse(input)
+	default:
+		response = "I'm here to help. What would you like to work on?"
+	}
+
+	tuiApp.SetThinking(false, "")
+	tuiApp.AddMessage("assistant", response)
+
+	assistantMsg := types.Message{
+		UUID:      generateUUID(),
+		Role:      types.RoleAssistant,
+		Content:   []types.ContentBlock{types.TextBlock{Text: response}},
+		Timestamp: time.Now(),
+	}
+	app.session.AddMessage(assistantMsg)
+	app.costTracker.CompleteTurn()
+}
+
+func (app *App) handleTaskMessage(input string, tuiApp *tui.App) {
+	tuiApp.SetThinking(true, "Thinking...")
+
+	sysPrompt := app.buildSystemPrompt()
+
+	toolCtx := tools.Context{
+		Options: tools.Options{
+			MainLoopModel: app.session.Model,
+			Tools:         app.toolRegistry.FilterEnabled(),
+			Debug:         false,
+		},
+		AbortController: context.Background(),
+	}
+
+	canUseTool := func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
+		t, ok := app.toolRegistry.FindToolByName(toolName)
+		if !ok {
+			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
+		}
+
+		switch app.config.PermissionMode {
+		case config.PermissionReadOnly:
+			if !isReadOnlyTool(toolName) {
+				return tools.PermissionDecision{
+					Behavior: tools.Deny,
+					Message:  fmt.Sprintf("Permission denied: %s", toolName),
+				}, nil
+			}
+		case config.PermissionWorkspaceWrite:
+			if isDangerousTool(toolName) {
+				return tools.PermissionDecision{
+					Behavior: tools.Ask,
+					Message:  fmt.Sprintf("Confirm: %s", toolName),
+				}, nil
+			}
+		}
+
+		for _, allowed := range app.config.AlwaysAllow {
+			if allowed == toolName {
+				return tools.PermissionDecision{Behavior: tools.Allow}, nil
+			}
+		}
+
+		permCtx := permissions.EmptyContext()
+		return permissions.Evaluate(t, toolInput, permCtx), nil
+	}
+
+	params := agent.QueryParams{
+		Messages:       app.session.Messages,
+		SystemPrompt:   sysPrompt,
+		CanUseTool:     canUseTool,
+		ToolUseContext: toolCtx,
+	}
+
+	stream, err := app.loop.Query(context.Background(), params)
+	if err != nil {
+		tuiApp.SetThinking(false, "")
+		tuiApp.AddMessage("system", fmt.Sprintf("Error: %v", err))
+		return
+	}
+
+	var responseText strings.Builder
+	var hasResponse bool
+
+	for event := range stream {
+		switch e := event.(type) {
+		case types.StreamMessage:
+			if !hasResponse {
+				tuiApp.SetThinking(false, "")
+				hasResponse = true
+			}
+			for _, block := range e.Message.Content {
+				if text, ok := block.(types.TextBlock); ok {
+					responseText.WriteString(text.Text)
+				}
+			}
+			app.session.AddMessage(e.Message)
+		}
+	}
+
+	if hasResponse && responseText.String() != "" {
+		tuiApp.AddMessage("assistant", responseText.String())
+	}
+
+	tuiApp.SetThinking(false, "")
+	app.costTracker.CompleteTurn()
+
+	if app.session.Turns%5 == 0 {
+		if path, err := app.sessionManager.SaveCurrent(); err == nil {
+			tuiApp.ShowStatus(fmt.Sprintf("Auto-saved to %s", path), "info")
+		}
+	}
+}
+
+func (app *App) buildSystemPrompt() string {
+	gitContext := ""
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		gitContext = fmt.Sprintf("Working in: %s", app.gitContext.Root)
+		if app.gitContext.Branch != "" {
+			gitContext += fmt.Sprintf(" (branch: %s)", app.gitContext.Branch)
+		}
+	}
+
+	var skillPrompts []string
+	skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
+	if err == nil {
+		for _, sk := range skillReg.All() {
+			skillPrompts = append(skillPrompts, sk.FormatPrompt())
+		}
+	}
+
+	cfg := agent.SystemPromptConfig{
+		PersonaName:      "Agent",
+		GitContext:       gitContext,
+		PermissionMode:   app.config.PermissionMode.String(),
+		WorkingDirectory: app.cwd,
+		Skills:           skillPrompts,
+	}
+
+	return agent.BuildSystemPrompt(cfg)
+}
+
+// ---------------------------------------------------------------------------
+// CLI Mode (classic)
+// ---------------------------------------------------------------------------
+
+func (app *App) runCLIMode() error {
 	gitInfo := &ui.GitInfo{}
 	if app.gitContext != nil && app.gitContext.IsRepo {
 		gitInfo.IsRepo = true
 		gitInfo.Root = app.gitContext.Root
 		gitInfo.Branch = app.gitContext.Branch
 	}
-	
-	// Detect build type
 	if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
 		gitInfo.BuildType = "dev"
 	} else {
 		gitInfo.BuildType = "release"
 	}
-	
-	// Try to get current git tag if in dev mode
-	if gitInfo.BuildType == "dev" && gitInfo.IsRepo {
-		// Look for tag in version string (e.g., "dev-main-d3ded56")
-		parts := strings.Split(Version, "-")
-		if len(parts) >= 3 {
-			// Last part might be sha, check if we're on a tag
-			gitInfo.Tag = parts[1] // branch name as tag indicator
-		}
-	}
 
 	fmt.Print(ui.WelcomeScreen(Version, app.session.Model, app.config.PermissionMode.String(), gitInfo))
-}
 
-func (app *App) runREPL() error {
-	// Create contextual input handler
 	inputHandler := ui.NewContextualInput(app.cmdRegistry.GetCompletions())
 
 	for {
@@ -415,7 +644,6 @@ func (app *App) runREPL() error {
 			continue
 		}
 
-		// Handle slash commands
 		if result, handled, err := app.cmdRegistry.Handle(input); handled {
 			if err != nil {
 				fmt.Println(ui.RenderError(err.Error()))
@@ -429,26 +657,19 @@ func (app *App) runREPL() error {
 			continue
 		}
 
-		// Process user message through agent
-		if err := app.processMessage(input); err != nil {
+		if err := app.processMessageCLI(input); err != nil {
 			fmt.Println(ui.RenderError(fmt.Sprintf("Error: %v", err)))
 		}
 	}
 }
 
-func (app *App) processMessage(input string) error {
-	// User input is already shown by the input handler with ◆ indicator
-	// Just add a newline for visual separation
-	fmt.Println()
-
-	// Validate and normalize input (especially important for Termux)
+func (app *App) processMessageCLI(input string) error {
 	validator := ui.NewTermuxValidator()
 	normalizedInput, valid := validator.ValidateInput(input)
 	if !valid {
 		return fmt.Errorf("invalid input")
 	}
 
-	// Add user message to session
 	userMsg := types.Message{
 		UUID:      generateUUID(),
 		Role:      types.RoleUser,
@@ -457,64 +678,7 @@ func (app *App) processMessage(input string) error {
 	}
 	app.session.AddMessage(userMsg)
 
-	// Check if this is a conversational message (greeting, simple question, etc.)
-	// For these, we use a simpler flow without tool overhead
-	if agent.IsConversational(normalizedInput) {
-		return app.handleConversationalMessage(normalizedInput)
-	}
-
-	// For task-based messages, use the full agent loop with tools
-	return app.handleTaskMessage(normalizedInput)
-}
-
-// handleConversationalMessage handles greetings and simple conversation without tools
-func (app *App) handleConversationalMessage(input string) error {
-	// Show brief thinking indicator
-	app.streamRenderer.StartThinking("")
-	
-	// Generate appropriate response based on conversation type
-	convType := agent.ClassifyInput(input)
-	var response string
-	
-	switch convType {
-	case agent.ConvGreeting:
-		response = agent.GetGreetingResponse()
-	case agent.ConvQuestion:
-		response = agent.GetCapabilityResponse()
-	case agent.ConvCasual:
-		response = agent.GetCasualResponse(input)
-	default:
-		response = "I'm here to help. What would you like to work on?"
-	}
-	
-	// Stop thinking indicator
-	app.streamRenderer.StopThinking()
-	
-	// Output the response
-	fmt.Println(response)
-	fmt.Println()
-	
-	// Add to session
-	assistantMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleAssistant,
-		Content:   []types.ContentBlock{types.TextBlock{Text: response}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(assistantMsg)
-	
-	// Track the turn
-	app.costTracker.CompleteTurn()
-	
-	return nil
-}
-
-// handleTaskMessage handles work-related messages using the full agent loop with tools
-func (app *App) handleTaskMessage(input string) error {
-	// Build enhanced system prompt
-	sysPrompt := app.buildEnhancedSystemPrompt()
-
-	// Create tool context
+	sysPrompt := app.buildSystemPrompt()
 	toolCtx := tools.Context{
 		Options: tools.Options{
 			MainLoopModel: app.session.Model,
@@ -524,223 +688,53 @@ func (app *App) handleTaskMessage(input string) error {
 		AbortController: context.Background(),
 	}
 
-	// Permission check function
-	canUseTool := func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
-		t, ok := app.toolRegistry.FindToolByName(toolName)
-		if !ok {
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
-		}
+	fmt.Println(tui.SpinnerRender("Thinking..."))
 
-		// Check permission mode
-		switch app.config.PermissionMode {
-		case config.PermissionReadOnly:
-			// Only allow read/search tools
-			if !isReadOnlyTool(toolName) {
-				return tools.PermissionDecision{
-					Behavior: tools.Deny,
-					Message:  fmt.Sprintf("Permission denied: %s is not allowed in read-only mode", toolName),
-				}, nil
-			}
-		case config.PermissionWorkspaceWrite:
-			// Block dangerous tools
-			if isDangerousTool(toolName) {
-				return tools.PermissionDecision{
-					Behavior: tools.Ask,
-					Message:  fmt.Sprintf("This action requires confirmation: %s", toolName),
-				}, nil
-			}
-		case config.PermissionDangerFullAccess:
-			// Allow everything
-		}
-
-		// Check always allow/deny lists
-		for _, allowed := range app.config.AlwaysAllow {
-			if allowed == toolName {
-				return tools.PermissionDecision{Behavior: tools.Allow}, nil
-			}
-		}
-		for _, denied := range app.config.AlwaysDeny {
-			if denied == toolName {
-				return tools.PermissionDecision{Behavior: tools.Deny, Message: "tool is in deny list"}, nil
-			}
-		}
-
-		// Use permission engine
-		permCtx := permissions.EmptyContext()
-		return permissions.Evaluate(t, toolInput, permCtx), nil
-	}
-
-	// Show thinking indicator with context
-	app.streamRenderer.StartThinking("Thinking...")
-
-	// Start a goroutine to animate the thinking indicator
-	thinkingCtx, cancelThinking := context.WithCancel(context.Background())
-	defer cancelThinking()
-
-	go func() {
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-ticker.C:
-				app.streamRenderer.UpdateThinking()
-			case <-thinkingCtx.Done():
-				return
-			}
-		}
-	}()
-
-	// Query the agent
 	params := agent.QueryParams{
 		Messages:       app.session.Messages,
 		SystemPrompt:   sysPrompt,
-		CanUseTool:     canUseTool,
 		ToolUseContext: toolCtx,
 	}
 
 	stream, err := app.loop.Query(context.Background(), params)
 	if err != nil {
-		app.streamRenderer.StopThinking()
 		return err
 	}
 
-	// Process stream
-	var responseMsg *types.Message
 	var hasOutput bool
-
 	for event := range stream {
 		switch e := event.(type) {
 		case types.StreamMessage:
-			// First message - stop thinking animation and start output
 			if !hasOutput {
-				app.streamRenderer.StopThinking()
+				fmt.Print("\r\033[K")
 				hasOutput = true
 			}
-
-			if responseMsg == nil {
-				responseMsg = &e.Message
-				app.renderMessage(e.Message)
-			} else {
-				// Append content
-				responseMsg.Content = append(responseMsg.Content, e.Message.Content...)
-				for _, block := range e.Message.Content {
-					if text, ok := block.(types.TextBlock); ok {
-						fmt.Print(text.Text)
-					}
+			for _, block := range e.Message.Content {
+				if text, ok := block.(types.TextBlock); ok {
+					fmt.Print(text.Text)
 				}
 			}
 			app.session.AddMessage(e.Message)
-
-		case types.ProgressMessage:
-			// Tool progress updates - animate active tools
-			app.streamRenderer.HandleProgress(e.ToolUseID, e.Data)
-			if app.streamRenderer.HasActiveTools() {
-				app.streamRenderer.UpdateThinking()
-			}
 		}
 	}
 
 	if hasOutput {
-		fmt.Println() // Final newline after response
-	} else {
-		// No output received, make sure thinking is stopped
-		app.streamRenderer.StopThinking()
+		fmt.Println()
 	}
 
-	// Complete the turn for cost tracking
 	app.costTracker.CompleteTurn()
-
-	// Auto-save session periodically
-	if app.session.Turns%5 == 0 {
-		if path, err := app.sessionManager.SaveCurrent(); err == nil {
-			fmt.Println(ui.RenderAutoSave(path))
-		}
-	}
-
 	return nil
-}
-
-func (app *App) buildSystemPrompt() string {
-	return app.buildEnhancedSystemPrompt()
-}
-
-// buildEnhancedSystemPrompt creates a comprehensive system prompt with clear guidance
-func (app *App) buildEnhancedSystemPrompt() string {
-	// Build git context string
-	gitContext := ""
-	if app.gitContext != nil && app.gitContext.IsRepo {
-		gitContext = fmt.Sprintf("Working in git repository: %s", app.gitContext.Root)
-		if app.gitContext.Branch != "" {
-			gitContext += fmt.Sprintf(" (branch: %s)", app.gitContext.Branch)
-		}
-	}
-
-	// Load skills
-	var skillPrompts []string
-	skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
-	if err == nil {
-		for _, sk := range skillReg.All() {
-			skillPrompts = append(skillPrompts, sk.FormatPrompt())
-		}
-	}
-
-	config := agent.SystemPromptConfig{
-		PersonaName:      ui.PersonaName,
-		GitContext:       gitContext,
-		PermissionMode:   app.config.PermissionMode.String(),
-		WorkingDirectory: app.cwd,
-		Skills:           skillPrompts,
-	}
-
-	return agent.BuildSystemPrompt(config)
-}
-
-func (app *App) renderMessage(msg types.Message) {
-	for _, block := range msg.Content {
-		switch b := block.(type) {
-		case types.TextBlock:
-			fmt.Print(b.Text)
-		case types.ToolUseBlock:
-			// Show tool use start with animation
-			app.streamRenderer.PrintToolStart(b.ID, b.Name, "")
-		case types.ToolResultBlock:
-			// Show tool completion
-			app.streamRenderer.PrintToolComplete(b.ToolUseID, b.Content)
-		}
-	}
-}
-
-func (app *App) getStatusReport() string {
-	meta := app.session.GetMetadata()
-
-	projectRoot := ""
-	gitBranch := ""
-	if app.gitContext != nil && app.gitContext.IsRepo {
-		projectRoot = app.gitContext.Root
-		gitBranch = app.gitContext.Branch
-	}
-
-	return ui.RenderStatusReport(
-		"active",
-		meta.MessageCount,
-		meta.Turns,
-		meta.EstimatedTokens,
-		app.session.Model,
-		projectRoot,
-		gitBranch,
-	)
 }
 
 func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println()
-	fmt.Println(ui.HeaderStyle.Render("  Welcome to " + ui.PersonaName))
+	fmt.Println(ui.HeaderStyle.Render("  Welcome to Agent Harness"))
 	fmt.Println()
-	fmt.Println("  Let's get you set up securely.")
+	fmt.Println("  Let's get you set up.")
 	fmt.Println()
 
-	// Provider selection using simple input for Termux compatibility
 	fmt.Println("  Choose an API provider:")
-	fmt.Println("    1) OpenRouter (recommended)")
+	fmt.Println("    1) OpenRouter")
 	fmt.Println("    2) OpenAI")
 	fmt.Println("    3) Anthropic")
 	fmt.Print("  Enter choice (1-3) [1]: ")
@@ -765,7 +759,6 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Printf("  Selected: %s\n", app.config.Provider)
 	fmt.Println()
 
-	// API key input with masking
 	fmt.Printf("  Enter your %s API key: ", app.config.Provider)
 	apiKey, err := config.PromptPassword("")
 	if err != nil {
@@ -781,7 +774,6 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println("  " + ui.RenderSuccess("API key received"))
 	fmt.Println()
 
-	// Model selection
 	defaultModel := "anthropic/claude-3.5-sonnet"
 	if app.config.Provider == "openai" {
 		defaultModel = "gpt-4o"
@@ -802,11 +794,9 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Println()
-	fmt.Println("  Credentials will be encrypted with a master password.")
-	fmt.Println("  You'll need this password each time you start agent-harness.")
+	fmt.Println("  Credentials will be encrypted.")
 	fmt.Println()
 
-	// Save securely
 	secureCfg := &config.SecureConfig{
 		Provider: app.config.Provider,
 		APIKey:   app.config.APIKey,
@@ -818,10 +808,7 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	}
 
 	fmt.Println()
-	fmt.Println("  " + ui.RenderSuccess("Credentials saved securely"))
-	fmt.Println()
-	fmt.Println(ui.DimStyle.Render("  Encryption: AES-256-GCM with Argon2id"))
-	fmt.Println(ui.DimStyle.Render("  File permissions: 0600 (user read/write only)"))
+	fmt.Println("  " + ui.RenderSuccess("Credentials saved"))
 	fmt.Println()
 
 	return nil
@@ -848,6 +835,5 @@ func isDangerousTool(name string) bool {
 }
 
 func generateUUID() string {
-	// Simple UUID generation - in production use proper UUID library
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }

@@ -74,6 +74,7 @@ func (sr *StreamRenderer) StartThinking(context string) {
 	sr.kaomojiIdx = 0
 	
 	// Print thinking indicator with kaomoji
+	// Layout: blank line, "◆ <context>", "   <frame> <status>" (no trailing newline on last line)
 	frame := KaomojiFrames[0]
 	if context != "" {
 		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s", 
@@ -98,8 +99,12 @@ func (sr *StreamRenderer) StopThinking() {
 	}
 
 	sr.isThinking = false
-	// Clear the spinner line and the thinking indicator
-	fmt.Fprint(sr.out, "\r\033[K\033[1A\r\033[K")
+	// Clear the thinking indicator lines
+	// StartThinking prints: newline, "◆ <context>", newline, "   <frame> <status>"
+	// We need to clear those lines and return to the start
+	fmt.Fprint(sr.out, "\r\033[K")       // Clear current line (spinner line)
+	fmt.Fprint(sr.out, "\033[1A\r\033[K") // Move up and clear the ◆ line
+	fmt.Fprint(sr.out, "\033[1A\r\033[K") // Move up and clear the blank line
 }
 
 // UpdateThinking updates the thinking animation frame
@@ -120,23 +125,43 @@ func (sr *StreamRenderer) UpdateThinking() {
 	sr.kaomojiIdx = (sr.kaomojiIdx + 1) % len(KaomojiFrames)
 	frame := KaomojiFrames[sr.kaomojiIdx]
 	
+	// Build status text - keep it short to avoid line wrapping
+	var status string
 	if len(sr.toolStack) > 0 {
-		// Update the last tool's progress line
 		lastTool := sr.toolStack[len(sr.toolStack)-1]
-		progress := lastTool.LatestProgress
-		if progress == "" {
-			progress = "running..."
+		status = lastTool.LatestProgress
+		if status == "" {
+			status = "running..."
 		}
-		
-		// Use \r and \033[K for cleaner single-line updates
-		fmt.Fprintf(sr.out, "\r\033[K   %s %s", 
-			DimStyle.Render(frame),
-			DimStyle.Render(Truncate(progress, 60)))
 	} else {
-		// Update the kaomoji on the current line
+		status = "thinking..."
+	}
+	
+	// Get terminal width for truncation
+	width, _, _ := GetTerminalSize()
+	maxStatusLen := width - 15 // Reserve space for frame and padding
+	if maxStatusLen < 20 {
+		maxStatusLen = 20
+	}
+	
+	// Truncate status to fit on one line
+	status = Truncate(status, maxStatusLen)
+	
+	// IMPORTANT: Check toolStack FIRST before isThinking
+	// PrintToolStart prints a trailing newline, so cursor is on line AFTER spinner
+	// We need to move up one line to get to the spinner line
+	// For thinking spins: StartThinking prints NO trailing newline, cursor is ON spinner line
+	// We just need \r to go to start of line
+	if len(sr.toolStack) > 0 {
+		// Tool spinner - move up to the spinner line, update, then add newline back
+		fmt.Fprintf(sr.out, "\033[1A\r\033[K   %s %s\n", 
+			DimStyle.Render(frame),
+			DimStyle.Render(status))
+	} else if sr.isThinking {
+		// Thinking spinner - already on the right line
 		fmt.Fprintf(sr.out, "\r\033[K   %s %s", 
 			DimStyle.Render(frame),
-			DimStyle.Render("thinking..."))
+			DimStyle.Render(status))
 	}
 }
 

@@ -128,6 +128,9 @@ func (le *LineEditor) readLineTermux() (*ReadOutcome, error) {
 		case '\n', '\r':
 			line := input.String()
 			le.addToHistory(line)
+			// Move to new line and show input with diamond indicator
+			fmt.Println()
+			fmt.Printf("◆ %s\n", line)
 			return &ReadOutcome{Text: line}, nil
 		case '\x03': // Ctrl+C
 			if input.Len() == 0 {
