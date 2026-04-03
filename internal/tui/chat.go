@@ -184,18 +184,41 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case StreamMessageMsg:
 		// Complete message received - add it to the chat
 		for _, block := range msg.Message.Content {
-			if textBlock, ok := block.(types.TextBlock); ok {
-				m.AddMessage("assistant", textBlock.Text)
+			switch b := block.(type) {
+			case types.TextBlock:
+				m.AddMessage("assistant", b.Text)
+			case types.ToolUseBlock:
+				// Show tool call in chat
+				m.AddToolMessage(b.Name, fmt.Sprintf("Calling tool with input: %v", b.Input))
+			case types.ToolResultBlock:
+				// Show tool result in chat
+				preview := b.Content
+				if len(preview) > 200 {
+					preview = preview[:200] + "..."
+				}
+				status := "✓"
+				if b.IsError {
+					status = "✗ Error"
+				}
+				m.AddToolMessage("Result", fmt.Sprintf("[%s] %s", status, preview))
 			}
 		}
 
 	case StreamErrorMsg:
+		// Commit any accumulated text before showing error
+		if m.streamText != "" {
+			m.AddMessage("assistant", m.streamText)
+		}
 		m.AddMessage("system", fmt.Sprintf("Error: %s", msg.Error))
 		m.streaming = false
 		m.streamText = ""
 		m.refreshViewport()
 
 	case StreamDoneMsg:
+		// Commit any accumulated streaming text to the chat history
+		if m.streamText != "" {
+			m.AddMessage("assistant", m.streamText)
+		}
 		m.streaming = false
 		m.streamText = ""
 		m.refreshViewport()
