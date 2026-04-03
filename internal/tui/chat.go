@@ -39,11 +39,12 @@ type ChatDelegate interface {
 // ChatMessage represents a message in the chat
 // ---------------------------------------------------------------------------
 type ChatMessage struct {
-	Role      string
-	Content   string
-	Timestamp time.Time
-	IsTool    bool
-	ToolName  string
+	Role         string
+	Content      string
+	Timestamp    time.Time
+	IsTool       bool
+	ToolName     string
+	ResponseTime time.Duration // Time taken to generate this response
 }
 
 // ---------------------------------------------------------------------------
@@ -66,6 +67,12 @@ type ChatModel struct {
 	streaming     bool
 	streamBuffer  string
 	currentTool   *ToolUseBlock
+	
+	// Timer state for response tracking
+	startTime    time.Time
+	elapsed      time.Duration
+	timerRunning bool
+	chunkCount   int
 
 	// Delegate
 	delegate ChatDelegate
@@ -116,6 +123,7 @@ func (m ChatModel) GetModel() string {
 func (m ChatModel) Init() tea.Cmd {
 	return tea.Batch(
 		textarea.Blink,
+		m.startTimer(), // Start the timer ticker
 	)
 }
 
@@ -191,6 +199,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	// -------------------------------------------------------------------------
+	// Timer tick for elapsed time display
+	// -------------------------------------------------------------------------
+	case timerTickMsg:
+		if m.timerRunning {
+			m.elapsed = time.Since(m.startTime)
+		}
+		// Always continue ticking - timer controls whether to update elapsed
+		return m, m.startTimer()
+
+	// -------------------------------------------------------------------------
 	// Async agent messages - real-time streaming
 	// -------------------------------------------------------------------------
 	case AgentStartMsg:
@@ -198,11 +216,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinkingText = "Thinking..."
 		m.streaming = true
 		m.streamBuffer = ""
-		return m, nil
+		m.startTime = time.Now()
+		m.timerRunning = true
+		m.elapsed = 0
+		m.chunkCount = 0
+		return m, m.startTimer()
 
 	case AgentChunkMsg:
 		if m.streaming {
 			m.streamBuffer += msg.Text
+			m.chunkCount++
 			// Update or create the streaming assistant message
 			m.updateOrCreateStreamingMessage(m.streamBuffer)
 		}
@@ -289,7 +312,8 @@ func (m ChatModel) View() string {
 	var inputSection string
 	prompt := PromptStyle.Render("◆ ")
 	if m.thinking {
-		inputSection = prompt + m.textarea.View() + "\n" + SpinnerRender(m.thinkingText)
+		statusLine := m.renderStatusLine()
+		inputSection = prompt + m.textarea.View() + "\n" + statusLine
 	} else {
 		inputSection = prompt + m.textarea.View()
 	}
@@ -350,12 +374,81 @@ func (m *ChatModel) ClearInput() {
 }
 
 // SetThinking sets the thinking state.
+// When thinking is set to true, this also starts the response timer.
 func (m *ChatModel) SetThinking(thinking bool, text string) {
 	m.thinking = thinking
 	m.thinkingText = text
 	if text == "" {
 		m.thinkingText = "Thinking..."
 	}
+	
+	// Start/stop timer based on thinking state
+	if thinking {
+		m.startTime = time.Now()
+		m.timerRunning = true
+		m.elapsed = 0
+		m.chunkCount = 0
+	} else {
+		m.timerRunning = false
+	}
+}
+
+// startTimer returns a command that ticks every 100ms to update elapsed time
+func (m *ChatModel) startTimer() tea.Cmd {
+	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
+		return timerTickMsg{time: t}
+	})
+}
+
+// timerTickMsg is sent on each timer tick
+type timerTickMsg struct {
+	time time.Time
+}
+
+// renderStatusLine renders the thinking/streaming status with timer
+func (m *ChatModel) renderStatusLine() string {
+	if !m.thinking {
+		return ""
+	}
+
+	// Calculate elapsed time
+	if m.timerRunning {
+		m.elapsed = time.Since(m.startTime)
+	}
+
+	// Format elapsed time
+	elapsedStr := formatElapsed(m.elapsed)
+
+	// Determine status text based on state
+	status := "thinking"
+	if m.streaming && m.streamBuffer != "" {
+		status = "streaming"
+	} else if m.currentTool != nil {
+		status = fmt.Sprintf("using %s", m.currentTool.Name)
+	}
+
+	// Build status line: spinner + status + elapsed + chunks
+	spinner := SpinnerRender("")
+	detail := elapsedStr
+	if m.chunkCount > 0 {
+		detail = fmt.Sprintf("%s | %d chunks", elapsedStr, m.chunkCount)
+	}
+
+	statusText := StreamingStyle.Render(fmt.Sprintf("%s %s (%s)", strings.TrimSpace(spinner), status, detail))
+	return statusText
+}
+
+// formatElapsed formats a duration as human-readable string
+func formatElapsed(d time.Duration) string {
+	if d < time.Second {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	if d < time.Minute {
+		return fmt.Sprintf("%.1fs", d.Seconds())
+	}
+	mins := int(d.Minutes())
+	secs := int(d.Seconds()) % 60
+	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
 // ConsumesTab returns whether this view consumes Tab key.
@@ -409,6 +502,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
 		m.messages[len(m.messages)-1].Content = content
 		m.messages[len(m.messages)-1].Timestamp = time.Now()
+		m.messages[len(m.messages)-1].ResponseTime = m.elapsed
 	}
 	m.refreshViewport()
 }
@@ -466,6 +560,10 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	header := AssistantStyle.Render("Agent")
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+	}
+	// Show response time if available
+	if msg.ResponseTime > 0 {
+		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
