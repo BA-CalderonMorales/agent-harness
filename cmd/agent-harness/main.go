@@ -808,13 +808,22 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 
 	sysPrompt := app.buildSystemPrompt()
 
+	// FIX: Create a cancellable context for agent execution
+	// This allows ESC key to actually cancel the running agent
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() // Ensure cleanup
+	
+	// Register the cancel function with the TUI so ESC key can trigger it
+	tuiApp.SetAgentCancelFunc(cancel)
+	defer tuiApp.SetAgentCancelFunc(nil) // Clear on exit
+
 	toolCtx := tools.Context{
 		Options: tools.Options{
 			MainLoopModel: app.session.Model,
 			Tools:         app.toolRegistry.FilterEnabled(),
 			Debug:         false,
 		},
-		AbortController: context.Background(),
+		AbortController: ctx,
 	}
 
 	canUseTool := func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
