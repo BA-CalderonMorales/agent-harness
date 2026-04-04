@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	Version   = "0.0.43"
+	Version   = "0.0.44"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -58,12 +58,11 @@ func main() {
 }
 
 func run() error {
-	var showVersion, showHelp, useTUI bool
+	var showVersion, showHelp bool
 	flag.BoolVar(&showVersion, "version", false, "Show version")
 	flag.BoolVar(&showVersion, "v", false, "Show version (shorthand)")
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showHelp, "h", false, "Show help (shorthand)")
-	flag.BoolVar(&useTUI, "tui", true, "Use TUI mode (default: true)")
 
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
@@ -71,8 +70,6 @@ func run() error {
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -v, --version    Show version\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help       Show help\n")
-		fmt.Fprintf(os.Stderr, "  --tui=true       Use TUI mode (default)\n")
-		fmt.Fprintf(os.Stderr, "  --tui=false      Use CLI mode\n")
 		fmt.Fprintf(os.Stderr, "\nFor more: https://github.com/BA-CalderonMorales/agent-harness\n")
 	}
 
@@ -111,10 +108,7 @@ func run() error {
 
 	app.initSlashCommands()
 
-	if useTUI {
-		return app.runTUIMode()
-	}
-	return app.runCLIMode()
+	return app.runTUIMode()
 }
 
 func printVersion() {
@@ -591,6 +585,13 @@ func (d *TUISettingsDelegate) OnSettingChange(key, value string) {
 	case "model":
 		d.app.session.Model = value
 		d.app.costTracker.SetModel(value)
+		// Save the new default model to secure config
+		credManager := config.NewCredentialManager()
+		if err := credManager.UpdateDefaultModel(value); err != nil {
+			d.tuiApp.AddMessage("system", fmt.Sprintf("Warning: failed to save default model: %v", err))
+		} else {
+			d.tuiApp.AddMessage("system", fmt.Sprintf("Default model updated to: %s", value))
+		}
 	case "provider":
 		d.app.config.Provider = value
 	case "permissions":
@@ -906,130 +907,6 @@ func (app *App) buildSystemPrompt() string {
 	}
 
 	return agent.BuildSystemPrompt(cfg)
-}
-
-// ---------------------------------------------------------------------------
-// CLI Mode (classic)
-// ---------------------------------------------------------------------------
-
-func (app *App) runCLIMode() error {
-	gitInfo := &ui.GitInfo{}
-	if app.gitContext != nil && app.gitContext.IsRepo {
-		gitInfo.IsRepo = true
-		gitInfo.Root = app.gitContext.Root
-		gitInfo.Branch = app.gitContext.Branch
-	}
-	if strings.Contains(Version, "dev") || strings.Contains(Version, "local") {
-		gitInfo.BuildType = "dev"
-	} else {
-		gitInfo.BuildType = "release"
-	}
-
-	fmt.Print(ui.WelcomeScreen(Version, app.session.Model, app.config.PermissionMode.String(), gitInfo))
-
-	inputHandler := ui.NewContextualInput(app.cmdRegistry.GetCompletions())
-
-	for {
-		outcome, err := inputHandler.ReadInput()
-		if err != nil {
-			return fmt.Errorf("input error: %w", err)
-		}
-
-		if outcome.Exit {
-			fmt.Print(ui.RenderGoodbye(app.costTracker.Summary()))
-			return nil
-		}
-
-		if outcome.Cancel {
-			fmt.Println("^C")
-			continue
-		}
-
-		input := outcome.Text
-		if input == "" {
-			continue
-		}
-
-		if result, handled, err := app.cmdRegistry.Handle(input); handled {
-			if err != nil {
-				fmt.Println(ui.RenderError(err.Error()))
-				continue
-			}
-			if commands.IsQuit(result) {
-				fmt.Print(ui.RenderGoodbye(app.costTracker.Summary()))
-				return nil
-			}
-			fmt.Println(result)
-			continue
-		}
-
-		if err := app.processMessageCLI(input); err != nil {
-			fmt.Println(ui.RenderError(fmt.Sprintf("Error: %v", err)))
-		}
-	}
-}
-
-func (app *App) processMessageCLI(input string) error {
-	validator := ui.NewTermuxValidator()
-	normalizedInput, valid := validator.ValidateInput(input)
-	if !valid {
-		return fmt.Errorf("invalid input")
-	}
-
-	userMsg := types.Message{
-		UUID:      generateUUID(),
-		Role:      types.RoleUser,
-		Content:   []types.ContentBlock{types.TextBlock{Text: normalizedInput}},
-		Timestamp: time.Now(),
-	}
-	app.session.AddMessage(userMsg)
-
-	sysPrompt := app.buildSystemPrompt()
-	toolCtx := tools.Context{
-		Options: tools.Options{
-			MainLoopModel: app.session.Model,
-			Tools:         app.toolRegistry.FilterEnabled(),
-			Debug:         false,
-		},
-		AbortController: context.Background(),
-	}
-
-	fmt.Println(tui.SpinnerRender("Thinking..."))
-
-	params := agent.QueryParams{
-		Messages:       app.session.Messages,
-		SystemPrompt:   sysPrompt,
-		ToolUseContext: toolCtx,
-	}
-
-	stream, err := app.loop.Query(context.Background(), params)
-	if err != nil {
-		return err
-	}
-
-	var hasOutput bool
-	for event := range stream {
-		switch e := event.(type) {
-		case types.StreamMessage:
-			if !hasOutput {
-				fmt.Print("\r\033[K")
-				hasOutput = true
-			}
-			for _, block := range e.Message.Content {
-				if text, ok := block.(types.TextBlock); ok {
-					fmt.Print(text.Text)
-				}
-			}
-			app.session.AddMessage(e.Message)
-		}
-	}
-
-	if hasOutput {
-		fmt.Println()
-	}
-
-	app.costTracker.CompleteTurn()
-	return nil
 }
 
 func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
