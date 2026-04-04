@@ -13,6 +13,13 @@ import (
 	"golang.org/x/term"
 )
 
+// Debug output helper
+func debugPrintf(format string, args ...interface{}) {
+	if os.Getenv("AGENT_HARNESS_VERBOSE") == "1" {
+		fmt.Fprintf(os.Stderr, "[debug] "+format, args...)
+	}
+}
+
 // PromptPassword prompts for a password with masking
 // Falls back to plain text input on Termux or when terminal manipulation fails
 func PromptPassword(prompt string) (string, error) {
@@ -23,7 +30,14 @@ func PromptPassword(prompt string) (string, error) {
 	fmt.Println()
 	
 	if err == nil {
-		return string(password), nil
+		// Validate we got something
+		pass := strings.TrimSpace(string(password))
+		return pass, nil
+	}
+	
+	// Debug: show error in verbose mode
+	if os.Getenv("AGENT_HARNESS_VERBOSE") == "1" {
+		fmt.Fprintf(os.Stderr, "[debug] term.ReadPassword failed: %v, using fallback\n", err)
 	}
 	
 	// Fall back to plain text reading for Termux and other environments

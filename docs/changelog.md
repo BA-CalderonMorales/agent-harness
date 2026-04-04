@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.0.48] - 2026-04-04
+
+### Fixed
+- Credential decryption error handling with user-friendly recovery options
+- Numeric model input (1, 2, 3) now maps to actual models instead of literal "1"
+- ESC key now properly cancels running agent execution
+- Model display validation to catch invalid numeric-only model names
+
+### Changed
+- Tool calling UX: now shows grey command preview like Kimi does
+- Animated tool display in yolo mode: spinner + tool name + command preview
+- Single-line tool animation instead of endless [bash] bash repetitions
+- Better password input handling with whitespace trimming
+
+### Security
+- Added validation for corrupted credential files (salt/nonce/ciphertext)
+- Clear master key on decryption failure to force fresh password prompt
+
 ## [0.0.47] - 2026-04-04
 
 ### Added

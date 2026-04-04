@@ -107,11 +107,30 @@ func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 		return nil, fmt.Errorf("unsupported secure store version: %d", store.Version)
 	}
 
+	// Validate stored data integrity before attempting decryption
+	if len(store.Salt) == 0 {
+		return nil, fmt.Errorf("corrupted credentials: missing salt")
+	}
+	if len(store.Nonce) == 0 {
+		return nil, fmt.Errorf("corrupted credentials: missing nonce")
+	}
+	if len(store.Ciphertext) == 0 {
+		return nil, fmt.Errorf("corrupted credentials: missing encrypted data")
+	}
+	// AES-GCM nonce should be 12 bytes
+	if len(store.Nonce) != 12 {
+		return nil, fmt.Errorf("corrupted credentials: invalid nonce length (%d, expected 12)", len(store.Nonce))
+	}
+
 	// Get master password if not already set
 	if cm.masterKey == nil {
 		password, err := PromptPassword("Enter master password: ")
 		if err != nil {
 			return nil, fmt.Errorf("failed to read password: %w", err)
+		}
+		// Validate password isn't empty
+		if password == "" {
+			return nil, fmt.Errorf("password cannot be empty")
 		}
 		cm.masterKey = deriveKey(password, store.Salt)
 	}
@@ -119,6 +138,8 @@ func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 	// Decrypt
 	plaintext, err := cm.decrypt(store.Ciphertext, store.Nonce)
 	if err != nil {
+		// Clear the master key so next attempt will prompt for password again
+		cm.masterKey = nil
 		return nil, fmt.Errorf("failed to decrypt credentials (wrong password?): %w", err)
 	}
 
