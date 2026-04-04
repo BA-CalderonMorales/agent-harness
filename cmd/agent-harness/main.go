@@ -29,7 +29,7 @@ import (
 )
 
 var (
-	Version   = "0.0.45"
+	Version   = "0.0.46"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -48,6 +48,7 @@ type App struct {
 	loop           *agent.Loop
 	gitContext     *git.Context
 	cwd            string
+	tuiApp         *tui.App // TUI reference for callbacks
 }
 
 func main() {
@@ -245,6 +246,10 @@ func (app *App) initSlashCommands() {
 			func(m string) error {
 				app.session.Model = m
 				app.costTracker.SetModel(m)
+				// TUI FIX: Notify TUI to update status bar display
+				if app.tuiApp != nil {
+					app.tuiApp.SetChatModel(m)
+				}
 				return nil
 			},
 			func() []string {
@@ -418,6 +423,7 @@ func (app *App) initSlashCommandsForTUI(tuiApp *tui.App) {
 
 func (app *App) runTUIMode() error {
 	tuiApp := tui.NewApp()
+	app.tuiApp = tuiApp // Store reference for callbacks
 
 	// Re-register slash commands that need TUI integration
 	app.initSlashCommandsForTUI(tuiApp)
@@ -585,6 +591,8 @@ func (d *TUISettingsDelegate) OnSettingChange(key, value string) {
 	case "model":
 		d.app.session.Model = value
 		d.app.costTracker.SetModel(value)
+		// TUI FIX: Update chat model for status bar display
+		d.tuiApp.SetChatModel(value)
 		// Save the new default model to secure config
 		credManager := config.NewCredentialManager()
 		if err := credManager.UpdateDefaultModel(value); err != nil {

@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.0.46] - 2026-04-04
+
+### Fixed
+- TUI status bar now updates correctly when selecting model via picker
+- Model selection via /model command or Settings view reflects immediately in status bar
+
+### Added
+- Release publish script for streamlined release workflow
+
 All notable changes to agent-harness will be documented in this file.
 
 ## [0.0.45] - 2026-04-04
