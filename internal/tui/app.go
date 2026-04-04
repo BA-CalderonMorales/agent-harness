@@ -689,6 +689,11 @@ func (a *App) SetModels(models []ModelItem) {
 	a.modelPicker.SetModels(models)
 }
 
+// SetChatModel sets the current model name for display in the status bar.
+func (a *App) SetChatModel(model string) {
+	a.chatModel.SetModel(model)
+}
+
 // handlePaletteSelection handles a command selected from the palette.
 // Commands with no arguments are executed immediately.
 // /model with no args opens the model picker.
