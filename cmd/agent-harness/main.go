@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/atotto/clipboard"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
@@ -528,6 +529,51 @@ func (d *TUIsessionsDelegate) OnSessionExport(id string) {
 		return
 	}
 	d.tuiApp.AddMessage("system", fmt.Sprintf("Exported to %s", path))
+}
+
+func (d *TUIsessionsDelegate) OnSessionCopy(id string) {
+	// Load the session to get its messages
+	session, err := d.app.sessionManager.LoadSession(id)
+	if err != nil {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Failed to load session for copy: %v", err))
+		return
+	}
+
+	// Format the conversation as text
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("Session: %s\n", id[:8]))
+	b.WriteString(fmt.Sprintf("Model: %s\n", session.Model))
+	b.WriteString(fmt.Sprintf("Created: %s\n\n", session.CreatedAt.Format("2006-01-02 15:04")))
+	b.WriteString("=== Conversation ===\n\n")
+
+	for _, msg := range session.Messages {
+		switch msg.Role {
+		case types.RoleUser:
+			b.WriteString("User:\n")
+		case types.RoleAssistant:
+			b.WriteString("Assistant:\n")
+		case types.RoleSystem:
+			b.WriteString("System:\n")
+		default:
+			b.WriteString(fmt.Sprintf("%s:\n", msg.Role))
+		}
+
+		for _, block := range msg.Content {
+			if textBlock, ok := block.(types.TextBlock); ok {
+				b.WriteString(textBlock.Text)
+				b.WriteString("\n")
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	// Copy to clipboard
+	if err := clipboard.WriteAll(b.String()); err != nil {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Failed to copy to clipboard: %v", err))
+		return
+	}
+
+	d.tuiApp.AddMessage("system", fmt.Sprintf("Copied conversation from session %s to clipboard (%d messages)", id[:8], len(session.Messages)))
 }
 
 func (d *TUIsessionsDelegate) OnSessionLoad() {
