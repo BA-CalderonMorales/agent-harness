@@ -1,203 +1,332 @@
-# Release Workflow Skill - Agent Harness
+# Release Workflow Skill
 
-> **Purpose:** Ensure consistent, reliable releases every time. No missed workflows, no manual errors, no surprises.
-
----
-
-## 1. The Golden Rule
-
-**Always use the Makefile. Never bypass it.**
-
-The Makefile contains critical build flags (`ldflags`) that inject version info. Building manually with `go build` creates broken binaries that report wrong versions.
+> **Purpose:** Prevent version mismatches and ensure consistent release tagging.
+> **Scope:** Version validation, GitHub release checking, automated version bumping.
+> **Location:** Stored within agent-harness repo at `.agent-harness/skills/release-workflow/`
+> **Note:** No emojis. Use text indicators only.
 
 ---
 
-## 2. Quick Reference
+## 1. The Problem
+
+Version mismatches happen when:
+- Code version doesn't match the git tag
+- Git tag doesn't match the GitHub release
+- Multiple sources of truth for version numbers
+- Manual steps are forgotten
+
+## The Problem
+```
+GitHub Release: v0.0.42
+Code Version:   "0.0.41"  [MISMATCH!]
+Git Tag:        v0.0.42
+```
+
+---
+
+## 2. Pre-Release Validation Checklist
+
+### 2.1 Check Current State
 
 ```bash
-# Step 1: Ensure you're on develop with clean changes
+#!/bin/bash
+# save as: ~/projects/check-version.sh
+
+REPO_DIR="${1:-.}"
+cd "$REPO_DIR" || exit 1
+
+echo "=== Version Status Check ==="
+echo ""
+
+# 1. Get code version from main.go (Go projects)
+CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+if [ -z "$CODE_VERSION" ]; then
+    CODE_VERSION="NOT FOUND"
+fi
+echo "Code Version:   $CODE_VERSION"
+
+# 2. Get latest git tag
+GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
+echo "Latest Git Tag: $GIT_TAG"
+
+# 3. Get latest GitHub release
+GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
+echo "GitHub Release: $GH_RELEASE"
+
+echo ""
+echo "=== Validation ==="
+
+# Check if code version matches git tag (strip 'v' prefix for comparison)
+CODE_V="v$CODE_VERSION"
+if [ "$CODE_V" != "$GIT_TAG" ] && [ "$CODE_VERSION" != "$GIT_TAG" ]; then
+    echo "! WARNING: Code version ($CODE_VERSION) != Git tag ($GIT_TAG)"
+    MISMATCH=1
+fi
+
+# Check if git tag matches GitHub release
+if [ "$GIT_TAG" != "$GH_RELEASE" ]; then
+    echo "! WARNING: Git tag ($GIT_TAG) != GitHub release ($GH_RELEASE)"
+    MISMATCH=1
+fi
+
+if [ -z "$MISMATCH" ]; then
+    echo "[OK] All versions aligned"
+    exit 0
+else
+    echo ""
+    echo "[ERROR] Version mismatch detected!"
+    exit 1
+fi
+```
+
+### 2.2 Determine Next Version
+
+```bash
+#!/bin/bash
+# save as: ~/projects/bump-version.sh
+
+CURRENT_VERSION="${1:-}"
+BUMP_TYPE="${2:-patch}"  # patch, minor, major
+
+if [ -z "$CURRENT_VERSION" ]; then
+    echo "Usage: bump-version.sh <current_version> [patch|minor|major]"
+    exit 1
+fi
+
+# Strip 'v' prefix if present
+VERSION="${CURRENT_VERSION#v}"
+
+# Split into components
+MAJOR=$(echo "$VERSION" | cut -d. -f1)
+MINOR=$(echo "$VERSION" | cut -d. -f2)
+PATCH=$(echo "$VERSION" | cut -d. -f3)
+
+# Bump accordingly
+case "$BUMP_TYPE" in
+    major)
+        MAJOR=$((MAJOR + 1))
+        MINOR=0
+        PATCH=0
+        ;;
+    minor)
+        MINOR=$((MINOR + 1))
+        PATCH=0
+        ;;
+    patch|*)
+        PATCH=$((PATCH + 1))
+        ;;
+esac
+
+echo "$MAJOR.$MINOR.$PATCH"
+```
+
+---
+
+## 3. Release Workflow
+
+### 3.1 Step-by-Step Release Process
+
+```bash
+# BEFORE any release, run these commands:
+
+# 1. Ensure you're on develop branch
 git checkout develop
-git status  # Should be clean
+git pull origin develop
 
-# Step 2: Run tests
-make test
+# 2. Check current versions
+~/projects/check-version.sh
 
-# Step 3: Bump version in cmd/agent-harness/main.go
-# Edit: var Version = "X.X.X"
+# 3. If mismatch found, fix code version first
+# Edit cmd/*/main.go to match GitHub release
 
-# Step 4: Commit the version bump
+# 4. Determine next version
+NEW_VERSION=$(~/projects/bump-version.sh v0.0.42 patch)  # or minor/major
+echo "Next version: v$NEW_VERSION"
+
+# 5. Update code version
+# Edit cmd/agent-harness/main.go:
+# Version = "0.0.43"
+
+# 6. Update changelog
+cat >> docs/changelog.md << EOF
+## [0.0.43] - $(date +%Y-%m-%d)
+
+### Fixed
+- Version alignment issue
+
+EOF
+
+# 7. Commit version bump
 git add -A
-git commit -m "chore(version): bump to vX.X.X"
+git commit -m "chore(release): bump version to v$NEW_VERSION"
 
-# Step 5: Build locally to verify
-make build
-./build/agent-harness --version  # Should show vX.X.X
-
-# Step 6: Push to develop
+# 8. Push to develop
 git push origin develop
 
-# Step 7: Tag and push (this triggers the release workflow)
-git tag -a vX.X.X -m "Release vX.X.X - Brief description"
-git push origin vX.X.X  # <-- CRITICAL: This triggers GitHub Actions
-
-# Step 8: Sync Main (Final Step)
+# 9. Merge to main (follow your branch strategy)
 git checkout main
-git merge develop
-git push origin main
+git merge develop  # or create PR
 
-# Step 9: Return to Develop
-git checkout develop
+# 10. Create and push tag
+git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+git push origin "v$NEW_VERSION"
 
-# Step 10: Monitor the release
-gh run watch  # or check GitHub Actions UI
+# 11. Verify release was created
+git fetch --tags
+gh release list --limit 5
 ```
 
----
-
-## 3. Common Failures & Prevention
-
-### Failure: Workflow Didn't Trigger
-
-**Symptom:** Tag exists locally, no GitHub Actions run.
-
-**Cause:** Forgot to `git push origin vX.X.X`
-
-**Prevention:** 
-```bash
-# Always verify tag was pushed
-git ls-remote --tags origin | grep "vX.X.X"
-
-# Or use this helper function (add to .bashrc)
-release-tag() {
-    local version=$1
-    local message=${2:-"Release $version"}
-    
-    if [ -z "$version" ]; then
-        echo "Usage: release-tag vX.X.X 'Release description'"
-        return 1
-    fi
-    
-    echo "Creating tag $version..."
-    git tag -a "$version" -m "$message"
-    
-    echo "Pushing to origin..."
-    git push origin "$version"
-    
-    echo "Verifying..."
-    sleep 2
-    git ls-remote --tags origin | grep "$version" || echo "WARNING: Tag not found on remote!"
-}
-```
-
-### Failure: Wrong Version in Binary
-
-**Symptom:** Binary shows old version or "dev" despite new tag.
-
-**Cause:** Used `go build` instead of `make build`.
-
-**Prevention:** Always use the Makefile:
-```bash
-make build  # Correct
-./build/agent-harness --version
-```
-
----
-
-## 4. Release Checklist
-
-Use this before every release:
-
-```markdown
-- [ ] On `develop` branch with clean working directory
-- [ ] All tests pass: `make test`
-- [ ] Local build works: `make build && ./build/agent-harness --version`
-- [ ] Version string updated in `cmd/agent-harness/main.go`
-- [ ] Version bump committed: `git commit -m "chore(version): bump to vX.X.X"`
-- [ ] Changes pushed to origin: `git push origin develop`
-- [ ] Tag created: `git tag -a vX.X.X -m "Release vX.X.X"`
-- [ ] Tag pushed to origin: `git push origin vX.X.X`
-- [ ] Verify tag on remote: `git ls-remote --tags origin | grep vX.X.X`
-- [ ] Sync Main: `git checkout main && git merge develop && git push origin main`
-- [ ] Return to Develop: `git checkout develop`
-- [ ] GitHub Actions workflow triggered (check Actions tab)
-- [ ] All matrix builds succeed
-- [ ] Release created with artifacts
-```
-
----
-
-## 5. Understanding the Workflow
-
-### Trigger Conditions
-
-The release workflow (`.github/workflows/release.yml`) triggers on:
-
-```yaml
-on:
-  push:
-    tags:
-      - 'v*'  # Any tag starting with 'v'
-  workflow_dispatch:  # Manual trigger fallback
-```
-
-**Key insight:** The workflow triggers on `push`, not `tag create`. Local tags don't count.
-
-### Build Matrix
-
-The workflow builds for:
-- Linux (AMD64, ARM64)
-- macOS (AMD64 Intel, ARM64 Apple Silicon)
-- Windows (AMD64, ARM64)
-
----
-
-## 6. Emergency Procedures
-
-### Workflow Failed Mid-Release
+### 3.2 One-Command Release Script
 
 ```bash
-# Check what failed
-gh run list --workflow=release.yml
+#!/bin/bash
+# save as: ~/projects/release.sh
+# Usage: release.sh [patch|minor|major]
 
-# If it's a transient issue, re-run:
-gh run rerun <run-id>
+set -e
 
-# If the tag is bad, delete and recreate:
-git push --delete origin vX.X.X  # Delete remote tag
-git tag -d vX.X.X                 # Delete local tag
+REPO_DIR="${REPO_DIR:-~/projects/agent-harness}"
+BUMP_TYPE="${1:-patch}"
 
-# Fix issues, then re-tag
-# ... make fixes ...
-git tag -a vX.X.X -m "Release vX.X.X - fixed"
-git push origin vX.X.X
-```
+cd "$REPO_DIR"
 
-### Wrong Commit Tagged
+echo "=== Starting Release Process ==="
+echo "Repository: $REPO_DIR"
+echo "Bump type: $BUMP_TYPE"
+echo ""
 
-```bash
-# Delete bad tag everywhere
-git push --delete origin vX.X.X
-git tag -d vX.X.X
+# 1. Check current state
+echo "→ Checking current versions..."
+CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
+GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
 
-# Recreate at correct commit
-git tag -a vX.X.X <commit-sha> -m "Release vX.X.X"
-git push origin vX.X.X
+echo "  Code:   $CODE_VERSION"
+echo "  Git:    $GIT_TAG"
+echo "  GitHub: $GH_RELEASE"
+
+# 2. Validate we're starting from aligned state
+CODE_V="v$CODE_VERSION"
+if [ "$CODE_V" != "$GH_RELEASE" ] && [ "$CODE_VERSION" != "$GH_RELEASE" ]; then
+    echo ""
+    echo "! WARNING: Starting from mismatched state!"
+    echo "  Code version does not match GitHub release."
+    echo "  Fix this first before creating new release."
+    exit 1
+fi
+
+# 3. Calculate new version
+echo ""
+echo "→ Calculating new version..."
+LATEST="${GH_RELEASE#v}"
+NEW_VERSION=$(bash ~/projects/bump-version.sh "$LATEST" "$BUMP_TYPE")
+echo "  New version: v$NEW_VERSION"
+
+# 4. Update code
+echo ""
+echo "→ Updating code version..."
+sed -i "s/Version\s*=\s*\"[^\"]*\"/Version   = \"$NEW_VERSION\"/" cmd/*/main.go
+
+# 5. Update changelog if exists
+if [ -f docs/changelog.md ]; then
+    echo "→ Updating changelog..."
+    TODAY=$(date +%Y-%m-%d)
+    # Prepend to changelog
+    TEMP=$(mktemp)
+    cat > "$TEMP" << EOF
+# Changelog
+
+## [$NEW_VERSION] - $TODAY
+
+### Changed
+- Version bump to v$NEW_VERSION
+
+EOF
+    tail -n +3 docs/changelog.md >> "$TEMP"
+    mv "$TEMP" docs/changelog.md
+fi
+
+# 6. Commit
+echo ""
+echo "→ Committing changes..."
+git add -A
+git commit -m "chore(release): bump version to v$NEW_VERSION"
+
+# 7. Push
+echo ""
+echo "→ Pushing to develop..."
+git push origin develop
+
+echo ""
+echo "=== Release Preparation Complete ==="
+echo ""
+echo "Next steps:"
+echo "  1. Merge develop to main:"
+echo "     git checkout main && git merge develop"
+echo "  2. Push main: git push origin main"
+echo "  3. Create tag: git tag -a v$NEW_VERSION -m 'Release v$NEW_VERSION'"
+echo "  4. Push tag: git push origin v$NEW_VERSION"
+echo ""
+echo "Or run: cd $REPO_DIR && ./scripts/release/publish.sh v$NEW_VERSION"
 ```
 
 ---
 
-## 7. Version Numbering
+## 4. Quick Reference
 
-Follow semantic versioning:
+### Check Versions Anywhere
+```bash
+cd ~/projects/agent-harness
+~/projects/check-version.sh
+```
 
-| Pattern | Meaning | Example |
-|---------|---------|---------|
-| `v0.X.0` | Minor release, new features | `v0.17.0` |
-| `v0.0.X` | Patch release, bug fixes | `v0.17.1` |
-| `v0.X.0-alpha` | Pre-release | `v0.18.0-alpha` |
+### Create New Release
+```bash
+cd ~/projects/agent-harness
+~/projects/release.sh patch   # or minor, major
+```
 
-**For this project (pre-1.0):**
-- Bump minor for UX changes, new features
-- Bump patch for bug fixes
+### Manual Version Fix (Emergency)
+```bash
+# If version is out of sync:
+1. Edit cmd/agent-harness/main.go → update Version string
+2. git add -A && git commit -m "fix: align version with release"
+3. git push origin develop
+```
 
-**CRITICAL:** The agent will intentionally assume all releases are **patch** version bumps. If a **major** or **minor** upgrade is required, the user must explicitly request it.
+---
+
+## 5. Version Format
+
+We follow **Semantic Versioning** (semver):
+```
+vMAJOR.MINOR.PATCH
+
+Examples:
+  v0.0.42  → v0.0.43 (patch - bug fixes)
+  v0.0.42  → v0.1.0  (minor - new features)
+  v0.0.42  → v1.0.0  (major - breaking changes)
+```
+
+**When to bump:**
+| Type | When | Example |
+|------|------|---------|
+| Patch | Bug fixes, docs | v0.0.42 → v0.0.43 |
+| Minor | New features, enhancements | v0.0.42 → v0.1.0 |
+| Major | Breaking API changes | v0.0.42 → v1.0.0 |
+
+---
+
+## 6. Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| "Code version != Git tag" | Update code version first, then tag |
+| "Git tag already exists" | Use different version or delete tag: `git tag -d v0.0.43` |
+| "GitHub release already exists" | Cannot overwrite. Use new version. |
+| Forgot to bump version | Fix immediately: edit code, commit, force-push (if not main) |
+
+---
+
+> **Last Updated:** 2026-04-04  
+> **Purpose:** Never have version mismatches again.
