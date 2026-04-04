@@ -173,13 +173,51 @@ Before declaring a fix complete, verify:
 
 ---
 
+## Pattern 6: PATH Shadowing Detection
+
+Use when updates appear to succeed but old version persists.
+
+### Symptom
+- Update reports success but `version` shows old number
+- Which binary varies depending on how you call it
+- Different paths return different versions
+
+### Detection
+```bash
+# Find all binaries in PATH
+which -a agent-harness
+
+# Check each version
+for bin in $(which -a agent-harness 2>/dev/null); do
+    echo "=== $bin ==="
+    "$bin" --version 2>/dev/null | head -1
+done
+
+# Check PATH precedence
+echo "$PATH" | tr ':' '\n' | nl
+```
+
+### Common Shadow Locations (Termux)
+- `$HOME/buckets/usr/bin/` - Often added to PATH before `$PREFIX/bin`
+- `$HOME/.local/bin/` - User-local installs
+- `$HOME/` - Direct home directory copies
+
+### Fix
+Remove shadowing binaries, keep only canonical location:
+```bash
+# Canonical Termux location
+$PREFIX/bin/agent-harness
+```
+
+---
+
 ## Extension Points
 
 Add new patterns here as we discover them:
 
-- [ ] **Pattern 6:** Race condition detection
 - [ ] **Pattern 7:** State machine validation
 - [ ] **Pattern 8:** Resource leak tracking
+- [ ] **Pattern 9:** Configuration drift detection
 
 ---
 

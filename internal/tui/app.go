@@ -6,6 +6,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -804,6 +805,12 @@ func ShortenModelName(model string) string {
 		return "(use /model)"
 	}
 
+	// FIX: Handle numeric-only model names (user entered wrong value)
+	// Return the full model name with a warning indicator
+	if _, err := strconv.Atoi(model); err == nil {
+		return "(invalid: " + model + ")"
+	}
+
 	tag := ""
 	if idx := strings.LastIndex(model, ":"); idx != -1 {
 		tag = model[idx+1:]
@@ -820,6 +827,8 @@ func ShortenModelName(model string) string {
 		for i := len(segments) - 1; i >= 0; i-- {
 			s := segments[i]
 			if strings.ContainsAny(s, "0123456789") {
+				// Prefer segments that end with 'b' (like "120b" for billion parameters)
+				// and are longer than current short (indicating more specific version)
 				if len(s) > len(short) || (len(s) == len(short) && strings.HasSuffix(s, "b")) {
 					short = s
 				}
