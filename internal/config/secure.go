@@ -339,6 +339,40 @@ func (cm *CredentialManager) ClearSecureConfig() error {
 	return nil
 }
 
+// UpdateDefaultModel updates just the default model in secure storage
+// This is called when the user changes the model at runtime
+func (cm *CredentialManager) UpdateDefaultModel(model string) error {
+	// Load existing credentials
+	data, err := os.ReadFile(cm.configPath)
+	if err != nil {
+		return fmt.Errorf("failed to read secure config: %w", err)
+	}
+
+	var store SecureStore
+	if err := json.Unmarshal(data, &store); err != nil {
+		return fmt.Errorf("failed to parse secure config: %w", err)
+	}
+
+	if store.Version != secureStoreVersion {
+		return fmt.Errorf("unsupported secure store version: %d", store.Version)
+	}
+
+	// Update the model
+	store.Model = model
+
+	// Marshal and save
+	newData, err := json.MarshalIndent(store, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal store: %w", err)
+	}
+
+	if err := writeFileSecure(cm.configPath, newData, secureFilePerms); err != nil {
+		return fmt.Errorf("failed to write secure config: %w", err)
+	}
+
+	return nil
+}
+
 // GetEncryptionStatus returns the current encryption status
 func (cm *CredentialManager) GetEncryptionStatus() EncryptionStatus {
 	status := EncryptionStatus{
