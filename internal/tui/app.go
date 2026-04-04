@@ -448,7 +448,7 @@ func (a App) renderTabBar() string {
 	}
 
 	bar := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
-	return TabBarStyle.Width(a.width).Render(bar)
+	return TabBarStyle.Width(a.width).PaddingTop(1).PaddingLeft(1).Render(bar)
 }
 
 // ---------------------------------------------------------------------------
@@ -456,8 +456,8 @@ func (a App) renderTabBar() string {
 // ---------------------------------------------------------------------------
 
 func (a App) renderActiveView() string {
-	// Reserve space for tab bar (2) + status bar (1)
-	contentHeight := a.height - 3
+	// Reserve space for tab bar (3 with padding) + status bar (2 with padding)
+	contentHeight := a.height - 5
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -516,7 +516,7 @@ func (a App) renderStatusBar() string {
 		content = " " + status + "  " + model + "  Ctrl+C: quit"
 	}
 
-	return StatusBarStyle.Width(a.width).Render(content)
+	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
 }
 
 // ---------------------------------------------------------------------------

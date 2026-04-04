@@ -18,6 +18,7 @@ type SessionsDelegate interface {
 	OnSessionSelect(id string)
 	OnSessionDelete(id string)
 	OnSessionExport(id string)
+	OnSessionCopy(id string) // Copy conversation to clipboard
 	OnSessionLoad()
 }
 
@@ -114,6 +115,11 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.delegate.OnSessionExport(m.sessions[m.cursor].ID)
 			}
 
+		case "c":
+			if m.cursor < len(m.sessions) && m.delegate != nil {
+				m.delegate.OnSessionCopy(m.sessions[m.cursor].ID)
+			}
+
 		case "r":
 			if m.delegate != nil {
 				m.delegate.OnSessionLoad()
@@ -163,6 +169,7 @@ func (m SessionsModel) View() string {
 		{Key: "Enter", Desc: "Select"},
 		{Key: "d", Desc: "Delete"},
 		{Key: "e", Desc: "Export"},
+		{Key: "c", Desc: "Copy"},
 		{Key: "r", Desc: "Refresh"},
 	}))
 
