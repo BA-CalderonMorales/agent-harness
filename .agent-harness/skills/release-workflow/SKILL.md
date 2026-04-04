@@ -174,6 +174,11 @@ git push origin "v$NEW_VERSION"
 # 11. Verify release was created
 git fetch --tags
 gh release list --limit 5
+
+# 12. CRITICAL: Return to develop branch for shipping mode
+git checkout develop
+
+echo "✓ Release complete. Now on develop branch - ready for shipping."
 ```
 
 ### 3.2 One-Command Release Script
@@ -266,6 +271,7 @@ echo "     git checkout main && git merge develop"
 echo "  2. Push main: git push origin main"
 echo "  3. Create tag: git tag -a v$NEW_VERSION -m 'Release v$NEW_VERSION'"
 echo "  4. Push tag: git push origin v$NEW_VERSION"
+echo "  5. Return to develop: git checkout develop"
 echo ""
 echo "Or run: cd $REPO_DIR && ./scripts/release/publish.sh v$NEW_VERSION"
 ```
@@ -325,6 +331,23 @@ Examples:
 | "Git tag already exists" | Use different version or delete tag: `git tag -d v0.0.43` |
 | "GitHub release already exists" | Cannot overwrite. Use new version. |
 | Forgot to bump version | Fix immediately: edit code, commit, force-push (if not main) |
+
+---
+
+## 7. Shipping Mode Protocol
+
+> **Rule:** Always end a release back on the `develop` branch.
+
+After pushing the tag, immediately switch back to develop:
+
+```bash
+git checkout develop
+```
+
+This ensures:
+- The next feature work starts from the right branch
+- No accidental commits to main
+- Clear separation between release and development workflows
 
 ---
 
