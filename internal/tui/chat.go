@@ -671,21 +671,22 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 }
 
 func (m ChatModel) renderToolMessage(msg ChatMessage) string {
-	var b strings.Builder
-
-	// Tool header - use display name if available, fall back to tool name
+	// Single-line compact tool display
 	displayName := msg.ToolDisplayName
 	if displayName == "" {
 		displayName = msg.ToolName
 	}
-	toolHeader := ToolCallStyle.Render(fmt.Sprintf("[%s]", displayName))
-	b.WriteString(toolHeader)
-	b.WriteString("\n")
 
-	// Content
-	b.WriteString(HelpDimStyle.Render(Truncate(msg.Content, m.width-4)))
+	// Extract the action description from content (e.g., "Using bash..." -> "bash")
+	action := strings.TrimPrefix(msg.Content, "Using ")
+	action = strings.TrimSuffix(action, "...")
+	if action == msg.Content {
+		// Content wasn't in expected format, use the display name as action
+		action = displayName
+	}
 
-	return b.String()
+	// Compact single-line format: "[tool] action"
+	return ToolCallStyle.Render(fmt.Sprintf("[%s] %s", displayName, action))
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
