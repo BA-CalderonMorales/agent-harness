@@ -1,6 +1,10 @@
-# Agent Harness - Development Guide
+# AGENTS.md - Agent Harness Development Guide
 
-> Patterns and conventions for working on this codebase.
+> Domain-specific constitution for this repository.
+>
+> This file extends [PHILOSOPHY.md](./PHILOSOPHY.md) with project-specific conventions.
+>
+> **Quick Start**: See patterns and conventions for working on this codebase below.
 
 ## Quick Reference
 
