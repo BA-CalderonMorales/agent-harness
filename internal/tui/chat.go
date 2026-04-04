@@ -4,6 +4,7 @@ package tui
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"sync"
 	"time"
@@ -92,7 +93,14 @@ var (
 	markdownRenderer     *glamour.TermRenderer
 	markdownRendererOnce sync.Once
 	markdownRendererErr  error
+	isTermux             = detectTermux()
 )
+
+// detectTermux checks if we're running in Termux environment
+func detectTermux() bool {
+	return os.Getenv("TERMUX_VERSION") != "" ||
+		strings.Contains(os.Getenv("HOME"), "com.termux")
+}
 
 // getMarkdownRenderer returns a shared glamour renderer instance
 func getMarkdownRenderer() (*glamour.TermRenderer, error) {
@@ -106,8 +114,14 @@ func getMarkdownRenderer() (*glamour.TermRenderer, error) {
 }
 
 // renderMarkdown converts markdown text to ANSI-styled text
+// In Termux, this returns plain text to avoid performance issues
 func renderMarkdown(content string, width int) string {
 	if strings.TrimSpace(content) == "" {
+		return content
+	}
+
+	// Skip expensive markdown rendering in Termux for better performance
+	if isTermux {
 		return content
 	}
 
