@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -41,6 +42,7 @@ type SettingsModel struct {
 	focused  bool
 	editing  bool
 	editBuf  string
+	viewport viewport.Model
 
 	// Delegate
 	delegate SettingsDelegate
@@ -51,6 +53,7 @@ func NewSettingsModel() SettingsModel {
 	return SettingsModel{
 		settings: make([]Setting, 0),
 		cursor:   0,
+		viewport: viewport.New(80, 20),
 	}
 }
 
@@ -75,6 +78,13 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		// Reserve space for header (3 lines) and footer (2 lines)
+		vpHeight := msg.Height - 5
+		if vpHeight < 5 {
+			vpHeight = 5
+		}
+		m.viewport.Width = msg.Width
+		m.viewport.Height = vpHeight
 
 	case tea.KeyMsg:
 		if !m.focused {
@@ -169,20 +179,27 @@ func (m SettingsModel) View() string {
 
 	var b strings.Builder
 
-	// Header
+	// Header (always visible, not in viewport)
 	b.WriteString(RenderHeader(HeaderConfig{
 		Title:    "Settings",
 		Subtitle: "Configuration options",
 		Count:    len(m.settings),
 	}))
 
-	// Settings list
+	// Build settings list content for viewport
+	var settingsContent strings.Builder
 	for i, setting := range m.settings {
-		b.WriteString(m.renderSetting(setting, i == m.cursor))
-		b.WriteString("\n")
+		settingsContent.WriteString(m.renderSetting(setting, i == m.cursor))
+		settingsContent.WriteString("\n")
 	}
 
-	// Footer
+	// Update viewport content
+	m.viewport.SetContent(settingsContent.String())
+
+	// Render viewport (scrollable settings list)
+	b.WriteString(m.viewport.View())
+
+	// Footer (always visible, not in viewport)
 	footerActions := []ActionHint{
 		{Key: "↑/↓", Desc: "Navigate"},
 		{Key: "Enter", Desc: "Edit"},
@@ -265,8 +282,10 @@ func (m SettingsModel) ConsumesEsc() bool {
 	return m.editing
 }
 
-// Scroll scrolls the list.
+// Scroll scrolls the list and updates viewport.
+// CRITICAL FIX: Also scrolls the viewport to ensure all settings are visible
 func (m *SettingsModel) Scroll(lines int) {
+	oldCursor := m.cursor
 	if lines > 0 {
 		for i := 0; i < lines && m.cursor < len(m.settings)-1; i++ {
 			m.cursor++
@@ -275,6 +294,33 @@ func (m *SettingsModel) Scroll(lines int) {
 		for i := 0; i < -lines && m.cursor > 0; i++ {
 			m.cursor--
 		}
+	}
+	// Scroll viewport to keep cursor visible
+	if m.cursor != oldCursor {
+		m.syncViewportToCursor()
+	}
+}
+
+// syncViewportToCursor ensures the cursor is visible in the viewport
+func (m *SettingsModel) syncViewportToCursor() {
+	// Approximate line height per setting (2 lines: label/value + description)
+	lineHeight := 2
+	cursorLine := m.cursor * lineHeight
+	
+	// If cursor is above viewport, scroll up
+	if cursorLine < m.viewport.YOffset {
+		m.viewport.SetYOffset(cursorLine)
+	}
+	
+	// If cursor is below viewport, scroll down
+	viewportBottom := m.viewport.YOffset + m.viewport.Height
+	cursorBottom := cursorLine + lineHeight
+	if cursorBottom > viewportBottom {
+		newOffset := cursorBottom - m.viewport.Height
+		if newOffset < 0 {
+			newOffset = 0
+		}
+		m.viewport.SetYOffset(newOffset)
 	}
 }
 

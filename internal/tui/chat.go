@@ -144,6 +144,7 @@ func renderMarkdown(content string, width int) string {
 }
 
 // NewChatModel creates a new chat model.
+// UI FIX: Styled textarea with consistent background for better visual appeal
 func NewChatModel() ChatModel {
 	ta := textarea.New()
 	ta.SetHeight(3)
@@ -152,6 +153,18 @@ func NewChatModel() ChatModel {
 	ta.Prompt = ""
 	ta.Placeholder = "Type a message..."
 	ta.Focus()
+
+	// CRITICAL FIX: Style the textarea to match our design system
+	// This removes the strange background color inconsistency
+	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
+	
+	// Style the textarea base to have consistent background
+	ta.FocusedStyle.Base = lipgloss.NewStyle().
+		Background(ColorSurface).
+		Foreground(ColorText)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().
+		Background(ColorSurface).
+		Foreground(ColorTextDim)
 
 	vp := viewport.New(80, 20)
 
@@ -358,8 +371,11 @@ func (m ChatModel) View() string {
 		inputHeight = 4
 	}
 	
+	headerHeight := 2 // Header takes 2 lines
+	separatorHeight := 1
+	
 	// Ensure minimum height for viewport
-	vpHeight := m.height - inputHeight - 1 // -1 for separator
+	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
@@ -370,6 +386,14 @@ func (m ChatModel) View() string {
 
 	// Build the view
 	var sections []string
+
+	// Header (like Settings has)
+	header := RenderHeader(HeaderConfig{
+		Title:    "Chat",
+		Subtitle: "Agent conversation",
+		Count:    len(m.messages),
+	})
+	sections = append(sections, header)
 
 	// Viewport for messages
 	vpContent := m.viewport.View()
@@ -384,20 +408,20 @@ func (m ChatModel) View() string {
 		Render(vpContent)
 	sections = append(sections, vpRendered)
 
-	// Separator line
-	sep := SeparatorStyle.Render(strings.Repeat("─", m.width))
-	sections = append(sections, sep)
-
-	// Input area (fixed height)
-	var inputSection string
+	// Input area with styled container (golazo-inspired design)
+	// CRITICAL FIX: Consistent styling for input bar
+	inputContainer := InputContainerStyle.Width(m.width)
+	
+	var inputContent string
 	prompt := PromptStyle.Render("◆ ")
 	if m.thinking {
 		statusLine := m.renderStatusLine()
-		inputSection = prompt + m.textarea.View() + "\n" + statusLine
+		inputContent = prompt + m.textarea.View() + "\n" + statusLine
 	} else {
-		inputSection = prompt + m.textarea.View()
+		inputContent = prompt + m.textarea.View()
 	}
-	sections = append(sections, inputSection)
+	
+	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }

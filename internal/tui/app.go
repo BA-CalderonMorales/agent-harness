@@ -424,13 +424,13 @@ func (a App) View() string {
 }
 
 // ---------------------------------------------------------------------------
-// Tab bar rendering
+// Tab bar rendering - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
+
+const diagFill = `╱`
 
 func (a App) renderTabBar() string {
 	var tabs []string
-
-	tabs = append(tabs, LogoStyle.Render("Agent"))
 
 	for i := viewID(0); i < viewCount; i++ {
 		style := TabNormal
@@ -447,8 +447,14 @@ func (a App) renderTabBar() string {
 		tabs = append(tabs, style.Render(label))
 	}
 
-	bar := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
-	return TabBarStyle.Width(a.width).PaddingTop(1).PaddingLeft(1).Render(bar)
+	// Join tabs with spacing
+	tabsContent := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
+
+	// Center the tabs in the available width
+	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, tabsContent)
+
+	// Apply tab bar styling with top padding for breathing room
+	return TabBarStyle.Width(a.width).PaddingTop(1).Render(centeredTabs)
 }
 
 // ---------------------------------------------------------------------------
