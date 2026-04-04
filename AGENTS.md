@@ -14,7 +14,7 @@ internal/
 pkg/bash/, git/, sandbox/   # Infrastructure
 
 # Run locally
-cd ~/projects/agent-harness && ./scripts/run-termux.sh
+cd ~/Projects/agent-harness && ./scripts/run-termux.sh
 
 # Or from buckets/usr/bin (workspace-level access)
 ~/buckets/usr/bin/agent-harness
