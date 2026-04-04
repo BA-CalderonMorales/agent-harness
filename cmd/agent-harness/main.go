@@ -145,7 +145,35 @@ func (app *App) loadConfig() error {
 	if credManager.HasSecureCredentials() {
 		secureCfg, err := credManager.LoadSecure()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+			// FIX: Handle decryption failure gracefully
+			// This can happen if:
+			// 1. User entered wrong password
+			// 2. Credentials file is corrupted
+			// 3. App was updated and encryption format changed
+			fmt.Fprintf(os.Stderr, "\n%s\n", ui.ErrorStyle.Render("Failed to load credentials"))
+			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
+			
+			// Offer to reset credentials and start fresh
+			fmt.Println("Would you like to:")
+			fmt.Println("  1) Try again (in case you entered the wrong password)")
+			fmt.Println("  2) Reset credentials and set up again")
+			fmt.Print("\nChoice [1-2] [1]: ")
+			
+			reader := bufio.NewReader(os.Stdin)
+			choice, _ := reader.ReadString('\n')
+			choice = strings.TrimSpace(choice)
+			
+			if choice == "2" {
+				// Clear corrupt credentials
+				if clearErr := credManager.ClearSecureConfig(); clearErr != nil {
+					fmt.Fprintf(os.Stderr, "Warning: failed to clear credentials: %v\n", clearErr)
+				} else {
+					fmt.Println(ui.RenderSuccess("Credentials cleared. Starting fresh setup..."))
+				}
+			} else {
+				// User wants to try again - return error to exit and let them restart
+				return fmt.Errorf("credential decryption failed: %w", err)
+			}
 		} else {
 			app.secureConfig = secureCfg
 			if secureCfg.Provider != "" {
@@ -1039,6 +1067,36 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 		model = ""
 	}
 	model = strings.TrimSpace(model)
+	
+	// FIX: Handle numeric input - user might think they're selecting from a list
+	// Map common numeric inputs to appropriate models for the selected provider
+	switch model {
+	case "1":
+		if app.config.Provider == "openai" {
+			model = "gpt-4o"
+		} else if app.config.Provider == "anthropic" {
+			model = "claude-3-5-sonnet-20241022"
+		} else {
+			model = "nvidia/nemotron-3-super-120b-a12b:free"
+		}
+	case "2":
+		if app.config.Provider == "openai" {
+			model = "gpt-4o-mini"
+		} else if app.config.Provider == "anthropic" {
+			model = "claude-3-opus-20240229"
+		} else {
+			model = "anthropic/claude-3.5-sonnet"
+		}
+	case "3":
+		if app.config.Provider == "openai" {
+			model = "gpt-4-turbo"
+		} else if app.config.Provider == "anthropic" {
+			model = "claude-3-haiku-20240307"
+		} else {
+			model = "openai/gpt-4o"
+		}
+	}
+	
 	if model != "" {
 		app.config.Model = model
 	} else {
