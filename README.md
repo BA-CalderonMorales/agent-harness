@@ -49,7 +49,7 @@ On first run, you will be prompted to:
 ### Usage
 
 ```bash
-# Start interactive mode
+# Start the TUI (the only mode supported)
 agent-harness
 
 # Or use the short alias (after setup)
@@ -61,11 +61,15 @@ ah
 - `/status` — Show session and workspace status
 - `/cost` — Show token usage and estimated cost
 - `/compact` — Compact session to reduce token usage
-- `/model <name>` — Change the current model
+- `/model <name>` — Change the current model (also updates default)
 - `/permissions <mode>` — Change permission mode
 - `/diff` — Show git diff of workspace changes
 - `/export` — Export conversation to file
 - `/quit` — Exit the application
+
+**Changing the Default Model:**
+
+The model you select with `/model <name>` will automatically become your new default model for all future sessions. You can also change the model from the Settings tab (press `3` or `Tab` to navigate there).
 
 ## Features
 
