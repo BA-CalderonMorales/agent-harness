@@ -629,7 +629,23 @@ func (d *TUIChatDelegate) OnCommand(command string) {
 func (app *App) getSessionInfos() []tui.SessionInfo {
 	sessions, err := app.sessionManager.ListSessions()
 	if err != nil {
-		return nil
+		sessions = []state.SessionMetadata{}
+	}
+
+	// CRITICAL FIX: Ensure current session is included even if not saved yet
+	currentSession := app.sessionManager.GetCurrent()
+	currentFound := false
+	if currentSession != nil {
+		for _, s := range sessions {
+			if s.ID == currentSession.ID {
+				currentFound = true
+				break
+			}
+		}
+		// If current session not in saved list, add it
+		if !currentFound {
+			sessions = append([]state.SessionMetadata{currentSession.GetMetadata()}, sessions...)
+		}
 	}
 
 	var infos []tui.SessionInfo
@@ -642,7 +658,7 @@ func (app *App) getSessionInfos() []tui.SessionInfo {
 			CreatedAt:    s.CreatedAt,
 			UpdatedAt:    s.UpdatedAt,
 			Model:        s.Model,
-			IsActive:     s.ID == app.session.ID,
+			IsActive:     currentSession != nil && s.ID == currentSession.ID,
 		})
 	}
 	return infos
@@ -825,6 +841,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 	if app.session.Turns%5 == 0 {
 		if path, err := app.sessionManager.SaveCurrent(); err == nil {
 			tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
+			// CRITICAL FIX: Refresh sessions list so current session appears
+			tuiApp.RefreshSessions(app.getSessionInfos())
 		}
 	}
 }
