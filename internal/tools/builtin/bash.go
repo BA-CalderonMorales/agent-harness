@@ -43,7 +43,7 @@ var BashTool = tools.NewTool(tools.Tool{
 		if detectDestructive(input) {
 			return tools.PermissionDecision{
 				Behavior: tools.Ask,
-				Message:  "Command '" + cmd + "' is potentially destructive. Do you want to continue?",
+				Message:  "Shell command '" + cmd + "' is potentially destructive. Do you want to continue?",
 				UpdatedInput: input,
 			}
 		}
@@ -67,7 +67,7 @@ var BashTool = tools.NewTool(tools.Tool{
 		}
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: content}
 	},
-	UserFacingName: func(map[string]any) string { return "bash" },
+	UserFacingName: func(map[string]any) string { return "Shell" },
 	GetActivityDescription: func(input map[string]any) string {
 		if c, ok := input["command"].(string); ok {
 			return "Running " + c

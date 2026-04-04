@@ -14,6 +14,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
@@ -29,7 +30,7 @@ import (
 )
 
 var (
-	Version   = "0.0.46"
+	Version   = "0.0.47"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -37,18 +38,20 @@ var (
 
 // App holds the application state
 type App struct {
-	config         *config.LayeredConfig
-	secureConfig   *config.SecureConfig
-	session        *state.Session
-	sessionManager *state.SessionManager
-	costTracker    *agent.CostTracker
-	cmdRegistry    *commands.SlashRegistry
-	toolRegistry   *tools.ToolRegistry
-	client         llm.Client
-	loop           *agent.Loop
-	gitContext     *git.Context
-	cwd            string
-	tuiApp         *tui.App // TUI reference for callbacks
+	config          *config.LayeredConfig
+	secureConfig    *config.SecureConfig
+	session         *state.Session
+	sessionManager  *state.SessionManager
+	costTracker     *agent.CostTracker
+	cmdRegistry     *commands.SlashRegistry
+	toolRegistry    *tools.ToolRegistry
+	client          llm.Client
+	loop            *agent.Loop
+	gitContext      *git.Context
+	cwd             string
+	tuiApp          *tui.App // TUI reference for callbacks
+	approvalManager *approval.Manager
+	executionMode   approval.ExecutionMode
 }
 
 func main() {
@@ -193,6 +196,20 @@ func (app *App) initSession() error {
 	app.session = sessionManager.CreateSession(model)
 	app.costTracker = agent.NewCostTracker()
 	app.costTracker.SetModel(model)
+
+	// Initialize execution mode from config (default to interactive)
+	if app.config.ExecutionMode != "" {
+		if mode, err := approval.ParseExecutionMode(app.config.ExecutionMode); err == nil {
+			app.executionMode = mode
+		} else {
+			app.executionMode = approval.ModeInteractive
+		}
+	} else if app.config.PermissionMode == config.PermissionDangerFullAccess {
+		// If permission mode is danger-full-access, default to yolo
+		app.executionMode = approval.ModeYolo
+	} else {
+		app.executionMode = approval.ModeInteractive
+	}
 
 	return nil
 }
@@ -608,6 +625,11 @@ func (d *TUISettingsDelegate) OnSettingChange(key, value string) {
 		if mode, err := config.ParsePermissionMode(value); err == nil {
 			d.app.config.PermissionMode = mode
 		}
+	case "execution_mode":
+		if mode, err := approval.ParseExecutionMode(value); err == nil {
+			d.app.executionMode = mode
+			d.tuiApp.AddMessage("system", fmt.Sprintf("Execution mode set to: %s", mode.String()))
+		}
 	}
 	d.tuiApp.SetSettings(d.app.getSettings())
 }
@@ -699,6 +721,14 @@ func (app *App) getSettings() []tui.Setting {
 			Type:        "choice",
 			Options:     []string{"read-only", "workspace-write", "danger-full-access"},
 		},
+		{
+			Key:         "execution_mode",
+			Label:       "Execution Mode",
+			Value:       app.executionMode.String(),
+			Description: "Command approval mode - interactive (prompt for each) or yolo (auto-approve with visibility)",
+			Type:        "choice",
+			Options:     []string{"interactive", "yolo"},
+		},
 	}
 }
 
@@ -763,6 +793,35 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		t, ok := app.toolRegistry.FindToolByName(toolName)
 		if !ok {
 			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
+		}
+
+		// Check if tool requires approval
+		if approval.RequiresApproval(toolName) {
+			cmd := app.extractCommandForDisplay(toolName, toolInput)
+			
+			// Show command in TUI (even in yolo mode for transparency)
+			tuiApp.Send(tui.ToolExecutingMsg{
+				ToolName: toolName,
+				Command:  cmd,
+			})
+
+			// In interactive mode, request explicit approval
+			if app.executionMode == approval.ModeInteractive {
+				decision, err := app.requestCommandApproval(toolName, cmd, toolInput)
+				if err != nil {
+					return tools.PermissionDecision{
+						Behavior: tools.Deny,
+						Message:  fmt.Sprintf("Approval failed: %v", err),
+					}, nil
+				}
+				
+				if !decision.IsApproved() {
+					return tools.PermissionDecision{
+						Behavior: tools.Deny,
+						Message:  "Command rejected by user",
+					}, nil
+				}
+			}
 		}
 
 		switch app.config.PermissionMode {
@@ -1029,4 +1088,83 @@ func isDangerousTool(name string) bool {
 
 func generateUUID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+// extractCommandForDisplay extracts the command string from tool input for display
+func (app *App) extractCommandForDisplay(toolName string, toolInput map[string]any) string {
+	switch toolName {
+	case "bash", "shell":
+		if cmd, ok := toolInput["command"].(string); ok {
+			return cmd
+		}
+	case "write", "edit":
+		var parts []string
+		if path, ok := toolInput["path"].(string); ok {
+			parts = append(parts, path)
+		}
+		if content, ok := toolInput["content"].(string); ok {
+			lines := strings.Split(content, "\n")
+			if len(lines) > 0 {
+				display := lines[0]
+				if len(display) > 50 {
+					display = display[:47] + "..."
+				}
+				parts = append(parts, display)
+			}
+		}
+		return strings.Join(parts, " - ")
+	default:
+		// For other tools, show key parameters
+		var parts []string
+		for k, v := range toolInput {
+			if k != "command" && k != "content" {
+				parts = append(parts, fmt.Sprintf("%s=%v", k, v))
+			}
+		}
+		if len(parts) > 0 {
+			return strings.Join(parts, ", ")
+		}
+	}
+	return fmt.Sprintf("[%s]", toolName)
+}
+
+// requestCommandApproval requests user approval for a command
+func (app *App) requestCommandApproval(toolName, command string, toolInput map[string]any) (approval.Decision, error) {
+	if app.tuiApp == nil {
+		return approval.DecisionReject, fmt.Errorf("TUI not available")
+	}
+
+	cmdID := generateUUID()
+	isDestructive := false
+
+	// Check if command is destructive
+	if toolName == "bash" || toolName == "shell" {
+		if strings.Contains(command, "rm ") || strings.Contains(command, "dd ") {
+			isDestructive = true
+		}
+	}
+	if toolName == "write" || toolName == "edit" {
+		isDestructive = true
+	}
+
+	req := approval.NewApprovalRequest(approval.CommandInfo{
+		ID:            cmdID,
+		ToolName:      toolName,
+		DisplayName:   toolName,
+		Command:       command,
+		Description:   approval.FormatCommandForDisplay(toolName, command),
+		IsDestructive: isDestructive,
+		Timestamp:     time.Now(),
+	})
+
+	// Send approval request to TUI
+	app.tuiApp.Send(tui.ApprovalRequestMsg{Request: req})
+
+	// Wait for response
+	select {
+	case decision := <-req.Response:
+		return decision, nil
+	case <-req.Context.Done():
+		return approval.DecisionReject, req.Context.Err()
+	}
 }

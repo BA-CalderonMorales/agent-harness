@@ -347,30 +347,30 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check for common error patterns and provide specific guidance
 		switch {
 		case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline"):
-			feedback = "⚠ Model timed out. The model may be overloaded or unresponsive.\n\n" +
-				"→ Try switching models: type /model <name> or press Tab to go to Settings\n" +
-				"? Popular alternatives: claude-3-5-sonnet, gpt-4o, deepseek-chat"
+			feedback = "[!] Model timed out. The model may be overloaded or unresponsive.\n\n" +
+				"[>] Try switching models: type /model <name> or press Tab to go to Settings\n" +
+				"[?] Popular alternatives: claude-3-5-sonnet, gpt-4o, deepseek-chat"
 		case strings.Contains(errStr, "connection") || strings.Contains(errStr, "network"):
-			feedback = "⚠ Connection error. Check your internet connection and API key.\n\n" +
-				"→ Verify settings: /config or Tab → Settings\n" +
-				"→ Check API key: /config"
+			feedback = "[!] Connection error. Check your internet connection and API key.\n\n" +
+				"[>] Verify settings: /config or Tab → Settings\n" +
+				"[>] Check API key: /config"
 		case strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "quota"):
-			feedback = "⚠ Rate limit or quota exceeded.\n\n" +
-				"→ Try a different model: /model <name>\n" +
-				"→ Check your account at your provider's dashboard"
+			feedback = "[!] Rate limit or quota exceeded.\n\n" +
+				"[>] Try a different model: /model <name>\n" +
+				"[>] Check your account at your provider's dashboard"
 		case strings.Contains(errStr, "authentication") || strings.Contains(errStr, "api key"):
-			feedback = "⚠ Authentication failed. Your API key may be invalid.\n\n" +
-				"→ Update API key: Tab → Settings → Provider\n" +
-				"→ Check /config for current settings"
+			feedback = "[!] Authentication failed. Your API key may be invalid.\n\n" +
+				"[>] Update API key: Tab → Settings → Provider\n" +
+				"[>] Check /config for current settings"
 		case strings.Contains(errStr, "model") && strings.Contains(errStr, "not found"):
-			feedback = "⚠ Model not found or unavailable.\n\n" +
-				"→ List available models: /model (with no args)\n" +
-				"→ Check supported models: /models or see docs/supported_models.md"
+			feedback = "[!] Model not found or unavailable.\n\n" +
+				"[>] List available models: /model (with no args)\n" +
+				"[>] Check supported models: /models or see docs/supported_models.md"
 		default:
 			// Generic error with helpful hints
-			feedback = fmt.Sprintf("⚠ Error: %s\n\n"+
-				"→ If the model isn't responding, try: /model <name>\n"+
-				"→ Or switch models via: Tab → Settings", errStr)
+			feedback = fmt.Sprintf("[!] Error: %s\n\n"+
+				"[>] If the model isn't responding, try: /model <name>\n"+
+				"[>] Or switch models via: Tab → Settings", errStr)
 		}
 		
 		m.AddMessage("system", feedback)
