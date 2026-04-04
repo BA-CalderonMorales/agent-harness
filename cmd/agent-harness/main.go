@@ -28,7 +28,7 @@ import (
 )
 
 var (
-	Version   = "0.0.39"
+	Version   = "0.0.40"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -376,6 +376,10 @@ func (app *App) initSlashCommands() {
 			}
 			return strings.Join(lines, "\n")
 		}))
+	app.cmdRegistry.Register("workspace", "Show workspace information and project context",
+		commands.WorkspaceHandler(func() string {
+			return app.getWorkspaceInfo()
+		}))
 
 	app.cmdRegistry.Register("reset", "Reset agent harness (delete credentials and all sessions)",
 		commands.ResetHandler(func() error {
@@ -509,8 +513,12 @@ func (d *TUIsessionsDelegate) OnSessionSelect(id string) {
 }
 
 func (d *TUIsessionsDelegate) OnSessionDelete(id string) {
-	// TODO: Implement
-	d.tuiApp.AddMessage("system", "Session deletion not yet implemented")
+	if err := d.app.sessionManager.DeleteSession(id); err != nil {
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Failed to delete session: %v", err))
+		return
+	}
+	d.tuiApp.AddMessage("system", fmt.Sprintf("Deleted session %s", id[:8]))
+	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
 }
 
 func (d *TUIsessionsDelegate) OnSessionExport(id string) {
@@ -773,6 +781,39 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			tuiApp.Send(tui.StatusMsg{Text: fmt.Sprintf("Auto-saved to %s", path), Type: "info"})
 		}
 	}
+}
+
+// getWorkspaceInfo returns formatted workspace information
+func (app *App) getWorkspaceInfo() string {
+	var b strings.Builder
+
+	b.WriteString(fmt.Sprintf("Current directory: %s\n", app.cwd))
+
+	// Git info
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		b.WriteString(fmt.Sprintf("Git repository: %s\n", app.gitContext.Root))
+		if app.gitContext.Branch != "" {
+			b.WriteString(fmt.Sprintf("  Branch: %s\n", app.gitContext.Branch))
+		}
+	} else {
+		b.WriteString("Git: not a repository\n")
+	}
+
+	// Session info
+	if app.session != nil {
+		b.WriteString(fmt.Sprintf("\nActive session: %s\n", app.session.ID[:8]))
+		b.WriteString(fmt.Sprintf("  Model: %s\n", app.session.Model))
+		b.WriteString(fmt.Sprintf("  Messages: %d\n", len(app.session.Messages)))
+		b.WriteString(fmt.Sprintf("  Turns: %d\n", app.session.Turns))
+	}
+
+	// Permission mode
+	b.WriteString(fmt.Sprintf("\nPermission mode: %s\n", app.config.PermissionMode.String()))
+
+	// Provider
+	b.WriteString(fmt.Sprintf("Provider: %s\n", app.config.Provider))
+
+	return b.String()
 }
 
 func (app *App) buildSystemPrompt() string {

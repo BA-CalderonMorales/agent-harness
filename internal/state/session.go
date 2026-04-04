@@ -326,6 +326,23 @@ func (sm *SessionManager) GetSessionsDir() string {
 	return sm.sessionsDir
 }
 
+// DeleteSession deletes a session by ID
+func (sm *SessionManager) DeleteSession(id string) error {
+	// Don't allow deleting the current session
+	if sm.current != nil && sm.current.ID == id {
+		return fmt.Errorf("cannot delete the active session")
+	}
+
+	path := filepath.Join(sm.sessionsDir, id+".json")
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("session not found")
+		}
+		return fmt.Errorf("failed to delete session: %w", err)
+	}
+	return nil
+}
+
 // GetDefaultSessionPath returns the path for auto-save sessions
 func (sm *SessionManager) GetDefaultSessionPath() string {
 	if sm.current == nil {
