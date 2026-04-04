@@ -483,43 +483,54 @@ func (a App) renderActiveView() string {
 // Status bar rendering
 // ---------------------------------------------------------------------------
 
+// renderStatusBar renders the status bar at the bottom.
+// Shows meaningful model info and actionable hints - never just "default".
 func (a App) renderStatusBar() string {
-	// Build simple status bar with proper spacing
 	var parts []string
 
-	// Left: Status and app name
+	// Left: Status indicator based on state
 	status := StatusOnline.Render("[ready]")
+	modelName := a.chatModel.GetModel()
+
+	// If no model configured, show warning indicator
+	if modelName == "" {
+		status = StatusConnecting.Render("[⚠ no model]")
+	}
 	parts = append(parts, " "+status+" Agent Harness")
 
-	// Middle: Model info
-	model := ShortenModelName(a.chatModel.GetModel())
-	parts = append(parts, StatusLabel.Render("model:"+model))
+	// Middle: Model info - never shows "default"
+	model := ShortenModelName(modelName)
+	modelDisplay := StatusLabel.Render("model:" + model)
+	// Highlight if no model set
+	if modelName == "" {
+		modelDisplay = WarningStyle.Render("model:" + model)
+	}
+	parts = append(parts, modelDisplay)
 
 	// Right: Help hints and mode
 	modeStr := "[typing]"
 	if a.mode == ModeNormal {
 		modeStr = "[navigate]"
 	}
-	rightParts := []string{
-		StatusHintStyle.Render("Tab: views"),
-		StatusHintStyle.Render("?: help"),
-		StatusHintStyle.Render("Ctrl+C: quit"),
-		modeStr,
-	}
-	right := strings.Join(rightParts, "  ")
 	if a.mode == ModeNormal {
-		right = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
+		right := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
+		parts = append(parts, right)
 	} else {
-		right = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + StatusHintStyle.Render(modeStr)
+		right := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + StatusHintStyle.Render(modeStr)
+		parts = append(parts, right)
 	}
-	parts = append(parts, right)
 
 	// Join with flexible spacing
 	content := strings.Join(parts, "  ")
 
-	// If too wide for terminal, use minimal version
+	// If too wide for terminal, use minimal version but keep model info meaningful
 	if lipgloss.Width(content) > a.width-4 {
-		content = " " + status + "  " + model + "  Ctrl+C: quit"
+		shortModel := ShortenModelName(modelName)
+		if modelName == "" {
+			content = " " + status + "  " + shortModel
+		} else {
+			content = " " + status + "  " + shortModel + "  Ctrl+C: quit"
+		}
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
@@ -719,9 +730,10 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 }
 
 // ShortenModelName returns a compact display name for a model.
+// Never returns "default" - always shows something actionable or informative.
 func ShortenModelName(model string) string {
 	if model == "" {
-		return "default"
+		return "(use /model)"
 	}
 
 	tag := ""
