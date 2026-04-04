@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -40,22 +41,25 @@ type SessionInfo struct {
 // SessionsModel is the sessions view model
 // ---------------------------------------------------------------------------
 type SessionsModel struct {
-	width   int
-	height  int
+	width    int
+	height   int
 	sessions []SessionInfo
 	cursor   int
 	focused  bool
 	loading  bool
+	viewport viewport.Model
 
 	// Delegate
 	delegate SessionsDelegate
 }
 
 // NewSessionsModel creates a new sessions model.
+// CRITICAL FIX: Added viewport for proper scrolling
 func NewSessionsModel() SessionsModel {
 	return SessionsModel{
 		sessions: make([]SessionInfo, 0),
 		cursor:   0,
+		viewport: viewport.New(80, 20),
 	}
 }
 
@@ -73,31 +77,55 @@ func (m *SessionsModel) SetSessions(sessions []SessionInfo) {
 }
 
 // Init initializes the sessions model.
+// CRITICAL FIX: Load sessions immediately on init to show current session
 func (m SessionsModel) Init() tea.Cmd {
-	return nil
+	return func() tea.Msg {
+		if m.delegate != nil {
+			m.delegate.OnSessionLoad()
+		}
+		return SessionsLoadedMsg{}
+	}
 }
+
+// SessionsLoadedMsg is sent when sessions have been loaded
+type SessionsLoadedMsg struct{}
 
 // Update handles messages.
 func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+	
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-
+		// CRITICAL FIX: Update viewport size for proper scrolling
+		headerHeight := 3
+		footerHeight := 2
+		m.viewport.Width = msg.Width
+		m.viewport.Height = msg.Height - headerHeight - footerHeight
+		if m.viewport.Height < 5 {
+			m.viewport.Height = 5
+		}
+		
 	case tea.KeyMsg:
 		if !m.focused {
-			return m, nil
+			// Still update viewport for background scrolling
+			newVP, cmd := m.viewport.Update(msg)
+			m.viewport = newVP
+			return m, cmd
 		}
 
 		switch msg.String() {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
+				m.syncViewportToCursor()
 			}
 
 		case "down", "j":
 			if m.cursor < len(m.sessions)-1 {
 				m.cursor++
+				m.syncViewportToCursor()
 			}
 
 		case "enter", " ":
@@ -127,7 +155,28 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	return m, nil
+	// Update viewport for scroll messages
+	newVP, cmd := m.viewport.Update(msg)
+	m.viewport = newVP
+	cmds = append(cmds, cmd)
+
+	return m, tea.Batch(cmds...)
+}
+
+// syncViewportToCursor ensures the selected session is visible
+func (m *SessionsModel) syncViewportToCursor() {
+	cursorLine := m.cursor * 2 // Approximate 2 lines per item
+	if cursorLine < m.viewport.YOffset {
+		m.viewport.SetYOffset(cursorLine)
+	}
+	viewportBottom := m.viewport.YOffset + m.viewport.Height
+	if cursorLine+2 > viewportBottom {
+		newOffset := cursorLine + 2 - m.viewport.Height
+		if newOffset < 0 {
+			newOffset = 0
+		}
+		m.viewport.SetYOffset(newOffset)
+	}
 }
 
 // View renders the sessions list.
@@ -151,12 +200,27 @@ func (m SessionsModel) View() string {
 		})
 	}
 
+	var b strings.Builder
+
+	// Header (consistent with Settings view)
+	b.WriteString(RenderHeader(HeaderConfig{
+		Title:    "Sessions",
+		Subtitle: "Manage your conversations",
+		Count:    len(m.sessions),
+	}))
+
+	// Content area height (subtract header height)
+	contentHeight := m.height - 3
+	if contentHeight < 5 {
+		contentHeight = 5
+	}
+
 	// Two-pane layout
 	listW, detailW := TwoPaneWidths(m.width)
 
 	// Render list
 	var listB strings.Builder
-	listB.WriteString(ListTitleStyle.Render("  Sessions") + "\n\n")
+	listB.WriteString(ListTitleStyle.Render("  All Sessions") + "\n\n")
 
 	for i, session := range m.sessions {
 		item := m.renderSessionItem(session, i == m.cursor, listW)
@@ -173,16 +237,18 @@ func (m SessionsModel) View() string {
 		{Key: "r", Desc: "Refresh"},
 	}))
 
-	listContent := lipgloss.NewStyle().Width(listW).Height(m.height - 2).Render(listB.String())
+	listContent := lipgloss.NewStyle().Width(listW).Height(contentHeight - 2).Render(listB.String())
 
 	// Render detail
 	detailContent := ""
 	if m.cursor >= 0 && m.cursor < len(m.sessions) {
 		detailStr := m.renderSessionDetail(m.sessions[m.cursor])
-		detailContent = DetailPanelStyle.Width(detailW).Height(m.height - 4).Render(detailStr)
+		detailContent = DetailPanelStyle.Width(detailW).Height(contentHeight - 4).Render(detailStr)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listContent, detailContent)
+	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, listContent, detailContent))
+
+	return b.String()
 }
 
 func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, width int) string {
@@ -279,8 +345,10 @@ func (m SessionsModel) ConsumesEsc() bool {
 	return false
 }
 
-// Scroll scrolls the list.
+// Scroll scrolls the list and viewport.
+// CRITICAL FIX: Ensures selected item is visible
 func (m *SessionsModel) Scroll(lines int) {
+	oldCursor := m.cursor
 	if lines > 0 {
 		for i := 0; i < lines && m.cursor < len(m.sessions)-1; i++ {
 			m.cursor++
@@ -288,6 +356,21 @@ func (m *SessionsModel) Scroll(lines int) {
 	} else {
 		for i := 0; i < -lines && m.cursor > 0; i++ {
 			m.cursor--
+		}
+	}
+	// Sync viewport to keep cursor visible (approx 2 lines per item)
+	if m.cursor != oldCursor {
+		cursorLine := m.cursor * 2
+		if cursorLine < m.viewport.YOffset {
+			m.viewport.SetYOffset(cursorLine)
+		}
+		viewportBottom := m.viewport.YOffset + m.viewport.Height
+		if cursorLine+2 > viewportBottom {
+			newOffset := cursorLine + 2 - m.viewport.Height
+			if newOffset < 0 {
+				newOffset = 0
+			}
+			m.viewport.SetYOffset(newOffset)
 		}
 	}
 }

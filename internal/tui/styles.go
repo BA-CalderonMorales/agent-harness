@@ -30,23 +30,39 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// Tab bar
+// Tab bar - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
 var (
+	// TabNormal is the style for inactive tabs
 	TabNormal = lipgloss.NewStyle().
 			Padding(0, 2).
-			Foreground(ColorTextDim)
+			Foreground(ColorTextDim).
+			Bold(false)
 
+	// TabActive is the style for the active tab with visual indicator
 	TabActive = lipgloss.NewStyle().
 			Padding(0, 2).
 			Foreground(ColorPrimary).
 			Bold(true).
 			Underline(true)
 
+	// TabBarStyle with elegant bottom border
 	TabBarStyle = lipgloss.NewStyle().
 			BorderStyle(lipgloss.NormalBorder()).
 			BorderBottom(true).
-			BorderForeground(ColorBorder)
+			BorderForeground(ColorBorder).
+			PaddingBottom(0)
+
+	// TitleStyle for view headers (golazo-inspired)
+	TitleStyle = lipgloss.NewStyle().
+			Foreground(ColorPrimary).
+			Bold(true).
+			Padding(0, 1)
+
+	// SubtitleStyle for view subtitles
+	SubtitleStyle = lipgloss.NewStyle().
+			Foreground(ColorTextDim).
+			Padding(0, 1)
 )
 
 // ---------------------------------------------------------------------------
@@ -153,7 +169,7 @@ var (
 )
 
 // ---------------------------------------------------------------------------
-// Input area
+// Input area - Golazo-inspired styling
 // ---------------------------------------------------------------------------
 var (
 	InputStyle = lipgloss.NewStyle().
@@ -161,6 +177,15 @@ var (
 			BorderTop(true).
 			BorderForeground(ColorBorder).
 			Padding(0, 1)
+
+	// InputContainerStyle - styled container for the input area
+	// CRITICAL FIX: Consistent background, no strange color changes
+	InputContainerStyle = lipgloss.NewStyle().
+				BorderStyle(lipgloss.NormalBorder()).
+				BorderTop(true).
+				BorderForeground(ColorBorder).
+				Background(ColorSurface).
+				Padding(0, 1)
 
 	PromptStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).

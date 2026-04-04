@@ -135,29 +135,31 @@ func RenderStatusBadge(s ItemStatus) string {
 }
 
 // ---------------------------------------------------------------------------
-// Header rendering
+// Header rendering - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
 
-// RenderHeader returns a standardized view header.
+// RenderHeader returns a standardized view header with centered layout.
+// Inspired by golazo's exceptional visual design (github.com/0xjuanma/golazo)
 func RenderHeader(cfg HeaderConfig) string {
 	var parts []string
 
-	title := ListTitleStyle.Render(cfg.Title)
+	// Title with primary color
+	title := TitleStyle.Render(cfg.Title)
 	parts = append(parts, title)
 
 	if cfg.Subtitle != "" {
-		parts = append(parts, HelpDimStyle.Render("  "+cfg.Subtitle))
+		parts = append(parts, SubtitleStyle.Render(cfg.Subtitle))
 	}
 
 	if cfg.Badge != "" {
-		parts = append(parts, "  "+InfoStyle.Render("["+cfg.Badge+"]"))
+		parts = append(parts, InfoStyle.Render("["+cfg.Badge+"]"))
 	}
 
 	if cfg.Count >= 0 {
-		parts = append(parts, HelpDimStyle.Render(fmt.Sprintf("  (%d)", cfg.Count)))
+		parts = append(parts, HelpDimStyle.Render(fmt.Sprintf("(%d)", cfg.Count)))
 	}
 
-	return strings.Join(parts, "") + "\n\n"
+	return strings.Join(parts, " ") + "\n\n"
 }
 
 // ---------------------------------------------------------------------------
