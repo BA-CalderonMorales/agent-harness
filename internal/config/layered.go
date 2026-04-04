@@ -46,6 +46,7 @@ type LayeredConfig struct {
 	APIKey         string
 	Model          string
 	PermissionMode PermissionMode
+	ExecutionMode  string // "interactive" or "yolo"
 	AlwaysAllow    []string
 	AlwaysDeny     []string
 	McpServers     map[string]McpServerConfig
@@ -224,6 +225,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 		if mode, err := ParsePermissionMode(v); err == nil {
 			config.PermissionMode = mode
 		}
+	}
+	if v, ok := config.merged["execution_mode"].(string); ok {
+		config.ExecutionMode = v
 	}
 	if v, ok := config.merged["always_allow"].([]interface{}); ok {
 		config.AlwaysAllow = make([]string, 0, len(v))

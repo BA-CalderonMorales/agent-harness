@@ -3,7 +3,10 @@
 
 package tui
 
-import "github.com/BA-CalderonMorales/agent-harness/pkg/types"
+import (
+	"github.com/BA-CalderonMorales/agent-harness/internal/approval"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+)
 
 // StreamStartMsg is sent when the agent starts processing a message
 type StreamStartMsg struct {
@@ -54,3 +57,17 @@ type openModelPickerMsg struct{}
 
 // ClearChatMsg signals the chat should be cleared
 type ClearChatMsg struct{}
+
+// ToolExecutingMsg is sent when a tool is about to execute (for visibility)
+type ToolExecutingMsg struct {
+	ToolName string
+	Command  string
+}
+
+// ApprovalRequestMsg is sent when command approval is needed
+type ApprovalRequestMsg struct {
+	Request *approval.ApprovalRequest
+}
+
+// AgentCancelMsg is sent when the user cancels agent execution (ESC key)
+type AgentCancelMsg struct{}

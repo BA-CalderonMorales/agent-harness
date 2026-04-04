@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.0.47] - 2026-04-04
+
+### Added
+- Command approval system with two execution modes:
+  - Interactive mode: prompts for approval before executing shell/write/edit commands
+  - Yolo mode: auto-approves commands but shows what is happening in the UI
+- Approval dialog with four options: Approve, Approve All, Reject, Reject + Suggest
+- Pattern memory: remembers "Approve All" and "Reject All" choices per session
+- ESC key integration to cancel agent execution at any time
+- Command visibility: always see what commands are about to run
+
+### Changed
+- Tool display name changed from "bash" to "Shell" for clarity
+- Removed emojis from error messages (replaced with text indicators)
+- Slimmed down README with clearer documentation structure
+- Added awesome-tuis credit to acknowledgments
+
+### Documentation
+- New docs/command-approval.md explaining the approval system
+- Updated debugging-patterns.md with approval system patterns
+
 ## [0.0.46] - 2026-04-04
 
 ### Fixed

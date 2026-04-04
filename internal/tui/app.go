@@ -4,6 +4,8 @@
 package tui
 
 import (
+	"context"
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -49,9 +51,10 @@ type App struct {
 	mode       Mode
 
 	// Sub-models
-	chatModel     ChatModel
-	sessionsModel SessionsModel
-	settingsModel SettingsModel
+	chatModel      ChatModel
+	sessionsModel  SessionsModel
+	settingsModel  SettingsModel
+	approvalDialog ApprovalDialogModel
 
 	// UI state
 	showHelp       bool
@@ -70,6 +73,9 @@ type App struct {
 	// Handlers for user actions (set by main.go)
 	onUserSubmit  func(string, App)
 	onUserCommand func(string, App)
+
+	// Agent cancellation context
+	agentCancelFunc context.CancelFunc
 }
 
 // NewApp creates the root app model.
@@ -80,10 +86,24 @@ func NewApp() *App {
 		chatModel:      NewChatModel(),
 		sessionsModel:  NewSessionsModel(),
 		settingsModel:  NewSettingsModel(),
+		approvalDialog: NewApprovalDialog(),
 		helpModel:      NewHelp(),
 		commandPalette: NewCommandPalette(),
 		modelPicker:    NewModelPicker(),
 		msgChan:        make(chan tea.Msg, 64),
+	}
+}
+
+// SetAgentCancelFunc sets the cancellation function for the current agent execution
+func (a *App) SetAgentCancelFunc(cancel context.CancelFunc) {
+	a.agentCancelFunc = cancel
+}
+
+// CancelAgent cancels the current agent execution
+func (a *App) CancelAgent() {
+	if a.agentCancelFunc != nil {
+		a.agentCancelFunc()
+		a.agentCancelFunc = nil
 	}
 }
 
@@ -191,6 +211,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 
+		// When approval dialog is open, delegate to it
+		if a.approvalDialog.IsVisible() {
+			dialog, cmd := a.approvalDialog.Update(msg)
+			a.approvalDialog = dialog
+			return a, cmd
+		}
+
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			return a, tea.Quit
@@ -212,6 +239,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case tea.KeyEsc:
+			// If agent is running, cancel it first
+			if a.agentCancelFunc != nil {
+				a.CancelAgent()
+				return a, func() tea.Msg {
+					return AgentCancelMsg{}
+				}
+			}
 			if !a.activeViewConsumesEsc() {
 				a.mode = ModeNormal
 				a.blurActive()
@@ -371,6 +405,29 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			cmds = append(cmds, cmd)
 		}
 		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
+	// Approval request - show the approval dialog
+	// -------------------------------------------------------------------------
+	case ApprovalRequestMsg:
+		a.approvalDialog.Show(msg.Request)
+		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Tool executing notification - show in chat
+	// -------------------------------------------------------------------------
+	case ToolExecutingMsg:
+		// Add a visible command notification to the chat
+		a.chatModel.AddToolMessage(msg.ToolName, getToolDisplayName(msg.ToolName), 
+			fmt.Sprintf("Executing: %s", msg.Command))
+		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Agent cancellation - handle cancel signal
+	// -------------------------------------------------------------------------
+	case AgentCancelMsg:
+		a.chatModel.AddMessage("system", "Agent execution cancelled by user (ESC)")
+		return a, nil
 	}
 
 	// -------------------------------------------------------------------------
@@ -408,6 +465,11 @@ func (a App) View() string {
 		return a.helpModel.View()
 	}
 
+	// Render approval dialog overlay first (if visible)
+	if a.approvalDialog.IsVisible() {
+		return a.approvalDialog.View()
+	}
+
 	tabBar := a.renderTabBar()
 	content := a.renderActiveView()
 	statusBar := a.renderStatusBar()
@@ -422,6 +484,7 @@ func (a App) View() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
 }
+
 
 // ---------------------------------------------------------------------------
 // Tab bar rendering - Golazo-inspired centered design
@@ -494,7 +557,7 @@ func (a App) renderStatusBar() string {
 
 	// If no model configured, show warning indicator
 	if modelName == "" {
-		status = StatusConnecting.Render("[⚠ no model]")
+		status = StatusConnecting.Render("[! no model]")
 	}
 	parts = append(parts, " "+status+" Agent Harness")
 
