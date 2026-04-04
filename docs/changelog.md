@@ -2,6 +2,17 @@
 
 All notable changes to agent-harness will be documented in this file.
 
+## [0.0.43] - 2026-04-04
+
+### Added
+- Release workflow skill to prevent version mismatches
+- check-version.sh script for version validation
+- bump-version.sh script for semver calculations
+- release.sh script for one-command releases
+
+### Fixed
+- Version alignment: bumped to 0.0.43 to match release process
+
 ## [0.0.41] - 2026-04-04
 
 ### Added
