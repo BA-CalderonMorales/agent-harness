@@ -78,8 +78,19 @@ type ChatModel struct {
 	timerRunning bool
 	chunkCount   int
 
+	// Tool animation state (for yolo mode - single animated line)
+	toolAnimation *ToolAnimationState
+
 	// Delegate
 	delegate ChatDelegate
+}
+
+// ToolAnimationState tracks the current animated tool display (yolo mode)
+type ToolAnimationState struct {
+	ToolName    string
+	Command     string
+	StartTime   time.Time
+	Frame       int
 }
 
 // ToolUseBlock represents an active tool invocation
@@ -314,11 +325,25 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if displayName == "" {
 			displayName = msg.ToolName
 		}
-		m.AddToolMessage(msg.ToolName, displayName, fmt.Sprintf("Using %s...", displayName))
+		
+		// Extract command from tool input for preview
+		command := m.extractCommandFromToolInput(msg.ToolName, msg.Input)
+		
+		// Set up tool animation state for yolo-style display
+		m.toolAnimation = &ToolAnimationState{
+			ToolName:  displayName,
+			Command:   command,
+			StartTime: time.Now(),
+			Frame:     0,
+		}
+		
+		// Add the tool message with command preview
+		m.AddToolMessageWithPreview(msg.ToolName, displayName, command)
 		return m, nil
 
 	case AgentToolDoneMsg:
 		m.currentTool = nil
+		m.toolAnimation = nil
 		return m, nil
 
 	case AgentDoneMsg:
@@ -500,6 +525,82 @@ func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
 	m.refreshViewport()
 }
 
+// AddToolMessageWithPreview adds a tool message with command preview.
+// This shows a grey preview of the actual command being executed (like Kimi does).
+func (m *ChatModel) AddToolMessageWithPreview(toolName, toolDisplayName, command string) {
+	if toolDisplayName == "" {
+		toolDisplayName = toolName
+	}
+	
+	// Build content with command preview
+	var content string
+	if command != "" {
+		// Show tool name with grey command preview
+		content = fmt.Sprintf("%s %s", toolDisplayName, ToolCommandPreviewStyle.Render(command))
+	} else {
+		content = fmt.Sprintf("Using %s...", toolDisplayName)
+	}
+	
+	msg := ChatMessage{
+		Role:            "tool",
+		Content:         content,
+		Timestamp:       time.Now(),
+		IsTool:          true,
+		ToolName:        toolName,
+		ToolDisplayName: toolDisplayName,
+	}
+	m.messages = append(m.messages, msg)
+	m.refreshViewport()
+}
+
+// extractCommandFromToolInput extracts the human-readable command from tool input
+func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[string]any) string {
+	switch toolName {
+	case "bash", "BashTool":
+		if cmd, ok := input["command"].(string); ok && cmd != "" {
+			// Truncate long commands for display
+			return m.truncateCommand(cmd, 60)
+		}
+	case "read", "ReadTool":
+		if path, ok := input["path"].(string); ok && path != "" {
+			return fmt.Sprintf("cat %s", path)
+		}
+	case "write", "WriteTool":
+		if path, ok := input["path"].(string); ok && path != "" {
+			return fmt.Sprintf("write %s", path)
+		}
+	case "edit", "EditTool":
+		if path, ok := input["path"].(string); ok && path != "" {
+			return fmt.Sprintf("edit %s", path)
+		}
+	case "glob", "GlobTool":
+		if pattern, ok := input["pattern"].(string); ok && pattern != "" {
+			return fmt.Sprintf("find %s", pattern)
+		}
+	case "grep", "GrepTool":
+		if pattern, ok := input["pattern"].(string); ok && pattern != "" {
+			return fmt.Sprintf("grep '%s'", pattern)
+		}
+	case "webfetch", "WebFetchTool":
+		if url, ok := input["url"].(string); ok && url != "" {
+			return fmt.Sprintf("fetch %s", m.truncateCommand(url, 40))
+		}
+	case "websearch", "WebSearchTool":
+		if query, ok := input["query"].(string); ok && query != "" {
+			return fmt.Sprintf("search '%s'", m.truncateCommand(query, 40))
+		}
+	}
+	return ""
+}
+
+// truncateCommand truncates a command for display with ellipsis
+func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
+	if len(cmd) <= maxLen {
+		return cmd
+	}
+	return cmd[:maxLen-3] + "..."
+}
+
 // SetInput sets the input text.
 func (m *ChatModel) SetInput(text string) {
 	m.textarea.SetValue(text)
@@ -560,6 +661,28 @@ func (m *ChatModel) renderStatusLine() string {
 
 	// Format elapsed time
 	elapsedStr := formatElapsed(m.elapsed)
+
+	// If we have an active tool with animation state, show animated tool display
+	// This provides the "yolo mode" single-line animated tool view
+	if m.toolAnimation != nil && m.currentTool != nil {
+		// Update animation frame
+		m.toolAnimation.Frame++
+		
+		spinner := ToolSpinnerRender(m.toolAnimation.Frame)
+		toolName := m.toolAnimation.ToolName
+		command := m.toolAnimation.Command
+		
+		// Build animated tool line: spinner + tool name + grey command preview
+		var statusParts []string
+		statusParts = append(statusParts, InfoStyle.Render(spinner))
+		statusParts = append(statusParts, ToolCallStyle.Render(toolName))
+		if command != "" {
+			statusParts = append(statusParts, ToolCommandPreviewStyle.Render(command))
+		}
+		statusParts = append(statusParts, HelpDimStyle.Render(fmt.Sprintf("(%s)", elapsedStr)))
+		
+		return strings.Join(statusParts, " ")
+	}
 
 	// Determine status text based on state
 	status := "thinking"
@@ -729,22 +852,19 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 }
 
 func (m ChatModel) renderToolMessage(msg ChatMessage) string {
-	// Single-line compact tool display
+	// If content already contains styled preview (from AddToolMessageWithPreview),
+	// use it directly for better display
+	if msg.Content != "" && msg.Content != fmt.Sprintf("Using %s...", msg.ToolDisplayName) {
+		// Content has command preview, render with tool style
+		return ToolCallStyle.Render(fmt.Sprintf("→ %s", msg.Content))
+	}
+	
+	// Fallback to simple display for legacy messages
 	displayName := msg.ToolDisplayName
 	if displayName == "" {
 		displayName = msg.ToolName
 	}
-
-	// Extract the action description from content (e.g., "Using bash..." -> "bash")
-	action := strings.TrimPrefix(msg.Content, "Using ")
-	action = strings.TrimSuffix(action, "...")
-	if action == msg.Content {
-		// Content wasn't in expected format, use the display name as action
-		action = displayName
-	}
-
-	// Compact single-line format: "[tool] action"
-	return ToolCallStyle.Render(fmt.Sprintf("[%s] %s", displayName, action))
+	return ToolCallStyle.Render(fmt.Sprintf("[%s] %s", displayName, msg.Content))
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {

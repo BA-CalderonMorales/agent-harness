@@ -122,6 +122,12 @@ var (
 			Foreground(ColorAccent).
 			Padding(0, 1)
 
+	// ToolCommandPreviewStyle - grey preview of actual command being executed
+	// Used for human-readable command preview (like Kimi does)
+	ToolCommandPreviewStyle = lipgloss.NewStyle().
+				Foreground(ColorTextDim).
+				Italic(true)
+
 	ToolRunningStyle = lipgloss.NewStyle().
 				BorderStyle(lipgloss.ThickBorder()).
 				BorderForeground(ColorInfo).
@@ -392,6 +398,12 @@ func SpinnerRender(msg string) string {
 	dots := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 	idx := int(time.Now().UnixMilli()/80) % len(dots)
 	return InfoStyle.Render(dots[idx]) + " " + HelpDimStyle.Render(msg)
+}
+
+// ToolSpinnerRender returns a tool-specific spinner animation
+func ToolSpinnerRender(frame int) string {
+	frames := []string{"◐", "◓", "◑", "◒"}
+	return frames[frame%len(frames)]
 }
 
 // ---------------------------------------------------------------------------
