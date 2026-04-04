@@ -2,6 +2,23 @@
 
 All notable changes to agent-harness will be documented in this file.
 
+## [0.0.45] - 2026-04-04
+
+### Changed
+- Status bar now shows actionable hints instead of "default" when no model is set
+- Status bar shows [⚠ no model] warning when model is not configured
+- Improved model display: shows shortened model name or "(use /model)" hint
+
+### Added
+- Visual feedback with actionable hints when models fail to respond
+- Error messages now include specific guidance for common failure patterns:
+  - Timeout errors: suggests switching models with /model command
+  - Connection errors: suggests checking /config and Settings
+  - Rate limit errors: suggests trying different models
+  - Authentication errors: suggests updating API key in Settings
+  - Model not found: suggests using /model to list available models
+- Follows visual-ux skill patterns: uses ⚠, ?, → indicators consistently
+
 ## [0.0.43] - 2026-04-04
 
 ### Added
