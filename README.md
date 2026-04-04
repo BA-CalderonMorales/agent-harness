@@ -2,22 +2,19 @@
 
 A clean-room, pattern-derived agent harness for building coding agents.
 
-> This project captures architectural patterns from production agentic coding tools and reimplements them in Go, with first-class support for OpenRouter and other OpenAI-compatible endpoints.
+> **Note:** This project is in early development. We are iterating fast. Best used in Coder, DevPod, or GitHub Codespaces for a consistent environment.
 
 ## Purpose
 
-`agent-harness` exists to teach the community how to build professional-grade coding agents. It derives the **domain patterns** that make agentic coding work:
+`agent-harness` captures architectural patterns from production agentic coding tools:
 
 1. Core agent loop with streaming responses
-2. Tool dispatch and execution with permission controls
-3. Permission modes (read-only / workspace-write / danger-full-access)
+2. Tool dispatch with permission controls
+3. Two execution modes: interactive (prompt for each command) and yolo (auto-approve with visibility)
 4. Secure credential storage with AES-256-GCM encryption
-5. Session management with auto-save and compaction
+5. Session management with auto-save
 6. Layered configuration (user / project / local)
-7. Slash command system with history and completion
-8. Git integration for workspace context
-9. Cost tracking with model-specific pricing
-10. MCP integration (extension point)
+7. Slash command system
 
 ## Quick Start
 
@@ -38,56 +35,28 @@ curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/ma
 go install github.com/BA-CalderonMorales/agent-harness/cmd/agent-harness@latest
 ```
 
-### First Run
-
-On first run, you will be prompted to:
-1. Choose an API provider (OpenRouter, OpenAI, or Anthropic)
-2. Enter your API key (input is masked)
-3. Select a model
-4. Set a master password for credential encryption
-
 ### Usage
 
 ```bash
-# Start the TUI (the only mode supported)
+# Start the TUI
 agent-harness
 
 # Or use the short alias (after setup)
 ah
 ```
 
-**Slash Commands:**
-- `/help` — Show available commands
-- `/status` — Show session and workspace status
-- `/cost` — Show token usage and estimated cost
-- `/compact` — Compact session to reduce token usage
-- `/model <name>` — Change the current model (also updates default)
-- `/permissions <mode>` — Change permission mode
-- `/diff` — Show git diff of workspace changes
-- `/export` — Export conversation to file
-- `/quit` — Exit the application
+**Key Controls:**
+- `Tab` / `Shift+Tab` - Switch views (Chat, Sessions, Settings)
+- `ESC` - Cancel current agent execution or exit mode
+- `?` - Show help (in normal mode)
+- `/` - Open command palette (when input is empty)
+- `Ctrl+C` - Quit
 
-**Changing the Default Model:**
+**Execution Modes:**
+- **Interactive** (default) - Prompts you before executing shell/write/edit commands
+- **Yolo** - Auto-approves commands but shows what is happening in the UI
 
-The model you select with `/model <name>` will automatically become your new default model for all future sessions. You can also change the model from the Settings tab (press `3` or `Tab` to navigate there).
-
-## Features
-
-### Secure Credential Storage
-- AES-256-GCM encryption for API keys
-- Argon2id key derivation
-- Master password required on startup
-- File permissions 0600 (user-only access)
-
-### Layered Configuration
-1. **User**: `~/.agent-harness/settings.json`
-2. **Project**: `./.agent-harness/settings.json`
-3. **Local**: `./.agent-harness/settings.local.json` (gitignored)
-
-### Permission Modes
-- **read-only**: Only read/search tools allowed
-- **workspace-write**: Most tools allowed, dangerous ones ask
-- **danger-full-access**: All tools run without confirmation
+Switch modes in Settings or with `/mode` commands.
 
 ## Architecture
 
@@ -95,26 +64,24 @@ The model you select with `/model <name>` will automatically become your new def
 cmd/agent-harness/          # CLI entrypoint
 internal/
   agent/                    # Core loop + streaming executor
+  approval/                 # Command approval system
   commands/                 # Slash command registry
   config/                   # Layered config + secure storage
   llm/                      # LLM client abstraction
   permissions/              # Permission stack
   state/                    # Session management
   tools/                    # Tool descriptor + registry
-  tools/builtin/            # Built-in tool implementations
-  ui/                       # Input handling + rendering
+  tui/                      # Terminal UI (Bubble Tea)
 pkg/
   bash/                     # Shell execution
   git/                      # Git operations
-  sandbox/                  # Safety checks
 ```
-
-See [docs/architecture.md](docs/architecture.md) for detailed documentation.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) — Pattern implementations
-- [Edge Cases](docs/edgecases.md) — Non-obvious behaviors
+- [Architecture](docs/architecture.md) - Pattern implementations
+- [Command Approval](docs/command-approval.md) - How the approval system works
+- [Edge Cases](docs/edgecases.md) - Non-obvious behaviors
 
 ## Building from Source
 
@@ -130,6 +97,6 @@ MIT
 
 This project is inspired by the architectural patterns found in [terminal-jarvis](https://github.com/BA-CalderonMorales/terminal-jarvis).
 
-### UI/UX Inspiration
+The TUI design patterns are inspired by [golazo](https://github.com/0xjuanma/golazo) by [Juan Manuel](https://github.com/0xjuanma).
 
-The TUI design patterns, including header styling and visual hierarchy, are inspired by [golazo](https://github.com/0xjuanma/golazo) by [Juan Manuel](https://github.com/0xjuanma). Their exceptional work on terminal UI aesthetics has significantly influenced the agent-harness interface.
+Additional TUI inspiration from the [awesome-tuis](https://github.com/rothgar/awesome-tuis) collection.
