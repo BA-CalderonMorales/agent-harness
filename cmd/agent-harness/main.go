@@ -444,6 +444,8 @@ func (app *App) runTUIMode() error {
 	tuiApp.RefreshSessions(app.getSessionInfos())
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetModels(app.getModelItems())
+	// FIX v0.0.46: Initialize status bar with current model
+	tuiApp.SetChatModel(app.session.Model)
 
 	return tui.Run(tuiApp)
 }
