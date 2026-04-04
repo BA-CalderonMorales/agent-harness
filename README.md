@@ -125,3 +125,7 @@ MIT
 ## Acknowledgments
 
 This project is inspired by the architectural patterns found in [terminal-jarvis](https://github.com/BA-CalderonMorales/terminal-jarvis).
+
+### UI/UX Inspiration
+
+The TUI design patterns, including header styling and visual hierarchy, are inspired by [golazo](https://github.com/0xjuanma/golazo) by [Juan Manuel](https://github.com/0xjuanma). Their exceptional work on terminal UI aesthetics has significantly influenced the agent-harness interface.
