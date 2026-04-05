@@ -76,7 +76,7 @@ func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 	start := time.Now()
 	result := TestResult{Name: test.Name}
 	
-	ctx, cancel := context.WithTimeout(context.Background(), test.Timeout)
+	_, cancel := context.WithTimeout(context.Background(), test.Timeout)
 	defer cancel()
 	
 	// Execute hooks
