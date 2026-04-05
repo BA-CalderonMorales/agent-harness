@@ -24,6 +24,13 @@ cd ~/projects/agent-harness && ./scripts/run-termux.sh
 ~/buckets/usr/bin/agent-harness
 ```
 
+## Working Rules
+
+- If a prompt would require a major architectural deviation, stop and explain before proceeding.
+- Keep changes and milestones separated into distinct commits.
+- After each change or milestone, commit and push before starting the next one.
+- Do not bundle unrelated work from different prompts into the same commit.
+
 ## Key Patterns
 
 ### Tool Descriptor Pattern
