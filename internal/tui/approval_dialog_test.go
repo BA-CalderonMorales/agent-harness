@@ -289,10 +289,8 @@ func TestApprovalDialog_NotificationTimeout(t *testing.T) {
 func TestApprovalDialog_Update_WindowSize(t *testing.T) {
 	dialog := NewApprovalDialog()
 
-	dialog, _ = dialog.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-
-	// Window size is stored when dialog is visible or for future use
-	// The test verifies the update is processed without error
+	// Window size update should be processed without error
+	_, _ = dialog.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 }
 
 // ---------------------------------------------------------------------------
