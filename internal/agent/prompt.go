@@ -93,9 +93,7 @@ For CODING TASKS and WORK:
 	// Add any loaded skills
 	if len(config.Skills) > 0 {
 		parts = append(parts, "\n## Additional Context\n")
-		for _, skill := range config.Skills {
-			parts = append(parts, skill)
-		}
+		parts = append(parts, config.Skills...)
 	}
 
 	return strings.Join(parts, "\n")

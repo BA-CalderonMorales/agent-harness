@@ -805,9 +805,9 @@ func (m ChatModel) ConsumesEsc() bool {
 // Scroll scrolls the viewport.
 func (m *ChatModel) Scroll(lines int) {
 	if lines > 0 {
-		m.viewport.LineDown(lines)
+		m.viewport.ScrollDown(lines)
 	} else {
-		m.viewport.LineUp(-lines)
+		m.viewport.ScrollUp(-lines)
 	}
 }
 

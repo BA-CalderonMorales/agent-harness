@@ -122,7 +122,7 @@ func (ctx *Context) FormatStatus() string {
 	}
 
 	var parts []string
-	parts = append(parts, fmt.Sprintf("%s", ctx.Root))
+	parts = append(parts, ctx.Root)
 
 	if ctx.Branch != "" {
 		parts = append(parts, fmt.Sprintf("(%s)", ctx.Branch))
