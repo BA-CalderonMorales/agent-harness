@@ -826,6 +826,13 @@ func (app *App) getModelItems() []tui.ModelItem {
 			{ID: "claude-3-opus-20240229", Name: "Claude 3 Opus", Provider: "anthropic", ContextLen: 200000, IsDefault: app.session.Model == "claude-3-opus-20240229"},
 			{ID: "claude-3-haiku-20240307", Name: "Claude 3 Haiku", Provider: "anthropic", ContextLen: 200000, IsDefault: app.session.Model == "claude-3-haiku-20240307"},
 		}
+	case "ollama":
+		items = []tui.ModelItem{
+			{ID: "gemma4:2b", Name: "Gemma 4 E2B (Fast)", Provider: "ollama", ContextLen: 128000, IsDefault: app.session.Model == "gemma4:2b"},
+			{ID: "gemma4:4b", Name: "Gemma 4 E4B (Quality)", Provider: "ollama", ContextLen: 128000, IsDefault: app.session.Model == "gemma4:4b"},
+			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: app.session.Model == "llama3.2:3b"},
+			{ID: "qwen2.5:3b", Name: "Qwen 2.5 3B", Provider: "ollama", ContextLen: 128000, IsDefault: app.session.Model == "qwen2.5:3b"},
+		}
 	default:
 		// openrouter and fallback
 		items = []tui.ModelItem{
@@ -1082,7 +1089,8 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Println("    1) OpenRouter")
 	fmt.Println("    2) OpenAI")
 	fmt.Println("    3) Anthropic")
-	fmt.Print("  Enter choice (1-3) [1]: ")
+	fmt.Println("    4) Ollama (Local)")
+	fmt.Print("  Enter choice (1-4) [1]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	choice, err := reader.ReadString('\n')
@@ -1096,6 +1104,8 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 		app.config.Provider = "openai"
 	case "3":
 		app.config.Provider = "anthropic"
+	case "4":
+		app.config.Provider = "ollama"
 	default:
 		app.config.Provider = "openrouter"
 	}
@@ -1104,26 +1114,35 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	fmt.Printf("  Selected: %s\n", app.config.Provider)
 	fmt.Println()
 
-	fmt.Printf("  Enter your %s API key: ", app.config.Provider)
-	apiKey, err := config.PromptPassword("")
-	if err != nil {
-		return fmt.Errorf("failed to read API key: %w", err)
-	}
-	apiKey = strings.TrimSpace(apiKey)
+	// Ollama doesn't require an API key
+	if app.config.Provider == "ollama" {
+		app.config.APIKey = "ollama"
+		fmt.Println("  Ollama uses local models - no API key required")
+		fmt.Println()
+	} else {
+		fmt.Printf("  Enter your %s API key: ", app.config.Provider)
+		apiKey, err := config.PromptPassword("")
+		if err != nil {
+			return fmt.Errorf("failed to read API key: %w", err)
+		}
+		apiKey = strings.TrimSpace(apiKey)
 
-	if apiKey == "" {
-		return fmt.Errorf("API key cannot be empty")
-	}
+		if apiKey == "" {
+			return fmt.Errorf("API key cannot be empty")
+		}
 
-	app.config.APIKey = apiKey
-	fmt.Println("  " + ui.RenderSuccess("API key received"))
-	fmt.Println()
+		app.config.APIKey = apiKey
+		fmt.Println("  " + ui.RenderSuccess("API key received"))
+		fmt.Println()
+	}
 
 	defaultModel := "nvidia/nemotron-3-super-120b-a12b:free"
 	if app.config.Provider == "openai" {
 		defaultModel = "gpt-4o"
 	} else if app.config.Provider == "anthropic" {
 		defaultModel = "claude-3-5-sonnet-20241022"
+	} else if app.config.Provider == "ollama" {
+		defaultModel = "gemma4:2b"
 	}
 
 	fmt.Printf("  Model [%s]: ", defaultModel)
