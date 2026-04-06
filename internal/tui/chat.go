@@ -42,7 +42,7 @@ type ChatDelegate interface {
 // ChatMessage represents a message in the chat
 // ---------------------------------------------------------------------------
 type ChatMessage struct {
-	ID              string        // Unique identifier for message replacement
+	ID              string // Unique identifier for message replacement
 	Role            string
 	Content         string
 	Timestamp       time.Time
