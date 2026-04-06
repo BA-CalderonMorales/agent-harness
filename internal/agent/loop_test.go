@@ -131,7 +131,7 @@ func TestLoop_MaxTurnsRespected(t *testing.T) {
 			return tools.PermissionDecision{Behavior: tools.Allow}, nil
 		},
 		ToolUseContext: tools.Context{
-			Options: tools.Options{Tools: []tools.Tool{bashTool}},
+			Options:         tools.Options{Tools: []tools.Tool{bashTool}},
 			AbortController: context.Background(),
 		},
 	}

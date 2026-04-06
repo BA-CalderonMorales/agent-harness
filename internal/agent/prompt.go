@@ -20,7 +20,7 @@ type SystemPromptConfig struct {
 // BuildSystemPrompt creates a comprehensive system prompt with clear guidance
 func BuildSystemPrompt(config SystemPromptConfig) string {
 	var parts []string
-	
+
 	// Core identity - agentic coding assistant
 	parts = append(parts, fmt.Sprintf(`You are %s, an agentic coding assistant integrated into the user's terminal.
 You have access to tools and full agency to decide when to use them.
@@ -70,7 +70,7 @@ For CODING TASKS and WORK:
 	if config.GitContext != "" {
 		parts = append(parts, fmt.Sprintf("\n## Workspace Context\n\n%s", config.GitContext))
 	}
-	
+
 	if config.WorkingDirectory != "" {
 		parts = append(parts, fmt.Sprintf("\nWorking directory: %s", config.WorkingDirectory))
 	}
@@ -114,7 +114,7 @@ Be concise, professional, and helpful.`, personaName)
 // BuildConversationalPrompt creates a prompt optimized for conversational responses
 func BuildConversationalPrompt(personaName string, context string) string {
 	var parts []string
-	
+
 	parts = append(parts, fmt.Sprintf(`You are %s, a helpful coding assistant.
 
 The user is just chatting - no tools needed. Respond naturally and briefly.

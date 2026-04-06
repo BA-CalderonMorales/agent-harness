@@ -9,13 +9,13 @@ import (
 type Type string
 
 const (
-	TypeLocalShell   Type = "local_bash"
-	TypeLocalAgent   Type = "local_agent"
-	TypeRemoteAgent  Type = "remote_agent"
-	TypeInProcess    Type = "in_process_teammate"
-	TypeDream        Type = "dream"
-	TypeWorkflow     Type = "local_workflow"
-	TypeMonitorMCP   Type = "monitor_mcp"
+	TypeLocalShell  Type = "local_bash"
+	TypeLocalAgent  Type = "local_agent"
+	TypeRemoteAgent Type = "remote_agent"
+	TypeInProcess   Type = "in_process_teammate"
+	TypeDream       Type = "dream"
+	TypeWorkflow    Type = "local_workflow"
+	TypeMonitorMCP  Type = "monitor_mcp"
 )
 
 // Status is the lifecycle state of a task.
@@ -42,25 +42,25 @@ type Handle struct {
 
 // StateBase is common to all task implementations.
 type StateBase struct {
-	ID           string
-	Type         Type
-	Status       Status
-	Description  string
-	ToolUseID    string
-	StartTime    int64
-	EndTime      int64
+	ID            string
+	Type          Type
+	Status        Status
+	Description   string
+	ToolUseID     string
+	StartTime     int64
+	EndTime       int64
 	TotalPausedMs int64
-	OutputFile   string
-	OutputOffset int64
-	Notified     bool
-	Events       []Event
+	OutputFile    string
+	OutputOffset  int64
+	Notified      bool
+	Events        []Event
 }
 
 // Event captures a discrete event in the task's history.
 type Event struct {
-	Timestamp time.Time `json:"timestamp"`
-	Type      string    `json:"type"` // "thought", "tool_call", "observation", "error"
-	Content   string    `json:"content"`
+	Timestamp time.Time      `json:"timestamp"`
+	Type      string         `json:"type"` // "thought", "tool_call", "observation", "error"
+	Content   string         `json:"content"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
@@ -126,14 +126,14 @@ func GenerateTaskID(ty Type) string {
 // CreateStateBase initializes common task state.
 func CreateStateBase(id string, ty Type, description string, toolUseID string) StateBase {
 	return StateBase{
-		ID:          id,
-		Type:        ty,
-		Status:      StatusPending,
-		Description: description,
-		ToolUseID:   toolUseID,
-		StartTime:   time.Now().UnixMilli(),
-		OutputFile:  fmt.Sprintf("/tmp/agent-harness/%s.log", id),
+		ID:           id,
+		Type:         ty,
+		Status:       StatusPending,
+		Description:  description,
+		ToolUseID:    toolUseID,
+		StartTime:    time.Now().UnixMilli(),
+		OutputFile:   fmt.Sprintf("/tmp/agent-harness/%s.log", id),
 		OutputOffset: 0,
-		Notified:    false,
+		Notified:     false,
 	}
 }

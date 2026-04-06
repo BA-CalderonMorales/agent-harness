@@ -76,10 +76,10 @@ type FileVersion struct {
 // NewAppState creates the default application state.
 func NewAppState() *AppState {
 	return &AppState{
-		Store:       NewStore(),
+		Store:          NewStore(),
 		PermissionMode: "default",
-		Model:       "",
-		FileHistory: make(map[string]FileVersion),
+		Model:          "",
+		FileHistory:    make(map[string]FileVersion),
 	}
 }
 

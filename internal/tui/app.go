@@ -419,7 +419,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case ToolExecutingMsg:
 		// Add a visible command notification to the chat
-		a.chatModel.AddToolMessage(msg.ToolName, getToolDisplayName(msg.ToolName), 
+		a.chatModel.AddToolMessage(msg.ToolName, getToolDisplayName(msg.ToolName),
 			fmt.Sprintf("Executing: %s", msg.Command))
 		return a, nil
 
@@ -485,7 +485,6 @@ func (a App) View() string {
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
 }
-
 
 // ---------------------------------------------------------------------------
 // Tab bar rendering - Golazo-inspired centered design

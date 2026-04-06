@@ -11,8 +11,8 @@ import (
 
 // NotebookCell represents a single cell in a Jupyter notebook.
 type NotebookCell struct {
-	CellType string   `json:"cell_type"`
-	Source   []string `json:"source"`
+	CellType string         `json:"cell_type"`
+	Source   []string       `json:"source"`
 	Metadata map[string]any `json:"metadata,omitempty"`
 }
 

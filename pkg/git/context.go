@@ -12,12 +12,12 @@ import (
 
 // Context holds git context information
 type Context struct {
-	IsRepo      bool
-	Root        string
-	Branch      string
-	Commit      string
-	HasChanges  bool
-	RemoteURL   string
+	IsRepo     bool
+	Root       string
+	Branch     string
+	Commit     string
+	HasChanges bool
+	RemoteURL  string
 }
 
 // GetContext retrieves git context for the current directory
@@ -123,11 +123,11 @@ func (ctx *Context) FormatStatus() string {
 
 	var parts []string
 	parts = append(parts, fmt.Sprintf("%s", ctx.Root))
-	
+
 	if ctx.Branch != "" {
 		parts = append(parts, fmt.Sprintf("(%s)", ctx.Branch))
 	}
-	
+
 	if ctx.HasChanges {
 		parts = append(parts, "*")
 	}
@@ -155,12 +155,12 @@ func GetRelativePath(absPath string) (string, error) {
 	if err != nil {
 		return absPath, err
 	}
-	
+
 	rel, err := filepath.Rel(root, absPath)
 	if err != nil {
 		return absPath, err
 	}
-	
+
 	return rel, nil
 }
 

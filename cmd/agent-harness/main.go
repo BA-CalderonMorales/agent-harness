@@ -152,17 +152,17 @@ func (app *App) loadConfig() error {
 			// 3. App was updated and encryption format changed
 			fmt.Fprintf(os.Stderr, "\n%s\n", ui.ErrorStyle.Render("Failed to load credentials"))
 			fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-			
+
 			// Offer to reset credentials and start fresh
 			fmt.Println("Would you like to:")
 			fmt.Println("  1) Try again (in case you entered the wrong password)")
 			fmt.Println("  2) Reset credentials and set up again")
 			fmt.Print("\nChoice [1-2] [1]: ")
-			
+
 			reader := bufio.NewReader(os.Stdin)
 			choice, _ := reader.ReadString('\n')
 			choice = strings.TrimSpace(choice)
-			
+
 			if choice == "2" {
 				// Clear corrupt credentials
 				if clearErr := credManager.ClearSecureConfig(); clearErr != nil {
@@ -812,7 +812,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 	// This allows ESC key to actually cancel the running agent
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel() // Ensure cleanup
-	
+
 	// Register the cancel function with the TUI so ESC key can trigger it
 	tuiApp.SetAgentCancelFunc(cancel)
 	defer tuiApp.SetAgentCancelFunc(nil) // Clear on exit
@@ -835,7 +835,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		// Check if tool requires approval
 		if approval.RequiresApproval(toolName) {
 			cmd := app.extractCommandForDisplay(toolName, toolInput)
-			
+
 			// Show command in TUI (even in yolo mode for transparency)
 			tuiApp.Send(tui.ToolExecutingMsg{
 				ToolName: toolName,
@@ -851,7 +851,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 						Message:  fmt.Sprintf("Approval failed: %v", err),
 					}, nil
 				}
-				
+
 				if !decision.IsApproved() {
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
@@ -918,7 +918,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 					responseText.WriteString(b.Text)
 				case types.ToolUseBlock:
 					toolCallCount++
-					
+
 					// Look up tool for rich UI display
 					tool, ok := app.toolRegistry.FindToolByName(b.Name)
 					displayName := b.Name
@@ -927,7 +927,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 						displayName = tool.UserFacingName(b.Input)
 						activityDesc = tool.GetActivityDescription(b.Input)
 					}
-					
+
 					tuiApp.Send(tui.AgentToolStartMsg{
 						ToolID:       b.ID,
 						ToolName:     b.Name,
@@ -1088,7 +1088,7 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 		model = ""
 	}
 	model = strings.TrimSpace(model)
-	
+
 	// FIX: Handle numeric input - user might think they're selecting from a list
 	// Map common numeric inputs to appropriate models for the selected provider
 	switch model {
@@ -1117,7 +1117,7 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 			model = "openai/gpt-4o"
 		}
 	}
-	
+
 	if model != "" {
 		app.config.Model = model
 	} else {

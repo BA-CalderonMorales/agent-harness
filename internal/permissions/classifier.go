@@ -11,8 +11,8 @@ import (
 
 // ClassifierResult is the outcome of the auto-mode safety classifier.
 type ClassifierResult struct {
-	Safe    bool
-	Reason  string
+	Safe   bool
+	Reason string
 }
 
 // AutoClassifier evaluates whether a tool action is safe in auto mode.
@@ -62,9 +62,9 @@ func (c *AutoClassifier) ClassifyAction(ctx context.Context, messages []types.Me
 
 func isAlwaysSafeTool(toolName string) bool {
 	safe := map[string]bool{
-		"todo_write":        true,
-		"enter_plan_mode":   true,
-		"exit_plan_mode":    true,
+		"todo_write":      true,
+		"enter_plan_mode": true,
+		"exit_plan_mode":  true,
 	}
 	return safe[toolName]
 }

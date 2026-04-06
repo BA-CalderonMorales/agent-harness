@@ -25,9 +25,9 @@ type ReadCacheEntry struct {
 
 // ReadCache is an LRU cache for file reads to preserve prompt cache tokens.
 type ReadCache struct {
-	mu       sync.RWMutex
-	entries  map[ReadCacheKey]ReadCacheEntry
-	maxSize  int
+	mu      sync.RWMutex
+	entries map[ReadCacheKey]ReadCacheEntry
+	maxSize int
 }
 
 // NewReadCache creates a new file read cache.
@@ -45,18 +45,18 @@ func NewReadCache(maxSize int) *ReadCache {
 func (c *ReadCache) Get(key ReadCacheKey) (string, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	
+
 	entry, ok := c.entries[key]
 	if !ok {
 		return "", false
 	}
-	
+
 	// Verify file hasn't changed on disk
 	info, err := os.Stat(key.Path)
 	if err != nil || info.ModTime() != key.Mtime {
 		return "", false
 	}
-	
+
 	return entry.Content, true
 }
 
@@ -64,7 +64,7 @@ func (c *ReadCache) Get(key ReadCacheKey) (string, bool) {
 func (c *ReadCache) Set(key ReadCacheKey, content string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	// Evict oldest if at capacity
 	if len(c.entries) >= c.maxSize {
 		var oldestKey ReadCacheKey
@@ -79,7 +79,7 @@ func (c *ReadCache) Set(key ReadCacheKey, content string) {
 		}
 		delete(c.entries, oldestKey)
 	}
-	
+
 	c.entries[key] = ReadCacheEntry{
 		Content:   content,
 		Timestamp: time.Now(),
@@ -100,7 +100,7 @@ func MakeKey(path string, offset, limit int, info os.FileInfo) ReadCacheKey {
 func (c *ReadCache) InvalidatePath(path string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	
+
 	for key := range c.entries {
 		if key.Path == path {
 			delete(c.entries, key)
@@ -142,7 +142,7 @@ func NewStaleWriteTracker() *StaleWriteTracker {
 func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.FileInfo) {
 	t.mu.Lock()
 	defer t.mu.Unlock()
-	
+
 	t.versions[path] = FileVersion{
 		Path:    path,
 		Mtime:   info.ModTime(),
@@ -157,34 +157,34 @@ func (t *StaleWriteTracker) CheckStale(path string) error {
 	t.mu.RLock()
 	expected, ok := t.versions[path]
 	t.mu.RUnlock()
-	
+
 	if !ok {
 		// No prior read recorded - allow the write
 		return nil
 	}
-	
+
 	info, err := os.Stat(path)
 	if err != nil {
 		return fmt.Errorf("cannot stat file for stale check: %w", err)
 	}
-	
+
 	// Primary check: mtime unchanged
 	if info.ModTime().Equal(expected.Mtime) {
 		return nil
 	}
-	
+
 	// On Windows or if mtime differs, check content hash
 	content, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("cannot read file for stale check: %w", err)
 	}
-	
+
 	currentHash := ComputeHash(content)
 	if currentHash == expected.Hash {
 		// File unchanged despite timestamp difference
 		return nil
 	}
-	
+
 	return fmt.Errorf("file was modified since last read (stale write protection)")
 }
 
