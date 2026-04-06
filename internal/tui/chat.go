@@ -97,6 +97,10 @@ type ChatModel struct {
 	// Current tool message for in-place updates (replaces previous tool display)
 	currentToolMsg *ChatMessage
 
+	// completedToolMsg tracks the finalized tool message to display in history
+	// This is separate from currentToolMsg to allow single-line replacement during execution
+	completedToolMsg *ChatMessage
+
 	// Delegate
 	delegate ChatDelegate
 }
@@ -356,6 +360,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Frame:     0,
 		}
 
+		// SINGLE-LINE REPLACEMENT: Clear any previous completed tool before starting new one
+		// This ensures only the current tool is visible (no scrolling from multiple tool lines)
+		m.completedToolMsg = nil
+
 		// Update current tool message for in-place display (replaces previous tool)
 		m.currentToolMsg = &ChatMessage{
 			ID:              msg.ToolID,
@@ -371,7 +379,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentToolDoneMsg:
-		// Finalize current tool message and add to history
+		// Finalize current tool message and store as completed (but don't add to messages yet)
+		// This enables single-line replacement: only the most recent completed tool is shown
 		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
 			status := ToolStatusSuccess
 			if !msg.Success {
@@ -385,8 +394,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentToolMsg.ToolStatus = status
 			m.currentToolMsg.Timestamp = time.Now()
 
-			// Add completed tool to messages
-			m.messages = append(m.messages, *m.currentToolMsg)
+			// Store as completed tool message (replaces any previous completed tool)
+			// This keeps the UI to a single line - only the most recent tool
+			m.completedToolMsg = m.currentToolMsg
 			m.currentToolMsg = nil
 		}
 		m.currentTool = nil
@@ -407,6 +417,14 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.finalizeStreamingMessage(finalContent)
 		}
 		m.streamBuffer = ""
+
+		// SINGLE-LINE REPLACEMENT: Commit the completed tool to message history
+		// This preserves the final tool result in the conversation after the turn completes
+		if m.completedToolMsg != nil {
+			m.messages = append(m.messages, *m.completedToolMsg)
+			m.completedToolMsg = nil
+		}
+		m.refreshViewport()
 		return m, nil
 
 	case AgentErrorMsg:
@@ -454,6 +472,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages = make([]ChatMessage, 0)
 		m.streamBuffer = ""
 		m.thinking = false
+		m.currentToolMsg = nil
+		m.completedToolMsg = nil
+		m.toolAnimation = nil
+		m.currentTool = nil
 		m.refreshViewport()
 		return m, nil
 	}
@@ -884,8 +906,17 @@ func (m *ChatModel) refreshViewport() {
 		content.WriteString("\n\n")
 	}
 
-	// Add current tool message for in-place display (replaces previous tool)
+	// SINGLE-LINE REPLACEMENT: Show only the most recent completed tool (if any)
+	// This prevents multiple tool lines from accumulating and forcing scroll
+	if m.completedToolMsg != nil {
+		content.WriteString(m.renderMessage(*m.completedToolMsg))
+	}
+
+	// Add current tool message for in-place display (replaces previous running tool)
 	if m.currentToolMsg != nil {
+		if m.completedToolMsg != nil {
+			content.WriteString("\n\n")
+		}
 		content.WriteString(m.renderMessage(*m.currentToolMsg))
 	}
 
