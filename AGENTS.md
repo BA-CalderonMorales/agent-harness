@@ -1,6 +1,10 @@
-# Agent Harness - Development Guide
+# AGENTS.md - Agent Harness Development Guide
 
-> Patterns and conventions for working on this codebase.
+> Domain-specific constitution for this repository.
+>
+> This file extends [PHILOSOPHY.md](./PHILOSOPHY.md) with project-specific conventions.
+>
+> **Quick Start**: See patterns and conventions for working on this codebase below.
 
 ## Quick Reference
 
@@ -19,6 +23,13 @@ cd ~/[Pp]rojects/agent-harness && ./scripts/run-termux.sh
 # Or from buckets/usr/bin (workspace-level access)
 ~/buckets/usr/bin/agent-harness
 ```
+
+## Working Rules
+
+- If a prompt would require a major architectural deviation, stop and explain before proceeding.
+- Keep changes and milestones separated into distinct commits.
+- After each change or milestone, commit and push before starting the next one.
+- Do not bundle unrelated work from different prompts into the same commit.
 
 ## Key Patterns
 
