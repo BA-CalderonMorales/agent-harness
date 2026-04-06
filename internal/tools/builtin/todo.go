@@ -2,7 +2,6 @@ package builtin
 
 import (
 	"fmt"
-	"sync"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -14,12 +13,6 @@ type TodoItem struct {
 	Text   string `json:"text"`
 	Status string `json:"status"`
 }
-
-// Global todo store (in production, this belongs in state).
-var (
-	todoStore []TodoItem
-	todoMu    sync.RWMutex
-)
 
 // TodoWriteTool manages a simple todo list.
 var TodoWriteTool = tools.NewTool(tools.Tool{
@@ -73,10 +66,6 @@ var TodoWriteTool = tools.NewTool(tools.Tool{
 				Status: getString(m, "status"),
 			})
 		}
-
-		todoMu.Lock()
-		todoStore = newTodos
-		todoMu.Unlock()
 
 		return tools.ToolResult{Data: fmt.Sprintf("Updated %d todos", len(newTodos))}, nil
 	},
