@@ -239,12 +239,16 @@ type SessionManager struct {
 
 // NewSessionManager creates a new session manager
 func NewSessionManager() (*SessionManager, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
+	// Check for env var override first
+	sessionsDir := os.Getenv("AGENT_HARNESS_SESSION_DIR")
+	if sessionsDir == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get home directory: %w", err)
+		}
+		sessionsDir = filepath.Join(home, ".agent-harness", "sessions")
 	}
 
-	sessionsDir := filepath.Join(home, ".agent-harness", "sessions")
 	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
 		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
 	}
