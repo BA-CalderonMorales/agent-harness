@@ -306,12 +306,12 @@ func (m *SettingsModel) syncViewportToCursor() {
 	// Approximate line height per setting (2 lines: label/value + description)
 	lineHeight := 2
 	cursorLine := m.cursor * lineHeight
-	
+
 	// If cursor is above viewport, scroll up
 	if cursorLine < m.viewport.YOffset {
 		m.viewport.SetYOffset(cursorLine)
 	}
-	
+
 	// If cursor is below viewport, scroll down
 	viewportBottom := m.viewport.YOffset + m.viewport.Height
 	cursorBottom := cursorLine + lineHeight

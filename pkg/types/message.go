@@ -36,9 +36,9 @@ func (ToolUseBlock) isContentBlock() {}
 
 // ToolResultBlock represents the result of a tool execution.
 type ToolResultBlock struct {
-	ToolUseID string      `json:"tool_use_id"`
-	Content   string      `json:"content"`
-	IsError   bool        `json:"is_error,omitempty"`
+	ToolUseID string `json:"tool_use_id"`
+	Content   string `json:"content"`
+	IsError   bool   `json:"is_error,omitempty"`
 }
 
 func (ToolResultBlock) isContentBlock() {}

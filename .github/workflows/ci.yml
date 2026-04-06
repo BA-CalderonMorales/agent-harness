@@ -1,22 +1,83 @@
+# Continuous Integration for Agent Harness
+# Runs on all PRs and pushes to main/develop
+
 name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [ main, develop ]
   pull_request:
-    branches: [main]
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.23'
 
 jobs:
+  # Build and basic checks
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build
+        run: go build -v ./cmd/agent-harness
+
+      - name: Build with tags
+        run: |
+          go build -tags kairos -v ./cmd/agent-harness
+
+  # Run all tests
   test:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          go-version: '1.23'
-      - name: Build
-        run: go build ./cmd/agent-harness
-      - name: Test
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run tests
         run: go test -v ./...
-      - name: Vet
+
+      - name: Run tests with race detector
+        run: go test -race ./...
+
+  # Code quality checks
+  quality:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run go vet
         run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          if [ "$(gofmt -l . | wc -l)" -gt 0 ]; then
+            echo "The following files need formatting:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "latest"
+          install-go: false

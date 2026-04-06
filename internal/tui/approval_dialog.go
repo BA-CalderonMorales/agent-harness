@@ -30,7 +30,7 @@ type ApprovalDialogModel struct {
 	request  *approval.ApprovalRequest
 	options  []ApprovalOption
 	selected int
-	
+
 	// For yolo mode notification
 	notification      string
 	notificationUntil time.Time

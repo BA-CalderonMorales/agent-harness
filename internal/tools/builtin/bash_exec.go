@@ -36,11 +36,11 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	}
 
 	cmd := exec.CommandContext(execCtx, shell, "-c", cmdStr)
-	
+
 	// Set up pipes for real-time progress
 	stdoutPipe, _ := cmd.StdoutPipe()
 	stderrPipe, _ := cmd.StderrPipe()
-	
+
 	if err := cmd.Start(); err != nil {
 		return tools.ToolResult{Data: "[error starting command: " + err.Error() + "]"}, nil
 	}
@@ -72,12 +72,12 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 
 	err := cmd.Wait()
 	wg.Wait()
-	
+
 	result := output.String()
 	if result == "" {
 		result = " "
 	}
-	
+
 	if err != nil {
 		if execCtx.Err() == context.DeadlineExceeded {
 			result += "\n[command timed out after " + timeout.String() + "]"

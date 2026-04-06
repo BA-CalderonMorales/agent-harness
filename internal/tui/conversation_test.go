@@ -7,17 +7,17 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // TestConversationalMessageFlow verifies the conversational message path
 func TestConversationalMessageFlow(t *testing.T) {
 	chat := NewChatModel()
-	
+
 	// Simulate user submitting a message
 	chat.AddMessage("user", "hello")
-	
+
 	// Verify user message was added
 	if len(chat.messages) != 1 {
 		t.Fatalf("Expected 1 message, got %d", len(chat.messages))
@@ -25,19 +25,19 @@ func TestConversationalMessageFlow(t *testing.T) {
 	if chat.messages[0].Role != "user" {
 		t.Errorf("Expected role 'user', got %s", chat.messages[0].Role)
 	}
-	
+
 	// Simulate receiving AgentStartMsg
 	msg := AgentStartMsg{Timestamp: time.Now()}
 	model, cmd := chat.Update(msg)
 	chat = model.(ChatModel)
-	
+
 	if !chat.thinking {
 		t.Error("Expected thinking to be true after AgentStartMsg")
 	}
 	if !chat.streaming {
 		t.Error("Expected streaming to be true after AgentStartMsg")
 	}
-	
+
 	// Verify timer command was returned
 	if cmd == nil {
 		t.Error("Expected timer command from AgentStartMsg")
@@ -47,15 +47,15 @@ func TestConversationalMessageFlow(t *testing.T) {
 // TestConversationalDirectResponse verifies non-streamed responses work
 func TestConversationalDirectResponse(t *testing.T) {
 	chat := NewChatModel()
-	
+
 	// User message
 	chat.AddMessage("user", "what can you do?")
-	
+
 	// Simulate start
 	startMsg := AgentStartMsg{Timestamp: time.Now()}
 	model, _ := chat.Update(startMsg)
 	chat = model.(ChatModel)
-	
+
 	// Simulate direct response (no chunks, just FullResponse)
 	doneMsg := AgentDoneMsg{
 		FullResponse: "I can help you with coding tasks!",
@@ -63,20 +63,20 @@ func TestConversationalDirectResponse(t *testing.T) {
 	}
 	model, _ = chat.Update(doneMsg)
 	chat = model.(ChatModel)
-	
+
 	// Verify response was added
 	if len(chat.messages) != 2 {
 		t.Fatalf("Expected 2 messages (user + assistant), got %d", len(chat.messages))
 	}
-	
+
 	if chat.messages[1].Role != "assistant" {
 		t.Errorf("Expected assistant message, got %s", chat.messages[1].Role)
 	}
-	
+
 	if chat.messages[1].Content != "I can help you with coding tasks!" {
 		t.Errorf("Expected response content, got: %s", chat.messages[1].Content)
 	}
-	
+
 	if chat.thinking {
 		t.Error("Expected thinking to be false after AgentDoneMsg")
 	}
@@ -85,15 +85,15 @@ func TestConversationalDirectResponse(t *testing.T) {
 // TestStreamingResponse verifies chunked responses work
 func TestStreamingResponse(t *testing.T) {
 	chat := NewChatModel()
-	
+
 	// User message
 	chat.AddMessage("user", "write a poem")
-	
+
 	// Start streaming
 	startMsg := AgentStartMsg{Timestamp: time.Now()}
 	model, _ := chat.Update(startMsg)
 	chat = model.(ChatModel)
-	
+
 	// Receive chunks
 	chunks := []string{"Hello", " world", "!"}
 	for _, chunk := range chunks {
@@ -101,17 +101,17 @@ func TestStreamingResponse(t *testing.T) {
 		model, _ = chat.Update(chunkMsg)
 		chat = model.(ChatModel)
 	}
-	
+
 	// Done
 	doneMsg := AgentDoneMsg{Timestamp: time.Now()}
 	model, _ = chat.Update(doneMsg)
 	chat = model.(ChatModel)
-	
+
 	// Verify final message contains all chunks
 	if len(chat.messages) != 2 {
 		t.Fatalf("Expected 2 messages, got %d", len(chat.messages))
 	}
-	
+
 	expected := "Hello world!"
 	if chat.messages[1].Content != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, chat.messages[1].Content)
@@ -121,16 +121,16 @@ func TestStreamingResponse(t *testing.T) {
 // TestAgentMessageRouting verifies app routes messages to chat
 func TestAgentMessageRouting(t *testing.T) {
 	app := NewApp()
-	
+
 	// Initialize
 	cmd := app.Init()
 	if cmd == nil {
 		t.Error("Expected Init to return commands")
 	}
-	
+
 	// Send an AgentStartMsg through the app's message channel
 	app.Send(AgentStartMsg{Timestamp: time.Now()})
-	
+
 	// Verify the message can be received (this tests the channel works)
 	select {
 	case msg := <-app.msgChan:
@@ -146,7 +146,7 @@ func TestAgentMessageRouting(t *testing.T) {
 func TestAsyncMessageDelivery(t *testing.T) {
 	chat := NewChatModel()
 	chat.SetModel("test-model")
-	
+
 	// Simulate the full flow
 	messages := []tea.Msg{
 		AgentStartMsg{Timestamp: time.Now()},
@@ -155,25 +155,25 @@ func TestAsyncMessageDelivery(t *testing.T) {
 		AgentChunkMsg{Text: " request...", Timestamp: time.Now()},
 		AgentDoneMsg{FullResponse: "Processing your request...", Timestamp: time.Now()},
 	}
-	
+
 	for _, msg := range messages {
 		model, _ := chat.Update(msg)
 		chat = model.(ChatModel)
 	}
-	
+
 	// Verify final state
 	if len(chat.messages) != 1 {
 		t.Fatalf("Expected 1 assistant message, got %d", len(chat.messages))
 	}
-	
+
 	if chat.messages[0].Content != "Processing your request..." {
 		t.Errorf("Unexpected content: %s", chat.messages[0].Content)
 	}
-	
+
 	if chat.thinking {
 		t.Error("Should not be thinking after done")
 	}
-	
+
 	if chat.streaming {
 		t.Error("Should not be streaming after done")
 	}

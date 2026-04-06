@@ -42,14 +42,27 @@ type ChatDelegate interface {
 // ChatMessage represents a message in the chat
 // ---------------------------------------------------------------------------
 type ChatMessage struct {
+	ID              string        // Unique identifier for message replacement
 	Role            string
 	Content         string
 	Timestamp       time.Time
 	IsTool          bool
 	ToolName        string
-	ToolDisplayName string // User-friendly display name for the tool
+	ToolDisplayName string        // User-friendly display name for the tool
+	ToolStatus      ToolStatus    // pending, running, success, error
 	ResponseTime    time.Duration // Time taken to generate this response
 }
+
+// ToolStatus represents the execution state of a tool
+type ToolStatus string
+
+const (
+	ToolStatusPending  ToolStatus = "pending"
+	ToolStatusRunning  ToolStatus = "running"
+	ToolStatusSuccess  ToolStatus = "success"
+	ToolStatusError    ToolStatus = "error"
+	ToolStatusComplete ToolStatus = "complete" // Generic completion (no success/error distinction)
+)
 
 // ---------------------------------------------------------------------------
 // ChatModel is the chat view model
@@ -66,12 +79,12 @@ type ChatModel struct {
 	thinking     bool
 	thinkingText string
 	model        string
-	
+
 	// Streaming state
-	streaming     bool
-	streamBuffer  string
-	currentTool   *ToolUseBlock
-	
+	streaming    bool
+	streamBuffer string
+	currentTool  *ToolUseBlock
+
 	// Timer state for response tracking
 	startTime    time.Time
 	elapsed      time.Duration
@@ -87,10 +100,10 @@ type ChatModel struct {
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
 type ToolAnimationState struct {
-	ToolName    string
-	Command     string
-	StartTime   time.Time
-	Frame       int
+	ToolName  string
+	Command   string
+	StartTime time.Time
+	Frame     int
 }
 
 // ToolUseBlock represents an active tool invocation
@@ -168,7 +181,7 @@ func NewChatModel() ChatModel {
 	// CRITICAL FIX: Style the textarea to match our design system
 	// This removes the strange background color inconsistency
 	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
-	
+
 	// Style the textarea base to have consistent background
 	ta.FocusedStyle.Base = lipgloss.NewStyle().
 		Background(ColorSurface).
@@ -325,13 +338,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if displayName == "" {
 			displayName = msg.ToolName
 		}
-		
+
 		// Use rich activity description from tool if available, otherwise extract from input
 		command := msg.ActivityDesc
 		if command == "" {
 			command = m.extractCommandFromToolInput(msg.ToolName, msg.Input)
 		}
-		
+
 		// Set up tool animation state for yolo-style display
 		m.toolAnimation = &ToolAnimationState{
 			ToolName:  displayName,
@@ -339,14 +352,34 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			StartTime: time.Now(),
 			Frame:     0,
 		}
-		
-		// Add the tool message with command preview
-		m.AddToolMessageWithPreview(msg.ToolName, displayName, command)
+
+		// Add or update the tool message with running status
+		m.AddOrUpdateToolMessage(msg.ToolID, msg.ToolName, displayName, command, ToolStatusRunning)
 		return m, nil
 
 	case AgentToolDoneMsg:
+		// Update the tool message with completion status
+		if m.currentTool != nil {
+			status := ToolStatusSuccess
+			if !msg.Success {
+				status = ToolStatusError
+			}
+			// Find and update the existing message
+			for i := range m.messages {
+				if m.messages[i].ID == msg.ToolID && m.messages[i].IsTool {
+					command := m.extractCommandFromToolInput(m.messages[i].ToolName, nil)
+					if command == "" && m.toolAnimation != nil {
+						command = m.toolAnimation.Command
+					}
+					m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, command, status)
+					m.messages[i].ToolStatus = status
+					break
+				}
+			}
+		}
 		m.currentTool = nil
 		m.toolAnimation = nil
+		m.refreshViewport()
 		return m, nil
 
 	case AgentDoneMsg:
@@ -367,11 +400,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentErrorMsg:
 		m.thinking = false
 		m.streaming = false
-		
+
 		// Build informative error message with action hints
 		errStr := fmt.Sprintf("%v", msg.Error)
 		var feedback string
-		
+
 		// Check for common error patterns and provide specific guidance
 		switch {
 		case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline"):
@@ -400,7 +433,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"[>] If the model isn't responding, try: /model <name>\n"+
 				"[>] Or switch models via: Tab → Settings", errStr)
 		}
-		
+
 		m.AddMessage("system", feedback)
 		m.streamBuffer = ""
 		return m, nil
@@ -432,10 +465,10 @@ func (m ChatModel) View() string {
 	if m.thinking {
 		inputHeight = 4
 	}
-	
+
 	headerHeight := 2 // Header takes 2 lines
 	separatorHeight := 1
-	
+
 	// Ensure minimum height for viewport
 	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
 	if vpHeight < 5 {
@@ -462,7 +495,7 @@ func (m ChatModel) View() string {
 	if strings.TrimSpace(vpContent) == "" {
 		vpContent = HelpDimStyle.Render("  No messages yet. Start chatting!")
 	}
-	
+
 	// Constrain viewport to calculated height
 	vpRendered := lipgloss.NewStyle().
 		Height(vpHeight).
@@ -473,7 +506,7 @@ func (m ChatModel) View() string {
 	// Input area with styled container (golazo-inspired design)
 	// CRITICAL FIX: Consistent styling for input bar
 	inputContainer := InputContainerStyle.Width(m.width)
-	
+
 	var inputContent string
 	prompt := PromptStyle.Render("◆ ")
 	if m.thinking {
@@ -482,7 +515,7 @@ func (m ChatModel) View() string {
 	} else {
 		inputContent = prompt + m.textarea.View()
 	}
-	
+
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -512,48 +545,88 @@ func (m *ChatModel) AddMessage(role, content string) {
 }
 
 // AddToolMessage adds a tool message to the chat.
+// If you need message replacement (for live updates), use AddOrUpdateToolMessage instead.
 func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
 	if toolDisplayName == "" {
 		toolDisplayName = toolName
 	}
 	msg := ChatMessage{
+		ID:              fmt.Sprintf("%s-%d", toolName, time.Now().UnixNano()),
 		Role:            "tool",
 		Content:         content,
 		Timestamp:       time.Now(),
 		IsTool:          true,
 		ToolName:        toolName,
 		ToolDisplayName: toolDisplayName,
+		ToolStatus:      ToolStatusComplete,
 	}
 	m.messages = append(m.messages, msg)
 	m.refreshViewport()
 }
 
-// AddToolMessageWithPreview adds a tool message with command preview.
-// This shows a grey preview of the actual command being executed (like Kimi does).
-func (m *ChatModel) AddToolMessageWithPreview(toolName, toolDisplayName, command string) {
+// AddOrUpdateToolMessage adds a tool message or updates existing one by ID.
+// This prevents duplicate tool messages - instead updates in place.
+func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, command string, status ToolStatus) {
 	if toolDisplayName == "" {
 		toolDisplayName = toolName
 	}
-	
-	// Build content with command preview
-	var content string
-	if command != "" {
-		// Show tool name with grey command preview
-		content = fmt.Sprintf("%s %s", toolDisplayName, ToolCommandPreviewStyle.Render(command))
-	} else {
-		content = fmt.Sprintf("Using %s...", toolDisplayName)
+
+	// Build content with status indicator
+	content := m.formatToolContent(toolDisplayName, command, status)
+
+	// Look for existing message with same ID
+	for i := range m.messages {
+		if m.messages[i].ID == id && m.messages[i].IsTool {
+			// Update existing message
+			m.messages[i].Content = content
+			m.messages[i].ToolStatus = status
+			m.messages[i].Timestamp = time.Now()
+			m.refreshViewport()
+			return
+		}
 	}
-	
+
+	// Add new message
 	msg := ChatMessage{
+		ID:              id,
 		Role:            "tool",
 		Content:         content,
 		Timestamp:       time.Now(),
 		IsTool:          true,
 		ToolName:        toolName,
 		ToolDisplayName: toolDisplayName,
+		ToolStatus:      status,
 	}
 	m.messages = append(m.messages, msg)
 	m.refreshViewport()
+}
+
+// formatToolContent formats tool message content based on status
+func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus) string {
+	var statusIndicator string
+	switch status {
+	case ToolStatusRunning:
+		statusIndicator = "→"
+	case ToolStatusSuccess:
+		statusIndicator = "✓"
+	case ToolStatusError:
+		statusIndicator = "✗"
+	case ToolStatusComplete:
+		statusIndicator = "✓"
+	default:
+		statusIndicator = "→"
+	}
+
+	if command != "" {
+		return fmt.Sprintf("%s %s %s", statusIndicator, toolDisplayName, ToolCommandPreviewStyle.Render(command))
+	}
+	return fmt.Sprintf("%s %s", statusIndicator, toolDisplayName)
+}
+
+// AddToolMessageWithPreview adds a tool message with command preview.
+// DEPRECATED: Use AddOrUpdateToolMessage instead for proper message replacement.
+func (m *ChatModel) AddToolMessageWithPreview(toolName, toolDisplayName, command string) {
+	m.AddOrUpdateToolMessage(toolName, toolName, toolDisplayName, command, ToolStatusRunning)
 }
 
 // extractCommandFromToolInput extracts the human-readable command from tool input
@@ -627,7 +700,7 @@ func (m *ChatModel) SetThinking(thinking bool, text string) {
 	if text == "" {
 		m.thinkingText = "Thinking..."
 	}
-	
+
 	// Start/stop timer based on thinking state
 	if thinking {
 		m.startTime = time.Now()
@@ -670,11 +743,11 @@ func (m *ChatModel) renderStatusLine() string {
 	if m.toolAnimation != nil && m.currentTool != nil {
 		// Update animation frame
 		m.toolAnimation.Frame++
-		
+
 		spinner := ToolSpinnerRender(m.toolAnimation.Frame)
 		toolName := m.toolAnimation.ToolName
 		command := m.toolAnimation.Command
-		
+
 		// Build animated tool line: spinner + tool name + grey command preview
 		var statusParts []string
 		statusParts = append(statusParts, InfoStyle.Render(spinner))
@@ -683,7 +756,7 @@ func (m *ChatModel) renderStatusLine() string {
 			statusParts = append(statusParts, ToolCommandPreviewStyle.Render(command))
 		}
 		statusParts = append(statusParts, HelpDimStyle.Render(fmt.Sprintf("(%s)", elapsedStr)))
-		
+
 		return strings.Join(statusParts, " ")
 	}
 
@@ -855,19 +928,21 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 }
 
 func (m ChatModel) renderToolMessage(msg ChatMessage) string {
-	// If content already contains styled preview (from AddToolMessageWithPreview),
-	// use it directly for better display
-	if msg.Content != "" && msg.Content != fmt.Sprintf("Using %s...", msg.ToolDisplayName) {
-		// Content has command preview, render with tool style
-		return ToolCallStyle.Render(fmt.Sprintf("→ %s", msg.Content))
+	// Choose style based on tool status
+	var style lipgloss.Style
+	switch msg.ToolStatus {
+	case ToolStatusRunning:
+		style = ToolRunningStyle
+	case ToolStatusSuccess, ToolStatusComplete:
+		style = ToolDoneStyle
+	case ToolStatusError:
+		style = ToolErrorStyle
+	default:
+		style = ToolCallStyle
 	}
-	
-	// Fallback to simple display for legacy messages
-	displayName := msg.ToolDisplayName
-	if displayName == "" {
-		displayName = msg.ToolName
-	}
-	return ToolCallStyle.Render(fmt.Sprintf("[%s] %s", displayName, msg.Content))
+
+	// Content already has status indicator and command preview from formatToolContent
+	return style.Render(msg.Content)
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {

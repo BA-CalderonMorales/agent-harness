@@ -24,22 +24,22 @@ func debugPrintf(format string, args ...interface{}) {
 // Falls back to plain text input on Termux or when terminal manipulation fails
 func PromptPassword(prompt string) (string, error) {
 	fmt.Print(prompt)
-	
+
 	// Try standard password reading first
 	password, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
-	
+
 	if err == nil {
 		// Validate we got something
 		pass := strings.TrimSpace(string(password))
 		return pass, nil
 	}
-	
+
 	// Debug: show error in verbose mode
 	if os.Getenv("AGENT_HARNESS_VERBOSE") == "1" {
 		fmt.Fprintf(os.Stderr, "[debug] term.ReadPassword failed: %v, using fallback\n", err)
 	}
-	
+
 	// Fall back to plain text reading for Termux and other environments
 	// where terminal manipulation isn't available
 	return promptPasswordFallback()

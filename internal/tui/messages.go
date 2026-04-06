@@ -60,6 +60,7 @@ type ClearChatMsg struct{}
 
 // ToolExecutingMsg is sent when a tool is about to execute (for visibility)
 type ToolExecutingMsg struct {
+	ToolID   string // Unique ID for message tracking/replacement
 	ToolName string
 	Command  string
 }

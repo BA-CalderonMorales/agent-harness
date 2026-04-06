@@ -25,27 +25,27 @@ func NewTermuxValidator() *TermuxValidator {
 func (tv *TermuxValidator) ValidateInput(input string) (string, bool) {
 	// Trim whitespace
 	trimmed := strings.TrimSpace(input)
-	
+
 	// Check for empty input
 	if trimmed == "" {
 		return "", false
 	}
-	
+
 	// Check length limit
 	if len(trimmed) > tv.maxInputLength {
 		return trimmed[:tv.maxInputLength], true // Truncate but accept
 	}
-	
+
 	// Clean up any problematic characters that might come from mobile keyboards
 	cleaned := tv.sanitizeInput(trimmed)
-	
+
 	return cleaned, true
 }
 
 // sanitizeInput removes or normalizes problematic characters
 func (tv *TermuxValidator) sanitizeInput(input string) string {
 	var result strings.Builder
-	
+
 	for _, r := range input {
 		switch {
 		// Keep printable ASCII
@@ -65,21 +65,21 @@ func (tv *TermuxValidator) sanitizeInput(input string) string {
 			// Skip
 		}
 	}
-	
+
 	return result.String()
 }
 
 // IsGreeting checks if input is a simple greeting
 func (tv *TermuxValidator) IsGreeting(input string) bool {
 	lower := strings.ToLower(strings.TrimSpace(input))
-	
+
 	// Must be exact match or greeting + simple name (e.g., "Hello Harness")
 	greetings := []string{
 		"hello", "hi", "hey", "howdy", "greetings",
 		"yo", "hiya", "what's up", "sup",
 		"good morning", "good afternoon", "good evening",
 	}
-	
+
 	// Common follow-ups that indicate a greeting (not a task)
 	greetingFollowups := []string{
 		"there", "harness", "agent", "assistant", "bot",
@@ -87,7 +87,7 @@ func (tv *TermuxValidator) IsGreeting(input string) bool {
 		"everyone", "all", "folks", "guys",
 		"again", "back",
 	}
-	
+
 	for _, g := range greetings {
 		// Exact match
 		if lower == g {
@@ -111,7 +111,7 @@ func (tv *TermuxValidator) IsGreeting(input string) bool {
 			}
 		}
 	}
-	
+
 	return false
 }
 
@@ -135,7 +135,7 @@ func isLikelyVerb(word string) bool {
 // IsSimpleQuestion checks if input is a simple question about capabilities
 func (tv *TermuxValidator) IsSimpleQuestion(input string) bool {
 	lower := strings.ToLower(strings.TrimSpace(input))
-	
+
 	// These should be standalone questions, not task requests
 	patterns := []string{
 		"what can you do",
@@ -146,30 +146,30 @@ func (tv *TermuxValidator) IsSimpleQuestion(input string) bool {
 		"what are your capabilities",
 		"how can you help",
 	}
-	
+
 	// "Help" alone is a question, but "Help me" is a task request
 	if lower == "help" || lower == "help?" {
 		return true
 	}
-	
+
 	for _, p := range patterns {
 		if strings.Contains(lower, p) {
 			return true
 		}
 	}
-	
+
 	return false
 }
 
 // GetTermuxInfo returns information about the Termux environment
 func GetTermuxInfo() map[string]string {
 	info := make(map[string]string)
-	
+
 	info["TERMUX_VERSION"] = os.Getenv("TERMUX_VERSION")
 	info["TERMUX_APP_PID"] = os.Getenv("TERMUX_APP_PID")
 	info["HOME"] = os.Getenv("HOME")
 	info["PREFIX"] = os.Getenv("PREFIX")
-	
+
 	// Detect if we're actually in Termux
 	isTermux := DetectTermux()
 	if isTermux {
@@ -177,7 +177,7 @@ func GetTermuxInfo() map[string]string {
 	} else {
 		info["detected"] = "false"
 	}
-	
+
 	return info
 }
 
@@ -187,17 +187,17 @@ func IsTermuxInputIssue(input string) (bool, string) {
 	if strings.TrimSpace(input) == "" {
 		return true, "Input appears to be empty"
 	}
-	
+
 	// Check for excessive repeated characters (might indicate stuck key)
 	if hasExcessiveRepeats(input, 10) {
 		return true, "Input has excessive repeated characters"
 	}
-	
+
 	// Check for null bytes or control characters
 	if strings.Contains(input, "\x00") {
 		return true, "Input contains null bytes"
 	}
-	
+
 	return false, ""
 }
 
@@ -206,7 +206,7 @@ func hasExcessiveRepeats(s string, threshold int) bool {
 	if len(s) < threshold {
 		return false
 	}
-	
+
 	count := 1
 	for i := 1; i < len(s); i++ {
 		if s[i] == s[i-1] {
@@ -218,7 +218,7 @@ func hasExcessiveRepeats(s string, threshold int) bool {
 			count = 1
 		}
 	}
-	
+
 	return false
 }
 
@@ -226,13 +226,13 @@ func hasExcessiveRepeats(s string, threshold int) bool {
 func NormalizeTermuxInput(input string) string {
 	// Handle Samsung keyboard double-space period
 	input = strings.ReplaceAll(input, "  .", ".")
-	
+
 	// Normalize line endings
 	input = strings.ReplaceAll(input, "\r\n", "\n")
 	input = strings.ReplaceAll(input, "\r", "\n")
-	
+
 	// Trim trailing newlines
 	input = strings.TrimRight(input, "\n")
-	
+
 	return input
 }

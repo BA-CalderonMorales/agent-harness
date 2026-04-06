@@ -12,21 +12,21 @@ import (
 
 // BehaviorTest defines a behavior-based test
 type BehaviorTest struct {
-	Name        string
-	Given       func() TestContext
-	When        func(TestContext) TestContext
-	Then        func(TestContext) error
-	Timeout     time.Duration
-	Cleanup     func(TestContext)
+	Name    string
+	Given   func() TestContext
+	When    func(TestContext) TestContext
+	Then    func(TestContext) error
+	Timeout time.Duration
+	Cleanup func(TestContext)
 }
 
 // TestContext holds state during test execution
 type TestContext struct {
-	SessionID   string
-	WorkDir     string
-	State       map[string]interface{}
-	Errors      []error
-	Artifacts   map[string]string
+	SessionID string
+	WorkDir   string
+	State     map[string]interface{}
+	Errors    []error
+	Artifacts map[string]string
 }
 
 // NewTestContext creates a fresh test context
@@ -42,9 +42,9 @@ func NewTestContext() TestContext {
 
 // BehaviorRunner executes behavior tests
 type BehaviorRunner struct {
-	t          *testing.T
-	baseline   map[string]TestResult
-	hooks      RunnerHooks
+	t        *testing.T
+	baseline map[string]TestResult
+	hooks    RunnerHooks
 }
 
 // RunnerHooks for test lifecycle
@@ -75,10 +75,10 @@ func NewBehaviorRunner(t *testing.T) *BehaviorRunner {
 func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 	start := time.Now()
 	result := TestResult{Name: test.Name}
-	
+
 	_, cancel := context.WithTimeout(context.Background(), test.Timeout)
 	defer cancel()
-	
+
 	// Execute hooks
 	if r.hooks.BeforeEach != nil {
 		if err := r.hooks.BeforeEach(test); err != nil {
@@ -87,7 +87,7 @@ func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 			return result
 		}
 	}
-	
+
 	// Execute test phases
 	testCtx := test.Given()
 	defer func() {
@@ -96,10 +96,10 @@ func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 		}
 		cleanupWorkDir(testCtx.WorkDir)
 	}()
-	
+
 	// Run When phase
 	testCtx = test.When(testCtx)
-	
+
 	// Run Then phase
 	if err := test.Then(testCtx); err != nil {
 		result.Error = err
@@ -110,15 +110,15 @@ func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 	} else {
 		result.Passed = true
 	}
-	
+
 	result.Duration = time.Since(start)
 	result.Artifacts = testCtx.Artifacts
-	
+
 	// Execute after hook
 	if r.hooks.AfterEach != nil {
 		r.hooks.AfterEach(test, result)
 	}
-	
+
 	return result
 }
 
@@ -226,10 +226,10 @@ type SessionManager struct {
 }
 
 type Session struct {
-	ID       string
-	State    map[string]interface{}
-	History  []Action
-	WorkDir  string
+	ID      string
+	State   map[string]interface{}
+	History []Action
+	WorkDir string
 }
 
 type Action struct {

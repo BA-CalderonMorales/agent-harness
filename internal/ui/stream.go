@@ -64,25 +64,25 @@ func (sr *StreamRenderer) SetOutput(w io.Writer) {
 func (sr *StreamRenderer) StartThinking(context string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if sr.isThinking {
 		return
 	}
-	
+
 	sr.isThinking = true
 	sr.thinkingStart = time.Now()
 	sr.kaomojiIdx = 0
-	
+
 	// Print thinking indicator with kaomoji
 	// Layout: blank line, "◆ <context>", "   <frame> <status>" (no trailing newline on last line)
 	frame := KaomojiFrames[0]
 	if context != "" {
-		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s", 
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s",
 			DimStyle.Render(context),
 			DimStyle.Render(frame),
 			DimStyle.Render("thinking..."))
 	} else {
-		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s", 
+		fmt.Fprintf(sr.out, "\n◆ %s\n   %s %s",
 			DimStyle.Render("Processing..."),
 			DimStyle.Render(frame),
 			DimStyle.Render("thinking..."))
@@ -102,7 +102,7 @@ func (sr *StreamRenderer) StopThinking() {
 	// Clear the thinking indicator lines
 	// StartThinking prints: newline, "◆ <context>", newline, "   <frame> <status>"
 	// We need to clear those lines and return to the start
-	fmt.Fprint(sr.out, "\r\033[K")       // Clear current line (spinner line)
+	fmt.Fprint(sr.out, "\r\033[K")        // Clear current line (spinner line)
 	fmt.Fprint(sr.out, "\033[1A\r\033[K") // Move up and clear the ◆ line
 	fmt.Fprint(sr.out, "\033[1A\r\033[K") // Move up and clear the blank line
 }
@@ -111,20 +111,20 @@ func (sr *StreamRenderer) StopThinking() {
 func (sr *StreamRenderer) UpdateThinking() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if !sr.isThinking && len(sr.toolStack) == 0 {
 		return
 	}
-	
+
 	// Only update every 200ms
 	if time.Since(sr.lastFrameTime) < 200*time.Millisecond {
 		return
 	}
 	sr.lastFrameTime = time.Now()
-	
+
 	sr.kaomojiIdx = (sr.kaomojiIdx + 1) % len(KaomojiFrames)
 	frame := KaomojiFrames[sr.kaomojiIdx]
-	
+
 	// Build status text - keep it short to avoid line wrapping
 	var status string
 	if len(sr.toolStack) > 0 {
@@ -136,17 +136,17 @@ func (sr *StreamRenderer) UpdateThinking() {
 	} else {
 		status = "thinking..."
 	}
-	
+
 	// Get terminal width for truncation
 	width, _, _ := GetTerminalSize()
 	maxStatusLen := width - 15 // Reserve space for frame and padding
 	if maxStatusLen < 20 {
 		maxStatusLen = 20
 	}
-	
+
 	// Truncate status to fit on one line
 	status = Truncate(status, maxStatusLen)
-	
+
 	// IMPORTANT: Check toolStack FIRST before isThinking
 	// PrintToolStart prints a trailing newline, so cursor is on line AFTER spinner
 	// We need to move up one line to get to the spinner line
@@ -154,12 +154,12 @@ func (sr *StreamRenderer) UpdateThinking() {
 	// We just need \r to go to start of line
 	if len(sr.toolStack) > 0 {
 		// Tool spinner - move up to the spinner line, update, then add newline back
-		fmt.Fprintf(sr.out, "\033[1A\r\033[K   %s %s\n", 
+		fmt.Fprintf(sr.out, "\033[1A\r\033[K   %s %s\n",
 			DimStyle.Render(frame),
 			DimStyle.Render(status))
 	} else if sr.isThinking {
 		// Thinking spinner - already on the right line
-		fmt.Fprintf(sr.out, "\r\033[K   %s %s", 
+		fmt.Fprintf(sr.out, "\r\033[K   %s %s",
 			DimStyle.Render(frame),
 			DimStyle.Render(status))
 	}
@@ -169,9 +169,9 @@ func (sr *StreamRenderer) UpdateThinking() {
 func (sr *StreamRenderer) PrintAgentOutput(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	sr.isThinking = false
-	
+
 	// Split into lines and render each
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
@@ -188,7 +188,7 @@ func (sr *StreamRenderer) PrintAgentOutput(text string) {
 func (sr *StreamRenderer) PrintToolStart(toolID, toolName, description string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	action := FormatToolAction(toolName, description)
 	toolInfo := ToolInfo{
 		ID:          toolID,
@@ -197,12 +197,12 @@ func (sr *StreamRenderer) PrintToolStart(toolID, toolName, description string) {
 		StartTime:   time.Now(),
 	}
 	sr.toolStack = append(sr.toolStack, toolInfo)
-	
+
 	// Print tool start with arrow indicator
 	fmt.Fprintf(sr.out, "\n→ %s\n", DimStyle.Render(action))
-	
+
 	// Show kaomoji spinner on next line
-	fmt.Fprintf(sr.out, "   %s %s\n", 
+	fmt.Fprintf(sr.out, "   %s %s\n",
 		DimStyle.Render(KaomojiFrames[0]),
 		DimStyle.Render("running..."))
 }
@@ -211,12 +211,12 @@ func (sr *StreamRenderer) PrintToolStart(toolID, toolName, description string) {
 func (sr *StreamRenderer) HandleProgress(toolUseID string, data any) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	msg := fmt.Sprintf("%v", data)
 	// Truncate and clean message for display
 	msg = strings.TrimSpace(msg)
 	msg = strings.ReplaceAll(msg, "\n", " ")
-	
+
 	for i := range sr.toolStack {
 		if sr.toolStack[i].ID == toolUseID {
 			sr.toolStack[i].LatestProgress = msg
@@ -229,7 +229,7 @@ func (sr *StreamRenderer) HandleProgress(toolUseID string, data any) {
 func (sr *StreamRenderer) PrintToolComplete(toolUseID string, result string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	// Find and remove from stack
 	var toolName string
 	for i, t := range sr.toolStack {
@@ -239,17 +239,17 @@ func (sr *StreamRenderer) PrintToolComplete(toolUseID string, result string) {
 			break
 		}
 	}
-	
+
 	if toolName == "" {
 		return
 	}
-	
+
 	// Clear the spinner line and show success
 	action := FormatToolAction(toolName, "")
-	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n", 
+	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
 		SuccessStyle.Render("✓"),
 		DimStyle.Render(action))
-	
+
 	// Show result summary if significant
 	if len(result) > 0 && len(result) < 100 {
 		fmt.Fprintf(sr.out, "   %s\n", DimStyle.Render(Truncate(result, 80)))
@@ -260,7 +260,7 @@ func (sr *StreamRenderer) PrintToolComplete(toolUseID string, result string) {
 func (sr *StreamRenderer) PrintToolError(toolUseID string, err error) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	// Find and remove from stack
 	var toolName string
 	for i, t := range sr.toolStack {
@@ -270,17 +270,17 @@ func (sr *StreamRenderer) PrintToolError(toolUseID string, err error) {
 			break
 		}
 	}
-	
+
 	if toolName == "" {
 		return
 	}
-	
+
 	// Clear the spinner line and show error
 	action := FormatToolAction(toolName, "")
-	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n", 
+	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
 		ErrorStyle.Render("✗"),
 		ErrorStyle.Render(action))
-	
+
 	if err != nil {
 		fmt.Fprintf(sr.out, "   %s\n", ErrorStyle.Render(err.Error()))
 	}
@@ -290,12 +290,12 @@ func (sr *StreamRenderer) PrintToolError(toolUseID string, err error) {
 func (sr *StreamRenderer) PrintProgress(message string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	// Update spinner index
 	sr.spinnerIdx = (sr.spinnerIdx + 1) % len(BrailleFrames)
 	frame := BrailleFrames[sr.spinnerIdx]
-	
-	fmt.Fprintf(sr.out, "\r   %s %s", 
+
+	fmt.Fprintf(sr.out, "\r   %s %s",
 		DimStyle.Render(frame),
 		DimStyle.Render(message))
 }
@@ -304,7 +304,7 @@ func (sr *StreamRenderer) PrintProgress(message string) {
 func (sr *StreamRenderer) ClearProgress() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	fmt.Fprintf(sr.out, "\r\033[K")
 }
 
@@ -312,7 +312,7 @@ func (sr *StreamRenderer) ClearProgress() {
 func (sr *StreamRenderer) PrintUserMessage(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	fmt.Fprintf(sr.out, "\n◆ %s\n", text)
 }
 
@@ -320,7 +320,7 @@ func (sr *StreamRenderer) PrintUserMessage(text string) {
 func (sr *StreamRenderer) PrintSeparator() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	width := 40
 	if w, _, err := GetTerminalSize(); err == nil && w > 0 {
 		width = w / 2
@@ -328,7 +328,7 @@ func (sr *StreamRenderer) PrintSeparator() {
 			width = 60
 		}
 	}
-	
+
 	sep := strings.Repeat("─", width)
 	fmt.Fprintf(sr.out, "\n%s\n", DimStyle.Render(sep))
 }
@@ -337,7 +337,7 @@ func (sr *StreamRenderer) PrintSeparator() {
 func (sr *StreamRenderer) PrintSuggestion(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	fmt.Fprintf(sr.out, "   %s %s\n",
 		DimStyle.Render("tip:"),
 		DimStyle.Render(text))
@@ -347,7 +347,7 @@ func (sr *StreamRenderer) PrintSuggestion(text string) {
 func (sr *StreamRenderer) Flush() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
-	
+
 	if f, ok := sr.out.(*os.File); ok {
 		f.Sync()
 	}
@@ -432,11 +432,11 @@ func (ip *InteractivePrompt) Render() string {
 	if ip.contextProvider != nil {
 		context = ip.contextProvider()
 	}
-	
+
 	if context != "" {
 		return fmt.Sprintf("%s %s ", DimStyle.Render(context), ip.basePrompt)
 	}
-	
+
 	return ip.basePrompt + " "
 }
 
@@ -445,12 +445,12 @@ func (ip *InteractivePrompt) AddToHistory(entry string) {
 	if entry = strings.TrimSpace(entry); entry == "" {
 		return
 	}
-	
+
 	// Avoid duplicates at the end
 	if len(ip.history) > 0 && ip.history[len(ip.history)-1] == entry {
 		return
 	}
-	
+
 	ip.history = append(ip.history, entry)
 	ip.historyIdx = -1
 }
@@ -460,12 +460,12 @@ func (ip *InteractivePrompt) HistoryUp() (string, bool) {
 	if len(ip.history) == 0 {
 		return "", false
 	}
-	
+
 	if ip.historyIdx < len(ip.history)-1 {
 		ip.historyIdx++
 		return ip.history[len(ip.history)-1-ip.historyIdx], true
 	}
-	
+
 	return "", false
 }
 
@@ -475,7 +475,7 @@ func (ip *InteractivePrompt) HistoryDown() (string, bool) {
 		ip.historyIdx = -1
 		return "", false
 	}
-	
+
 	ip.historyIdx--
 	return ip.history[len(ip.history)-1-ip.historyIdx], true
 }
