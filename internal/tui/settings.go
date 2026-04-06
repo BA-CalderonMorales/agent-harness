@@ -29,6 +29,7 @@ type Setting struct {
 	Description string
 	Type        string // "string", "bool", "number", "choice"
 	Options     []string
+	BoolValue   bool // For boolean settings
 }
 
 // ---------------------------------------------------------------------------
@@ -108,7 +109,19 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter", " ":
 			if m.cursor < len(m.settings) {
-				m.startEditing()
+				// For boolean settings, toggle immediately without entering edit mode
+				if m.settings[m.cursor].Type == "bool" {
+					m.settings[m.cursor].BoolValue = !m.settings[m.cursor].BoolValue
+					if m.delegate != nil {
+						value := "false"
+						if m.settings[m.cursor].BoolValue {
+							value = "true"
+						}
+						m.delegate.OnSettingChange(m.settings[m.cursor].Key, value)
+					}
+				} else {
+					m.startEditing()
+				}
 			}
 
 		case "r":
@@ -228,6 +241,26 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		prefix = IndicatorSelected
 		style = ListSelectedStyle
 		valueStyle = ListSelectedStyle
+	}
+
+	// For boolean settings, show checkbox
+	if setting.Type == "bool" {
+		checkbox := "[ ]"
+		if setting.BoolValue {
+			checkbox = "[x]"
+		}
+		if selected {
+			checkbox = PromptStyle.Render(checkbox)
+		}
+		label := style.Render(prefix + checkbox + " " + setting.Label)
+		b.WriteString(label)
+
+		// Description for boolean
+		if selected {
+			b.WriteString("\n")
+			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("    %s", setting.Description)))
+		}
+		return b.String()
 	}
 
 	// Label and value

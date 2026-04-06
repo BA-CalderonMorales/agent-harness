@@ -117,10 +117,7 @@ var (
 				PaddingLeft(1)
 
 	ToolCallStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(ColorAccent).
-			Foreground(ColorAccent).
-			Padding(0, 1)
+			Foreground(ColorAccent)
 
 	// ToolCommandPreviewStyle - grey preview of actual command being executed
 	// Used for human-readable command preview (like Kimi does)
@@ -129,28 +126,16 @@ var (
 				Italic(true)
 
 	ToolRunningStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.ThickBorder()).
-				BorderForeground(ColorInfo).
-				Foreground(ColorInfo).
-				Padding(0, 1)
+				Foreground(ColorInfo)
 
 	ToolThinkingStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(ColorWarning).
-				Foreground(ColorWarning).
-				Padding(0, 1)
+				Foreground(ColorWarning)
 
 	ToolDoneStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(ColorSuccess).
-			Foreground(ColorSuccess).
-			Padding(0, 1)
+			Foreground(ColorSuccess)
 
 	ToolErrorStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(ColorError).
-			Foreground(ColorError).
-			Padding(0, 1)
+			Foreground(ColorError)
 
 	StreamingStyle = lipgloss.NewStyle().
 			Foreground(ColorTextDim).
