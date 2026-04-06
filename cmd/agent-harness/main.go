@@ -918,10 +918,22 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 					responseText.WriteString(b.Text)
 				case types.ToolUseBlock:
 					toolCallCount++
+					
+					// Look up tool for rich UI display
+					tool, ok := app.toolRegistry.FindToolByName(b.Name)
+					displayName := b.Name
+					activityDesc := ""
+					if ok {
+						displayName = tool.UserFacingName(b.Input)
+						activityDesc = tool.GetActivityDescription(b.Input)
+					}
+					
 					tuiApp.Send(tui.AgentToolStartMsg{
-						ToolID:   b.ID,
-						ToolName: b.Name,
-						Input:    b.Input,
+						ToolID:       b.ID,
+						ToolName:     b.Name,
+						DisplayName:  displayName,
+						ActivityDesc: activityDesc,
+						Input:        b.Input,
 					})
 				case types.ToolResultBlock:
 					tuiApp.Send(tui.AgentToolDoneMsg{
