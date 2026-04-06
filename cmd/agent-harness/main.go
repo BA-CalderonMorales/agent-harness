@@ -38,20 +38,19 @@ var (
 
 // App holds the application state
 type App struct {
-	config          *config.LayeredConfig
-	secureConfig    *config.SecureConfig
-	session         *state.Session
-	sessionManager  *state.SessionManager
-	costTracker     *agent.CostTracker
-	cmdRegistry     *commands.SlashRegistry
-	toolRegistry    *tools.ToolRegistry
-	client          llm.Client
-	loop            *agent.Loop
-	gitContext      *git.Context
-	cwd             string
-	tuiApp          *tui.App // TUI reference for callbacks
-	approvalManager *approval.Manager
-	executionMode   approval.ExecutionMode
+	config         *config.LayeredConfig
+	secureConfig   *config.SecureConfig
+	session        *state.Session
+	sessionManager *state.SessionManager
+	costTracker    *agent.CostTracker
+	cmdRegistry    *commands.SlashRegistry
+	toolRegistry   *tools.ToolRegistry
+	client         llm.Client
+	loop           *agent.Loop
+	gitContext     *git.Context
+	cwd            string
+	tuiApp         *tui.App // TUI reference for callbacks
+	executionMode  approval.ExecutionMode
 }
 
 func main() {

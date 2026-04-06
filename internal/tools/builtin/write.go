@@ -53,7 +53,7 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		_, err := os.Stat(path)
 		if err == nil {
 			if err := fs.DefaultStaleTracker.CheckStale(path); err != nil {
-				return tools.ToolResult{}, fmt.Errorf("stale write detected: %w. The file may have been modified by another process. Please re-read and try again.", err)
+				return tools.ToolResult{}, fmt.Errorf("stale write detected: %w; the file may have been modified by another process - please re-read and try again", err)
 			}
 		}
 

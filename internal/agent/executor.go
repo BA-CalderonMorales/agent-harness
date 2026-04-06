@@ -18,7 +18,6 @@ type trackedTool struct {
 	status            toolStatus
 	isConcurrencySafe bool
 	results           []types.Message
-	pendingProgress   []types.ProgressMessage
 	contextModifiers  []func(ctx tools.Context) tools.Context
 	promise           chan struct{}
 }
