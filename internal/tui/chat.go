@@ -326,8 +326,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			displayName = msg.ToolName
 		}
 		
-		// Extract command from tool input for preview
-		command := m.extractCommandFromToolInput(msg.ToolName, msg.Input)
+		// Use rich activity description from tool if available, otherwise extract from input
+		command := msg.ActivityDesc
+		if command == "" {
+			command = m.extractCommandFromToolInput(msg.ToolName, msg.Input)
+		}
 		
 		// Set up tool animation state for yolo-style display
 		m.toolAnimation = &ToolAnimationState{

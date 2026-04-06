@@ -40,6 +40,32 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		IsReadOnly:            func(map[string]any) bool { return true },
 		IsSearchOrReadCommand: func(map[string]any) tools.SearchReadFlags { return tools.SearchReadFlags{IsRead: true} },
 	},
+	UserFacingName: func(input map[string]any) string {
+		return "Read"
+	},
+	GetActivityDescription: func(input map[string]any) string {
+		path := getString(input, "file_path")
+		if path == "" {
+			return "Reading file"
+		}
+		// Show just the filename for brevity
+		parts := strings.Split(path, "/")
+		filename := parts[len(parts)-1]
+		offset := int(getFloat(input, "offset"))
+		limit := int(getFloat(input, "limit"))
+		if offset > 0 || limit > 0 {
+			return fmt.Sprintf("Reading %s (lines %d-%d)", filename, offset, offset+limit)
+		}
+		return fmt.Sprintf("Reading %s", filename)
+	},
+	GetToolUseSummary: func(input map[string]any) string {
+		path := getString(input, "file_path")
+		if path == "" {
+			return ""
+		}
+		parts := strings.Split(path, "/")
+		return parts[len(parts)-1]
+	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		path := getString(input, "file_path")
 		if path == "" {

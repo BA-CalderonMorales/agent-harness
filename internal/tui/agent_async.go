@@ -93,10 +93,11 @@ type AgentErrorMsg struct {
 
 // AgentToolStartMsg signals a tool is being invoked
 type AgentToolStartMsg struct {
-	ToolID      string
-	ToolName    string
-	DisplayName string
-	Input       map[string]any
+	ToolID       string
+	ToolName     string
+	DisplayName  string
+	ActivityDesc string // Rich description of what the tool is doing
+	Input        map[string]any
 }
 
 // AgentToolDoneMsg signals a tool has completed
