@@ -115,3 +115,9 @@ All notable changes to agent-harness will be documented in this file.
 
 ### Fixed
 - Terminal input handling on mobile devices
+## [0.0.49] - 2026-04-05
+
+### Fixed
+- Tool UI now uses per-tool UserFacingName and GetActivityDescription methods
+- Rich activity descriptions show what tools are doing (e.g., 'Reading file.go (lines 10-20)')
+- Anti-pattern fixed: removed hardcoded switch statements for tool display names
