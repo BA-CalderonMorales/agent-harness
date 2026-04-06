@@ -5,7 +5,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"strconv"
 	"strings"
 
@@ -418,9 +417,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Tool executing notification - show in chat
 	// -------------------------------------------------------------------------
 	case ToolExecutingMsg:
-		// Add a visible command notification to the chat
-		a.chatModel.AddToolMessage(msg.ToolName, getToolDisplayName(msg.ToolName),
-			fmt.Sprintf("Executing: %s", msg.Command))
+		// Add or update tool message with running status
+		a.chatModel.AddOrUpdateToolMessage(msg.ToolID, msg.ToolName, getToolDisplayName(msg.ToolName),
+			msg.Command, ToolStatusRunning)
 		return a, nil
 
 	// -------------------------------------------------------------------------
