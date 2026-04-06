@@ -104,7 +104,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
-		
+
 		// Handle recoverable errors with retry logic
 		if streamErr != nil {
 			if recErr, ok := streamErr.(*recoverableError); ok {
@@ -115,11 +115,11 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 					streamErr = nil
 				} else if recoverErr != nil {
 					// Recovery failed - now yield the original error
-					streamErr = fmt.Errorf("recovery failed after %d attempts: %w (original: %v)", 
+					streamErr = fmt.Errorf("recovery failed after %d attempts: %w (original: %v)",
 						state.maxOutputTokensRecoveryCount, recoverErr, recErr.err)
 				}
 			}
-			
+
 			if streamErr != nil {
 				return Terminal{Reason: TerminalReasonError, Error: streamErr}
 			}
@@ -153,7 +153,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 					case <-ctx.Done():
 						return
 					}
-					
+
 					// Update session messages for final results
 					if sm, ok := ev.(types.StreamMessage); ok {
 						l.mu.Lock()
@@ -167,7 +167,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			_, execErr := executor.GetRemainingResults(ctx)
 			executor.Close()
 			<-done
-			
+
 			if execErr != nil {
 				_ = execErr
 			}
@@ -245,7 +245,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
-					
+
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
 					toolInputBuffer = ""
 				}
@@ -374,7 +374,7 @@ func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *l
 		if state.maxOutputTokensOverride > 64000 {
 			state.maxOutputTokensOverride = 64000
 		}
-		
+
 		// Yield recovery attempt notice
 		select {
 		case out <- types.StreamMessage{Message: types.Message{

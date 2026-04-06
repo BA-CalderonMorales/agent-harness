@@ -27,28 +27,28 @@ type Session struct {
 
 // SessionMetadata contains lightweight session info
 type SessionMetadata struct {
-	ID            string    `json:"id"`
-	CreatedAt     time.Time `json:"created_at"`
-	UpdatedAt     time.Time `json:"updated_at"`
-	MessageCount  int       `json:"message_count"`
-	Model         string    `json:"model"`
-	Turns         int       `json:"turns"`
-	EstimatedTokens int     `json:"estimated_tokens"`
+	ID              string    `json:"id"`
+	CreatedAt       time.Time `json:"created_at"`
+	UpdatedAt       time.Time `json:"updated_at"`
+	MessageCount    int       `json:"message_count"`
+	Model           string    `json:"model"`
+	Turns           int       `json:"turns"`
+	EstimatedTokens int       `json:"estimated_tokens"`
 }
 
 // CompactionResult contains the result of a compaction operation
 type CompactionResult struct {
-	RemovedCount      int
-	KeptCount         int
-	Skipped           bool
-	CompactedSession  *Session
+	RemovedCount     int
+	KeptCount        int
+	Skipped          bool
+	CompactedSession *Session
 }
 
 // CompactionConfig controls how compaction works
 type CompactionConfig struct {
-	MaxMessages      int
+	MaxMessages        int
 	MaxEstimatedTokens int
-	PreserveRecent   int  // Always preserve this many recent messages
+	PreserveRecent     int // Always preserve this many recent messages
 }
 
 // DefaultCompactionConfig returns a sensible default config

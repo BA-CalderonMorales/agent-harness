@@ -61,7 +61,7 @@ func TestEvaluateAllowRule(t *testing.T) {
 
 func TestEvaluateModeBypass(t *testing.T) {
 	ctx := Context{
-		Mode:                        ModeBypassPermissions,
+		Mode:                         ModeBypassPermissions,
 		IsBypassPermissionsAvailable: true,
 	}
 

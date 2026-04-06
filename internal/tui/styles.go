@@ -281,9 +281,9 @@ var (
 			Padding(0, 2)
 
 	ListHeaderStyle = lipgloss.NewStyle().
-				Foreground(ColorAccent).
-				Bold(true).
-				Underline(true)
+			Foreground(ColorAccent).
+			Bold(true).
+			Underline(true)
 
 	ListSeparatorStyle = lipgloss.NewStyle().
 				Foreground(ColorBorder)
@@ -299,15 +299,15 @@ var (
 			Padding(1, 2)
 
 	PanelSecondary = lipgloss.NewStyle().
-				BorderStyle(lipgloss.NormalBorder()).
-				BorderForeground(ColorMuted).
-				Padding(0, 1)
+			BorderStyle(lipgloss.NormalBorder()).
+			BorderForeground(ColorMuted).
+			Padding(0, 1)
 
 	PanelHighlight = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(ColorPrimary).
-				Background(ColorHighlight).
-				Padding(1, 2)
+			BorderStyle(lipgloss.RoundedBorder()).
+			BorderForeground(ColorPrimary).
+			Background(ColorHighlight).
+			Padding(1, 2)
 )
 
 // Header styles
@@ -318,12 +318,12 @@ var (
 			MarginBottom(1)
 
 	HeaderSecondary = lipgloss.NewStyle().
-				Foreground(ColorSecondary).
-				Bold(true)
+			Foreground(ColorSecondary).
+			Bold(true)
 
 	HeaderTertiary = lipgloss.NewStyle().
-				Foreground(ColorAccent).
-				Bold(true)
+			Foreground(ColorAccent).
+			Bold(true)
 )
 
 // Data display styles
@@ -349,15 +349,15 @@ var (
 			Bold(true)
 
 	BadgeDisabled = lipgloss.NewStyle().
-				Foreground(ColorTextDim)
+			Foreground(ColorTextDim)
 
 	BadgeRunning = lipgloss.NewStyle().
-				Foreground(ColorInfo).
-				Bold(true)
+			Foreground(ColorInfo).
+			Bold(true)
 
 	BadgeWarning = lipgloss.NewStyle().
-				Foreground(ColorWarning).
-				Bold(true)
+			Foreground(ColorWarning).
+			Bold(true)
 
 	ErrorStyle = lipgloss.NewStyle().
 			Foreground(ColorError).

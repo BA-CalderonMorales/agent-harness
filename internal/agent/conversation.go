@@ -57,14 +57,14 @@ func ClassifyInput(input string) ConversationType {
 	if trimmed == "" {
 		return ConvCasual
 	}
-	
+
 	// Check for greetings first (exact matches preferred)
 	for _, pattern := range greetingPatterns {
 		if pattern.MatchString(trimmed) {
 			return ConvGreeting
 		}
 	}
-	
+
 	// Check for questions about capabilities
 	for _, pattern := range questionPatterns {
 		if pattern.MatchString(trimmed) {
@@ -79,14 +79,14 @@ func ClassifyInput(input string) ConversationType {
 			return ConvTask
 		}
 	}
-	
+
 	// Check for casual conversation
 	for _, pattern := range casualPatterns {
 		if pattern.MatchString(trimmed) {
 			return ConvCasual
 		}
 	}
-	
+
 	// Default to task for anything else
 	return ConvTask
 }
@@ -131,19 +131,19 @@ Type /help to see available commands, or just start describing what you need.`
 // GetCasualResponse returns a response for casual conversation
 func GetCasualResponse(input string) string {
 	inputLower := strings.ToLower(strings.TrimSpace(input))
-	
+
 	if strings.Contains(inputLower, "thank") {
 		return "You're welcome! Anything else you'd like to work on?"
 	}
-	
+
 	if strings.Contains(inputLower, "how are you") || strings.Contains(inputLower, "how's it going") {
 		return "I'm ready to help! What would you like to work on?"
 	}
-	
+
 	if strings.Contains(inputLower, "joke") {
 		return "Why do programmers prefer dark mode? Because light attracts bugs.\n\nNow, what are we working on?"
 	}
-	
+
 	return "I'm here to help with your coding tasks. What would you like to work on?"
 }
 

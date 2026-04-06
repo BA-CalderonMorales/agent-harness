@@ -87,13 +87,13 @@ func (d Decision) IsFinal() bool {
 
 // CommandInfo contains details about a command awaiting approval
 type CommandInfo struct {
-	ID          string
-	ToolName    string
-	DisplayName string
-	Command     string // The actual command being executed
-	Description string // Human-readable description of what it does
+	ID            string
+	ToolName      string
+	DisplayName   string
+	Command       string // The actual command being executed
+	Description   string // Human-readable description of what it does
 	IsDestructive bool
-	Timestamp   time.Time
+	Timestamp     time.Time
 }
 
 // ApprovalRequest represents a request for user approval
@@ -122,9 +122,9 @@ func (r *ApprovalRequest) Respond(d Decision) {
 
 // Manager handles command approval flow
 type Manager struct {
-	mode           ExecutionMode
-	handler        ApprovalHandler
-	pending        map[string]*ApprovalRequest
+	mode             ExecutionMode
+	handler          ApprovalHandler
+	pending          map[string]*ApprovalRequest
 	approvedPatterns map[string]bool // Patterns that are auto-approved
 	rejectedPatterns map[string]bool // Patterns that are auto-rejected
 }
@@ -135,10 +135,10 @@ type ApprovalHandler interface {
 	// RequestApproval asks the user for approval
 	// Returns a channel that will receive the decision
 	RequestApproval(req *ApprovalRequest) error
-	
+
 	// ShowCommand displays what command is running (for yolo mode)
 	ShowCommand(cmd CommandInfo)
-	
+
 	// OnCancel is called when the user cancels (ESC key)
 	OnCancel()
 }
@@ -190,7 +190,7 @@ func (m *Manager) CheckApproval(cmd CommandInfo) (Decision, error) {
 
 	req := NewApprovalRequest(cmd)
 	m.pending[cmd.ID] = req
-	
+
 	if err := m.handler.RequestApproval(req); err != nil {
 		delete(m.pending, cmd.ID)
 		return DecisionReject, err
@@ -200,7 +200,7 @@ func (m *Manager) CheckApproval(cmd CommandInfo) (Decision, error) {
 	select {
 	case decision := <-req.Response:
 		delete(m.pending, cmd.ID)
-		
+
 		// Handle special decisions
 		switch decision {
 		case DecisionApproveAll:
@@ -210,7 +210,7 @@ func (m *Manager) CheckApproval(cmd CommandInfo) (Decision, error) {
 			m.rejectedPatterns[cmd.Command] = true
 			return DecisionReject, fmt.Errorf("command rejected by user")
 		}
-		
+
 		return decision, nil
 	case <-req.Context.Done():
 		delete(m.pending, cmd.ID)
@@ -247,12 +247,12 @@ func FormatCommandForDisplay(toolName, command string) string {
 	if command == "" {
 		return fmt.Sprintf("[%s]", toolName)
 	}
-	
+
 	// For shell commands, show the actual command
 	if toolName == "bash" || toolName == "shell" {
 		return command
 	}
-	
+
 	// For other tools, show the tool name and truncated details
 	if len(command) > 100 {
 		return command[:97] + "..."

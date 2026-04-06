@@ -76,7 +76,7 @@ func (b *ContentBudget) RecordUsage(toolName string, resultSize int, toolMaxResu
 	}
 
 	if b.usedChars+resultSize > b.maxCharsPerTurn {
-		return fmt.Errorf("content budget exceeded: used %d/%d chars, result is %d chars", 
+		return fmt.Errorf("content budget exceeded: used %d/%d chars, result is %d chars",
 			b.usedChars, b.maxCharsPerTurn, resultSize)
 	}
 
@@ -116,11 +116,11 @@ func (b *ContentBudget) GetTruncatedResult(toolName string, result string, toolM
 
 	// Truncate with note
 	truncated := result[:remaining]
-	note := fmt.Sprintf("\n\n[Content truncated: result exceeded turn budget. Used %d/%d chars]", 
+	note := fmt.Sprintf("\n\n[Content truncated: result exceeded turn budget. Used %d/%d chars]",
 		b.usedChars+len(result), b.maxCharsPerTurn)
-	
+
 	b.usedChars += remaining
-	
+
 	return truncated + note, note
 }
 

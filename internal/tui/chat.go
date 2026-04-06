@@ -47,7 +47,7 @@ type ChatMessage struct {
 	Timestamp       time.Time
 	IsTool          bool
 	ToolName        string
-	ToolDisplayName string // User-friendly display name for the tool
+	ToolDisplayName string        // User-friendly display name for the tool
 	ResponseTime    time.Duration // Time taken to generate this response
 }
 
@@ -66,12 +66,12 @@ type ChatModel struct {
 	thinking     bool
 	thinkingText string
 	model        string
-	
+
 	// Streaming state
-	streaming     bool
-	streamBuffer  string
-	currentTool   *ToolUseBlock
-	
+	streaming    bool
+	streamBuffer string
+	currentTool  *ToolUseBlock
+
 	// Timer state for response tracking
 	startTime    time.Time
 	elapsed      time.Duration
@@ -87,10 +87,10 @@ type ChatModel struct {
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
 type ToolAnimationState struct {
-	ToolName    string
-	Command     string
-	StartTime   time.Time
-	Frame       int
+	ToolName  string
+	Command   string
+	StartTime time.Time
+	Frame     int
 }
 
 // ToolUseBlock represents an active tool invocation
@@ -168,7 +168,7 @@ func NewChatModel() ChatModel {
 	// CRITICAL FIX: Style the textarea to match our design system
 	// This removes the strange background color inconsistency
 	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
-	
+
 	// Style the textarea base to have consistent background
 	ta.FocusedStyle.Base = lipgloss.NewStyle().
 		Background(ColorSurface).
@@ -325,13 +325,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if displayName == "" {
 			displayName = msg.ToolName
 		}
-		
+
 		// Use rich activity description from tool if available, otherwise extract from input
 		command := msg.ActivityDesc
 		if command == "" {
 			command = m.extractCommandFromToolInput(msg.ToolName, msg.Input)
 		}
-		
+
 		// Set up tool animation state for yolo-style display
 		m.toolAnimation = &ToolAnimationState{
 			ToolName:  displayName,
@@ -339,7 +339,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			StartTime: time.Now(),
 			Frame:     0,
 		}
-		
+
 		// Add the tool message with command preview
 		m.AddToolMessageWithPreview(msg.ToolName, displayName, command)
 		return m, nil
@@ -367,11 +367,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentErrorMsg:
 		m.thinking = false
 		m.streaming = false
-		
+
 		// Build informative error message with action hints
 		errStr := fmt.Sprintf("%v", msg.Error)
 		var feedback string
-		
+
 		// Check for common error patterns and provide specific guidance
 		switch {
 		case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline"):
@@ -400,7 +400,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				"[>] If the model isn't responding, try: /model <name>\n"+
 				"[>] Or switch models via: Tab → Settings", errStr)
 		}
-		
+
 		m.AddMessage("system", feedback)
 		m.streamBuffer = ""
 		return m, nil
@@ -432,10 +432,10 @@ func (m ChatModel) View() string {
 	if m.thinking {
 		inputHeight = 4
 	}
-	
+
 	headerHeight := 2 // Header takes 2 lines
 	separatorHeight := 1
-	
+
 	// Ensure minimum height for viewport
 	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
 	if vpHeight < 5 {
@@ -462,7 +462,7 @@ func (m ChatModel) View() string {
 	if strings.TrimSpace(vpContent) == "" {
 		vpContent = HelpDimStyle.Render("  No messages yet. Start chatting!")
 	}
-	
+
 	// Constrain viewport to calculated height
 	vpRendered := lipgloss.NewStyle().
 		Height(vpHeight).
@@ -473,7 +473,7 @@ func (m ChatModel) View() string {
 	// Input area with styled container (golazo-inspired design)
 	// CRITICAL FIX: Consistent styling for input bar
 	inputContainer := InputContainerStyle.Width(m.width)
-	
+
 	var inputContent string
 	prompt := PromptStyle.Render("◆ ")
 	if m.thinking {
@@ -482,7 +482,7 @@ func (m ChatModel) View() string {
 	} else {
 		inputContent = prompt + m.textarea.View()
 	}
-	
+
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -534,7 +534,7 @@ func (m *ChatModel) AddToolMessageWithPreview(toolName, toolDisplayName, command
 	if toolDisplayName == "" {
 		toolDisplayName = toolName
 	}
-	
+
 	// Build content with command preview
 	var content string
 	if command != "" {
@@ -543,7 +543,7 @@ func (m *ChatModel) AddToolMessageWithPreview(toolName, toolDisplayName, command
 	} else {
 		content = fmt.Sprintf("Using %s...", toolDisplayName)
 	}
-	
+
 	msg := ChatMessage{
 		Role:            "tool",
 		Content:         content,
@@ -627,7 +627,7 @@ func (m *ChatModel) SetThinking(thinking bool, text string) {
 	if text == "" {
 		m.thinkingText = "Thinking..."
 	}
-	
+
 	// Start/stop timer based on thinking state
 	if thinking {
 		m.startTime = time.Now()
@@ -670,11 +670,11 @@ func (m *ChatModel) renderStatusLine() string {
 	if m.toolAnimation != nil && m.currentTool != nil {
 		// Update animation frame
 		m.toolAnimation.Frame++
-		
+
 		spinner := ToolSpinnerRender(m.toolAnimation.Frame)
 		toolName := m.toolAnimation.ToolName
 		command := m.toolAnimation.Command
-		
+
 		// Build animated tool line: spinner + tool name + grey command preview
 		var statusParts []string
 		statusParts = append(statusParts, InfoStyle.Render(spinner))
@@ -683,7 +683,7 @@ func (m *ChatModel) renderStatusLine() string {
 			statusParts = append(statusParts, ToolCommandPreviewStyle.Render(command))
 		}
 		statusParts = append(statusParts, HelpDimStyle.Render(fmt.Sprintf("(%s)", elapsedStr)))
-		
+
 		return strings.Join(statusParts, " ")
 	}
 
@@ -861,7 +861,7 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 		// Content has command preview, render with tool style
 		return ToolCallStyle.Render(fmt.Sprintf("→ %s", msg.Content))
 	}
-	
+
 	// Fallback to simple display for legacy messages
 	displayName := msg.ToolDisplayName
 	if displayName == "" {

@@ -42,8 +42,8 @@ var BashTool = tools.NewTool(tools.Tool{
 		cmd, _ := input["command"].(string)
 		if detectDestructive(input) {
 			return tools.PermissionDecision{
-				Behavior: tools.Ask,
-				Message:  "Shell command '" + cmd + "' is potentially destructive. Do you want to continue?",
+				Behavior:     tools.Ask,
+				Message:      "Shell command '" + cmd + "' is potentially destructive. Do you want to continue?",
 				UpdatedInput: input,
 			}
 		}
