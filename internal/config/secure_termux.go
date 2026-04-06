@@ -13,13 +13,6 @@ import (
 	"golang.org/x/term"
 )
 
-// Debug output helper
-func debugPrintf(format string, args ...interface{}) {
-	if os.Getenv("AGENT_HARNESS_VERBOSE") == "1" {
-		fmt.Fprintf(os.Stderr, "[debug] "+format, args...)
-	}
-}
-
 // PromptPassword prompts for a password with masking
 // Falls back to plain text input on Termux or when terminal manipulation fails
 func PromptPassword(prompt string) (string, error) {

@@ -64,7 +64,7 @@ var FileEditTool = tools.NewTool(tools.Tool{
 
 		// Stale write protection: check if file was modified since last read
 		if err := fs.DefaultStaleTracker.CheckStale(path); err != nil {
-			return tools.ToolResult{}, fmt.Errorf("stale write detected: %w. The file may have been modified by another process. Please re-read and try again.", err)
+			return tools.ToolResult{}, fmt.Errorf("stale write detected: %w; the file may have been modified by another process - please re-read and try again", err)
 		}
 
 		updated := strings.Replace(content, oldStr, newStr, 1)

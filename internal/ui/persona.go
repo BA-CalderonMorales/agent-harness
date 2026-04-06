@@ -10,10 +10,6 @@ import (
 	"time"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // SpinnerVerbs are concise loading messages
 var SpinnerVerbs = []string{
 	"Analyzing",

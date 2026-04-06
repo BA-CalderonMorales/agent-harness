@@ -489,8 +489,6 @@ func (a App) View() string {
 // Tab bar rendering - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
 
-const diagFill = `╱`
-
 func (a App) renderTabBar() string {
 	var tabs []string
 

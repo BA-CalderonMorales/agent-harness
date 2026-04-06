@@ -87,18 +87,14 @@ type QueryChainTracking struct {
 type loopState struct {
 	messages                     []types.Message
 	toolUseContext               tools.Context
-	autoCompactTracking          any
 	maxOutputTokensRecoveryCount int
 	hasAttemptedReactiveCompact  bool
 	maxOutputTokensOverride      int
-	pendingToolUseSummary        any
-	stopHookActive               bool
 	turnCount                    int
-	transition                   string
 }
 
 // Prominent token thresholds.
 const (
 	MaxOutputTokensRecoveryLimit = 3
-	AssistantBlockingBudgetMs    = 15 * time.Second
+	AssistantBlockingBudget      = 15 * time.Second
 )
