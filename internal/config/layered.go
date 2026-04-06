@@ -51,6 +51,12 @@ type LayeredConfig struct {
 	AlwaysDeny     []string
 	McpServers     map[string]McpServerConfig
 	CustomEnv      map[string]string
+
+	// Granular permissions (override PermissionMode when set)
+	PermRead    bool // Allow read/search tools
+	PermWrite   bool // Allow write/edit tools
+	PermDelete  bool // Allow delete/remove tools
+	PermExecute bool // Allow execute/bash tools
 }
 
 // PermissionMode controls what tools can do

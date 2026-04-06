@@ -657,6 +657,18 @@ func (d *TUISettingsDelegate) OnSettingChange(key, value string) {
 			d.app.executionMode = mode
 			d.tuiApp.AddMessage("system", fmt.Sprintf("Execution mode set to: %s", mode.String()))
 		}
+	case "perm_read":
+		d.app.config.PermRead = value == "true"
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Read permission: %s", map[bool]string{true: "enabled", false: "disabled"}[d.app.config.PermRead]))
+	case "perm_write":
+		d.app.config.PermWrite = value == "true"
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Write permission: %s", map[bool]string{true: "enabled", false: "disabled"}[d.app.config.PermWrite]))
+	case "perm_delete":
+		d.app.config.PermDelete = value == "true"
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Delete permission: %s", map[bool]string{true: "enabled", false: "disabled"}[d.app.config.PermDelete]))
+	case "perm_execute":
+		d.app.config.PermExecute = value == "true"
+		d.tuiApp.AddMessage("system", fmt.Sprintf("Execute permission: %s", map[bool]string{true: "enabled", false: "disabled"}[d.app.config.PermExecute]))
 	}
 	d.tuiApp.SetSettings(d.app.getSettings())
 }
@@ -744,7 +756,7 @@ func (app *App) getSettings() []tui.Setting {
 			Key:         "permissions",
 			Label:       "Permission Mode",
 			Value:       app.config.PermissionMode.String(),
-			Description: "Tool permission level",
+			Description: "Tool permission level (legacy)",
 			Type:        "choice",
 			Options:     []string{"read-only", "workspace-write", "danger-full-access"},
 		},
@@ -755,6 +767,39 @@ func (app *App) getSettings() []tui.Setting {
 			Description: "Command approval mode - interactive (prompt for each) or yolo (auto-approve with visibility)",
 			Type:        "choice",
 			Options:     []string{"interactive", "yolo"},
+		},
+		// Granular permissions section
+		{
+			Key:         "perm_read",
+			Label:       "Allow Read",
+			Value:       "",
+			Description: "Allow read/search tools",
+			Type:        "bool",
+			BoolValue:   app.config.PermRead,
+		},
+		{
+			Key:         "perm_write",
+			Label:       "Allow Write",
+			Value:       "",
+			Description: "Allow write/edit tools",
+			Type:        "bool",
+			BoolValue:   app.config.PermWrite,
+		},
+		{
+			Key:         "perm_delete",
+			Label:       "Allow Delete",
+			Value:       "",
+			Description: "Allow delete/remove tools",
+			Type:        "bool",
+			BoolValue:   app.config.PermDelete,
+		},
+		{
+			Key:         "perm_execute",
+			Label:       "Allow Execute",
+			Value:       "",
+			Description: "Allow bash/execute tools",
+			Type:        "bool",
+			BoolValue:   app.config.PermExecute,
 		},
 	}
 }

@@ -94,6 +94,9 @@ type ChatModel struct {
 	// Tool animation state (for yolo mode - single animated line)
 	toolAnimation *ToolAnimationState
 
+	// Current tool message for in-place updates (replaces previous tool display)
+	currentToolMsg *ChatMessage
+
 	// Delegate
 	delegate ChatDelegate
 }
@@ -353,29 +356,38 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Frame:     0,
 		}
 
-		// Add or update the tool message with running status
-		m.AddOrUpdateToolMessage(msg.ToolID, msg.ToolName, displayName, command, ToolStatusRunning)
+		// Update current tool message for in-place display (replaces previous tool)
+		m.currentToolMsg = &ChatMessage{
+			ID:              msg.ToolID,
+			Role:            "tool",
+			Content:         m.formatToolContent(displayName, command, ToolStatusRunning),
+			Timestamp:       time.Now(),
+			IsTool:          true,
+			ToolName:        msg.ToolName,
+			ToolDisplayName: displayName,
+			ToolStatus:      ToolStatusRunning,
+		}
+		m.refreshViewport()
 		return m, nil
 
 	case AgentToolDoneMsg:
-		// Update the tool message with completion status
-		if m.currentTool != nil {
+		// Finalize current tool message and add to history
+		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
 			status := ToolStatusSuccess
 			if !msg.Success {
 				status = ToolStatusError
 			}
-			// Find and update the existing message
-			for i := range m.messages {
-				if m.messages[i].ID == msg.ToolID && m.messages[i].IsTool {
-					command := m.extractCommandFromToolInput(m.messages[i].ToolName, nil)
-					if command == "" && m.toolAnimation != nil {
-						command = m.toolAnimation.Command
-					}
-					m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, command, status)
-					m.messages[i].ToolStatus = status
-					break
-				}
+			command := m.extractCommandFromToolInput(m.currentToolMsg.ToolName, nil)
+			if command == "" && m.toolAnimation != nil {
+				command = m.toolAnimation.Command
 			}
+			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, status)
+			m.currentToolMsg.ToolStatus = status
+			m.currentToolMsg.Timestamp = time.Now()
+
+			// Add completed tool to messages
+			m.messages = append(m.messages, *m.currentToolMsg)
+			m.currentToolMsg = nil
 		}
 		m.currentTool = nil
 		m.toolAnimation = nil
@@ -513,7 +525,13 @@ func (m ChatModel) View() string {
 		statusLine := m.renderStatusLine()
 		inputContent = prompt + m.textarea.View() + "\n" + statusLine
 	} else {
-		inputContent = prompt + m.textarea.View()
+		// Show model in status when not thinking
+		modelDisplay := m.model
+		if modelDisplay == "" {
+			modelDisplay = "default"
+		}
+		statusLine := HelpDimStyle.Render(fmt.Sprintf("model: %s", modelDisplay))
+		inputContent = prompt + m.textarea.View() + "\n" + statusLine
 	}
 
 	sections = append(sections, inputContainer.Render(inputContent))
@@ -864,6 +882,11 @@ func (m *ChatModel) refreshViewport() {
 	for _, msg := range m.messages {
 		content.WriteString(m.renderMessage(msg))
 		content.WriteString("\n\n")
+	}
+
+	// Add current tool message for in-place display (replaces previous tool)
+	if m.currentToolMsg != nil {
+		content.WriteString(m.renderMessage(*m.currentToolMsg))
 	}
 
 	m.viewport.SetContent(content.String())
