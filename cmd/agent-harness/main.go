@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	Version   = "0.0.51"
+	Version   = "0.0.52"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
