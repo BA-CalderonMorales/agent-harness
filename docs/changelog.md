@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.0.54] - 2026-04-06
+
+### Changed
+- Version bump to v0.0.54
+
 ## [0.0.48] - 2026-04-04
 
 ### Fixed
