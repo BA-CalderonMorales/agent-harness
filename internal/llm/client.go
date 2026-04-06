@@ -30,6 +30,8 @@ func NewHTTPClient(provider, apiKey string) *HTTPClient {
 		baseURL = "https://api.openai.com/v1"
 	case "anthropic":
 		baseURL = "https://api.anthropic.com/v1"
+	case "ollama", "local":
+		baseURL = "http://localhost:11434/v1"
 	}
 	return &HTTPClient{
 		BaseURL:    baseURL,
