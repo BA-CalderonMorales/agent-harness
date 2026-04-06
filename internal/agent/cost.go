@@ -25,7 +25,7 @@ func (u TokenUsage) TotalTokens() int {
 func (u TokenUsage) CostUSD(model string) float64 {
 	// Very rough pricing estimates per 1M tokens
 	var inputPrice, outputPrice float64
-	
+
 	switch {
 	case stringContains(model, "claude-3-opus"):
 		inputPrice = 15.0
@@ -50,16 +50,16 @@ func (u TokenUsage) CostUSD(model string) float64 {
 
 	inputCost := float64(u.InputTokens) / 1_000_000 * inputPrice
 	outputCost := float64(u.OutputTokens) / 1_000_000 * outputPrice
-	
+
 	return inputCost + outputCost
 }
 
 // CostTracker tracks cumulative costs across a session
 type CostTracker struct {
-	mu         sync.RWMutex
-	turns      []TokenUsage
+	mu          sync.RWMutex
+	turns       []TokenUsage
 	currentTurn TokenUsage
-	model      string
+	model       string
 }
 
 // NewCostTracker creates a new cost tracker
@@ -112,7 +112,7 @@ func (ct *CostTracker) GetCurrentTurn() TokenUsage {
 func (ct *CostTracker) GetCumulative() TokenUsage {
 	ct.mu.RLock()
 	defer ct.mu.RUnlock()
-	
+
 	var total TokenUsage
 	for _, turn := range ct.turns {
 		total.InputTokens += turn.InputTokens
@@ -125,7 +125,7 @@ func (ct *CostTracker) GetCumulative() TokenUsage {
 	total.OutputTokens += ct.currentTurn.OutputTokens
 	total.CacheCreationInputTokens += ct.currentTurn.CacheCreationInputTokens
 	total.CacheReadInputTokens += ct.currentTurn.CacheReadInputTokens
-	
+
 	return total
 }
 
@@ -133,13 +133,13 @@ func (ct *CostTracker) GetCumulative() TokenUsage {
 func (ct *CostTracker) GetTotalCost() float64 {
 	ct.mu.RLock()
 	defer ct.mu.RUnlock()
-	
+
 	var totalCost float64
 	for _, turn := range ct.turns {
 		totalCost += turn.CostUSD(ct.model)
 	}
 	totalCost += ct.currentTurn.CostUSD(ct.model)
-	
+
 	return totalCost
 }
 
@@ -155,7 +155,7 @@ func (ct *CostTracker) Summary() string {
 	cumulative := ct.GetCumulative()
 	totalCost := ct.GetTotalCost()
 	turns := ct.GetTurns()
-	
+
 	return fmt.Sprintf("Cost: %d input + %d output tokens (~$%.4f) across %d turns",
 		cumulative.InputTokens,
 		cumulative.OutputTokens,
@@ -167,7 +167,7 @@ func (ct *CostTracker) Summary() string {
 func (ct *CostTracker) FormatReport() string {
 	cumulative := ct.GetCumulative()
 	totalCost := ct.GetTotalCost()
-	
+
 	var result string
 	result += "Cost\n"
 	result += fmt.Sprintf("  Input tokens     %d\n", cumulative.InputTokens)
@@ -186,7 +186,7 @@ func (ct *CostTracker) FormatReport() string {
 	result += "Next\n"
 	result += "  /status          See session + workspace context\n"
 	result += "  /compact         Trim local history if the session is getting large\n"
-	
+
 	return result
 }
 

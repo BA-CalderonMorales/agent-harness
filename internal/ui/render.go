@@ -16,42 +16,42 @@ import (
 var (
 	// Primary styles
 	HeaderStyle = lipgloss.NewStyle().
-		Bold(true).
-		Foreground(lipgloss.Color("#ffffff"))
+			Bold(true).
+			Foreground(lipgloss.Color("#ffffff"))
 
 	LabelStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#888888"))
+			Foreground(lipgloss.Color("#888888"))
 
 	ValueStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#ffffff"))
+			Foreground(lipgloss.Color("#ffffff"))
 
 	// Semantic styles
 	SuccessStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#4ade80"))
+			Foreground(lipgloss.Color("#4ade80"))
 
 	ErrorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#f87171"))
+			Foreground(lipgloss.Color("#f87171"))
 
 	WarningStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#fbbf24"))
+			Foreground(lipgloss.Color("#fbbf24"))
 
 	InfoStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#60a5fa"))
+			Foreground(lipgloss.Color("#60a5fa"))
 
 	DimStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#666666"))
+			Foreground(lipgloss.Color("#666666"))
 
 	// Interactive styles
 	UserStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#a78bfa")).
-		Bold(true)
+			Foreground(lipgloss.Color("#a78bfa")).
+			Bold(true)
 
 	AgentStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#4ade80"))
+			Foreground(lipgloss.Color("#4ade80"))
 
 	ToolStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#fbbf24")).
-		Italic(true)
+			Foreground(lipgloss.Color("#fbbf24")).
+			Italic(true)
 )
 
 // Markers for lists and status - ASCII only, no emojis
@@ -134,7 +134,7 @@ func RenderToolResult(success bool, summary string) string {
 // WelcomeScreen renders the contextual welcome screen
 func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) string {
 	var lines []string
-	
+
 	// Determine build display
 	buildType := "release"
 	if gitContext != nil && gitContext.BuildType != "" {
@@ -143,7 +143,7 @@ func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) s
 	if strings.Contains(version, "dev") || strings.Contains(version, "local") {
 		buildType = "dev"
 	}
-	
+
 	// Header with persona and version
 	lines = append(lines, "")
 	versionDisplay := version
@@ -151,18 +151,18 @@ func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) s
 		versionDisplay = fmt.Sprintf("%s [dev]", version)
 	}
 	lines = append(lines, HeaderStyle.Render(fmt.Sprintf("  %s %s", PersonaName, DimStyle.Render(versionDisplay))))
-	
+
 	// Context-aware greeting
 	greeting := fmt.Sprintf("  %s %s", TimeOfDayGreeting(), GetRandomGreeting())
 	lines = append(lines, greeting)
 	lines = append(lines, "")
-	
+
 	// Compact status line
 	statusParts := []string{
 		fmt.Sprintf("model: %s", model),
 		fmt.Sprintf("permissions: %s", permissionMode),
 	}
-	
+
 	// Add git context if available
 	if gitContext != nil && gitContext.IsRepo {
 		gitInfo := gitContext.Branch
@@ -171,14 +171,14 @@ func WelcomeScreen(version, model, permissionMode string, gitContext *GitInfo) s
 		}
 		statusParts = append(statusParts, fmt.Sprintf("repo: %s", gitInfo))
 	}
-	
+
 	lines = append(lines, "  "+DimStyle.Render(strings.Join(statusParts, " • ")))
 	lines = append(lines, "")
-	
+
 	// Quick hint
 	lines = append(lines, DimStyle.Render("  Type /help for commands or just start chatting."))
 	lines = append(lines, "")
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -202,10 +202,10 @@ func RenderStatusReport(
 	gitBranch string,
 ) string {
 	var lines []string
-	
+
 	lines = append(lines, RenderSection("Status"))
 	lines = append(lines, "")
-	
+
 	// Session stats
 	lines = append(lines, RenderField("Session", mode))
 	lines = append(lines, RenderField("Messages", fmt.Sprintf("%d", messageCount)))
@@ -213,7 +213,7 @@ func RenderStatusReport(
 	lines = append(lines, RenderField("Est. tokens", fmt.Sprintf("%d", estimatedTokens)))
 	lines = append(lines, RenderField("Model", model))
 	lines = append(lines, "")
-	
+
 	// Workspace context
 	if projectRoot != "" {
 		lines = append(lines, RenderSection("Workspace"))
@@ -224,7 +224,7 @@ func RenderStatusReport(
 		}
 		lines = append(lines, "")
 	}
-	
+
 	// Quick actions
 	lines = append(lines, RenderSection("Quick Commands"))
 	lines = append(lines, "")
@@ -233,7 +233,7 @@ func RenderStatusReport(
 	lines = append(lines, "  /cost       Show token usage and cost")
 	lines = append(lines, "  /export     Save conversation to file")
 	lines = append(lines, "  /quit       Exit")
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -246,26 +246,26 @@ func RenderCostReport(
 	totalCost float64,
 ) string {
 	var lines []string
-	
+
 	lines = append(lines, RenderSection("Usage"))
 	lines = append(lines, "")
 	lines = append(lines, RenderField("Input tokens", fmt.Sprintf("%d", inputTokens)))
 	lines = append(lines, RenderField("Output tokens", fmt.Sprintf("%d", outputTokens)))
-	
+
 	if cacheCreationInputTokens > 0 {
 		lines = append(lines, RenderField("Cache write", fmt.Sprintf("%d", cacheCreationInputTokens)))
 	}
 	if cacheReadInputTokens > 0 {
 		lines = append(lines, RenderField("Cache read", fmt.Sprintf("%d", cacheReadInputTokens)))
 	}
-	
+
 	total := inputTokens + outputTokens + cacheReadInputTokens
 	lines = append(lines, RenderField("Total", fmt.Sprintf("%d", total)))
-	
+
 	if totalCost > 0 {
 		lines = append(lines, RenderField("Cost", fmt.Sprintf("$%.4f", totalCost)))
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -276,7 +276,7 @@ func RenderPermissionsReport(currentMode string, modes []struct {
 	Current     bool
 }) string {
 	var lines []string
-	
+
 	// Current mode description
 	var effect string
 	for _, m := range modes {
@@ -285,7 +285,7 @@ func RenderPermissionsReport(currentMode string, modes []struct {
 			break
 		}
 	}
-	
+
 	lines = append(lines, RenderSection("Permissions"))
 	lines = append(lines, "")
 	lines = append(lines, RenderField("Mode", currentMode))
@@ -293,7 +293,7 @@ func RenderPermissionsReport(currentMode string, modes []struct {
 	lines = append(lines, "")
 	lines = append(lines, RenderSection("Available Modes"))
 	lines = append(lines, "")
-	
+
 	for _, mode := range modes {
 		marker := AvailableMarker
 		if mode.Current {
@@ -304,20 +304,20 @@ func RenderPermissionsReport(currentMode string, modes []struct {
 			marker,
 			DimStyle.Render(mode.Description)))
 	}
-	
+
 	lines = append(lines, "")
 	lines = append(lines, DimStyle.Render("  Use /permissions <mode> to switch"))
-	
+
 	return strings.Join(lines, "\n")
 }
 
 // RenderCompactReport renders compaction results
 func RenderCompactReport(removedCount, keptCount int, skipped bool) string {
 	var lines []string
-	
+
 	lines = append(lines, RenderSection("Session Compacted"))
 	lines = append(lines, "")
-	
+
 	if skipped {
 		lines = append(lines, RenderField("Result", "No compaction needed"))
 		lines = append(lines, RenderField("Messages", fmt.Sprintf("%d", keptCount)))
@@ -327,19 +327,19 @@ func RenderCompactReport(removedCount, keptCount int, skipped bool) string {
 		lines = append(lines, "")
 		lines = append(lines, DimStyle.Render("  Older messages have been summarized to save tokens."))
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
 // RenderModelReport renders model information
 func RenderModelReport(currentModel string, messageCount int, turns int, aliases map[string]string) string {
 	var lines []string
-	
+
 	lines = append(lines, RenderSection("Model"))
 	lines = append(lines, "")
 	lines = append(lines, RenderField("Current", currentModel))
 	lines = append(lines, RenderField("Session", fmt.Sprintf("%d messages · %d turns", messageCount, turns)))
-	
+
 	if len(aliases) > 0 {
 		lines = append(lines, "")
 		lines = append(lines, RenderSection("Shortcuts"))
@@ -348,18 +348,18 @@ func RenderModelReport(currentModel string, messageCount int, turns int, aliases
 			lines = append(lines, RenderField(alias, model))
 		}
 	}
-	
+
 	return strings.Join(lines, "\n")
 }
 
 // RenderHelp renders the help screen
 func RenderHelp(commands map[string]string) string {
 	var lines []string
-	
+
 	lines = append(lines, "")
 	lines = append(lines, HeaderStyle.Render(fmt.Sprintf("  %s Commands", PersonaName)))
 	lines = append(lines, "")
-	
+
 	// Group commands by category
 	categories := map[string][]string{
 		"Session":  {"/help", "/status", "/clear", "/compact", "/session", "/export"},
@@ -367,7 +367,7 @@ func RenderHelp(commands map[string]string) string {
 		"Info":     {"/cost", "/diff", "/version"},
 		"Exit":     {"/quit", "/exit"},
 	}
-	
+
 	for category, cmds := range categories {
 		lines = append(lines, LabelStyle.Render("  "+category))
 		for _, cmd := range cmds {
@@ -378,21 +378,21 @@ func RenderHelp(commands map[string]string) string {
 		}
 		lines = append(lines, "")
 	}
-	
+
 	lines = append(lines, DimStyle.Render("  Pro tip: Type just the first few letters of a command and press Tab."))
 	lines = append(lines, "")
-	
+
 	return strings.Join(lines, "\n")
 }
 
 // RenderGoodbye renders the exit message
 func RenderGoodbye(costSummary string) string {
 	var lines []string
-	
+
 	lines = append(lines, "")
 	lines = append(lines, DimStyle.Render("  Goodbye. "+costSummary))
 	lines = append(lines, "")
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -421,19 +421,19 @@ func RenderSeparator() string {
 // RenderConversationTurn renders a complete conversation turn
 func RenderConversationTurn(userInput, agentResponse string, toolsUsed []string) string {
 	var lines []string
-	
+
 	// User input with diamond
 	lines = append(lines, RenderUserInput(userInput))
-	
+
 	// Tool uses (if any)
 	for _, tool := range toolsUsed {
 		lines = append(lines, "  "+RenderToolUse(tool, ""))
 	}
-	
+
 	// Agent response
 	lines = append(lines, RenderAgentResponse(agentResponse))
 	lines = append(lines, "")
-	
+
 	return strings.Join(lines, "\n")
 }
 
@@ -476,7 +476,7 @@ func ProgressBar(current, total int, width int) string {
 	if total <= 0 {
 		return ""
 	}
-	
+
 	filled := int(float64(current) / float64(total) * float64(width))
 	if filled > width {
 		filled = width
@@ -484,10 +484,10 @@ func ProgressBar(current, total int, width int) string {
 	if filled < 0 {
 		filled = 0
 	}
-	
+
 	bar := strings.Repeat("█", filled) + strings.Repeat("░", width-filled)
 	percent := int(float64(current) / float64(total) * 100)
-	
+
 	return fmt.Sprintf("[%s] %d%%", bar, percent)
 }
 
@@ -510,7 +510,7 @@ func TruncateMiddle(text string, maxLen int) string {
 	if maxLen <= 3 {
 		return "..."
 	}
-	
+
 	sideLen := (maxLen - 3) / 2
 	return text[:sideLen] + "..." + text[len(text)-sideLen:]
 }
@@ -522,7 +522,7 @@ func WordWrap(text string, width int) []string {
 	if len(words) == 0 {
 		return lines
 	}
-	
+
 	currentLine := words[0]
 	for _, word := range words[1:] {
 		if len(currentLine)+1+len(word) <= width {

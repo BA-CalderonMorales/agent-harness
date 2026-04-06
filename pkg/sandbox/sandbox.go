@@ -8,10 +8,10 @@ import (
 
 // Config defines path and command restrictions.
 type Config struct {
-	WorkingDirectory          string
-	AdditionalWorkingDirs     []string
-	AllowAbsolutePaths        bool
-	AllowHomeDirectoryAccess  bool
+	WorkingDirectory         string
+	AdditionalWorkingDirs    []string
+	AllowAbsolutePaths       bool
+	AllowHomeDirectoryAccess bool
 }
 
 // IsPathAllowed checks whether a file path is within permitted directories.

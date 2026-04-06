@@ -26,11 +26,11 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 	},
 	Capabilities: tools.CapabilityFlags{
-		IsEnabled:             func() bool { return true },
-		IsConcurrencySafe:     func(map[string]any) bool { return false }, // File edits are serial
-		IsReadOnly:            func(map[string]any) bool { return false },
-		IsDestructive:         func(map[string]any) bool { return false },
-		InterruptBehavior:     func() string { return "cancel" }, // Edits can be cancelled
+		IsEnabled:         func() bool { return true },
+		IsConcurrencySafe: func(map[string]any) bool { return false }, // File edits are serial
+		IsReadOnly:        func(map[string]any) bool { return false },
+		IsDestructive:     func(map[string]any) bool { return false },
+		InterruptBehavior: func() string { return "cancel" }, // Edits can be cancelled
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		path := getString(input, "file_path")
@@ -68,13 +68,13 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 
 		updated := strings.Replace(content, oldStr, newStr, 1)
-		
+
 		// Write atomically: write to temp file then rename
 		tempPath := path + ".tmp"
 		if err := os.WriteFile(tempPath, []byte(updated), 0644); err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to write temp file: %w", err)
 		}
-		
+
 		if err := os.Rename(tempPath, path); err != nil {
 			// Try to clean up temp file
 			os.Remove(tempPath)

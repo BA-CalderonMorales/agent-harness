@@ -11,21 +11,21 @@ import (
 // Styles for the TUI.
 var (
 	userStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7D56F4")).
-		Bold(true)
+			Foreground(lipgloss.Color("#7D56F4")).
+			Bold(true)
 
 	agentStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#04B575"))
+			Foreground(lipgloss.Color("#04B575"))
 
 	toolStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F4D03F")).
-		Italic(true)
+			Foreground(lipgloss.Color("#F4D03F")).
+			Italic(true)
 
 	errorStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#E74C3C"))
+			Foreground(lipgloss.Color("#E74C3C"))
 
 	helpStyle = lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#626262"))
+			Foreground(lipgloss.Color("#626262"))
 )
 
 // Message represents a rendered message in the TUI.
@@ -37,22 +37,22 @@ type Message struct {
 
 // Model is the bubbletea model for the agent harness TUI.
 type Model struct {
-	messages   []Message
-	input      string
-	width      int
-	height     int
-	sending    bool
-	quitting   bool
-	onSubmit   func(string) // callback when user submits input
-	onQuit     func()       // callback when user quits
-	isTermux   bool
-	termWidth  int
+	messages  []Message
+	input     string
+	width     int
+	height    int
+	sending   bool
+	quitting  bool
+	onSubmit  func(string) // callback when user submits input
+	onQuit    func()       // callback when user quits
+	isTermux  bool
+	termWidth int
 }
 
 // NewModel creates a new TUI model.
 func NewModel(onSubmit func(string), onQuit func()) Model {
 	// Detect Termux environment
-	isTermux := os.Getenv("TERMUX_VERSION") != "" || 
+	isTermux := os.Getenv("TERMUX_VERSION") != "" ||
 		strings.Contains(os.Getenv("HOME"), "com.termux")
 
 	return Model{

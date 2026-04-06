@@ -12,24 +12,24 @@ import (
 
 // TrackedTool represents a tool in the execution queue.
 type trackedTool struct {
-	id               string
-	block            types.ToolUseBlock
-	assistantMessage types.Message
-	status           toolStatus
+	id                string
+	block             types.ToolUseBlock
+	assistantMessage  types.Message
+	status            toolStatus
 	isConcurrencySafe bool
-	results          []types.Message
-	pendingProgress  []types.ProgressMessage
-	contextModifiers []func(ctx tools.Context) tools.Context
-	promise          chan struct{}
+	results           []types.Message
+	pendingProgress   []types.ProgressMessage
+	contextModifiers  []func(ctx tools.Context) tools.Context
+	promise           chan struct{}
 }
 
 type toolStatus string
 
 const (
-	statusQueued     toolStatus = "queued"
-	statusExecuting  toolStatus = "executing"
-	statusCompleted  toolStatus = "completed"
-	statusYielded    toolStatus = "yielded"
+	statusQueued    toolStatus = "queued"
+	statusExecuting toolStatus = "executing"
+	statusCompleted toolStatus = "completed"
+	statusYielded   toolStatus = "yielded"
 )
 
 // StreamingToolExecutor manages concurrent tool execution with ordering guarantees.
@@ -92,7 +92,7 @@ func (e *StreamingToolExecutor) DiscardRespectingInterrupt(toolDefs []tools.Tool
 		if e.tools[i].status != statusExecuting {
 			continue
 		}
-		
+
 		toolDef, ok := findTool(toolDefs, e.tools[i].block.Name)
 		if !ok {
 			continue
@@ -120,12 +120,12 @@ func (e *StreamingToolExecutor) AddTool(block types.ToolUseBlock, assistantMessa
 	toolDef, ok := findTool(e.toolDefinitions, block.Name)
 	if !ok {
 		e.tools = append(e.tools, trackedTool{
-			id:    block.ID,
-			block: block,
-			assistantMessage: assistantMessage,
-			status: statusCompleted,
+			id:                block.ID,
+			block:             block,
+			assistantMessage:  assistantMessage,
+			status:            statusCompleted,
 			isConcurrencySafe: true,
-			results: []types.Message{e.makeErrorMessage(block.ID, assistantMessage, fmt.Sprintf("Error: No such tool available: %s", block.Name))},
+			results:           []types.Message{e.makeErrorMessage(block.ID, assistantMessage, fmt.Sprintf("Error: No such tool available: %s", block.Name))},
 		})
 		e.progressCond.Broadcast()
 		return
@@ -351,7 +351,7 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 	// Apply content replacement budget
 	budget := tools.GetCurrentBudget()
 	resultStr := fmt.Sprintf("%v", result.Data)
-	
+
 	if !budget.CanUseResult(block.Name, len(resultStr), int64(toolDef.MaxResultSizeChars)) {
 		// Truncate to fit budget
 		truncated, note := budget.GetTruncatedResult(block.Name, resultStr, int64(toolDef.MaxResultSizeChars))

@@ -23,19 +23,19 @@ type ReadOutcome struct {
 
 // LineEditor provides rich input with history and completions
 type LineEditor struct {
-	prompt         string
-	completions    []string
-	history        []string
-	historyIndex   int
-	historyBackup  string
-	textarea       textarea.Model
-	width          int
-	height         int
-	done           bool
-	cancelled      bool
-	exitReq        bool
-	termWidth      int
-	isTermux       bool
+	prompt        string
+	completions   []string
+	history       []string
+	historyIndex  int
+	historyBackup string
+	textarea      textarea.Model
+	width         int
+	height        int
+	done          bool
+	cancelled     bool
+	exitReq       bool
+	termWidth     int
+	isTermux      bool
 }
 
 // NewLineEditor creates a new line editor
@@ -492,8 +492,8 @@ func (sp *SmartPrompt) HistoryDown() (string, bool) {
 
 // ContextualInput combines input reading with smart prompts
 type ContextualInput struct {
-	editor     *LineEditor
-	prompt     *SmartPrompt
+	editor      *LineEditor
+	prompt      *SmartPrompt
 	completions []string
 }
 
@@ -518,15 +518,15 @@ func (ci *ContextualInput) SetContextProvider(fn func() string) {
 func (ci *ContextualInput) ReadInput() (*ReadOutcome, error) {
 	// Update prompt before reading
 	ci.editor.prompt = ci.prompt.Render()
-	
+
 	outcome, err := ci.editor.ReadLine()
 	if err != nil {
 		return nil, err
 	}
-	
+
 	if outcome != nil && !outcome.Cancel && !outcome.Exit && outcome.Text != "" {
 		ci.prompt.AddToHistory(outcome.Text)
 	}
-	
+
 	return outcome, nil
 }

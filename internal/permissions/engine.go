@@ -12,13 +12,13 @@ import (
 type Mode string
 
 const (
-	ModeDefault            Mode = "default"
-	ModeAcceptEdits        Mode = "acceptEdits"
-	ModeDontAsk            Mode = "dontAsk"
-	ModePlan               Mode = "plan"
-	ModeAuto               Mode = "auto"
-	ModeBypassPermissions  Mode = "bypassPermissions"
-	ModeBubble             Mode = "bubble"
+	ModeDefault           Mode = "default"
+	ModeAcceptEdits       Mode = "acceptEdits"
+	ModeDontAsk           Mode = "dontAsk"
+	ModePlan              Mode = "plan"
+	ModeAuto              Mode = "auto"
+	ModeBypassPermissions Mode = "bypassPermissions"
+	ModeBubble            Mode = "bubble"
 )
 
 // RuleSource identifies where a permission rule came from.
@@ -45,25 +45,25 @@ type PermissionRule struct {
 
 // Context is the immutable permission context.
 type Context struct {
-	Mode                        Mode
-	AdditionalWorkingDirs       map[string]string
-	AlwaysAllowRules            map[RuleSource][]PermissionRule
-	AlwaysDenyRules             map[RuleSource][]PermissionRule
-	AlwaysAskRules              map[RuleSource][]PermissionRule
+	Mode                         Mode
+	AdditionalWorkingDirs        map[string]string
+	AlwaysAllowRules             map[RuleSource][]PermissionRule
+	AlwaysDenyRules              map[RuleSource][]PermissionRule
+	AlwaysAskRules               map[RuleSource][]PermissionRule
 	IsBypassPermissionsAvailable bool
-	ShouldAvoidPrompts          bool
-	AwaitAutomatedChecks        bool
-	PrePlanMode                 Mode
+	ShouldAvoidPrompts           bool
+	AwaitAutomatedChecks         bool
+	PrePlanMode                  Mode
 }
 
 // EmptyContext returns a safe default context.
 func EmptyContext() Context {
 	return Context{
-		Mode:                        ModeDefault,
-		AdditionalWorkingDirs:       make(map[string]string),
-		AlwaysAllowRules:            make(map[RuleSource][]PermissionRule),
-		AlwaysDenyRules:             make(map[RuleSource][]PermissionRule),
-		AlwaysAskRules:              make(map[RuleSource][]PermissionRule),
+		Mode:                         ModeDefault,
+		AdditionalWorkingDirs:        make(map[string]string),
+		AlwaysAllowRules:             make(map[RuleSource][]PermissionRule),
+		AlwaysDenyRules:              make(map[RuleSource][]PermissionRule),
+		AlwaysAskRules:               make(map[RuleSource][]PermissionRule),
 		IsBypassPermissionsAvailable: false,
 	}
 }
@@ -193,7 +193,7 @@ func matchWildcard(pattern, text string) bool {
 
 // DenialTrackingState tracks consecutive denials for auto-mode fallback.
 type DenialTrackingState struct {
-	ConsecutiveDenials int
+	ConsecutiveDenials        int
 	ShouldFallbackToPrompting bool
 }
 

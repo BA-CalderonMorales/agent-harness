@@ -19,20 +19,20 @@ func TestClassifyInput(t *testing.T) {
 		{"good afternoon", "Good afternoon", ConvGreeting},
 		{"what's up", "What's up", ConvGreeting},
 		{"yo", "Yo", ConvGreeting},
-		
+
 		// Questions about capabilities
 		{"what can you do", "What can you do?", ConvQuestion},
 		{"who are you", "Who are you?", ConvQuestion},
 		{"what are you", "What are you?", ConvQuestion},
 		{"help", "Help", ConvQuestion},
 		{"help me with", "Help me with this error", ConvTask},
-		
+
 		// Casual conversation
 		{"how are you", "How are you?", ConvCasual},
 		{"thanks", "Thanks!", ConvCasual},
 		{"thank you", "Thank you", ConvCasual},
 		{"great job", "Great job!", ConvCasual},
-		
+
 		// Tasks (should use tools)
 		{"create file", "Create a file called test.txt", ConvTask},
 		{"fix bug", "Fix the bug in main.go", ConvTask},
@@ -42,12 +42,12 @@ func TestClassifyInput(t *testing.T) {
 		{"explain code", "Explain this code to me", ConvTask},
 		{"help with", "Help me with this error", ConvTask},
 		{"analyze file", "Can you analyze @file.go", ConvTask},
-		
+
 		// Edge cases
 		{"empty string", "", ConvCasual},
 		{"just spaces", "   ", ConvCasual},
 	}
-	
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := ClassifyInput(tt.input)
@@ -69,7 +69,7 @@ func TestIsConversational(t *testing.T) {
 		"What can you do?",
 		"Who are you?",
 	}
-	
+
 	taskBased := []string{
 		"Create a file",
 		"Fix the bug",
@@ -79,13 +79,13 @@ func TestIsConversational(t *testing.T) {
 		"Explain this code",
 		"Help me debug this",
 	}
-	
+
 	for _, input := range conversational {
 		if !IsConversational(input) {
 			t.Errorf("IsConversational(%q) = false, want true", input)
 		}
 	}
-	
+
 	for _, input := range taskBased {
 		if IsConversational(input) {
 			t.Errorf("IsConversational(%q) = true, want false", input)
@@ -101,20 +101,20 @@ func TestShouldUseTools(t *testing.T) {
 		"What can you do?",
 		"Thanks!",
 	}
-	
+
 	shouldUseTools := []string{
 		"Create a file",
 		"Fix the bug",
 		"Edit main.go",
 		"Search for TODOs",
 	}
-	
+
 	for _, input := range shouldNotUseTools {
 		if ShouldUseTools(input) {
 			t.Errorf("ShouldUseTools(%q) = true, want false", input)
 		}
 	}
-	
+
 	for _, input := range shouldUseTools {
 		if !ShouldUseTools(input) {
 			t.Errorf("ShouldUseTools(%q) = false, want true", input)
@@ -157,13 +157,13 @@ func TestGetCasualResponse(t *testing.T) {
 	if thanks == "" {
 		t.Error("GetCasualResponse('Thank you!') returned empty string")
 	}
-	
+
 	// Test how are you response
 	howAreYou := GetCasualResponse("How are you?")
 	if howAreYou == "" {
 		t.Error("GetCasualResponse('How are you?') returned empty string")
 	}
-	
+
 	// Test joke request
 	joke := GetCasualResponse("Tell me a joke")
 	if joke == "" {

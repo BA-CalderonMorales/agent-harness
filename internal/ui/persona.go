@@ -98,11 +98,11 @@ func FormatToolAction(toolName string, description string) string {
 	// Clean up the tool name
 	name := strings.TrimPrefix(toolName, "builtin_")
 	name = strings.ReplaceAll(name, "_", " ")
-	
+
 	if description != "" {
 		return fmt.Sprintf("%s %s", name, description)
 	}
-	
+
 	// Default descriptions based on tool type - concise and clear
 	switch name {
 	case "read":
@@ -133,7 +133,7 @@ func FormatFileAction(action, path string) string {
 	// Get just the filename for brevity
 	parts := strings.Split(path, "/")
 	filename := parts[len(parts)-1]
-	
+
 	switch action {
 	case "read":
 		return fmt.Sprintf("Reading %s", filename)
@@ -151,7 +151,7 @@ func FormatFileAction(action, path string) string {
 // TimeOfDayGreeting returns a time-appropriate greeting
 func TimeOfDayGreeting() string {
 	hour := time.Now().Hour()
-	
+
 	switch {
 	case hour < 6:
 		return "Working late?"

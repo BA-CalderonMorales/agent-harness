@@ -93,7 +93,7 @@ type SessionsLoadedMsg struct{}
 // Update handles messages.
 func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -106,7 +106,7 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.viewport.Height < 5 {
 			m.viewport.Height = 5
 		}
-		
+
 	case tea.KeyMsg:
 		if !m.focused {
 			// Still update viewport for background scrolling

@@ -25,11 +25,11 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		}
 	},
 	Capabilities: tools.CapabilityFlags{
-		IsEnabled:             func() bool { return true },
-		IsConcurrencySafe:     func(map[string]any) bool { return false },
-		IsReadOnly:            func(map[string]any) bool { return false },
-		IsDestructive:         func(map[string]any) bool { return true },
-		InterruptBehavior:     func() string { return "cancel" },
+		IsEnabled:         func() bool { return true },
+		IsConcurrencySafe: func(map[string]any) bool { return false },
+		IsReadOnly:        func(map[string]any) bool { return false },
+		IsDestructive:     func(map[string]any) bool { return true },
+		InterruptBehavior: func() string { return "cancel" },
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		path := getString(input, "file_path")

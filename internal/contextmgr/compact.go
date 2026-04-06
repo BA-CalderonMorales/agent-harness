@@ -6,13 +6,13 @@ import (
 
 // CompactResult holds the outcome of a compaction operation.
 type CompactResult struct {
-	Messages               []types.Message
-	SummaryMessages        []types.Message
-	PreCompactTokenCount   int
-	PostCompactTokenCount  int
+	Messages                  []types.Message
+	SummaryMessages           []types.Message
+	PreCompactTokenCount      int
+	PostCompactTokenCount     int
 	TruePostCompactTokenCount int
-	Attachments            []types.Message
-	HookResults            []types.Message
+	Attachments               []types.Message
+	HookResults               []types.Message
 }
 
 // Compactor defines the three-layer context compression strategy.
@@ -54,10 +54,10 @@ func (c *Compactor) AutoCompact(messages []types.Message) (*CompactResult, error
 	}
 
 	result := &CompactResult{
-		Messages:               append([]types.Message{summary}, recent...),
-		SummaryMessages:        []types.Message{summary},
-		PreCompactTokenCount:   tokens,
-		PostCompactTokenCount:  estimateTokens(recent) + 50,
+		Messages:                  append([]types.Message{summary}, recent...),
+		SummaryMessages:           []types.Message{summary},
+		PreCompactTokenCount:      tokens,
+		PostCompactTokenCount:     estimateTokens(recent) + 50,
 		TruePostCompactTokenCount: estimateTokens(recent) + 50,
 	}
 	return result, nil

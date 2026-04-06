@@ -72,10 +72,10 @@ type AgentStartMsg struct {
 
 // AgentChunkMsg contains a streaming text chunk from the agent
 type AgentChunkMsg struct {
-	Text      string
-	ToolUse   *types.ToolUseBlock
+	Text       string
+	ToolUse    *types.ToolUseBlock
 	ToolResult *types.ToolResultBlock
-	Timestamp time.Time
+	Timestamp  time.Time
 }
 
 // AgentDoneMsg signals that agent processing is complete
@@ -113,11 +113,11 @@ type AgentToolDoneMsg struct {
 
 // AgentQueryParams bundles all parameters needed for an agent query
 type AgentQueryParams struct {
-	Messages       []types.Message
-	SystemPrompt   string
-	CanUseTool     func(string, map[string]any, tools.Context) (tools.PermissionDecision, error)
-	ToolCtx        tools.Context
-	Client         llm.Client
+	Messages     []types.Message
+	SystemPrompt string
+	CanUseTool   func(string, map[string]any, tools.Context) (tools.PermissionDecision, error)
+	ToolCtx      tools.Context
+	Client       llm.Client
 }
 
 // AgentQueryCmd returns a tea.Cmd that runs the agent query asynchronously

@@ -15,8 +15,8 @@ type ValidationResult struct {
 
 // ToolResult wraps the output of a tool call.
 type ToolResult struct {
-	Data           any
-	NewMessages    []types.Message
+	Data            any
+	NewMessages     []types.Message
 	ContextModifier func(ctx Context) Context
 }
 
@@ -52,15 +52,15 @@ const (
 
 // CapabilityFlags describes static/dynamic tool capabilities.
 type CapabilityFlags struct {
-	IsEnabled             func() bool
-	IsConcurrencySafe     func(input map[string]any) bool
-	IsReadOnly            func(input map[string]any) bool
-	IsDestructive         func(input map[string]any) bool
-	InterruptBehavior     func() string // "cancel" or "block"
+	IsEnabled               func() bool
+	IsConcurrencySafe       func(input map[string]any) bool
+	IsReadOnly              func(input map[string]any) bool
+	IsDestructive           func(input map[string]any) bool
+	InterruptBehavior       func() string // "cancel" or "block"
 	RequiresUserInteraction func() bool
-	IsSearchOrReadCommand func(input map[string]any) SearchReadFlags
-	IsOpenWorld           func(input map[string]any) bool
-	IsTransparentWrapper  func() bool
+	IsSearchOrReadCommand   func(input map[string]any) SearchReadFlags
+	IsOpenWorld             func(input map[string]any) bool
+	IsTransparentWrapper    func() bool
 }
 
 // SearchReadFlags is returned by IsSearchOrReadCommand.
@@ -72,16 +72,16 @@ type SearchReadFlags struct {
 
 // Options is the static configuration passed to tools.
 type Options struct {
-	Commands              []Command
-	Debug                 bool
-	MainLoopModel         string
-	Tools                 []Tool
-	Verbose               bool
+	Commands                []Command
+	Debug                   bool
+	MainLoopModel           string
+	Tools                   []Tool
+	Verbose                 bool
 	IsNonInteractiveSession bool
-	AgentDefinitions      AgentDefinitions
-	MaxBudgetUsd          float64
-	CustomSystemPrompt    string
-	AppendSystemPrompt    string
+	AgentDefinitions        AgentDefinitions
+	MaxBudgetUsd            float64
+	CustomSystemPrompt      string
+	AppendSystemPrompt      string
 }
 
 // Command represents a slash command definition.
@@ -93,7 +93,7 @@ type Command struct {
 
 // AgentDefinitions holds agent configuration.
 type AgentDefinitions struct {
-	ActiveAgents     []AgentDef
+	ActiveAgents      []AgentDef
 	AllowedAgentTypes []string
 }
 
@@ -118,20 +118,20 @@ type GlobLimits struct {
 
 // Context carries mutable execution state for a tool call.
 type Context struct {
-	Options            Options
-	AbortController    context.Context
-	GetAppState        func() any
-	SetAppState        func(updater func(prev any) any)
-	SetAppStateForTasks func(updater func(prev any) any)
-	Messages           []types.Message
-	ToolUseID          string
-	AgentID            string
-	AgentType          string
-	QueryTracking      QueryChainTracking
-	FileReadingLimits  FileReadingLimits
-	GlobLimits         GlobLimits
-	ToolDecisions      map[string]ToolDecision
-	ContentReplacement any
+	Options                 Options
+	AbortController         context.Context
+	GetAppState             func() any
+	SetAppState             func(updater func(prev any) any)
+	SetAppStateForTasks     func(updater func(prev any) any)
+	Messages                []types.Message
+	ToolUseID               string
+	AgentID                 string
+	AgentType               string
+	QueryTracking           QueryChainTracking
+	FileReadingLimits       FileReadingLimits
+	GlobLimits              GlobLimits
+	ToolDecisions           map[string]ToolDecision
+	ContentReplacement      any
 	LoadedNestedMemoryPaths map[string]struct{}
 	DiscoveredSkillNames    map[string]struct{}
 	LocalDenialTracking     any
@@ -156,47 +156,47 @@ type ToolDecision struct {
 // Tool is the core descriptor object pattern for agent tools.
 // In Go, we use a struct with function fields rather than a fat interface.
 type Tool struct {
-	Name           string
-	Aliases        []string
-	SearchHint     string
-	Description    string
-	InputSchema    func() map[string]any
-	InputJSONSchema map[string]any
-	OutputSchema   func() map[string]any
+	Name               string
+	Aliases            []string
+	SearchHint         string
+	Description        string
+	InputSchema        func() map[string]any
+	InputJSONSchema    map[string]any
+	OutputSchema       func() map[string]any
 	MaxResultSizeChars int64
 
 	// Capabilities
 	Capabilities CapabilityFlags
 
 	// Lifecycle
-	ValidateInput     func(input map[string]any, ctx Context) ValidationResult
-	CheckPermissions  func(input map[string]any, ctx Context) PermissionDecision
-	Call              func(input map[string]any, ctx Context, canUseTool CanUseToolFn, onProgress OnProgress) (ToolResult, error)
-	MapResult         func(result any, toolUseID string) types.ToolResultBlock
+	ValidateInput    func(input map[string]any, ctx Context) ValidationResult
+	CheckPermissions func(input map[string]any, ctx Context) PermissionDecision
+	Call             func(input map[string]any, ctx Context, canUseTool CanUseToolFn, onProgress OnProgress) (ToolResult, error)
+	MapResult        func(result any, toolUseID string) types.ToolResultBlock
 
 	// Rendering / UI (optional)
-	UserFacingName      func(input map[string]any) string
-	GetToolUseSummary   func(input map[string]any) string
+	UserFacingName         func(input map[string]any) string
+	GetToolUseSummary      func(input map[string]any) string
 	GetActivityDescription func(input map[string]any) string
-	ToAutoClassifierInput func(input map[string]any) any
+	ToAutoClassifierInput  func(input map[string]any) any
 
 	// Input pipeline hooks
-	BackfillObservableInput func(input map[string]any)
+	BackfillObservableInput  func(input map[string]any)
 	PreparePermissionMatcher func(input map[string]any) func(pattern string) bool
 }
 
 // DefaultCapabilityFlags returns safe defaults (fail-closed).
 func DefaultCapabilityFlags() CapabilityFlags {
 	return CapabilityFlags{
-		IsEnabled:             func() bool { return true },
-		IsConcurrencySafe:     func(map[string]any) bool { return false },
-		IsReadOnly:            func(map[string]any) bool { return false },
-		IsDestructive:         func(map[string]any) bool { return false },
-		InterruptBehavior:     func() string { return "block" },
+		IsEnabled:               func() bool { return true },
+		IsConcurrencySafe:       func(map[string]any) bool { return false },
+		IsReadOnly:              func(map[string]any) bool { return false },
+		IsDestructive:           func(map[string]any) bool { return false },
+		InterruptBehavior:       func() string { return "block" },
 		RequiresUserInteraction: func() bool { return false },
-		IsSearchOrReadCommand: func(map[string]any) SearchReadFlags { return SearchReadFlags{} },
-		IsOpenWorld:           func(map[string]any) bool { return false },
-		IsTransparentWrapper:  func() bool { return false },
+		IsSearchOrReadCommand:   func(map[string]any) SearchReadFlags { return SearchReadFlags{} },
+		IsOpenWorld:             func(map[string]any) bool { return false },
+		IsTransparentWrapper:    func() bool { return false },
 	}
 }
 
