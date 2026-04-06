@@ -31,31 +31,6 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		IsDestructive:         func(map[string]any) bool { return true },
 		InterruptBehavior:     func() string { return "cancel" },
 	},
-	UserFacingName: func(input map[string]any) string {
-		return "Write"
-	},
-	GetActivityDescription: func(input map[string]any) string {
-		path := getString(input, "file_path")
-		if path == "" {
-			return "Writing file"
-		}
-		parts := strings.Split(path, "/")
-		filename := parts[len(parts)-1]
-		content := getString(input, "content")
-		// Determine if creating or updating
-		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return fmt.Sprintf("Creating %s (%d bytes)", filename, len(content))
-		}
-		return fmt.Sprintf("Updating %s (%d bytes)", filename, len(content))
-	},
-	GetToolUseSummary: func(input map[string]any) string {
-		path := getString(input, "file_path")
-		if path == "" {
-			return ""
-		}
-		parts := strings.Split(path, "/")
-		return parts[len(parts)-1]
-	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		path := getString(input, "file_path")
 		if path == "" {
@@ -105,11 +80,27 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
 	},
-	UserFacingName: func(map[string]any) string { return "write" },
+	UserFacingName: func(map[string]any) string { return "Write" },
 	GetActivityDescription: func(input map[string]any) string {
-		if p, ok := input["file_path"].(string); ok {
-			return "Writing " + p
+		path := getString(input, "file_path")
+		if path == "" {
+			return "Writing file"
 		}
-		return "Writing file"
+		parts := strings.Split(path, "/")
+		filename := parts[len(parts)-1]
+		content := getString(input, "content")
+		// Determine if creating or updating
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			return fmt.Sprintf("Creating %s (%d bytes)", filename, len(content))
+		}
+		return fmt.Sprintf("Updating %s (%d bytes)", filename, len(content))
+	},
+	GetToolUseSummary: func(input map[string]any) string {
+		path := getString(input, "file_path")
+		if path == "" {
+			return ""
+		}
+		parts := strings.Split(path, "/")
+		return parts[len(parts)-1]
 	},
 })
