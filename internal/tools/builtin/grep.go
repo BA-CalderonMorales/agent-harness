@@ -33,30 +33,6 @@ var GrepTool = tools.NewTool(tools.Tool{
 		IsReadOnly:            func(map[string]any) bool { return true },
 		IsSearchOrReadCommand: func(map[string]any) tools.SearchReadFlags { return tools.SearchReadFlags{IsSearch: true} },
 	},
-	UserFacingName: func(input map[string]any) string {
-		return "Grep"
-	},
-	GetActivityDescription: func(input map[string]any) string {
-		pattern := getString(input, "pattern")
-		path := getString(input, "path")
-		if pattern == "" {
-			return "Searching code"
-		}
-		// Show just the filename or dir name
-		parts := strings.Split(path, "/")
-		name := parts[len(parts)-1]
-		if len(pattern) > 20 {
-			pattern = pattern[:17] + "..."
-		}
-		return fmt.Sprintf("Searching for '%s' in %s", pattern, name)
-	},
-	GetToolUseSummary: func(input map[string]any) string {
-		pattern := getString(input, "pattern")
-		if len(pattern) > 30 {
-			pattern = pattern[:27] + "..."
-		}
-		return pattern
-	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		if getString(input, "pattern") == "" || getString(input, "path") == "" {
 			return tools.ValidationResult{Valid: false, Message: "pattern and path are required"}
@@ -111,12 +87,27 @@ var GrepTool = tools.NewTool(tools.Tool{
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
 	},
-	UserFacingName: func(map[string]any) string { return "grep" },
+	UserFacingName: func(map[string]any) string { return "Grep" },
 	GetActivityDescription: func(input map[string]any) string {
-		if p, ok := input["pattern"].(string); ok {
-			return "Searching for pattern: " + p
+		pattern := getString(input, "pattern")
+		path := getString(input, "path")
+		if pattern == "" {
+			return "Searching code"
 		}
-		return "Searching contents"
+		// Show just the filename or dir name
+		parts := strings.Split(path, "/")
+		name := parts[len(parts)-1]
+		if len(pattern) > 20 {
+			pattern = pattern[:17] + "..."
+		}
+		return fmt.Sprintf("Searching for '%s' in %s", pattern, name)
+	},
+	GetToolUseSummary: func(input map[string]any) string {
+		pattern := getString(input, "pattern")
+		if len(pattern) > 30 {
+			pattern = pattern[:27] + "..."
+		}
+		return pattern
 	},
 })
 
