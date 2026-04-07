@@ -200,10 +200,16 @@ func (app *App) loadConfig() error {
 		}
 	}
 
-	if app.config.APIKey == "" {
+	// Skip API key check for local providers (Ollama)
+	if app.config.APIKey == "" && app.config.Provider != "ollama" && app.config.Provider != "local" {
 		if err := app.interactiveSetup(credManager); err != nil {
 			return fmt.Errorf("setup failed: %w", err)
 		}
+	}
+
+	// Set default API key for local providers (not actually used)
+	if app.config.APIKey == "" && (app.config.Provider == "ollama" || app.config.Provider == "local") {
+		app.config.APIKey = "ollama"
 	}
 
 	return nil

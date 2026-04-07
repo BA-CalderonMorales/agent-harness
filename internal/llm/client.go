@@ -53,7 +53,10 @@ func (c *HTTPClient) Stream(ctx context.Context, req Request) (<-chan types.LLME
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	// Ollama doesn't require an API key
+	if c.Provider != "ollama" && c.Provider != "local" {
+		httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
+	}
 	if c.Provider == "openrouter" {
 		httpReq.Header.Set("HTTP-Referer", "https://github.com/BA-CalderonMorales/agent-harness")
 		httpReq.Header.Set("X-Title", "agent-harness")
