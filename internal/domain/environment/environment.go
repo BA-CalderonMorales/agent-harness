@@ -2,7 +2,7 @@ package environment
 
 import (
 	"context"
-	"github.com/BA-CalderonMorales/agent-harness/internal/permissions"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/permissions"
 )
 
 // Environment defines the interface through which the agent interacts with the system.

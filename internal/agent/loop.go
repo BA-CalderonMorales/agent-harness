@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/llm"
-	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )

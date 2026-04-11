@@ -6,7 +6,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/tools"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
