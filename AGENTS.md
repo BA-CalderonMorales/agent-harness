@@ -11,6 +11,20 @@
 - Related: terminal-jarvis (Rust ADK), lumina-bot (Go gateway), claude-termux (JS CLI)
 - Shared commands: `harness-status`, `sync-philosophy`
 
+## Core Agent Loop
+
+All harnesses share identical control flow (`internal/agent/loop.go:queryLoop()`):
+
+```
+while not done:
+    1. Call LLM with current message context
+    2. If text-only response → done
+    3. If tool calls → execute, add results, continue
+    4. If max turns exceeded → error
+```
+
+Max turns: 10 (configurable). Tool execution supports batching by concurrency safety.
+
 ## Key Patterns
 
 - Tool Descriptor Pattern: structs with function fields, not interfaces
