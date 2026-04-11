@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/fs"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/defaults"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/fs"
 )
 
 // FileSystemBucket handles all file-related tool operations.
@@ -338,9 +338,9 @@ func (fs *FileSystemBucket) makeEditTool() tools.Tool {
 			return map[string]any{
 				"type": "object",
 				"properties": map[string]any{
-					"file_path":   map[string]any{"type": "string"},
-					"old_string":  map[string]any{"type": "string"},
-					"new_string":  map[string]any{"type": "string"},
+					"file_path":  map[string]any{"type": "string"},
+					"old_string": map[string]any{"type": "string"},
+					"new_string": map[string]any{"type": "string"},
 				},
 				"required": []string{"file_path"},
 			}

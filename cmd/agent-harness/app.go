@@ -6,13 +6,13 @@ import (
 	"path/filepath"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 )
 

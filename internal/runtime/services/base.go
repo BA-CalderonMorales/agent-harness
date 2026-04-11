@@ -42,9 +42,9 @@ type ServiceResult struct {
 
 // ServiceBucketCapabilities describes capabilities.
 type ServiceBucketCapabilities struct {
-	IsAsync     bool // Can run asynchronously
-	IsStateful  bool // Maintains state between calls
-	Category    string
+	IsAsync    bool // Can run asynchronously
+	IsStateful bool // Maintains state between calls
+	Category   string
 }
 
 // ServiceOrchestrator coordinates multiple ServiceBase implementations.

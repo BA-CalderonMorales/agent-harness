@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/session/loop"
 	"github.com/BA-CalderonMorales/agent-harness/internal/session/loop/buckets/defaults"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 

@@ -31,9 +31,9 @@ type LLMBase interface {
 
 // LLMBucketCapabilities describes static capabilities of an LLM bucket.
 type LLMBucketCapabilities struct {
-	Provider      string   // "openrouter", "anthropic", "ollama"
-	Models        []string // Supported model names
-	SupportsTools bool
+	Provider          string   // "openrouter", "anthropic", "ollama"
+	Models            []string // Supported model names
+	SupportsTools     bool
 	SupportsStreaming bool
 }
 

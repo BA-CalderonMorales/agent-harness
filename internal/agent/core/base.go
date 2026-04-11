@@ -48,13 +48,13 @@ type AgentExecutionContext struct {
 
 // AgentResult is the standardized output from agent bucket execution.
 type AgentResult struct {
-	Success      bool
-	Data         any
-	Messages     []types.Message
-	Error        error
-	Cost         CostInfo
-	ShouldHalt   bool
-	Retryable    bool
+	Success    bool
+	Data       any
+	Messages   []types.Message
+	Error      error
+	Cost       CostInfo
+	ShouldHalt bool
+	Retryable  bool
 }
 
 // CostInfo tracks token and cost information.
