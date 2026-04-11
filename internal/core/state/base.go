@@ -35,10 +35,10 @@ type StateBase interface {
 
 // StateBucketCapabilities describes static capabilities.
 type StateBucketCapabilities struct {
-	IsPersistent  bool // Survives process restart
-	IsThreadSafe  bool // Safe for concurrent access
-	SupportsTTL   bool // Supports time-to-live
-	Category      string
+	IsPersistent bool // Survives process restart
+	IsThreadSafe bool // Safe for concurrent access
+	SupportsTTL  bool // Supports time-to-live
+	Category     string
 }
 
 // StateOrchestrator coordinates multiple StateBase implementations.

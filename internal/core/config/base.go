@@ -24,9 +24,9 @@ type ConfigBase interface {
 
 // ConfigBucketCapabilities describes capabilities.
 type ConfigBucketCapabilities struct {
-	Priority   int    // Lower = higher priority
-	IsMutable  bool   // Can be changed at runtime
-	Category   string // "env", "file", "flags"
+	Priority  int    // Lower = higher priority
+	IsMutable bool   // Can be changed at runtime
+	Category  string // "env", "file", "flags"
 }
 
 // ConfigOrchestrator coordinates multiple ConfigBase implementations.

@@ -46,21 +46,21 @@ const (
 // PermissionEvaluationContext carries all context needed for a permission check.
 // Buckets receive this instead of digging into global state.
 type PermissionEvaluationContext struct {
-	Tool        tools.Tool
-	ToolName    string
-	Input       map[string]any
-	Mode        Mode
-	PermCtx     Context
+	Tool          tools.Tool
+	ToolName      string
+	Input         map[string]any
+	Mode          Mode
+	PermCtx       Context
 	PrevDecisions map[string]tools.ToolDecision
 }
 
 // PermissionBucketCapabilities describes static capabilities of a permission bucket.
 type PermissionBucketCapabilities struct {
-	IsLayered     bool     // Can have multiple rules that stack
-	IsOverride    bool     // Rules can override other sources
-	RuleSources   []string // Sources this bucket handles
-	Category      string   // "usersettings", "projectsettings", etc.
-	Priority      int      // Evaluation priority (lower = first)
+	IsLayered   bool     // Can have multiple rules that stack
+	IsOverride  bool     // Rules can override other sources
+	RuleSources []string // Sources this bucket handles
+	Category    string   // "usersettings", "projectsettings", etc.
+	Priority    int      // Evaluation priority (lower = first)
 }
 
 // PermissionOrchestrator coordinates multiple PermissionBase implementations.
@@ -85,28 +85,28 @@ func (o *PermissionOrchestrator) RegisterBucket(bucket PermissionBase) {
 func (o *PermissionOrchestrator) Evaluate(ctx PermissionEvaluationContext) tools.PermissionDecision {
 	// Evaluate by priority order
 	for _, bucket := range o.buckets {
-		if !bucket.CanHandle(ctx.ToolName, PermTypeAllow) && 
-		   !bucket.CanHandle(ctx.ToolName, PermTypeDeny) &&
-		   !bucket.CanHandle(ctx.ToolName, PermTypeAsk) {
+		if !bucket.CanHandle(ctx.ToolName, PermTypeAllow) &&
+			!bucket.CanHandle(ctx.ToolName, PermTypeDeny) &&
+			!bucket.CanHandle(ctx.ToolName, PermTypeAsk) {
 			continue
 		}
-		
+
 		decision := bucket.Evaluate(ctx)
-		
+
 		// Deny is final
 		if decision.Behavior == tools.Deny {
 			return decision
 		}
-		
+
 		// Allow can be overridden by later buckets
 		if decision.Behavior == tools.Allow {
 			// Continue to check for denies
 			continue
 		}
-		
+
 		// Ask means we need more info - continue
 	}
-	
+
 	// Default: allow
 	return tools.PermissionDecision{
 		Behavior:     tools.Allow,

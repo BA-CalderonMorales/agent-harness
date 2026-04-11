@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/session/loop"
 	"github.com/BA-CalderonMorales/agent-harness/internal/session/loop/buckets/defaults"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )

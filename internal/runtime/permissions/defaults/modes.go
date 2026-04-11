@@ -4,7 +4,7 @@ package defaults
 const (
 	// DefaultMode is the default permission mode.
 	DefaultMode = "default"
-	
+
 	// MaxConsecutiveDenials before auto-mode fallback.
 	MaxConsecutiveDenials = 3
 )
@@ -23,14 +23,14 @@ var ModeDescriptions = map[string]string{
 // IsDestructiveTool returns true for tools that modify state.
 func IsDestructiveTool(toolName string) bool {
 	destructive := map[string]bool{
-		"write":      true,
-		"edit":       true,
-		"bash":       true,
-		"shell":      true,
-		"rm":         true,
-		"delete":     true,
-		"move":       true,
-		"mv":         true,
+		"write":  true,
+		"edit":   true,
+		"bash":   true,
+		"shell":  true,
+		"rm":     true,
+		"delete": true,
+		"move":   true,
+		"mv":     true,
 	}
 	return destructive[toolName]
 }
@@ -38,13 +38,13 @@ func IsDestructiveTool(toolName string) bool {
 // IsReadOnlyTool returns true for tools that only read.
 func IsReadOnlyTool(toolName string) bool {
 	readOnly := map[string]bool{
-		"read":       true,
-		"glob":       true,
+		"read":         true,
+		"glob":         true,
 		"ls_recursive": true,
-		"grep":       true,
-		"search":     true,
-		"webfetch":   true,
-		"websearch":  true,
+		"grep":         true,
+		"search":       true,
+		"webfetch":     true,
+		"websearch":    true,
 	}
 	return readOnly[toolName]
 }

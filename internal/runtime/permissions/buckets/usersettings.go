@@ -61,7 +61,7 @@ func (u *UserSettingsBucket) Evaluate(ctx permissions.PermissionEvaluationContex
 			}
 		}
 	}
-	
+
 	// Check allow rules
 	if allowRules, ok := ctx.PermCtx.AlwaysAllowRules[permissions.SourceUserSettings]; ok {
 		for _, rule := range allowRules {
@@ -74,7 +74,7 @@ func (u *UserSettingsBucket) Evaluate(ctx permissions.PermissionEvaluationContex
 			}
 		}
 	}
-	
+
 	// Check ask rules
 	if askRules, ok := ctx.PermCtx.AlwaysAskRules[permissions.SourceUserSettings]; ok {
 		for _, rule := range askRules {
@@ -88,7 +88,7 @@ func (u *UserSettingsBucket) Evaluate(ctx permissions.PermissionEvaluationContex
 			}
 		}
 	}
-	
+
 	// No matching rule - passthrough
 	return tools.PermissionDecision{
 		Behavior:     tools.Passthrough,
@@ -111,18 +111,18 @@ func (u *UserSettingsBucket) ruleMatches(tool tools.Tool, input map[string]any, 
 			return false
 		}
 	}
-	
+
 	// Blanket rule (no content restriction)
 	if rule.RuleContent == "" {
 		return true
 	}
-	
+
 	// Content-level match using tool's permission matcher
 	if tool.PreparePermissionMatcher != nil {
 		matcher := tool.PreparePermissionMatcher(input)
 		return matcher(rule.RuleContent)
 	}
-	
+
 	// Fallback: simple wildcard on first string field
 	for _, v := range input {
 		if s, ok := v.(string); ok {

@@ -58,7 +58,7 @@ func (m *ModeBucket) Evaluate(ctx permissions.PermissionEvaluationContext) tools
 			UpdatedInput:   ctx.Input,
 			DecisionReason: "dontAsk_mode",
 		}
-		
+
 	case permissions.ModeBypassPermissions:
 		if ctx.PermCtx.IsBypassPermissionsAvailable {
 			return tools.PermissionDecision{
@@ -72,7 +72,7 @@ func (m *ModeBucket) Evaluate(ctx permissions.PermissionEvaluationContext) tools
 			UpdatedInput: ctx.Input,
 			Message:      "Bypass permissions not available",
 		}
-		
+
 	case permissions.ModeAuto:
 		// Auto mode: defer to classifier (returns ask to trigger classification)
 		return tools.PermissionDecision{
@@ -80,7 +80,7 @@ func (m *ModeBucket) Evaluate(ctx permissions.PermissionEvaluationContext) tools
 			UpdatedInput: ctx.Input,
 			Message:      "Auto mode requires classification",
 		}
-		
+
 	case permissions.ModeAcceptEdits:
 		// Auto-allow edit/write tools
 		if ctx.Tool.Name == "edit" || ctx.Tool.Name == "write" {
@@ -94,7 +94,7 @@ func (m *ModeBucket) Evaluate(ctx permissions.PermissionEvaluationContext) tools
 			Behavior:     tools.Passthrough,
 			UpdatedInput: ctx.Input,
 		}
-		
+
 	case permissions.ModePlan:
 		// Plan mode: ask for everything
 		return tools.PermissionDecision{
@@ -102,7 +102,7 @@ func (m *ModeBucket) Evaluate(ctx permissions.PermissionEvaluationContext) tools
 			UpdatedInput: ctx.Input,
 			Message:      "Plan mode - all operations require approval",
 		}
-		
+
 	default:
 		// Default mode: passthrough to tool-specific checks
 		return tools.PermissionDecision{
