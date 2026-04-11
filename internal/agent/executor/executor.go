@@ -10,11 +10,9 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
-// ExecutorBucket handles tool execution with concurrency safety.
+// ExecutorBucket handles tool execution.
 // It implements AgentBase for the core execution logic.
-type ExecutorBucket struct {
-	mu sync.RWMutex
-}
+type ExecutorBucket struct{}
 
 // Executor creates a new executor bucket.
 func Executor() *ExecutorBucket {
