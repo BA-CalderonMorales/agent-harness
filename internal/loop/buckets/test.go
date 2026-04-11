@@ -17,16 +17,16 @@ import (
 
 // LoopTest handles test execution.
 // Tools: run_tests, test
-type LoopTest struct {
-	basePath   string
-	timeout    time.Duration
-	maxOutput  int
-	parallel   int
+type TestBucket struct {
+	basePath  string
+	timeout   time.Duration
+	maxOutput int
+	parallel  int
 }
 
 // NewLoopTest creates a test bucket.
-func NewLoopTest(basePath string) *LoopTest {
-	return &LoopTest{
+func Test(basePath string) *TestBucket {
+	return &TestBucket{
 		basePath:  basePath,
 		timeout:   defaults.TestDefaultTimeout,
 		maxOutput: defaults.TestMaxOutputLines,
@@ -35,24 +35,24 @@ func NewLoopTest(basePath string) *LoopTest {
 }
 
 // WithTimeout sets the timeout.
-func (t *LoopTest) WithTimeout(d time.Duration) *LoopTest {
+func (t *TestBucket) WithTimeout(d time.Duration) *TestBucket {
 	t.timeout = d
 	return t
 }
 
 // WithParallel sets parallelism.
-func (t *LoopTest) WithParallel(n int) *LoopTest {
+func (t *TestBucket) WithParallel(n int) *TestBucket {
 	t.parallel = n
 	return t
 }
 
 // Name returns the bucket identifier.
-func (t *LoopTest) Name() string {
+func (t *TestBucket) Name() string {
 	return "test"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (t *LoopTest) CanHandle(toolName string, input map[string]any) bool {
+func (t *TestBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "run_tests", "test", "run_test":
 		return true
@@ -61,7 +61,7 @@ func (t *LoopTest) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (t *LoopTest) Capabilities() loop.BucketCapabilities {
+func (t *TestBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: false, // Tests may modify files
 		IsReadOnly:        false,
@@ -72,7 +72,7 @@ func (t *LoopTest) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the test operation.
-func (t *LoopTest) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (t *TestBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "run_tests", "test", "run_test":
 		return t.handleRunTests(ctx)
@@ -85,7 +85,7 @@ func (t *LoopTest) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleRunTests runs tests.
-func (t *LoopTest) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
+func (t *TestBucket) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 	// Detect test framework
 	framework := t.detectTestFramework()
 	config, ok := defaults.TestFrameworks[framework]
@@ -180,7 +180,7 @@ func (t *LoopTest) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 			return loop.LoopError{}
 		}(),
 		Messages: []types.Message{{
-			Role:    types.RoleUser,
+			Role: types.RoleUser,
 			Content: []types.ContentBlock{types.ToolResultBlock{
 				ToolUseID: ctx.ToolUseID,
 				Content:   summary.String(),
@@ -191,7 +191,7 @@ func (t *LoopTest) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // detectTestFramework detects the test framework.
-func (t *LoopTest) detectTestFramework() string {
+func (t *TestBucket) detectTestFramework() string {
 	// Check for go.mod
 	if _, err := exec.LookPath("go"); err == nil {
 		if _, err := exec.Command("test", "-f", filepath.Join(t.basePath, "go.mod")).Output(); err == nil {
@@ -236,7 +236,7 @@ func (t *LoopTest) detectTestFramework() string {
 }
 
 // buildTestArgs builds test command arguments.
-func (t *LoopTest) buildTestArgs(config defaults.TestFrameworkConfig, pattern string, coverage bool) []string {
+func (t *TestBucket) buildTestArgs(config defaults.TestFrameworkConfig, pattern string, coverage bool) []string {
 	args := []string{}
 
 	// Add base args
@@ -268,7 +268,7 @@ func (t *LoopTest) buildTestArgs(config defaults.TestFrameworkConfig, pattern st
 }
 
 // parseTestOutput parses test output.
-func (t *LoopTest) parseTestOutput(output string, framework string) *TestResult {
+func (t *TestBucket) parseTestOutput(output string, framework string) *TestResult {
 	result := &TestResult{
 		Passed:   0,
 		Failed:   0,
@@ -342,4 +342,4 @@ type TestFailure struct {
 }
 
 // Ensure LoopTest implements LoopBase
-var _ loop.LoopBase = (*LoopTest)(nil)
+var _ loop.LoopBase = (*TestBucket)(nil)

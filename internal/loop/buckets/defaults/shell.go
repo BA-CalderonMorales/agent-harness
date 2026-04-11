@@ -40,8 +40,8 @@ var ShellBlockedPatterns = []*regexp.Regexp{
 	regexp.MustCompile(`rm\s+-rf\s+/`),
 	regexp.MustCompile(`>\s*/dev/[sh]da`),
 	regexp.MustCompile(`:\s*\(\s*\)\s*{\s*:\s*\|\s*:\s*&\s*}`), // fork bomb
-	regexp.MustCompile(`curl.*\|.*bash`),                            // pipe curl to bash
-	regexp.MustCompile(`wget.*-O-.*\|.*bash`),                       // pipe wget to bash
+	regexp.MustCompile(`curl.*\|.*bash`),                       // pipe curl to bash
+	regexp.MustCompile(`wget.*-O-.*\|.*bash`),                  // pipe wget to bash
 	regexp.MustCompile(`eval\s*\(`),
 	regexp.MustCompile(`base64\s+-d.*\|`),
 }

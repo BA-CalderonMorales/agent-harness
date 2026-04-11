@@ -48,12 +48,12 @@ type ExecutionContext struct {
 
 // LoopResult is the standardized output from any bucket execution.
 type LoopResult struct {
-	Success      bool
-	Data         any
-	Messages     []types.Message
-	Error        LoopError
-	ShouldHalt   bool // If true, stop the entire loop
-	Retryable    bool // If true and failed, can retry
+	Success    bool
+	Data       any
+	Messages   []types.Message
+	Error      LoopError
+	ShouldHalt bool // If true, stop the entire loop
+	Retryable  bool // If true and failed, can retry
 }
 
 // BucketCapabilities describes static capabilities of a bucket.
@@ -64,8 +64,6 @@ type BucketCapabilities struct {
 	ToolNames         []string // Tools this bucket handles
 	Category          string   // "filesystem", "shell", "search", etc.
 }
-
-
 
 // LoopState tracks the current state of a loop iteration.
 type LoopState struct {
@@ -80,8 +78,8 @@ type LoopState struct {
 // NewLoopState creates a fresh loop state.
 func NewLoopState() *LoopState {
 	return &LoopState{
-		TurnCount:   1,
-		Messages:    make([]types.Message, 0),
+		TurnCount: 1,
+		Messages:  make([]types.Message, 0),
 		ToolUseContext: tools.Context{
 			ToolDecisions:           make(map[string]tools.ToolDecision),
 			LoadedNestedMemoryPaths: make(map[string]struct{}),

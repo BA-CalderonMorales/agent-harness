@@ -9,12 +9,12 @@ import (
 // LoopSystemPrompts manages system prompts and context injection.
 // It handles prompt composition, caching, and dynamic updates.
 type LoopSystemPrompts struct {
-	mu             sync.RWMutex
-	basePrompt     string
-	contextBlocks  map[string]string // named context blocks
-	appendBlocks   []string          // blocks to append
-	cache          string            // cached composed prompt
-	cacheValid     bool
+	mu            sync.RWMutex
+	basePrompt    string
+	contextBlocks map[string]string // named context blocks
+	appendBlocks  []string          // blocks to append
+	cache         string            // cached composed prompt
+	cacheValid    bool
 }
 
 // NewLoopSystemPrompts creates a prompt manager.
@@ -158,7 +158,7 @@ Please either:
 
 	// ContextCompactedPrompt is shown after context compaction
 	ContextCompactedPrompt = PromptTemplate{
-		Name: "context_compacted",
+		Name:     "context_compacted",
 		Template: `[Context was compacted to stay within limits. Previous conversation summary: {{summary}}]`,
 		Defaults: map[string]string{
 			"summary": "Earlier conversation details were summarized to save space.",
