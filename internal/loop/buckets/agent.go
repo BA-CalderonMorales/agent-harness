@@ -16,17 +16,17 @@ import (
 
 // LoopAgent handles sub-agent spawning and delegation.
 // This bucket creates isolated agent loops for specific tasks.
-type LoopAgent struct {
-	llmClient     llm.Client
-	toolRegistry  *tools.ToolRegistry
-	maxDepth      int
-	basePath      string
-	orchestratorFactory func(basePath string, client llm.Client) *loop.Orchestrator
+type AgentBucket struct {
+	llmClient           llm.Client
+	toolRegistry        *tools.ToolRegistry
+	maxDepth            int
+	basePath            string
+	orchestratorFactory func(basePath string, client llm.Client) *loop.OrchestrationBucket
 }
 
 // NewLoopAgent creates an agent bucket.
-func NewLoopAgent(basePath string, client llm.Client) *LoopAgent {
-	return &LoopAgent{
+func Agent(basePath string, client llm.Client) *AgentBucket {
+	return &AgentBucket{
 		llmClient:    client,
 		toolRegistry: tools.NewRegistry(),
 		maxDepth:     defaults.AgentMaxDepthDefault,
@@ -35,35 +35,35 @@ func NewLoopAgent(basePath string, client llm.Client) *LoopAgent {
 }
 
 // WithMaxDepth sets the maximum recursion depth.
-func (a *LoopAgent) WithMaxDepth(depth int) *LoopAgent {
+func (a *AgentBucket) WithMaxDepth(depth int) *AgentBucket {
 	a.maxDepth = depth
 	return a
 }
 
 // WithToolRegistry sets the tool registry for sub-agents.
-func (a *LoopAgent) WithToolRegistry(registry *tools.ToolRegistry) *LoopAgent {
+func (a *AgentBucket) WithToolRegistry(registry *tools.ToolRegistry) *AgentBucket {
 	a.toolRegistry = registry
 	return a
 }
 
 // WithOrchestratorFactory sets a custom factory for creating orchestrators.
-func (a *LoopAgent) WithOrchestratorFactory(factory func(basePath string, client llm.Client) *loop.Orchestrator) *LoopAgent {
+func (a *AgentBucket) WithOrchestratorFactory(factory func(basePath string, client llm.Client) *loop.OrchestrationBucket) *AgentBucket {
 	a.orchestratorFactory = factory
 	return a
 }
 
 // Name returns the bucket identifier.
-func (a *LoopAgent) Name() string {
+func (a *AgentBucket) Name() string {
 	return "agent"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (a *LoopAgent) CanHandle(toolName string, input map[string]any) bool {
+func (a *AgentBucket) CanHandle(toolName string, input map[string]any) bool {
 	return toolName == "agent" || toolName == "sub_agent" || toolName == "delegate"
 }
 
 // Capabilities describes what this bucket can do.
-func (a *LoopAgent) Capabilities() loop.BucketCapabilities {
+func (a *AgentBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: false, // Agents run serially
 		IsReadOnly:        false,
@@ -74,7 +74,7 @@ func (a *LoopAgent) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the agent delegation.
-func (a *LoopAgent) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (a *AgentBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	// Check recursion depth
 	currentDepth := 0
 	if d, ok := ctx.Input["_depth"].(float64); ok {
@@ -82,8 +82,8 @@ func (a *LoopAgent) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	}
 	if currentDepth >= a.maxDepth {
 		return loop.LoopResult{
-			Success: false,
-			Error:   loop.NewLoopError("depth_exceeded", fmt.Sprintf("agent recursion limit (%d) reached", a.maxDepth)),
+			Success:    false,
+			Error:      loop.NewLoopError("depth_exceeded", fmt.Sprintf("agent recursion limit (%d) reached", a.maxDepth)),
 			ShouldHalt: true,
 		}
 	}
@@ -130,12 +130,12 @@ func (a *LoopAgent) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 
 	// Return mock result for pattern demonstration
 	result := fmt.Sprintf("[Sub-agent %s completed]\nTask: %s\nResult: (sub-agent execution would run here)", agentType, prompt)
-	
+
 	return loop.LoopResult{
 		Success: true,
 		Data:    result,
 		Messages: []types.Message{{
-			Role:    types.RoleUser,
+			Role: types.RoleUser,
 			Content: []types.ContentBlock{types.ToolResultBlock{
 				ToolUseID: ctx.ToolUseID,
 				Content:   result,
@@ -153,21 +153,21 @@ func GetAgentPrompt(agentType string) string {
 }
 
 // runWithOrchestrator executes a real sub-agent using the loop orchestrator.
-func (a *LoopAgent) runWithOrchestrator(ctx context.Context, messages []types.Message, toolUseID string, agentType string) loop.LoopResult {
+func (a *AgentBucket) runWithOrchestrator(ctx context.Context, messages []types.Message, toolUseID string, agentType string) loop.LoopResult {
 	// Create orchestrator for sub-agent
-	var orch *loop.Orchestrator
+	var orch *loop.OrchestrationBucket
 	if a.orchestratorFactory != nil {
 		orch = a.orchestratorFactory(a.basePath, a.llmClient)
 	} else {
 		// Default: create standard orchestrator
 		cfg := loop.DefaultConfig()
 		cfg.MaxTurns = 5 // Shorter for sub-agents
-		
+
 		// Create buckets for sub-agent
-		fs := NewLoopFileSystem(a.basePath)
-		search := NewLoopSearch(a.basePath)
-		
-		orch = loop.NewOrchestrator(cfg, a.llmClient, fs, search)
+		fs := FileSystem(a.basePath)
+		search := Search(a.basePath)
+
+		orch = loop.Orchestration(cfg, a.llmClient, fs, search)
 	}
 
 	// Set up event channel to capture results
@@ -189,7 +189,7 @@ func (a *LoopAgent) runWithOrchestrator(ctx context.Context, messages []types.Me
 
 	// Run the sub-agent
 	state, err := orch.Run(ctx, params)
-	
+
 	// Collect result from final message
 	var result string
 	if err != nil {
@@ -234,10 +234,10 @@ func (a *LoopAgent) runWithOrchestrator(ctx context.Context, messages []types.Me
 
 // AgentConfig configures sub-agent behavior.
 type AgentConfig struct {
-	Model       string
-	MaxTurns    int
+	Model        string
+	MaxTurns     int
 	SystemPrompt string
-	Tools       []tools.Tool
+	Tools        []tools.Tool
 }
 
 // DefaultAgentConfig returns safe defaults for sub-agents.
@@ -251,4 +251,4 @@ func DefaultAgentConfig() AgentConfig {
 }
 
 // Ensure LoopAgent implements LoopBase
-var _ loop.LoopBase = (*LoopAgent)(nil)
+var _ loop.LoopBase = (*AgentBucket)(nil)

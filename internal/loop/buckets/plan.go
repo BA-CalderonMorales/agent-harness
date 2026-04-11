@@ -32,23 +32,23 @@ type PlanStep struct {
 
 // LoopPlan handles plan mode operations.
 // Tools: enter_plan_mode, exit_plan_mode
-type LoopPlan struct {
+type PlanBucket struct {
 	onPlanStart func(plan string)
 	onPlanStep  func(step int, total int, description string)
 	onPlanEnd   func(completed bool)
 }
 
 // NewLoopPlan creates a plan bucket.
-func NewLoopPlan() *LoopPlan {
-	return &LoopPlan{}
+func Plan() *PlanBucket {
+	return &PlanBucket{}
 }
 
 // WithCallbacks sets event handlers.
-func (p *LoopPlan) WithCallbacks(
+func (p *PlanBucket) WithCallbacks(
 	onStart func(plan string),
 	onStep func(step int, total int, description string),
 	onEnd func(completed bool),
-) *LoopPlan {
+) *PlanBucket {
 	p.onPlanStart = onStart
 	p.onPlanStep = onStep
 	p.onPlanEnd = onEnd
@@ -56,12 +56,12 @@ func (p *LoopPlan) WithCallbacks(
 }
 
 // Name returns the bucket identifier.
-func (p *LoopPlan) Name() string {
+func (p *PlanBucket) Name() string {
 	return "plan"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (p *LoopPlan) CanHandle(toolName string, input map[string]any) bool {
+func (p *PlanBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "enter_plan_mode", "plan", "exit_plan_mode", "approve_plan", "reject_plan":
 		return true
@@ -70,7 +70,7 @@ func (p *LoopPlan) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (p *LoopPlan) Capabilities() loop.BucketCapabilities {
+func (p *PlanBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        false,
@@ -81,7 +81,7 @@ func (p *LoopPlan) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the plan operation.
-func (p *LoopPlan) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (p *PlanBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "enter_plan_mode", "plan":
 		return p.handleEnterPlan(ctx)
@@ -100,7 +100,7 @@ func (p *LoopPlan) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleEnterPlan enters plan mode with a proposed plan.
-func (p *LoopPlan) handleEnterPlan(ctx loop.ExecutionContext) loop.LoopResult {
+func (p *PlanBucket) handleEnterPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	plan, _ := ctx.Input["plan"].(string)
 	steps, _ := ctx.Input["steps"].([]any)
 
@@ -154,9 +154,9 @@ func (p *LoopPlan) handleEnterPlan(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleExitPlan exits plan mode.
-func (p *LoopPlan) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
+func (p *PlanBucket) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	completed := planState.IsActive && planState.CurrentStep >= len(planState.Plan)
-	
+
 	var summary string
 	if completed {
 		summary = fmt.Sprintf("Plan completed (%d steps)", len(planState.Plan))
@@ -172,7 +172,7 @@ func (p *LoopPlan) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	}
 
 	result := fmt.Sprintf("%s (elapsed: %v)", summary, elapsed)
-	
+
 	return loop.LoopResult{
 		Success: true,
 		Data:    planState.Plan,
@@ -184,7 +184,7 @@ func (p *LoopPlan) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleApprovePlan approves and advances the plan.
-func (p *LoopPlan) handleApprovePlan(ctx loop.ExecutionContext) loop.LoopResult {
+func (p *PlanBucket) handleApprovePlan(ctx loop.ExecutionContext) loop.LoopResult {
 	if !planState.IsActive {
 		return loop.LoopResult{
 			Success: false,
@@ -217,7 +217,7 @@ func (p *LoopPlan) handleApprovePlan(ctx loop.ExecutionContext) loop.LoopResult 
 }
 
 // handleRejectPlan rejects the current plan step.
-func (p *LoopPlan) handleRejectPlan(ctx loop.ExecutionContext) loop.LoopResult {
+func (p *PlanBucket) handleRejectPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	if !planState.IsActive {
 		return loop.LoopResult{
 			Success: false,
@@ -250,19 +250,19 @@ func (p *LoopPlan) handleRejectPlan(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // GetPlanState returns current plan state.
-func (p *LoopPlan) GetPlanState() *PlanState {
+func (p *PlanBucket) GetPlanState() *PlanState {
 	return planState
 }
 
 // IsInPlanMode returns true if currently in plan mode.
-func (p *LoopPlan) IsInPlanMode() bool {
+func (p *PlanBucket) IsInPlanMode() bool {
 	return planState.IsActive
 }
 
 // ResetPlan resets the plan state.
-func (p *LoopPlan) ResetPlan() {
+func (p *PlanBucket) ResetPlan() {
 	planState = &PlanState{}
 }
 
 // Ensure LoopPlan implements LoopBase
-var _ loop.LoopBase = (*LoopPlan)(nil)
+var _ loop.LoopBase = (*PlanBucket)(nil)

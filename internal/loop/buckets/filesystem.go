@@ -14,18 +14,18 @@ import (
 
 // LoopFileSystem handles all file-related operations.
 // It implements LoopBase but only knows about files - no shell, no search.
-type LoopFileSystem struct {
-	basePath       string
-	allowedPaths   []string
-	blockedPaths   []string
-	maxFileSize    int64
-	maxReadOffset  int
-	maxReadLimit   int
+type FileSystemBucket struct {
+	basePath      string
+	allowedPaths  []string
+	blockedPaths  []string
+	maxFileSize   int64
+	maxReadOffset int
+	maxReadLimit  int
 }
 
 // NewLoopFileSystem creates a file system bucket.
-func NewLoopFileSystem(basePath string) *LoopFileSystem {
-	return &LoopFileSystem{
+func FileSystem(basePath string) *FileSystemBucket {
+	return &FileSystemBucket{
 		basePath:      basePath,
 		allowedPaths:  []string{},
 		blockedPaths:  defaults.FSDangerousPaths,
@@ -36,26 +36,26 @@ func NewLoopFileSystem(basePath string) *LoopFileSystem {
 }
 
 // WithAllowedPaths restricts operations to specific paths.
-func (fs *LoopFileSystem) WithAllowedPaths(paths ...string) *LoopFileSystem {
+func (fs *FileSystemBucket) WithAllowedPaths(paths ...string) *FileSystemBucket {
 	fs.allowedPaths = paths
 	return fs
 }
 
 // WithBlockedPaths adds additional blocked paths.
-func (fs *LoopFileSystem) WithBlockedPaths(paths ...string) *LoopFileSystem {
+func (fs *FileSystemBucket) WithBlockedPaths(paths ...string) *FileSystemBucket {
 	fs.blockedPaths = append(fs.blockedPaths, paths...)
 	return fs
 }
 
 // Name returns the bucket identifier.
-func (fs *LoopFileSystem) Name() string {
+func (fs *FileSystemBucket) Name() string {
 	return "filesystem"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (fs *LoopFileSystem) CanHandle(toolName string, input map[string]any) bool {
+func (fs *FileSystemBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
-	case "read", "read_file", "write", "write_file", "glob", "ls", "list_files", 
+	case "read", "read_file", "write", "write_file", "glob", "ls", "list_files",
 		"edit", "file_edit", "search_files":
 		return true
 	}
@@ -63,9 +63,9 @@ func (fs *LoopFileSystem) CanHandle(toolName string, input map[string]any) bool 
 }
 
 // Capabilities describes what this bucket can do.
-func (fs *LoopFileSystem) Capabilities() loop.BucketCapabilities {
+func (fs *FileSystemBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
-		IsConcurrencySafe: true, // File reads are safe
+		IsConcurrencySafe: true,  // File reads are safe
 		IsReadOnly:        false, // Can write
 		IsDestructive:     true,  // Can modify/delete files
 		ToolNames: []string{
@@ -77,7 +77,7 @@ func (fs *LoopFileSystem) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the file operation.
-func (fs *LoopFileSystem) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (fs *FileSystemBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "read", "read_file":
 		return fs.handleRead(ctx)
@@ -96,7 +96,7 @@ func (fs *LoopFileSystem) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleRead reads a file.
-func (fs *LoopFileSystem) handleRead(ctx loop.ExecutionContext) loop.LoopResult {
+func (fs *FileSystemBucket) handleRead(ctx loop.ExecutionContext) loop.LoopResult {
 	path, ok := ctx.Input["path"].(string)
 	if !ok || path == "" {
 		return loop.LoopResult{
@@ -175,7 +175,7 @@ func (fs *LoopFileSystem) handleRead(ctx loop.ExecutionContext) loop.LoopResult 
 }
 
 // handleWrite writes a file.
-func (fs *LoopFileSystem) handleWrite(ctx loop.ExecutionContext) loop.LoopResult {
+func (fs *FileSystemBucket) handleWrite(ctx loop.ExecutionContext) loop.LoopResult {
 	path, ok := ctx.Input["path"].(string)
 	if !ok || path == "" {
 		return loop.LoopResult{
@@ -240,7 +240,7 @@ func (fs *LoopFileSystem) handleWrite(ctx loop.ExecutionContext) loop.LoopResult
 }
 
 // handleList lists files in a directory.
-func (fs *LoopFileSystem) handleList(ctx loop.ExecutionContext) loop.LoopResult {
+func (fs *FileSystemBucket) handleList(ctx loop.ExecutionContext) loop.LoopResult {
 	path, ok := ctx.Input["path"].(string)
 	if !ok || path == "" {
 		path = "."
@@ -286,7 +286,7 @@ func (fs *LoopFileSystem) handleList(ctx loop.ExecutionContext) loop.LoopResult 
 }
 
 // handleEdit performs a file edit.
-func (fs *LoopFileSystem) handleEdit(ctx loop.ExecutionContext) loop.LoopResult {
+func (fs *FileSystemBucket) handleEdit(ctx loop.ExecutionContext) loop.LoopResult {
 	// Simplified edit - just do a string replace for now
 	path, ok := ctx.Input["path"].(string)
 	if !ok || path == "" {
@@ -337,14 +337,14 @@ func (fs *LoopFileSystem) handleEdit(ctx loop.ExecutionContext) loop.LoopResult 
 
 // Helpers
 
-func (fs *LoopFileSystem) resolvePath(path string) string {
+func (fs *FileSystemBucket) resolvePath(path string) string {
 	if filepath.IsAbs(path) {
 		return path
 	}
 	return filepath.Join(fs.basePath, path)
 }
 
-func (fs *LoopFileSystem) isBlocked(path string) bool {
+func (fs *FileSystemBucket) isBlocked(path string) bool {
 	for _, blocked := range fs.blockedPaths {
 		if path == blocked || strings.HasPrefix(path, blocked+"/") {
 			return true
@@ -353,7 +353,7 @@ func (fs *LoopFileSystem) isBlocked(path string) bool {
 	return false
 }
 
-func (fs *LoopFileSystem) listRecursive(dir string) []string {
+func (fs *FileSystemBucket) listRecursive(dir string) []string {
 	var files []string
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -384,4 +384,4 @@ func replaceOnce(s, old, new string) string {
 }
 
 // Ensure LoopFileSystem implements LoopBase
-var _ loop.LoopBase = (*LoopFileSystem)(nil)
+var _ loop.LoopBase = (*FileSystemBucket)(nil)

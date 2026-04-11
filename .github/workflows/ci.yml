@@ -81,3 +81,60 @@ jobs:
         with:
           version: "latest"
           install-go: false
+
+  # SBOM Generation
+  sbom:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: .
+          format: spdx-json
+          output-file: sbom.spdx.json
+
+      - name: Upload SBOM artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom
+          path: sbom.spdx.json
+          retention-days: 30
+
+  # Security scanning with Socket SFW
+  security:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install Socket SFW
+        run: |
+          curl -L -o sfw https://github.com/SocketDev/sfw-free/releases/latest/download/sfw-linux-x86_64
+          chmod +x sfw
+          sudo mv sfw /usr/local/bin/
+
+      - name: Download dependencies with SFW protection
+        run: sfw go mod download
+
+      - name: Verify dependencies with SFW protection
+        run: sfw go mod verify
+
+      - name: Run vulnerability scan
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          govulncheck ./...

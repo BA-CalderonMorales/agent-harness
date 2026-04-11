@@ -23,7 +23,7 @@ type LoopConfig struct {
 	TargetTokenLimit   int // Soft limit for compaction
 
 	// Tool execution
-	DefaultTimeout    time.Duration
+	DefaultTimeout     time.Duration
 	MaxConcurrentTools int // Limit concurrent tool execution
 
 	// Logging/Debugging

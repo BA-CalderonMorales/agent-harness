@@ -9,7 +9,7 @@ const (
 	GitStatusMaxFiles     = 100
 
 	// Safety
-	GitRequireApprovalForPush = true
+	GitRequireApprovalForPush  = true
 	GitRequireApprovalForForce = true
 )
 
@@ -30,11 +30,11 @@ var GitDestructiveCommands = []string{
 
 // GitStatusIndicators maps file prefixes to status
 var GitStatusIndicators = map[string]string{
-	"M": "modified",
-	"A": "added",
-	"D": "deleted",
-	"R": "renamed",
-	"C": "copied",
-	"U": "updated",
+	"M":  "modified",
+	"A":  "added",
+	"D":  "deleted",
+	"R":  "renamed",
+	"C":  "copied",
+	"U":  "updated",
 	"??": "untracked",
 }
