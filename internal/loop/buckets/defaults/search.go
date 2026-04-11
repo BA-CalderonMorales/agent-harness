@@ -3,13 +3,13 @@ package defaults
 // Search bucket defaults
 const (
 	// Result limits
-	SearchMaxResultsDefault    = 50
-	SearchMaxResultsFast       = 20
-	SearchMaxResultsRobust     = 100
-	SearchMaxResultsUnlimited  = 1000
+	SearchMaxResultsDefault   = 50
+	SearchMaxResultsFast      = 20
+	SearchMaxResultsRobust    = 100
+	SearchMaxResultsUnlimited = 1000
 
 	// Line limits
-	SearchMaxLineLength = 500
+	SearchMaxLineLength  = 500
 	SearchMaxLineDefault = 200
 
 	// Context lines

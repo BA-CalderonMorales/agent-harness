@@ -216,8 +216,8 @@ func (b *Builder) Build() *loop.OrchestrationBucket {
 
 // FileSystemOption provides configuration helpers for filesystem bucket.
 var FileSystemOption = struct {
-	AllowPaths  func(paths ...string) func(*buckets.FileSystemBucket)
-	BlockPaths  func(paths ...string) func(*buckets.FileSystemBucket)
+	AllowPaths func(paths ...string) func(*buckets.FileSystemBucket)
+	BlockPaths func(paths ...string) func(*buckets.FileSystemBucket)
 }{
 	AllowPaths: func(paths ...string) func(*buckets.FileSystemBucket) {
 		return func(fs *buckets.FileSystemBucket) {
@@ -233,8 +233,8 @@ var FileSystemOption = struct {
 
 // ShellOption provides configuration helpers for shell bucket.
 var ShellOption = struct {
-	Timeout      func(d int) func(*buckets.ShellBucket)
-	NoApproval   func() func(*buckets.ShellBucket)
+	Timeout       func(d int) func(*buckets.ShellBucket)
+	NoApproval    func() func(*buckets.ShellBucket)
 	AllowCommands func(cmds ...string) func(*buckets.ShellBucket)
 }{
 	Timeout: func(d int) func(*buckets.ShellBucket) {

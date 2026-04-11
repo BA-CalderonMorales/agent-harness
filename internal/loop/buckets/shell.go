@@ -17,13 +17,13 @@ import (
 // LoopShell handles shell/bash operations.
 // It implements LoopBase with strict safety controls.
 type ShellBucket struct {
-	basePath         string
-	allowedCommands  []string // Whitelist (empty = allow all non-destructive)
-	blockedCommands  []string // Blacklist
-	blockedPatterns  []*regexp.Regexp
-	maxTimeout       time.Duration
-	maxOutputSize    int
-	requireApproval  bool
+	basePath        string
+	allowedCommands []string // Whitelist (empty = allow all non-destructive)
+	blockedCommands []string // Blacklist
+	blockedPatterns []*regexp.Regexp
+	maxTimeout      time.Duration
+	maxOutputSize   int
+	requireApproval bool
 }
 
 // NewLoopShell creates a shell bucket with safe defaults.
@@ -146,8 +146,8 @@ func (sh *ShellBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 
 	if err != nil && execCtx.Err() == context.DeadlineExceeded {
 		return loop.LoopResult{
-			Success: false,
-			Error:   loop.NewLoopError("timeout", fmt.Sprintf("command timed out after %v", timeout)),
+			Success:   false,
+			Error:     loop.NewLoopError("timeout", fmt.Sprintf("command timed out after %v", timeout)),
 			Retryable: true,
 		}
 	}
@@ -172,7 +172,7 @@ func (sh *ShellBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 			return loop.LoopError{}
 		}(),
 		Messages: []types.Message{{
-			Role:    types.RoleUser,
+			Role: types.RoleUser,
 			Content: []types.ContentBlock{types.ToolResultBlock{
 				ToolUseID: ctx.ToolUseID,
 				Content:   result,

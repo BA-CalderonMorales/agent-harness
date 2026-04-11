@@ -8,12 +8,12 @@ import (
 // LoopError is a structured error for loop operations.
 // It carries categorization for retry decisions and user messages.
 type LoopError struct {
-	Code       string // Machine-readable error code
-	Message    string // Human-readable message
-	Cause      error  // Underlying error
-	Category   ErrorCategory
-	Retryable  bool
-	ToolName   string // Which tool caused the error, if any
+	Code      string // Machine-readable error code
+	Message   string // Human-readable message
+	Cause     error  // Underlying error
+	Category  ErrorCategory
+	Retryable bool
+	ToolName  string // Which tool caused the error, if any
 }
 
 // ErrorCategory classifies errors for handling decisions.

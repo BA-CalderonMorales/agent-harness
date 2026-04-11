@@ -233,7 +233,7 @@ func (s *SearchBucket) handleWebSearch(ctx loop.ExecutionContext) loop.LoopResul
 func (s *SearchBucket) processGrepOutput(output string) []string {
 	var results []string
 	scanner := bufio.NewScanner(bytes.NewReader([]byte(output)))
-	
+
 	for scanner.Scan() && len(results) < s.maxResults {
 		line := scanner.Text()
 		if len(line) > s.maxLineLength {
@@ -280,25 +280,25 @@ func IsCodeFile(path string) bool {
 func ParseGrepResults(output string) []SearchResult {
 	var results []SearchResult
 	lines := strings.Split(output, "\n")
-	
+
 	resultMap := make(map[string]*SearchResult)
-	
+
 	for _, line := range lines {
 		if line == "" {
 			continue
 		}
-		
+
 		// Parse grep -n output: file:line:content
 		parts := strings.SplitN(line, ":", 3)
 		if len(parts) < 3 {
 			continue
 		}
-		
+
 		file := parts[0]
 		lineNum := 0
 		fmt.Sscanf(parts[1], "%d", &lineNum)
 		content := parts[2]
-		
+
 		key := fmt.Sprintf("%s:%d", file, lineNum)
 		if _, exists := resultMap[key]; !exists {
 			resultMap[key] = &SearchResult{
@@ -309,7 +309,7 @@ func ParseGrepResults(output string) []SearchResult {
 			results = append(results, *resultMap[key])
 		}
 	}
-	
+
 	return results
 }
 

@@ -15,12 +15,12 @@ import (
 // LoopFileSystem handles all file-related operations.
 // It implements LoopBase but only knows about files - no shell, no search.
 type FileSystemBucket struct {
-	basePath       string
-	allowedPaths   []string
-	blockedPaths   []string
-	maxFileSize    int64
-	maxReadOffset  int
-	maxReadLimit   int
+	basePath      string
+	allowedPaths  []string
+	blockedPaths  []string
+	maxFileSize   int64
+	maxReadOffset int
+	maxReadLimit  int
 }
 
 // NewLoopFileSystem creates a file system bucket.
@@ -55,7 +55,7 @@ func (fs *FileSystemBucket) Name() string {
 // CanHandle determines if this bucket handles the tool.
 func (fs *FileSystemBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
-	case "read", "read_file", "write", "write_file", "glob", "ls", "list_files", 
+	case "read", "read_file", "write", "write_file", "glob", "ls", "list_files",
 		"edit", "file_edit", "search_files":
 		return true
 	}
@@ -65,7 +65,7 @@ func (fs *FileSystemBucket) CanHandle(toolName string, input map[string]any) boo
 // Capabilities describes what this bucket can do.
 func (fs *FileSystemBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
-		IsConcurrencySafe: true, // File reads are safe
+		IsConcurrencySafe: true,  // File reads are safe
 		IsReadOnly:        false, // Can write
 		IsDestructive:     true,  // Can modify/delete files
 		ToolNames: []string{

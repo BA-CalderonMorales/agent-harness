@@ -8,9 +8,9 @@ const (
 	AgentMaxDepthDeep    = 10
 
 	// Sub-agent settings
-	AgentSubAgentMaxTurns    = 5
-	AgentSubAgentModel       = "gpt-4o-mini"
-	AgentSubAgentModelFast   = "gpt-3.5-turbo"
+	AgentSubAgentMaxTurns  = 5
+	AgentSubAgentModel     = "gpt-4o-mini"
+	AgentSubAgentModelFast = "gpt-3.5-turbo"
 
 	// Timeout for sub-agents
 	AgentSubAgentTimeoutSecs = 120

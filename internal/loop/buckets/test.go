@@ -18,10 +18,10 @@ import (
 // LoopTest handles test execution.
 // Tools: run_tests, test
 type TestBucket struct {
-	basePath   string
-	timeout    time.Duration
-	maxOutput  int
-	parallel   int
+	basePath  string
+	timeout   time.Duration
+	maxOutput int
+	parallel  int
 }
 
 // NewLoopTest creates a test bucket.
@@ -180,7 +180,7 @@ func (t *TestBucket) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 			return loop.LoopError{}
 		}(),
 		Messages: []types.Message{{
-			Role:    types.RoleUser,
+			Role: types.RoleUser,
 			Content: []types.ContentBlock{types.ToolResultBlock{
 				ToolUseID: ctx.ToolUseID,
 				Content:   summary.String(),

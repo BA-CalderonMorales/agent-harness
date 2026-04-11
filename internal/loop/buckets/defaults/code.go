@@ -3,17 +3,17 @@ package defaults
 // Code bucket defaults
 const (
 	// Lint settings
-	CodeLintTimeoutSecs     = 60
-	CodeLintMaxIssues       = 50
-	CodeLintMaxFileSize     = 1024 * 1024 // 1MB
+	CodeLintTimeoutSecs = 60
+	CodeLintMaxIssues   = 50
+	CodeLintMaxFileSize = 1024 * 1024 // 1MB
 
 	// Format settings
-	CodeFormatTimeoutSecs   = 30
-	CodeFormatMaxFileSize   = 1024 * 1024 // 1MB
+	CodeFormatTimeoutSecs = 30
+	CodeFormatMaxFileSize = 1024 * 1024 // 1MB
 
 	// Analysis settings
-	CodeAnalysisMaxDepth    = 10
-	CodeAnalysisMaxFiles    = 100
+	CodeAnalysisMaxDepth = 10
+	CodeAnalysisMaxFiles = 100
 )
 
 // CodeLanguageTools maps languages to their tools
