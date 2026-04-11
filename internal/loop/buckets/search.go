@@ -16,7 +16,7 @@ import (
 
 // LoopSearch handles search operations (grep, web search, etc.).
 // It implements LoopBase for all search-related tools.
-type LoopSearch struct {
+type SearchBucket struct {
 	basePath      string
 	maxResults    int
 	maxLineLength int
@@ -24,8 +24,8 @@ type LoopSearch struct {
 }
 
 // NewLoopSearch creates a search bucket.
-func NewLoopSearch(basePath string) *LoopSearch {
-	return &LoopSearch{
+func Search(basePath string) *SearchBucket {
+	return &SearchBucket{
 		basePath:      basePath,
 		maxResults:    defaults.SearchMaxResultsDefault,
 		maxLineLength: defaults.SearchMaxLineLength,
@@ -34,24 +34,24 @@ func NewLoopSearch(basePath string) *LoopSearch {
 }
 
 // WithMaxResults sets the maximum number of results.
-func (s *LoopSearch) WithMaxResults(n int) *LoopSearch {
+func (s *SearchBucket) WithMaxResults(n int) *SearchBucket {
 	s.maxResults = n
 	return s
 }
 
 // WithContextLines sets the lines of context around matches.
-func (s *LoopSearch) WithContextLines(n int) *LoopSearch {
+func (s *SearchBucket) WithContextLines(n int) *SearchBucket {
 	s.contextLines = n
 	return s
 }
 
 // Name returns the bucket identifier.
-func (s *LoopSearch) Name() string {
+func (s *SearchBucket) Name() string {
 	return "search"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (s *LoopSearch) CanHandle(toolName string, input map[string]any) bool {
+func (s *SearchBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "grep", "search", "search_code", "find", "websearch", "web_search":
 		return true
@@ -60,7 +60,7 @@ func (s *LoopSearch) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (s *LoopSearch) Capabilities() loop.BucketCapabilities {
+func (s *SearchBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,  // Search is read-only
 		IsReadOnly:        true,  // Doesn't modify anything
@@ -71,7 +71,7 @@ func (s *LoopSearch) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the search operation.
-func (s *LoopSearch) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (s *SearchBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "grep", "search", "search_code":
 		return s.handleGrep(ctx)
@@ -88,7 +88,7 @@ func (s *LoopSearch) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleGrep runs a grep search.
-func (s *LoopSearch) handleGrep(ctx loop.ExecutionContext) loop.LoopResult {
+func (s *SearchBucket) handleGrep(ctx loop.ExecutionContext) loop.LoopResult {
 	pattern, ok := ctx.Input["pattern"].(string)
 	if !ok || pattern == "" {
 		return loop.LoopResult{
@@ -160,7 +160,7 @@ func (s *LoopSearch) handleGrep(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleFind finds files by name.
-func (s *LoopSearch) handleFind(ctx loop.ExecutionContext) loop.LoopResult {
+func (s *SearchBucket) handleFind(ctx loop.ExecutionContext) loop.LoopResult {
 	name, ok := ctx.Input["name"].(string)
 	if !ok || name == "" {
 		return loop.LoopResult{
@@ -206,7 +206,7 @@ func (s *LoopSearch) handleFind(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleWebSearch is a placeholder for web search.
-func (s *LoopSearch) handleWebSearch(ctx loop.ExecutionContext) loop.LoopResult {
+func (s *SearchBucket) handleWebSearch(ctx loop.ExecutionContext) loop.LoopResult {
 	query, ok := ctx.Input["query"].(string)
 	if !ok || query == "" {
 		return loop.LoopResult{
@@ -230,7 +230,7 @@ func (s *LoopSearch) handleWebSearch(ctx loop.ExecutionContext) loop.LoopResult 
 }
 
 // processGrepOutput parses and limits grep output.
-func (s *LoopSearch) processGrepOutput(output string) []string {
+func (s *SearchBucket) processGrepOutput(output string) []string {
 	var results []string
 	scanner := bufio.NewScanner(bytes.NewReader([]byte(output)))
 	
@@ -337,4 +337,4 @@ func (pb *PatternBuilder) Build() string {
 }
 
 // Ensure LoopSearch implements LoopBase
-var _ loop.LoopBase = (*LoopSearch)(nil)
+var _ loop.LoopBase = (*SearchBucket)(nil)

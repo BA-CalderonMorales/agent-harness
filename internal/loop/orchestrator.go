@@ -10,9 +10,9 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
-// Orchestrator implements the core agent loop using the bucket architecture.
+// OrchestrationBucket implements the core agent loop using the bucket architecture.
 // It coordinates multiple LoopBase implementations without knowing their internals.
-type Orchestrator struct {
+type OrchestrationBucket struct {
 	config        LoopConfig
 	buckets       []LoopBase
 	toolManager   *LoopTool
@@ -25,9 +25,9 @@ type Orchestrator struct {
 	events   chan<- types.StreamEvent
 }
 
-// NewOrchestrator creates a new loop orchestrator with the given buckets.
-func NewOrchestrator(config LoopConfig, client llm.Client, bucketsList ...LoopBase) *Orchestrator {
-	return &Orchestrator{
+// Orchestration creates a new loop orchestration bucket with the given buckets.
+func Orchestration(config LoopConfig, client llm.Client, bucketsList ...LoopBase) *OrchestrationBucket {
+	return &OrchestrationBucket{
 		config:      config,
 		buckets:     bucketsList,
 		toolManager: NewLoopTool(),
@@ -38,19 +38,19 @@ func NewOrchestrator(config LoopConfig, client llm.Client, bucketsList ...LoopBa
 }
 
 // RegisterBucket adds a bucket to the orchestrator.
-func (o *Orchestrator) RegisterBucket(bucket LoopBase) {
+func (o *OrchestrationBucket) RegisterBucket(bucket LoopBase) {
 	o.buckets = append(o.buckets, bucket)
 }
 
 // SetEventChannel sets the channel for streaming events.
-func (o *Orchestrator) SetEventChannel(ch chan<- types.StreamEvent) {
+func (o *OrchestrationBucket) SetEventChannel(ch chan<- types.StreamEvent) {
 	o.eventsMu.Lock()
 	defer o.eventsMu.Unlock()
 	o.events = ch
 }
 
 // emit sends an event to the event channel.
-func (o *Orchestrator) emit(event types.StreamEvent) {
+func (o *OrchestrationBucket) emit(event types.StreamEvent) {
 	o.eventsMu.RLock()
 	ch := o.events
 	o.eventsMu.RUnlock()
@@ -66,7 +66,7 @@ func (o *Orchestrator) emit(event types.StreamEvent) {
 
 // Run executes the agent loop until completion or max turns.
 // This is the main entry point for running the loop.
-func (o *Orchestrator) Run(ctx context.Context, params QueryParams) (*LoopState, error) {
+func (o *OrchestrationBucket) Run(ctx context.Context, params QueryParams) (*LoopState, error) {
 	state := NewLoopState()
 	state.Messages = params.Messages
 	state.ToolUseContext = params.ToolUseContext
@@ -126,7 +126,7 @@ func (o *Orchestrator) Run(ctx context.Context, params QueryParams) (*LoopState,
 }
 
 // callLLM makes a request to the language model.
-func (o *Orchestrator) callLLM(ctx context.Context, state *LoopState, params QueryParams) (types.Message, error) {
+func (o *OrchestrationBucket) callLLM(ctx context.Context, state *LoopState, params QueryParams) (types.Message, error) {
 	sysPrompt := o.prompts.Compose()
 
 	// Get enabled tools from tool manager
@@ -153,7 +153,7 @@ func (o *Orchestrator) callLLM(ctx context.Context, state *LoopState, params Que
 }
 
 // consumeStream reads LLM events and builds a message.
-func (o *Orchestrator) consumeStream(ctx context.Context, events <-chan types.LLMEvent) (types.Message, error) {
+func (o *OrchestrationBucket) consumeStream(ctx context.Context, events <-chan types.LLMEvent) (types.Message, error) {
 	var msg types.Message
 	msg.Role = types.RoleAssistant
 
@@ -220,12 +220,12 @@ func (o *Orchestrator) consumeStream(ctx context.Context, events <-chan types.LL
 }
 
 // extractToolUses gets all tool use blocks from a message.
-func (o *Orchestrator) extractToolUses(msg types.Message) []ToolUse {
+func (o *OrchestrationBucket) extractToolUses(msg types.Message) []ToolUse {
 	return o.toolManager.ParseToolUses(msg.Content)
 }
 
 // executeTools routes and executes tool calls.
-func (o *Orchestrator) executeTools(ctx context.Context, uses []ToolUse, state *LoopState, canUseTool tools.CanUseToolFn) []LoopResult {
+func (o *OrchestrationBucket) executeTools(ctx context.Context, uses []ToolUse, state *LoopState, canUseTool tools.CanUseToolFn) []LoopResult {
 	results := make([]LoopResult, len(uses))
 
 	for i, use := range uses {
@@ -269,7 +269,7 @@ func (o *Orchestrator) executeTools(ctx context.Context, uses []ToolUse, state *
 }
 
 // findBucket locates the appropriate bucket for a tool.
-func (o *Orchestrator) findBucket(toolName string, input map[string]any) (LoopBase, bool) {
+func (o *OrchestrationBucket) findBucket(toolName string, input map[string]any) (LoopBase, bool) {
 	for _, bucket := range o.buckets {
 		if bucket.CanHandle(toolName, input) {
 			return bucket, true
@@ -279,13 +279,13 @@ func (o *Orchestrator) findBucket(toolName string, input map[string]any) (LoopBa
 }
 
 // isAtBlockingLimit checks if we're near context limits.
-func (o *Orchestrator) isAtBlockingLimit(messages []types.Message) bool {
+func (o *OrchestrationBucket) isAtBlockingLimit(messages []types.Message) bool {
 	// Simplified check - real implementation would use tokenizer
 	return false
 }
 
 // attemptRecovery tries to recover from recoverable errors.
-func (o *Orchestrator) attemptRecovery(ctx context.Context, state *LoopState, rec *RecoverableError) bool {
+func (o *OrchestrationBucket) attemptRecovery(ctx context.Context, state *LoopState, rec *RecoverableError) bool {
 	if state.MaxOutputTokensRecoveryCount >= o.config.MaxOutputTokensRecovery {
 		return false
 	}

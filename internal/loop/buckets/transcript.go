@@ -13,7 +13,7 @@ import (
 
 // LoopTranscript handles conversation transcript operations.
 // Tools: search_transcript, summarize_transcript
-type LoopTranscript struct {
+type TranscriptBucket struct {
 	maxHistory  int
 	transcript  []TranscriptEntry
 }
@@ -34,26 +34,26 @@ type ToolCallInfo struct {
 }
 
 // NewLoopTranscript creates a transcript bucket.
-func NewLoopTranscript() *LoopTranscript {
-	return &LoopTranscript{
+func Transcript() *TranscriptBucket {
+	return &TranscriptBucket{
 		maxHistory: defaults.TranscriptMaxHistoryDefault,
 		transcript: make([]TranscriptEntry, 0),
 	}
 }
 
 // WithMaxHistory sets the maximum history to search.
-func (t *LoopTranscript) WithMaxHistory(n int) *LoopTranscript {
+func (t *TranscriptBucket) WithMaxHistory(n int) *TranscriptBucket {
 	t.maxHistory = n
 	return t
 }
 
 // Name returns the bucket identifier.
-func (t *LoopTranscript) Name() string {
+func (t *TranscriptBucket) Name() string {
 	return "transcript"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (t *LoopTranscript) CanHandle(toolName string, input map[string]any) bool {
+func (t *TranscriptBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "search_transcript", "transcript_search", "summarize_transcript", "transcript_summary":
 		return true
@@ -62,7 +62,7 @@ func (t *LoopTranscript) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (t *LoopTranscript) Capabilities() loop.BucketCapabilities {
+func (t *TranscriptBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        true,
@@ -73,7 +73,7 @@ func (t *LoopTranscript) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the transcript operation.
-func (t *LoopTranscript) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (t *TranscriptBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "search_transcript", "transcript_search":
 		return t.handleSearch(ctx)
@@ -88,7 +88,7 @@ func (t *LoopTranscript) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleSearch searches the conversation transcript.
-func (t *LoopTranscript) handleSearch(ctx loop.ExecutionContext) loop.LoopResult {
+func (t *TranscriptBucket) handleSearch(ctx loop.ExecutionContext) loop.LoopResult {
 	query, ok := ctx.Input["query"].(string)
 	if !ok || query == "" {
 		return loop.LoopResult{
@@ -146,7 +146,7 @@ func (t *LoopTranscript) handleSearch(ctx loop.ExecutionContext) loop.LoopResult
 }
 
 // handleSummarize creates a summary of the transcript.
-func (t *LoopTranscript) handleSummarize(ctx loop.ExecutionContext) loop.LoopResult {
+func (t *TranscriptBucket) handleSummarize(ctx loop.ExecutionContext) loop.LoopResult {
 	// Use provided messages
 	source := ctx.Messages
 	if len(source) == 0 {
@@ -210,7 +210,7 @@ func (t *LoopTranscript) handleSummarize(ctx loop.ExecutionContext) loop.LoopRes
 }
 
 // AddEntry adds an entry to the transcript.
-func (t *LoopTranscript) AddEntry(role, content string) {
+func (t *TranscriptBucket) AddEntry(role, content string) {
 	entry := TranscriptEntry{
 		Timestamp: time.Now(),
 		Role:      role,
@@ -225,14 +225,14 @@ func (t *LoopTranscript) AddEntry(role, content string) {
 }
 
 // GetTranscript returns the full transcript.
-func (t *LoopTranscript) GetTranscript() []TranscriptEntry {
+func (t *TranscriptBucket) GetTranscript() []TranscriptEntry {
 	result := make([]TranscriptEntry, len(t.transcript))
 	copy(result, t.transcript)
 	return result
 }
 
 // Clear resets the transcript.
-func (t *LoopTranscript) Clear() {
+func (t *TranscriptBucket) Clear() {
 	t.transcript = make([]TranscriptEntry, 0)
 }
 
@@ -296,4 +296,4 @@ func extractTopics(msgs []types.Message) []string {
 }
 
 // Ensure LoopTranscript implements LoopBase
-var _ loop.LoopBase = (*LoopTranscript)(nil)
+var _ loop.LoopBase = (*TranscriptBucket)(nil)

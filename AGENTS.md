@@ -43,35 +43,50 @@ The loop is decomposed into focused interfaces that can be implemented independe
 
 ### Bucket Implementations (`internal/loop/buckets/`)
 
-| Bucket | Handles | Capabilities |
-|--------|---------|--------------|
-| `LoopFileSystem` | read, write, glob, edit | Concurrency-safe, destructive |
-| `LoopShell` | bash, execute_command | Serial, destructive |
-| `LoopSearch` | grep, search, find, websearch | Concurrency-safe, read-only |
+| Type | Constructor | Handles | Capabilities |
+|------|-------------|---------|--------------|
+| `FileSystemBucket` | `FileSystem(basePath)` | read, write, glob, edit | Concurrency-safe, destructive |
+| `ShellBucket` | `Shell(basePath)` | bash, execute_command | Serial, destructive |
+| `SearchBucket` | `Search(basePath)` | grep, search, find | Concurrency-safe, read-only |
+| `GitBucket` | `Git(basePath)` | git_status, git_diff, git_commit | Serial, destructive |
+| `PlanBucket` | `Plan()` | enter_plan_mode, exit_plan_mode | - |
+| `TranscriptBucket` | `Transcript()` | search_transcript | Read-only |
+| `UIBucket` | `UI(exportDir, notebookDir)` | ask, todo, export | Interactive |
+| `WebBucket` | `Web()` | webfetch, web_search | Network, read-only |
+| `CodeBucket` | `Code(basePath)` | lint, format, analyze | Read-only |
+| `TestBucket` | `Test(basePath)` | run_tests | Destructive |
+| `AgentBucket` | `Agent(basePath, client)` | spawn sub-agents | Recursive |
 
 ### Creating an Orchestrator
 
 ```go
 // Using factory presets
 orch := loop.CreateFromPreset(loop.PresetStandard, basePath, llmClient)
-orch := loop.CreateFromPreset(loop.PresetFast, basePath, llmClient)
-orch := loop.CreateFromPreset(loop.PresetSafe, basePath, llmClient)
+orth := loop.CreateFromPreset(loop.PresetFast, basePath, llmClient)
+orth := loop.CreateFromPreset(loop.PresetSafe, basePath, llmClient)
 
 // Using factory with config
 factory := loop.NewFactory(basePath, llmClient).
     WithConfig(loop.FastConfig())
-orch := factory.CreateStandard()
+orth := factory.CreateStandard()
 
 // Using builder for custom setup
 orch := factory.NewBuilder().
-    WithFileSystem(func(fs *buckets.LoopFileSystem) {
+    WithFileSystem(func(fs *buckets.FileSystemBucket) {
         fs.WithBlockedPaths("/etc", "/usr")
     }).
-    WithShell(func(sh *buckets.LoopShell) {
+    WithShell(func(sh *buckets.ShellBucket) {
         sh.WithTimeout(30).WithoutApproval()
     }).
     WithSearch().
     Build()
+
+// Direct construction
+orch := loop.Orchestration(config, client,
+    buckets.FileSystem(basePath),
+    buckets.Shell(basePath),
+    buckets.Search(basePath),
+)
 ```
 
 ### Implementing a Custom Bucket
@@ -104,9 +119,49 @@ Then register:
 orch.RegisterBucket(&MyBucket{})
 ```
 
+## Naming Conventions
+
+### Go Restriction: No Type/Function Name Collision
+
+Go does not allow a type and function to share the same name in one package:
+
+```go
+type Orchestrator struct {}  // Type declaration
+func Orchestrator() {}       // ERROR: redeclared (same name)
+func NewOrchestrator() {}    // OK: different name
+```
+
+### Bucket Suffix Pattern
+
+To achieve readable constructors without `New*` prefixes, we use:
+- **Type name**: `<Domain>Bucket` (e.g., `FileSystemBucket`)
+- **Constructor**: `<Domain>()` (e.g., `FileSystem()`)
+
+```go
+// Type declaration
+type FileSystemBucket struct { ... }
+
+// Constructor - readable, no "New" prefix
+func FileSystem(basePath string) *FileSystemBucket {
+    return &FileSystemBucket{...}
+}
+
+// Usage
+fs := buckets.FileSystem("/path")
+```
+
+This pattern applies to all buckets:
+| Type | Constructor |
+|------|-------------|
+| `OrchestrationBucket` | `loop.Orchestration(...)` |
+| `FileSystemBucket` | `buckets.FileSystem(...)` |
+| `ShellBucket` | `buckets.Shell(...)` |
+| `SearchBucket` | `buckets.Search(...)` |
+
 ## Key Patterns
 
-- **Bucket Pattern**: Domain-specific LoopBase implementations hide internals
+- **Bucket Suffix Pattern**: Types end with `Bucket`, constructors use base name
+- **Bucket Architecture**: Domain-specific LoopBase implementations hide internals
 - **Tool Descriptor Pattern**: Structs with function fields, not interfaces
 - **Permission Stack**: deny → allow → ask → mode transforms → tool-specific checks
 - **File Operations**: cache by (path, offset, limit, mtime), stale-write protection, atomic writes
@@ -143,6 +198,7 @@ orch.RegisterBucket(&MyBucket{})
 - Lowercase filenames (except README.md, AGENTS.md)
 - No horizontal rules as section separators
 - Tool calling must work flawlessly - no regressions
+- Follow Bucket Suffix naming pattern for new buckets
 
 ## Working Rules
 

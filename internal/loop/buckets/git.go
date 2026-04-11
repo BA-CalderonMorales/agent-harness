@@ -15,15 +15,15 @@ import (
 
 // LoopGit handles git operations.
 // Tools: git_status, git_diff, git_log, git_branch, git_commit (with approval)
-type LoopGit struct {
+type GitBucket struct {
 	basePath       string
 	requireApproval bool
 	timeout        time.Duration
 }
 
 // NewLoopGit creates a git bucket.
-func NewLoopGit(basePath string) *LoopGit {
-	return &LoopGit{
+func Git(basePath string) *GitBucket {
+	return &GitBucket{
 		basePath:        basePath,
 		requireApproval: true,
 		timeout:         defaults.GitCommandTimeoutSecs * time.Second,
@@ -31,24 +31,24 @@ func NewLoopGit(basePath string) *LoopGit {
 }
 
 // WithoutApproval disables approval for safe commands.
-func (g *LoopGit) WithoutApproval() *LoopGit {
+func (g *GitBucket) WithoutApproval() *GitBucket {
 	g.requireApproval = false
 	return g
 }
 
 // WithTimeout sets command timeout.
-func (g *LoopGit) WithTimeout(d time.Duration) *LoopGit {
+func (g *GitBucket) WithTimeout(d time.Duration) *GitBucket {
 	g.timeout = d
 	return g
 }
 
 // Name returns the bucket identifier.
-func (g *LoopGit) Name() string {
+func (g *GitBucket) Name() string {
 	return "git"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (g *LoopGit) CanHandle(toolName string, input map[string]any) bool {
+func (g *GitBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "git_status", "git_diff", "git_log", "git_branch",
 		"git_show", "git_remote", "git_commit", "git_add":
@@ -58,7 +58,7 @@ func (g *LoopGit) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (g *LoopGit) Capabilities() loop.BucketCapabilities {
+func (g *GitBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        false,
@@ -72,7 +72,7 @@ func (g *LoopGit) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the git operation.
-func (g *LoopGit) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "git_status":
 		return g.handleStatus(ctx)
@@ -97,7 +97,7 @@ func (g *LoopGit) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleStatus shows git status.
-func (g *LoopGit) handleStatus(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleStatus(ctx loop.ExecutionContext) loop.LoopResult {
 	cmd := exec.Command("git", "status", "-s")
 	cmd.Dir = g.basePath
 
@@ -126,7 +126,7 @@ func (g *LoopGit) handleStatus(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleDiff shows git diff.
-func (g *LoopGit) handleDiff(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleDiff(ctx loop.ExecutionContext) loop.LoopResult {
 	args := []string{"diff"}
 	
 	// Check for staged
@@ -174,7 +174,7 @@ func (g *LoopGit) handleDiff(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleLog shows git log.
-func (g *LoopGit) handleLog(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleLog(ctx loop.ExecutionContext) loop.LoopResult {
 	maxEntries := defaults.GitLogMaxEntries
 	if n, ok := ctx.Input["n"].(float64); ok {
 		maxEntries = int(n)
@@ -204,7 +204,7 @@ func (g *LoopGit) handleLog(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleBranch shows git branches.
-func (g *LoopGit) handleBranch(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleBranch(ctx loop.ExecutionContext) loop.LoopResult {
 	cmd := exec.Command("git", "branch", "-v")
 	cmd.Dir = g.basePath
 
@@ -229,7 +229,7 @@ func (g *LoopGit) handleBranch(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleShow shows git show for a commit.
-func (g *LoopGit) handleShow(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleShow(ctx loop.ExecutionContext) loop.LoopResult {
 	ref := "HEAD"
 	if r, ok := ctx.Input["ref"].(string); ok && r != "" {
 		ref = r
@@ -259,7 +259,7 @@ func (g *LoopGit) handleShow(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleCommit creates a commit (requires approval).
-func (g *LoopGit) handleCommit(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleCommit(ctx loop.ExecutionContext) loop.LoopResult {
 	message, _ := ctx.Input["message"].(string)
 	if message == "" {
 		return loop.LoopResult{
@@ -298,7 +298,7 @@ func (g *LoopGit) handleCommit(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleAdd stages files.
-func (g *LoopGit) handleAdd(ctx loop.ExecutionContext) loop.LoopResult {
+func (g *GitBucket) handleAdd(ctx loop.ExecutionContext) loop.LoopResult {
 	path, _ := ctx.Input["path"].(string)
 	if path == "" {
 		path = "."
@@ -386,4 +386,4 @@ func IsGitRepo(path string) bool {
 }
 
 // Ensure LoopGit implements LoopBase
-var _ loop.LoopBase = (*LoopGit)(nil)
+var _ loop.LoopBase = (*GitBucket)(nil)

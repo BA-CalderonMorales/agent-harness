@@ -17,7 +17,7 @@ import (
 
 // LoopWeb handles web operations (fetch, search).
 // Tools: webfetch, web_search, fetch_url
-type LoopWeb struct {
+type WebBucket struct {
 	client         *http.Client
 	maxSize        int64
 	timeout        time.Duration
@@ -27,8 +27,8 @@ type LoopWeb struct {
 }
 
 // NewLoopWeb creates a web bucket.
-func NewLoopWeb() *LoopWeb {
-	return &LoopWeb{
+func Web() *WebBucket {
+	return &WebBucket{
 		client: &http.Client{
 			Timeout:       defaults.WebFetchTimeout,
 			CheckRedirect: makeRedirectChecker(defaults.WebFetchMaxRedirects),
@@ -42,31 +42,31 @@ func NewLoopWeb() *LoopWeb {
 }
 
 // WithTimeout sets the fetch timeout.
-func (w *LoopWeb) WithTimeout(d time.Duration) *LoopWeb {
+func (w *WebBucket) WithTimeout(d time.Duration) *WebBucket {
 	w.timeout = d
 	w.client.Timeout = d
 	return w
 }
 
 // WithUserAgent sets the user agent.
-func (w *LoopWeb) WithUserAgent(ua string) *LoopWeb {
+func (w *WebBucket) WithUserAgent(ua string) *WebBucket {
 	w.userAgent = ua
 	return w
 }
 
 // WithMaxSize sets max content size.
-func (w *LoopWeb) WithMaxSize(size int64) *LoopWeb {
+func (w *WebBucket) WithMaxSize(size int64) *WebBucket {
 	w.maxSize = size
 	return w
 }
 
 // Name returns the bucket identifier.
-func (w *LoopWeb) Name() string {
+func (w *WebBucket) Name() string {
 	return "web"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (w *LoopWeb) CanHandle(toolName string, input map[string]any) bool {
+func (w *WebBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "webfetch", "web_fetch", "fetch_url", "websearch", "web_search":
 		return true
@@ -75,7 +75,7 @@ func (w *LoopWeb) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (w *LoopWeb) Capabilities() loop.BucketCapabilities {
+func (w *WebBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        true,
@@ -86,7 +86,7 @@ func (w *LoopWeb) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the web operation.
-func (w *LoopWeb) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (w *WebBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "webfetch", "web_fetch", "fetch_url":
 		return w.handleFetch(ctx)
@@ -101,7 +101,7 @@ func (w *LoopWeb) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleFetch fetches a URL.
-func (w *LoopWeb) handleFetch(ctx loop.ExecutionContext) loop.LoopResult {
+func (w *WebBucket) handleFetch(ctx loop.ExecutionContext) loop.LoopResult {
 	urlStr, ok := ctx.Input["url"].(string)
 	if !ok || urlStr == "" {
 		return loop.LoopResult{
@@ -193,7 +193,7 @@ func (w *LoopWeb) handleFetch(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleSearch performs a web search (placeholder for actual search API).
-func (w *LoopWeb) handleSearch(ctx loop.ExecutionContext) loop.LoopResult {
+func (w *WebBucket) handleSearch(ctx loop.ExecutionContext) loop.LoopResult {
 	query, ok := ctx.Input["query"].(string)
 	if !ok || query == "" {
 		return loop.LoopResult{
@@ -231,7 +231,7 @@ The search would return:
 }
 
 // isAllowedScheme checks if URL scheme is allowed.
-func (w *LoopWeb) isAllowedScheme(scheme string) bool {
+func (w *WebBucket) isAllowedScheme(scheme string) bool {
 	for _, s := range w.allowedSchemes {
 		if strings.EqualFold(s, scheme) {
 			return true
@@ -241,7 +241,7 @@ func (w *LoopWeb) isAllowedScheme(scheme string) bool {
 }
 
 // isBlockedHost checks if host is blocked.
-func (w *LoopWeb) isBlockedHost(host string) bool {
+func (w *WebBucket) isBlockedHost(host string) bool {
 	for _, h := range w.blockedHosts {
 		if strings.EqualFold(h, host) {
 			return true
@@ -277,4 +277,4 @@ type WebSearchResult struct {
 }
 
 // Ensure LoopWeb implements LoopBase
-var _ loop.LoopBase = (*LoopWeb)(nil)
+var _ loop.LoopBase = (*WebBucket)(nil)
