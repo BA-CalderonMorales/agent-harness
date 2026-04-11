@@ -16,15 +16,15 @@ import (
 
 // LoopCode handles code analysis operations.
 // Tools: lint, format, analyze_code
-type LoopCode struct {
+type CodeBucket struct {
 	basePath   string
 	timeout    time.Duration
 	maxIssues  int
 }
 
 // NewLoopCode creates a code bucket.
-func NewLoopCode(basePath string) *LoopCode {
-	return &LoopCode{
+func Code(basePath string) *CodeBucket {
+	return &CodeBucket{
 		basePath:  basePath,
 		timeout:   defaults.CodeLintTimeoutSecs * time.Second,
 		maxIssues: defaults.CodeLintMaxIssues,
@@ -32,24 +32,24 @@ func NewLoopCode(basePath string) *LoopCode {
 }
 
 // WithTimeout sets the timeout.
-func (c *LoopCode) WithTimeout(d time.Duration) *LoopCode {
+func (c *CodeBucket) WithTimeout(d time.Duration) *CodeBucket {
 	c.timeout = d
 	return c
 }
 
 // WithMaxIssues sets max issues to report.
-func (c *LoopCode) WithMaxIssues(n int) *LoopCode {
+func (c *CodeBucket) WithMaxIssues(n int) *CodeBucket {
 	c.maxIssues = n
 	return c
 }
 
 // Name returns the bucket identifier.
-func (c *LoopCode) Name() string {
+func (c *CodeBucket) Name() string {
 	return "code"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (c *LoopCode) CanHandle(toolName string, input map[string]any) bool {
+func (c *CodeBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "lint", "format", "analyze_code", "code_review":
 		return true
@@ -58,7 +58,7 @@ func (c *LoopCode) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (c *LoopCode) Capabilities() loop.BucketCapabilities {
+func (c *CodeBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        true,
@@ -69,7 +69,7 @@ func (c *LoopCode) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the code operation.
-func (c *LoopCode) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (c *CodeBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "lint":
 		return c.handleLint(ctx)
@@ -86,7 +86,7 @@ func (c *LoopCode) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleLint runs linter on code.
-func (c *LoopCode) handleLint(ctx loop.ExecutionContext) loop.LoopResult {
+func (c *CodeBucket) handleLint(ctx loop.ExecutionContext) loop.LoopResult {
 	path, _ := ctx.Input["path"].(string)
 	if path == "" {
 		path = "."
@@ -153,7 +153,7 @@ func (c *LoopCode) handleLint(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleFormat runs formatter on code.
-func (c *LoopCode) handleFormat(ctx loop.ExecutionContext) loop.LoopResult {
+func (c *CodeBucket) handleFormat(ctx loop.ExecutionContext) loop.LoopResult {
 	path, _ := ctx.Input["path"].(string)
 	if path == "" {
 		return loop.LoopResult{
@@ -231,7 +231,7 @@ func (c *LoopCode) handleFormat(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleAnalyze performs code analysis.
-func (c *LoopCode) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
+func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 	path, _ := ctx.Input["path"].(string)
 	if path == "" {
 		path = "."
@@ -322,7 +322,7 @@ func (c *LoopCode) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // detectLanguage detects the primary language of a path.
-func (c *LoopCode) detectLanguage(path string) string {
+func (c *CodeBucket) detectLanguage(path string) string {
 	ext := filepath.Ext(path)
 	switch ext {
 	case ".go":
@@ -368,7 +368,7 @@ func (c *LoopCode) detectLanguage(path string) string {
 }
 
 // buildLintArgs builds linter arguments.
-func (c *LoopCode) buildLintArgs(config defaults.CodeToolConfig, path string) []string {
+func (c *CodeBucket) buildLintArgs(config defaults.CodeToolConfig, path string) []string {
 	// Language-specific arg building
 	switch config.Linter {
 	case "golangci-lint":
@@ -383,7 +383,7 @@ func (c *LoopCode) buildLintArgs(config defaults.CodeToolConfig, path string) []
 }
 
 // parseLintOutput parses linter output into structured issues.
-func (c *LoopCode) parseLintOutput(output string, lang string) []LintIssue {
+func (c *CodeBucket) parseLintOutput(output string, lang string) []LintIssue {
 	var issues []LintIssue
 	lines := strings.Split(output, "\n")
 
@@ -437,4 +437,4 @@ type LintIssue struct {
 }
 
 // Ensure LoopCode implements LoopBase
-var _ loop.LoopBase = (*LoopCode)(nil)
+var _ loop.LoopBase = (*CodeBucket)(nil)

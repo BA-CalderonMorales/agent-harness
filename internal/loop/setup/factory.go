@@ -33,97 +33,97 @@ func (f *Factory) WithConfig(cfg loop.LoopConfig) *Factory {
 }
 
 // CreateStandard builds an orchestrator with all standard buckets.
-func (f *Factory) CreateStandard() *loop.Orchestrator {
+func (f *Factory) CreateStandard() *loop.OrchestrationBucket {
 	return f.createWithBuckets(
-		buckets.NewLoopFileSystem(f.basePath),
-		buckets.NewLoopShell(f.basePath),
-		buckets.NewLoopSearch(f.basePath),
-		buckets.NewLoopGit(f.basePath),
-		buckets.NewLoopUI("", ""),
-		buckets.NewLoopPlan(),
-		buckets.NewLoopTranscript(),
+		buckets.FileSystem(f.basePath),
+		buckets.Shell(f.basePath),
+		buckets.Search(f.basePath),
+		buckets.Git(f.basePath),
+		buckets.UI("", ""),
+		buckets.Plan(),
+		buckets.Transcript(),
 	)
 }
 
 // CreateSafe builds an orchestrator with read-only buckets only.
-func (f *Factory) CreateSafe() *loop.Orchestrator {
-	fs := buckets.NewLoopFileSystem(f.basePath).
+func (f *Factory) CreateSafe() *loop.OrchestrationBucket {
+	fs := buckets.FileSystem(f.basePath).
 		WithBlockedPaths("/etc", "/usr", "/bin", "/sbin", "/dev", "/sys")
 
-	search := buckets.NewLoopSearch(f.basePath)
-	git := buckets.NewLoopGit(f.basePath).WithoutApproval()
-	transcript := buckets.NewLoopTranscript()
+	search := buckets.Search(f.basePath)
+	git := buckets.Git(f.basePath).WithoutApproval()
+	transcript := buckets.Transcript()
 
 	return f.createWithBuckets(fs, search, git, transcript)
 }
 
 // CreateFast builds an orchestrator optimized for speed.
-func (f *Factory) CreateFast() *loop.Orchestrator {
+func (f *Factory) CreateFast() *loop.OrchestrationBucket {
 	cfg := loop.FastConfig()
 
-	fs := buckets.NewLoopFileSystem(f.basePath)
+	fs := buckets.FileSystem(f.basePath)
 
-	shell := buckets.NewLoopShell(f.basePath).
+	shell := buckets.Shell(f.basePath).
 		WithTimeout(cfg.DefaultTimeout).
 		WithoutApproval()
 
-	search := buckets.NewLoopSearch(f.basePath).
+	search := buckets.Search(f.basePath).
 		WithMaxResults(defaults.SearchMaxResultsFast)
 
-	git := buckets.NewLoopGit(f.basePath).WithoutApproval()
-	transcript := buckets.NewLoopTranscript().
+	git := buckets.Git(f.basePath).WithoutApproval()
+	transcript := buckets.Transcript().
 		WithMaxHistory(defaults.TranscriptMaxHistoryFast)
 
-	return loop.NewOrchestrator(cfg, f.client, fs, shell, search, git, transcript)
+	return loop.Orchestration(cfg, f.client, fs, shell, search, git, transcript)
 }
 
 // CreateRobust builds an orchestrator for complex tasks.
-func (f *Factory) CreateRobust() *loop.Orchestrator {
+func (f *Factory) CreateRobust() *loop.OrchestrationBucket {
 	cfg := loop.RobustConfig()
 
-	fs := buckets.NewLoopFileSystem(f.basePath)
+	fs := buckets.FileSystem(f.basePath)
 
-	shell := buckets.NewLoopShell(f.basePath).
+	shell := buckets.Shell(f.basePath).
 		WithTimeout(5 * cfg.DefaultTimeout)
 
-	search := buckets.NewLoopSearch(f.basePath).
+	search := buckets.Search(f.basePath).
 		WithMaxResults(defaults.SearchMaxResultsRobust).
 		WithContextLines(defaults.SearchContextLinesMore)
 
-	git := buckets.NewLoopGit(f.basePath)
-	ui := buckets.NewLoopUI("", "")
-	agent := buckets.NewLoopAgent(f.basePath, f.client).WithMaxDepth(defaults.AgentMaxDepthDeep)
-	plan := buckets.NewLoopPlan()
-	transcript := buckets.NewLoopTranscript().WithMaxHistory(defaults.TranscriptMaxHistoryFull)
-	web := buckets.NewLoopWeb().WithTimeout(defaults.WebFetchTimeout)
-	code := buckets.NewLoopCode(f.basePath).WithMaxIssues(defaults.CodeLintMaxIssues)
-	test := buckets.NewLoopTest(f.basePath).WithParallel(defaults.TestMaxParallel)
+	git := buckets.Git(f.basePath)
+	ui := buckets.UI("", "")
+	agent := buckets.Agent(f.basePath, f.client).WithMaxDepth(defaults.AgentMaxDepthDeep)
+	plan := buckets.Plan()
+	transcript := buckets.Transcript().WithMaxHistory(defaults.TranscriptMaxHistoryFull)
+	web := buckets.Web().WithTimeout(defaults.WebFetchTimeout)
+	code := buckets.Code(f.basePath).WithMaxIssues(defaults.CodeLintMaxIssues)
+	test := buckets.Test(f.basePath).WithParallel(defaults.TestMaxParallel)
 
-	return loop.NewOrchestrator(cfg, f.client, fs, shell, search, git, ui, agent, plan, transcript, web, code, test)
+	return loop.Orchestration(cfg, f.client, fs, shell, search, git, ui, agent, plan, transcript, web, code, test)
 }
 
 // CreateCustom builds an orchestrator with specific buckets.
-func (f *Factory) CreateCustom(bucketsList ...loop.LoopBase) *loop.Orchestrator {
+func (f *Factory) CreateCustom(bucketsList ...loop.LoopBase) *loop.OrchestrationBucket {
 	return f.createWithBuckets(bucketsList...)
 }
 
 // CreateMinimal builds an orchestrator with only file operations.
-func (f *Factory) CreateMinimal() *loop.Orchestrator {
+func (f *Factory) CreateMinimal() *loop.OrchestrationBucket {
 	return f.createWithBuckets(
-		buckets.NewLoopFileSystem(f.basePath),
+		buckets.FileSystem(f.basePath),
 	)
 }
 
 // CreateWithFileSystemOnly builds an orchestrator with only the filesystem bucket.
-func (f *Factory) CreateWithFileSystemOnly() *loop.Orchestrator {
+func (f *Factory) CreateWithFileSystemOnly() *loop.OrchestrationBucket {
 	return f.createWithBuckets(
-		buckets.NewLoopFileSystem(f.basePath),
+		buckets.FileSystem(f.basePath),
 	)
 }
 
 // createWithBuckets is the internal constructor.
-func (f *Factory) createWithBuckets(bucketsList ...loop.LoopBase) *loop.Orchestrator {
-	return loop.NewOrchestrator(f.config, f.client, bucketsList...)
+func (f *Factory) createWithBuckets(bucketsList ...loop.LoopBase) *loop.OrchestrationBucket {
+	return loop.Orchestration(f.config, f.client, bucketsList...)
 }
 
 // Preset is a named orchestrator configuration.
@@ -138,7 +138,7 @@ const (
 )
 
 // CreateFromPreset creates an orchestrator from a named preset.
-func CreateFromPreset(preset Preset, basePath string, client llm.Client) *loop.Orchestrator {
+func CreateFromPreset(preset Preset, basePath string, client llm.Client) *loop.OrchestrationBucket {
 	factory := NewFactory(basePath, client)
 
 	switch preset {
@@ -170,8 +170,8 @@ func (f *Factory) NewBuilder() *Builder {
 }
 
 // WithFileSystem adds the filesystem bucket.
-func (b *Builder) WithFileSystem(opts ...func(*buckets.LoopFileSystem)) *Builder {
-	fs := buckets.NewLoopFileSystem(b.factory.basePath)
+func (b *Builder) WithFileSystem(opts ...func(*buckets.FileSystemBucket)) *Builder {
+	fs := buckets.FileSystem(b.factory.basePath)
 	for _, opt := range opts {
 		opt(fs)
 	}
@@ -180,8 +180,8 @@ func (b *Builder) WithFileSystem(opts ...func(*buckets.LoopFileSystem)) *Builder
 }
 
 // WithShell adds the shell bucket.
-func (b *Builder) WithShell(opts ...func(*buckets.LoopShell)) *Builder {
-	sh := buckets.NewLoopShell(b.factory.basePath)
+func (b *Builder) WithShell(opts ...func(*buckets.ShellBucket)) *Builder {
+	sh := buckets.Shell(b.factory.basePath)
 	for _, opt := range opts {
 		opt(sh)
 	}
@@ -190,8 +190,8 @@ func (b *Builder) WithShell(opts ...func(*buckets.LoopShell)) *Builder {
 }
 
 // WithSearch adds the search bucket.
-func (b *Builder) WithSearch(opts ...func(*buckets.LoopSearch)) *Builder {
-	search := buckets.NewLoopSearch(b.factory.basePath)
+func (b *Builder) WithSearch(opts ...func(*buckets.SearchBucket)) *Builder {
+	search := buckets.Search(b.factory.basePath)
 	for _, opt := range opts {
 		opt(search)
 	}
@@ -206,7 +206,7 @@ func (b *Builder) WithBucket(bucket loop.LoopBase) *Builder {
 }
 
 // Build constructs the orchestrator.
-func (b *Builder) Build() *loop.Orchestrator {
+func (b *Builder) Build() *loop.OrchestrationBucket {
 	if len(b.buckets) == 0 {
 		// Default to standard set
 		return b.factory.CreateStandard()
@@ -216,16 +216,16 @@ func (b *Builder) Build() *loop.Orchestrator {
 
 // FileSystemOption provides configuration helpers for filesystem bucket.
 var FileSystemOption = struct {
-	AllowPaths  func(paths ...string) func(*buckets.LoopFileSystem)
-	BlockPaths  func(paths ...string) func(*buckets.LoopFileSystem)
+	AllowPaths  func(paths ...string) func(*buckets.FileSystemBucket)
+	BlockPaths  func(paths ...string) func(*buckets.FileSystemBucket)
 }{
-	AllowPaths: func(paths ...string) func(*buckets.LoopFileSystem) {
-		return func(fs *buckets.LoopFileSystem) {
+	AllowPaths: func(paths ...string) func(*buckets.FileSystemBucket) {
+		return func(fs *buckets.FileSystemBucket) {
 			fs.WithAllowedPaths(paths...)
 		}
 	},
-	BlockPaths: func(paths ...string) func(*buckets.LoopFileSystem) {
-		return func(fs *buckets.LoopFileSystem) {
+	BlockPaths: func(paths ...string) func(*buckets.FileSystemBucket) {
+		return func(fs *buckets.FileSystemBucket) {
 			fs.WithBlockedPaths(paths...)
 		}
 	},
@@ -233,22 +233,22 @@ var FileSystemOption = struct {
 
 // ShellOption provides configuration helpers for shell bucket.
 var ShellOption = struct {
-	Timeout      func(d int) func(*buckets.LoopShell)
-	NoApproval   func() func(*buckets.LoopShell)
-	AllowCommands func(cmds ...string) func(*buckets.LoopShell)
+	Timeout      func(d int) func(*buckets.ShellBucket)
+	NoApproval   func() func(*buckets.ShellBucket)
+	AllowCommands func(cmds ...string) func(*buckets.ShellBucket)
 }{
-	Timeout: func(d int) func(*buckets.LoopShell) {
-		return func(sh *buckets.LoopShell) {
+	Timeout: func(d int) func(*buckets.ShellBucket) {
+		return func(sh *buckets.ShellBucket) {
 			sh.WithTimeout(time.Duration(d) * time.Second)
 		}
 	},
-	NoApproval: func() func(*buckets.LoopShell) {
-		return func(sh *buckets.LoopShell) {
+	NoApproval: func() func(*buckets.ShellBucket) {
+		return func(sh *buckets.ShellBucket) {
 			sh.WithoutApproval()
 		}
 	},
-	AllowCommands: func(cmds ...string) func(*buckets.LoopShell) {
-		return func(sh *buckets.LoopShell) {
+	AllowCommands: func(cmds ...string) func(*buckets.ShellBucket) {
+		return func(sh *buckets.ShellBucket) {
 			sh.WithAllowedCommands(cmds...)
 		}
 	},
@@ -256,16 +256,16 @@ var ShellOption = struct {
 
 // SearchOption provides configuration helpers for search bucket.
 var SearchOption = struct {
-	MaxResults   func(n int) func(*buckets.LoopSearch)
-	ContextLines func(n int) func(*buckets.LoopSearch)
+	MaxResults   func(n int) func(*buckets.SearchBucket)
+	ContextLines func(n int) func(*buckets.SearchBucket)
 }{
-	MaxResults: func(n int) func(*buckets.LoopSearch) {
-		return func(s *buckets.LoopSearch) {
+	MaxResults: func(n int) func(*buckets.SearchBucket) {
+		return func(s *buckets.SearchBucket) {
 			s.WithMaxResults(n)
 		}
 	},
-	ContextLines: func(n int) func(*buckets.LoopSearch) {
-		return func(s *buckets.LoopSearch) {
+	ContextLines: func(n int) func(*buckets.SearchBucket) {
+		return func(s *buckets.SearchBucket) {
 			s.WithContextLines(n)
 		}
 	},

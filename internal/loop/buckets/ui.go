@@ -15,14 +15,14 @@ import (
 
 // LoopUI handles user-facing and session management operations.
 // Tools: ask, todo, export, notebook, rewind, settings
-type LoopUI struct {
+type UIBucket struct {
 	sessionManager *state.SessionManager
 	exportDir      string
 	notebookDir    string
 }
 
 // NewLoopUI creates a UI bucket with default directories.
-func NewLoopUI(exportDir, notebookDir string) *LoopUI {
+func UI(exportDir, notebookDir string) *UIBucket {
 	sm, _ := state.NewSessionManager()
 	if exportDir == "" {
 		exportDir = defaults.UIExportDirDefault
@@ -30,7 +30,7 @@ func NewLoopUI(exportDir, notebookDir string) *LoopUI {
 	if notebookDir == "" {
 		notebookDir = defaults.UINotebookDirDefault
 	}
-	return &LoopUI{
+	return &UIBucket{
 		sessionManager: sm,
 		exportDir:      exportDir,
 		notebookDir:    notebookDir,
@@ -38,18 +38,18 @@ func NewLoopUI(exportDir, notebookDir string) *LoopUI {
 }
 
 // WithSessionManager sets a custom session manager.
-func (ui *LoopUI) WithSessionManager(sm *state.SessionManager) *LoopUI {
+func (ui *UIBucket) WithSessionManager(sm *state.SessionManager) *UIBucket {
 	ui.sessionManager = sm
 	return ui
 }
 
 // Name returns the bucket identifier.
-func (ui *LoopUI) Name() string {
+func (ui *UIBucket) Name() string {
 	return "ui"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (ui *LoopUI) CanHandle(toolName string, input map[string]any) bool {
+func (ui *UIBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "ask", "ask_user", "todo", "todo_write", "export",
 		"notebook", "notebook_edit", "rewind", "settings":
@@ -59,7 +59,7 @@ func (ui *LoopUI) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (ui *LoopUI) Capabilities() loop.BucketCapabilities {
+func (ui *UIBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: true,
 		IsReadOnly:        false,
@@ -73,7 +73,7 @@ func (ui *LoopUI) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the UI operation.
-func (ui *LoopUI) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	switch ctx.ToolName {
 	case "ask", "ask_user":
 		return ui.handleAsk(ctx)
@@ -96,7 +96,7 @@ func (ui *LoopUI) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleAsk asks the user a question.
-func (ui *LoopUI) handleAsk(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleAsk(ctx loop.ExecutionContext) loop.LoopResult {
 	question, _ := ctx.Input["question"].(string)
 	options := []string{}
 	if opts, ok := ctx.Input["options"].([]any); ok {
@@ -127,7 +127,7 @@ func (ui *LoopUI) handleAsk(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleTodo manages todo lists.
-func (ui *LoopUI) handleTodo(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleTodo(ctx loop.ExecutionContext) loop.LoopResult {
 	todos, _ := ctx.Input["todos"].([]any)
 
 	var result strings.Builder
@@ -151,7 +151,7 @@ func (ui *LoopUI) handleTodo(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleExport exports conversation/session data.
-func (ui *LoopUI) handleExport(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleExport(ctx loop.ExecutionContext) loop.LoopResult {
 	format, _ := ctx.Input["format"].(string)
 	if format == "" {
 		format = "json"
@@ -171,7 +171,7 @@ func (ui *LoopUI) handleExport(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleNotebook manages notebook entries.
-func (ui *LoopUI) handleNotebook(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleNotebook(ctx loop.ExecutionContext) loop.LoopResult {
 	action, _ := ctx.Input["action"].(string)
 	content, _ := ctx.Input["content"].(string)
 
@@ -198,7 +198,7 @@ func (ui *LoopUI) handleNotebook(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleRewind rewinds to a previous state.
-func (ui *LoopUI) handleRewind(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleRewind(ctx loop.ExecutionContext) loop.LoopResult {
 	steps := 1
 	if s, ok := ctx.Input["steps"].(float64); ok {
 		steps = int(s)
@@ -217,7 +217,7 @@ func (ui *LoopUI) handleRewind(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // handleSettings manages settings.
-func (ui *LoopUI) handleSettings(ctx loop.ExecutionContext) loop.LoopResult {
+func (ui *UIBucket) handleSettings(ctx loop.ExecutionContext) loop.LoopResult {
 	action, _ := ctx.Input["action"].(string)
 	key, _ := ctx.Input["key"].(string)
 	value, _ := ctx.Input["value"].(string)
@@ -253,7 +253,7 @@ type SessionInfo struct {
 }
 
 // GetSessions returns list of available sessions.
-func (ui *LoopUI) GetSessions() ([]SessionInfo, error) {
+func (ui *UIBucket) GetSessions() ([]SessionInfo, error) {
 	if ui.sessionManager == nil {
 		return nil, nil
 	}
@@ -288,4 +288,4 @@ func min(a, b int) int {
 }
 
 // Ensure LoopUI implements LoopBase
-var _ loop.LoopBase = (*LoopUI)(nil)
+var _ loop.LoopBase = (*UIBucket)(nil)

@@ -16,7 +16,7 @@ import (
 
 // LoopShell handles shell/bash operations.
 // It implements LoopBase with strict safety controls.
-type LoopShell struct {
+type ShellBucket struct {
 	basePath         string
 	allowedCommands  []string // Whitelist (empty = allow all non-destructive)
 	blockedCommands  []string // Blacklist
@@ -27,8 +27,8 @@ type LoopShell struct {
 }
 
 // NewLoopShell creates a shell bucket with safe defaults.
-func NewLoopShell(basePath string) *LoopShell {
-	return &LoopShell{
+func Shell(basePath string) *ShellBucket {
+	return &ShellBucket{
 		basePath:        basePath,
 		blockedCommands: defaults.ShellBlockedCommands,
 		blockedPatterns: defaults.ShellBlockedPatterns,
@@ -39,36 +39,36 @@ func NewLoopShell(basePath string) *LoopShell {
 }
 
 // WithTimeout sets the maximum command execution time.
-func (sh *LoopShell) WithTimeout(d time.Duration) *LoopShell {
+func (sh *ShellBucket) WithTimeout(d time.Duration) *ShellBucket {
 	sh.maxTimeout = d
 	return sh
 }
 
 // WithAllowedCommands restricts to specific commands.
-func (sh *LoopShell) WithAllowedCommands(cmds ...string) *LoopShell {
+func (sh *ShellBucket) WithAllowedCommands(cmds ...string) *ShellBucket {
 	sh.allowedCommands = cmds
 	return sh
 }
 
 // WithBlockedCommands adds to the blacklist.
-func (sh *LoopShell) WithBlockedCommands(cmds ...string) *LoopShell {
+func (sh *ShellBucket) WithBlockedCommands(cmds ...string) *ShellBucket {
 	sh.blockedCommands = append(sh.blockedCommands, cmds...)
 	return sh
 }
 
 // WithoutApproval disables approval requirements.
-func (sh *LoopShell) WithoutApproval() *LoopShell {
+func (sh *ShellBucket) WithoutApproval() *ShellBucket {
 	sh.requireApproval = false
 	return sh
 }
 
 // Name returns the bucket identifier.
-func (sh *LoopShell) Name() string {
+func (sh *ShellBucket) Name() string {
 	return "shell"
 }
 
 // CanHandle determines if this bucket handles the tool.
-func (sh *LoopShell) CanHandle(toolName string, input map[string]any) bool {
+func (sh *ShellBucket) CanHandle(toolName string, input map[string]any) bool {
 	switch toolName {
 	case "bash", "shell", "execute_command", "exec":
 		return true
@@ -77,7 +77,7 @@ func (sh *LoopShell) CanHandle(toolName string, input map[string]any) bool {
 }
 
 // Capabilities describes what this bucket can do.
-func (sh *LoopShell) Capabilities() loop.BucketCapabilities {
+func (sh *ShellBucket) Capabilities() loop.BucketCapabilities {
 	return loop.BucketCapabilities{
 		IsConcurrencySafe: false, // Shell commands are serial
 		IsReadOnly:        false, // Can modify state
@@ -88,7 +88,7 @@ func (sh *LoopShell) Capabilities() loop.BucketCapabilities {
 }
 
 // Execute runs the shell command.
-func (sh *LoopShell) Execute(ctx loop.ExecutionContext) loop.LoopResult {
+func (sh *ShellBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	command, ok := ctx.Input["command"].(string)
 	if !ok || command == "" {
 		return loop.LoopResult{
@@ -183,7 +183,7 @@ func (sh *LoopShell) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 }
 
 // validateCommand checks if a command is allowed.
-func (sh *LoopShell) validateCommand(cmd string) error {
+func (sh *ShellBucket) validateCommand(cmd string) error {
 	// Check blocked patterns
 	for _, pattern := range sh.blockedPatterns {
 		if pattern.MatchString(cmd) {
@@ -226,4 +226,4 @@ func IsDestructiveCommand(cmd string) bool {
 }
 
 // Ensure LoopShell implements LoopBase
-var _ loop.LoopBase = (*LoopShell)(nil)
+var _ loop.LoopBase = (*ShellBucket)(nil)
