@@ -217,6 +217,7 @@ func (ll *LayeredLoader) deepMerge(target, source map[string]interface{}) {
 }
 
 // extractValues extracts typed values from the merged config
+// Environment variables take precedence: AH_PROVIDER, AH_MODEL, AH_API_KEY
 func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	if v, ok := config.merged["provider"].(string); ok {
 		config.Provider = v
@@ -226,6 +227,17 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 	if v, ok := config.merged["model"].(string); ok {
 		config.Model = v
+	}
+
+	// Environment variables override config file values
+	if envProvider := os.Getenv("AH_PROVIDER"); envProvider != "" {
+		config.Provider = envProvider
+	}
+	if envModel := os.Getenv("AH_MODEL"); envModel != "" {
+		config.Model = envModel
+	}
+	if envAPIKey := os.Getenv("AH_API_KEY"); envAPIKey != "" {
+		config.APIKey = envAPIKey
 	}
 	if v, ok := config.merged["permission_mode"].(string); ok {
 		if mode, err := ParsePermissionMode(v); err == nil {
