@@ -10,9 +10,9 @@ import (
 // LoopTool provides tool management and routing capabilities.
 // It abstracts the tool registry and provides bucket-aware routing.
 type LoopTool struct {
-	registry    *tools.ToolRegistry
-	bucketMap   map[string]LoopBase // tool name -> bucket
-	validators  map[string]Validator
+	registry   *tools.ToolRegistry
+	bucketMap  map[string]LoopBase // tool name -> bucket
+	validators map[string]Validator
 }
 
 // Validator is a function that validates tool input.

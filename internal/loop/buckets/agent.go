@@ -17,10 +17,10 @@ import (
 // LoopAgent handles sub-agent spawning and delegation.
 // This bucket creates isolated agent loops for specific tasks.
 type AgentBucket struct {
-	llmClient     llm.Client
-	toolRegistry  *tools.ToolRegistry
-	maxDepth      int
-	basePath      string
+	llmClient           llm.Client
+	toolRegistry        *tools.ToolRegistry
+	maxDepth            int
+	basePath            string
 	orchestratorFactory func(basePath string, client llm.Client) *loop.OrchestrationBucket
 }
 
@@ -82,8 +82,8 @@ func (a *AgentBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 	}
 	if currentDepth >= a.maxDepth {
 		return loop.LoopResult{
-			Success: false,
-			Error:   loop.NewLoopError("depth_exceeded", fmt.Sprintf("agent recursion limit (%d) reached", a.maxDepth)),
+			Success:    false,
+			Error:      loop.NewLoopError("depth_exceeded", fmt.Sprintf("agent recursion limit (%d) reached", a.maxDepth)),
 			ShouldHalt: true,
 		}
 	}
@@ -130,12 +130,12 @@ func (a *AgentBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 
 	// Return mock result for pattern demonstration
 	result := fmt.Sprintf("[Sub-agent %s completed]\nTask: %s\nResult: (sub-agent execution would run here)", agentType, prompt)
-	
+
 	return loop.LoopResult{
 		Success: true,
 		Data:    result,
 		Messages: []types.Message{{
-			Role:    types.RoleUser,
+			Role: types.RoleUser,
 			Content: []types.ContentBlock{types.ToolResultBlock{
 				ToolUseID: ctx.ToolUseID,
 				Content:   result,
@@ -162,11 +162,11 @@ func (a *AgentBucket) runWithOrchestrator(ctx context.Context, messages []types.
 		// Default: create standard orchestrator
 		cfg := loop.DefaultConfig()
 		cfg.MaxTurns = 5 // Shorter for sub-agents
-		
+
 		// Create buckets for sub-agent
 		fs := FileSystem(a.basePath)
 		search := Search(a.basePath)
-		
+
 		orch = loop.Orchestration(cfg, a.llmClient, fs, search)
 	}
 
@@ -189,7 +189,7 @@ func (a *AgentBucket) runWithOrchestrator(ctx context.Context, messages []types.
 
 	// Run the sub-agent
 	state, err := orch.Run(ctx, params)
-	
+
 	// Collect result from final message
 	var result string
 	if err != nil {
@@ -234,10 +234,10 @@ func (a *AgentBucket) runWithOrchestrator(ctx context.Context, messages []types.
 
 // AgentConfig configures sub-agent behavior.
 type AgentConfig struct {
-	Model       string
-	MaxTurns    int
+	Model        string
+	MaxTurns     int
 	SystemPrompt string
-	Tools       []tools.Tool
+	Tools        []tools.Tool
 }
 
 // DefaultAgentConfig returns safe defaults for sub-agents.

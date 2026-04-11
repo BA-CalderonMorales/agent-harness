@@ -156,7 +156,7 @@ func (p *PlanBucket) handleEnterPlan(ctx loop.ExecutionContext) loop.LoopResult 
 // handleExitPlan exits plan mode.
 func (p *PlanBucket) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	completed := planState.IsActive && planState.CurrentStep >= len(planState.Plan)
-	
+
 	var summary string
 	if completed {
 		summary = fmt.Sprintf("Plan completed (%d steps)", len(planState.Plan))
@@ -172,7 +172,7 @@ func (p *PlanBucket) handleExitPlan(ctx loop.ExecutionContext) loop.LoopResult {
 	}
 
 	result := fmt.Sprintf("%s (elapsed: %v)", summary, elapsed)
-	
+
 	return loop.LoopResult{
 		Success: true,
 		Data:    planState.Plan,

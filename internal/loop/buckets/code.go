@@ -17,9 +17,9 @@ import (
 // LoopCode handles code analysis operations.
 // Tools: lint, format, analyze_code
 type CodeBucket struct {
-	basePath   string
-	timeout    time.Duration
-	maxIssues  int
+	basePath  string
+	timeout   time.Duration
+	maxIssues int
 }
 
 // NewLoopCode creates a code bucket.
@@ -114,7 +114,7 @@ func (c *CodeBucket) handleLint(ctx loop.ExecutionContext) loop.LoopResult {
 
 	// Many linters exit with non-zero when issues found
 	isError := err != nil && result == ""
-	
+
 	// Parse issues
 	issues := c.parseLintOutput(result, lang)
 	if len(issues) > c.maxIssues {
@@ -240,7 +240,7 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 	// Get file stats
 	cmd := exec.Command("find", path, "-type", "f", "-name", "*.go", "-o", "-name", "*.js", "-o", "-name", "*.py", "-o", "-name", "*.ts")
 	cmd.Dir = c.basePath
-	
+
 	output, _ := cmd.Output()
 	files := strings.Split(strings.TrimSpace(string(output)), "\n")
 	if len(files) == 1 && files[0] == "" {
@@ -250,7 +250,7 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 	// Count lines of code
 	var totalLines int
 	var fileCounts = make(map[string]int)
-	
+
 	for _, file := range files {
 		if file == "" {
 			continue
@@ -270,7 +270,7 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 	analysis.WriteString(fmt.Sprintf("Code Analysis for %s:\n\n", path))
 	analysis.WriteString(fmt.Sprintf("Total files: %d\n", len(files)))
 	analysis.WriteString(fmt.Sprintf("Total lines: %d\n\n", totalLines))
-	
+
 	if len(fileCounts) > 0 {
 		analysis.WriteString("Files by type:\n")
 		for ext, count := range fileCounts {
@@ -310,9 +310,9 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 	return loop.LoopResult{
 		Success: true,
 		Data: map[string]any{
-			"files":      len(files),
-			"lines":      totalLines,
-			"by_type":    fileCounts,
+			"files":   len(files),
+			"lines":   totalLines,
+			"by_type": fileCounts,
 		},
 		Messages: []types.Message{{
 			Role:    types.RoleUser,
@@ -395,7 +395,7 @@ func (c *CodeBucket) parseLintOutput(output string, lang string) []LintIssue {
 
 		// Simple parsing - real implementation would be more sophisticated
 		var issue LintIssue
-		
+
 		switch lang {
 		case "go":
 			// Try to parse "file:line:col: message" format

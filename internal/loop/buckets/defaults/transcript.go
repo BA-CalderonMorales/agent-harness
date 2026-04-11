@@ -8,16 +8,16 @@ const (
 	TranscriptMaxHistoryFull    = 10000
 
 	// Search settings
-	TranscriptMaxMatches    = 50
-	TranscriptContextChars  = 200
+	TranscriptMaxMatches   = 50
+	TranscriptContextChars = 200
 
 	// Summary settings
 	TranscriptSummaryMaxLength    = 2000
 	TranscriptSummaryBulletPoints = 10
 
 	// Topic extraction
-	TranscriptMaxTopics     = 10
-	TranscriptMinTopicFreq  = 2
+	TranscriptMaxTopics    = 10
+	TranscriptMinTopicFreq = 2
 )
 
 // TranscriptStopWords contains words to ignore in topic extraction

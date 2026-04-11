@@ -13,12 +13,12 @@ import (
 // OrchestrationBucket implements the core agent loop using the bucket architecture.
 // It coordinates multiple LoopBase implementations without knowing their internals.
 type OrchestrationBucket struct {
-	config        LoopConfig
-	buckets       []LoopBase
-	toolManager   *LoopTool
-	prompts       LoopSystemPrompts
-	strategies    LoopExecute
-	llmClient     llm.Client
+	config      LoopConfig
+	buckets     []LoopBase
+	toolManager *LoopTool
+	prompts     LoopSystemPrompts
+	strategies  LoopExecute
+	llmClient   llm.Client
 
 	// Event streaming
 	eventsMu sync.RWMutex
@@ -91,7 +91,7 @@ func (o *OrchestrationBucket) Run(ctx context.Context, params QueryParams) (*Loo
 
 		// Call LLM
 		o.emit(types.StreamRequestStart{})
-		
+
 		response, err := o.callLLM(ctx, state, params)
 		if err != nil {
 			if rec, ok := IsRecoverable(err); ok && o.config.EnableRecovery {

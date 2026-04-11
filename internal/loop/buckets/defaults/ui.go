@@ -5,18 +5,18 @@ import "time"
 // UI bucket defaults
 const (
 	// Export settings
-	UIExportDirDefault     = ".agent-harness/exports"
-	UIExportMaxSize        = 100 * 1024 * 1024 // 100MB
-	UIExportFormats        = "json,md,txt,html"
+	UIExportDirDefault = ".agent-harness/exports"
+	UIExportMaxSize    = 100 * 1024 * 1024 // 100MB
+	UIExportFormats    = "json,md,txt,html"
 
 	// Notebook settings
-	UINotebookDirDefault   = ".agent-harness/notebooks"
-	UINotebookMaxSize      = 10 * 1024 * 1024 // 10MB
-	UINotebookMaxEntries   = 1000
+	UINotebookDirDefault = ".agent-harness/notebooks"
+	UINotebookMaxSize    = 10 * 1024 * 1024 // 10MB
+	UINotebookMaxEntries = 1000
 
 	// Todo settings
-	UITodoMaxItems         = 100
-	UITodoMaxItemLength    = 500
+	UITodoMaxItems      = 100
+	UITodoMaxItemLength = 500
 
 	// Ask settings
 	UIAskMaxOptions        = 10
@@ -64,12 +64,12 @@ Messages: {{.MessageCount}}
 
 // UISettingsDefaults contains default settings values
 var UISettingsDefaults = map[string]string{
-	"theme":             "dark",
-	"auto_save":         "true",
+	"theme":               "dark",
+	"auto_save":           "true",
 	"confirm_destructive": "true",
-	"stream_output":     "true",
-	"show_token_count":  "true",
-	"max_history":       "100",
+	"stream_output":       "true",
+	"show_token_count":    "true",
+	"max_history":         "100",
 }
 
 // UITodoStatuses contains valid todo statuses

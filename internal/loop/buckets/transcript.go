@@ -14,8 +14,8 @@ import (
 // LoopTranscript handles conversation transcript operations.
 // Tools: search_transcript, summarize_transcript
 type TranscriptBucket struct {
-	maxHistory  int
-	transcript  []TranscriptEntry
+	maxHistory int
+	transcript []TranscriptEntry
 }
 
 // TranscriptEntry represents a single message in the transcript.
@@ -121,7 +121,7 @@ func (t *TranscriptBucket) handleSearch(ctx loop.ExecutionContext) loop.LoopResu
 	for i := startIdx; i < len(source); i++ {
 		msg := source[i]
 		content := extractTextContent(msg)
-		
+
 		if strings.Contains(strings.ToLower(content), strings.ToLower(query)) {
 			match := fmt.Sprintf("[%d] %s: %s", i, msg.Role, truncate(content, 200))
 			matches = append(matches, match)
@@ -217,7 +217,7 @@ func (t *TranscriptBucket) AddEntry(role, content string) {
 		Content:   content,
 	}
 	t.transcript = append(t.transcript, entry)
-	
+
 	// Trim if too large
 	if len(t.transcript) > t.maxHistory {
 		t.transcript = t.transcript[len(t.transcript)-t.maxHistory:]

@@ -15,7 +15,7 @@
 // Usage in buckets:
 //
 //	import "github.com/BA-CalderonMorales/agent-harness/internal/loop/buckets/defaults"
-//	
+//
 //	func (b *MyBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
 //	    if size > defaults.FSMaxFileSize {
 //	        return loop.LoopResult{Error: loop.NewLoopError("too_large", ...)}
@@ -23,8 +23,8 @@
 //	}
 //
 // Adding new defaults:
-//   1. Create a new file in this package (e.g., myfeature.go)
-//   2. Use const for simple values, var for complex types
-//   3. Document what the default controls
-//   4. Group related defaults in the same file
+//  1. Create a new file in this package (e.g., myfeature.go)
+//  2. Use const for simple values, var for complex types
+//  3. Document what the default controls
+//  4. Group related defaults in the same file
 package defaults

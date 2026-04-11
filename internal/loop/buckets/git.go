@@ -16,9 +16,9 @@ import (
 // LoopGit handles git operations.
 // Tools: git_status, git_diff, git_log, git_branch, git_commit (with approval)
 type GitBucket struct {
-	basePath       string
+	basePath        string
 	requireApproval bool
-	timeout        time.Duration
+	timeout         time.Duration
 }
 
 // NewLoopGit creates a git bucket.
@@ -103,7 +103,7 @@ func (g *GitBucket) handleStatus(ctx loop.ExecutionContext) loop.LoopResult {
 
 	output, err := cmd.CombinedOutput()
 	result := string(output)
-	
+
 	if err != nil && result == "" {
 		return loop.LoopResult{
 			Success: false,
@@ -128,12 +128,12 @@ func (g *GitBucket) handleStatus(ctx loop.ExecutionContext) loop.LoopResult {
 // handleDiff shows git diff.
 func (g *GitBucket) handleDiff(ctx loop.ExecutionContext) loop.LoopResult {
 	args := []string{"diff"}
-	
+
 	// Check for staged
 	if staged, ok := ctx.Input["staged"].(bool); ok && staged {
 		args = append(args, "--staged")
 	}
-	
+
 	// Check for specific file
 	if file, ok := ctx.Input["file"].(string); ok && file != "" {
 		args = append(args, file)
@@ -333,11 +333,11 @@ func (g *GitBucket) handleAdd(ctx loop.ExecutionContext) loop.LoopResult {
 
 // GitStatus represents parsed git status
 type GitStatus struct {
-	Modified []string
-	Added    []string
-	Deleted  []string
+	Modified  []string
+	Added     []string
+	Deleted   []string
 	Untracked []string
-	Renamed  []string
+	Renamed   []string
 }
 
 // parseGitStatus parses git status -s output
@@ -378,7 +378,7 @@ func parseGitStatus(output string) *GitStatus {
 func IsGitRepo(path string) bool {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	cmd := exec.CommandContext(ctx, "git", "rev-parse", "--git-dir")
 	cmd.Dir = path
 	err := cmd.Run()

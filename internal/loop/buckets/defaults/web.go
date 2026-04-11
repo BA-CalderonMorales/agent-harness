@@ -5,22 +5,22 @@ import "time"
 // Web bucket defaults
 const (
 	// Fetch settings
-	WebFetchTimeout         = 30 * time.Second
-	WebFetchMaxSize         = 5 * 1024 * 1024 // 5MB
-	WebFetchMaxRedirects    = 10
-	WebFetchUserAgent       = "Agent-Harness/1.0"
+	WebFetchTimeout      = 30 * time.Second
+	WebFetchMaxSize      = 5 * 1024 * 1024 // 5MB
+	WebFetchMaxRedirects = 10
+	WebFetchUserAgent    = "Agent-Harness/1.0"
 
 	// Content limits
-	WebMaxContentLength     = 1024 * 1024 // 1MB
-	WebMaxLineLength        = 10000
+	WebMaxContentLength = 1024 * 1024 // 1MB
+	WebMaxLineLength    = 10000
 
 	// Retry settings
-	WebMaxRetries           = 3
-	WebRetryBackoff         = 2 * time.Second
+	WebMaxRetries   = 3
+	WebRetryBackoff = 2 * time.Second
 
-	// Search settings  
-	WebSearchMaxResults     = 10
-	WebSearchTimeout        = 30 * time.Second
+	// Search settings
+	WebSearchMaxResults = 10
+	WebSearchTimeout    = 30 * time.Second
 )
 
 // WebAllowedSchemes contains allowed URL schemes
