@@ -5,7 +5,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/permissions"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/permissions"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/bash"
 )
 
