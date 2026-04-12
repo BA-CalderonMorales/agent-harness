@@ -5,6 +5,7 @@
 - **Source**: `cmd/agent-harness/main.go`
 - **Run**: `./scripts/run-termux.sh` or `~/buckets/usr/bin/agent-harness`
 - **Local LLM**: `./scripts/ah-fast.sh` (gemma4:2b) or `./scripts/ah-local.sh` (gemma4:4b)
+- **Prune Branches**: `./scripts/prune-branches.sh` (or `--dry-run`)
 
 ## Cross-Repo
 
@@ -199,6 +200,31 @@ This pattern applies to all buckets:
 - No horizontal rules as section separators
 - Tool calling must work flawlessly - no regressions
 - Follow Bucket Suffix naming pattern for new buckets
+
+## Branch Protection
+
+Protected branches: `main`, `develop`
+
+### Local Protection
+
+```bash
+# Safe deletion (checks protection)
+git del <branch>          # Delete merged branch
+git del-force <branch>    # Force delete
+
+# Prune all merged branches
+./scripts/prune-branches.sh --dry-run   # Preview
+./scripts/prune-branches.sh             # Execute
+```
+
+### Remote Protection
+
+Configure in GitHub: Settings → Branches → Add rule
+- Pattern: `main` and `develop`
+- Enable: "Restrict deletions"
+- Optional: Require PR reviews, status checks
+
+See `docs/branch-protection.md` for full setup.
 
 ## Working Rules
 
