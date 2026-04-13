@@ -93,15 +93,16 @@ func (app *App) handleCredentialError(credManager *config.CredentialManager, err
 }
 
 // applySecureConfig applies secure configuration values.
+// Environment variables take precedence over saved credentials.
 func (app *App) applySecureConfig(secureCfg *config.SecureConfig) {
 	app.secureConfig = secureCfg
-	if secureCfg.Provider != "" {
+	if secureCfg.Provider != "" && os.Getenv("AH_PROVIDER") == "" && os.Getenv("AGENT_HARNESS_PROVIDER") == "" {
 		app.config.Provider = secureCfg.Provider
 	}
-	if secureCfg.APIKey != "" {
+	if secureCfg.APIKey != "" && os.Getenv("AH_API_KEY") == "" && os.Getenv("AGENT_HARNESS_API_KEY") == "" {
 		app.config.APIKey = secureCfg.APIKey
 	}
-	if secureCfg.Model != "" {
+	if secureCfg.Model != "" && os.Getenv("AH_MODEL") == "" && os.Getenv("AGENT_HARNESS_MODEL") == "" {
 		app.config.Model = secureCfg.Model
 	}
 }

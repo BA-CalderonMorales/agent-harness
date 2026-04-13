@@ -230,13 +230,20 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 
 	// Environment variables override config file values
+	// Short form (AH_*) and long form (AGENT_HARNESS_*)
 	if envProvider := os.Getenv("AH_PROVIDER"); envProvider != "" {
+		config.Provider = envProvider
+	} else if envProvider := os.Getenv("AGENT_HARNESS_PROVIDER"); envProvider != "" {
 		config.Provider = envProvider
 	}
 	if envModel := os.Getenv("AH_MODEL"); envModel != "" {
 		config.Model = envModel
+	} else if envModel := os.Getenv("AGENT_HARNESS_MODEL"); envModel != "" {
+		config.Model = envModel
 	}
 	if envAPIKey := os.Getenv("AH_API_KEY"); envAPIKey != "" {
+		config.APIKey = envAPIKey
+	} else if envAPIKey := os.Getenv("AGENT_HARNESS_API_KEY"); envAPIKey != "" {
 		config.APIKey = envAPIKey
 	}
 	if v, ok := config.merged["permission_mode"].(string); ok {

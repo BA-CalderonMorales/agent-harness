@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3] - 2026-04-13
+
+### Fixed
+- Respect AGENT_HARNESS_PROVIDER and AGENT_HARNESS_MODEL environment variables
+- Prevent secure credentials from overriding explicit env-based provider/model selection
+
 ## [0.0.54] - 2026-04-06
 
 ### Changed
