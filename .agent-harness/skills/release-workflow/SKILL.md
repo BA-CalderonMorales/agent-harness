@@ -165,7 +165,39 @@ echo "$MAJOR.$MINOR.$PATCH"
 
 ## 3. Release Workflow
 
-### 3.1 Step-by-Step Release Process
+### 3.1 Automated Bump (GitHub Actions)
+
+The preferred method: trigger `.github/workflows/bump-version.yml` from the GitHub UI.
+
+**What it does:**
+1. Determines new version from input (patch/minor/major or explicit x.y.z)
+2. Updates `Version` in `cmd/agent-harness/main.go`
+3. Prepends entry to `docs/changelog.md`
+4. Commits with `chore(release): bump version to vX.Y.Z`
+5. Pushes commit and creates git tag
+6. Existing `release.yml` triggers automatically on the new tag
+
+**How to run:**
+```bash
+# Via CLI (requires gh CLI)
+gh workflow run bump-version.yml -f bump=patch
+
+# Or open GitHub UI:
+# Actions → Bump Version → Run workflow → choose patch/minor/major
+```
+
+### 3.2 Local Bump Script (Fallback)
+
+Uses `scripts/bump-version.sh` when you need to bump locally:
+
+```bash
+./scripts/bump-version.sh patch   # or minor, major, or explicit 0.2.0
+# Creates commit and tag locally
+# Then run:
+git push && git push origin v0.1.5
+```
+
+### 3.3 Manual Step-by-Step Release Process
 
 ```bash
 # BEFORE any release, run these commands:
@@ -175,31 +207,39 @@ git checkout develop
 git pull origin develop
 
 # 2. Check current versions (ALWAYS check remote first!)
-./scripts/release/check-remote.sh
+git fetch --tags origin
+CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
+GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
+echo "Code: $CODE_VERSION  Git: $GIT_TAG  GitHub: $GH_RELEASE"
 
 # 3. If mismatch found, fix first
-git fetch --tags origin
-git checkout develop  # ensure on correct branch
+git checkout develop
 
 # 4. Determine next version
-NEW_VERSION=$(./scripts/release/bump-version.sh v0.1.1 patch)  # uses remote as source
+NEW_VERSION=$(./scripts/bump-version.sh "$CODE_VERSION" patch)
 echo "Next version: v$NEW_VERSION"
 
 # 5. Update code version
-# Edit cmd/agent-harness/main.go:
-# Version = "0.0.43"
+sed -i 's/Version   = ".*"/Version   = "'$NEW_VERSION'"/' cmd/agent-harness/main.go
 
 # 6. Update changelog
-cat >> docs/changelog.md << EOF
-## [0.0.43] - $(date +%Y-%m-%d)
-
-### Fixed
-- Version alignment issue
-
-EOF
+DATE=$(date +%Y-%m-%d)
+TMP=$(mktemp)
+{
+    echo "# Changelog"
+    echo ""
+    echo "## [$NEW_VERSION] - $DATE"
+    echo ""
+    echo "### Changed"
+    echo "- Version bump to v$NEW_VERSION"
+    echo ""
+    tail -n +3 docs/changelog.md
+} > "$TMP"
+mv "$TMP" docs/changelog.md
 
 # 7. Commit version bump
-git add -A
+git add cmd/agent-harness/main.go docs/changelog.md
 git commit -m "chore(release): bump version to v$NEW_VERSION"
 
 # 8. Push to develop
@@ -220,140 +260,44 @@ gh release list --limit 5
 # 12. CRITICAL: Return to develop branch for shipping mode
 git checkout develop
 
-echo "✓ Release complete. Now on develop branch - ready for shipping."
-```
-
-### 3.2 One-Command Release Script
-
-Uses `scripts/release/release.sh`:
-
-```bash
-#!/bin/bash
-# Usage: ./scripts/release/release.sh [patch|minor|major]
-# CRITICAL: Fetches remote tags FIRST (prevents mismatch)
-
-set -e
-
-REPO_DIR="${REPO_DIR:-~/projects/agent-harness}"
-BUMP_TYPE="${1:-patch}"
-
-cd "$REPO_DIR"
-
-echo "=== Starting Release Process ==="
-echo "Repository: $REPO_DIR"
-echo "Bump type: $BUMP_TYPE"
-echo ""
-
-# 1. Check current state
-echo "→ Checking current versions..."
-CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
-GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
-GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
-
-echo "  Code:   $CODE_VERSION"
-echo "  Git:    $GIT_TAG"
-echo "  GitHub: $GH_RELEASE"
-
-# 2. Validate we're starting from aligned state
-CODE_V="v$CODE_VERSION"
-if [ "$CODE_V" != "$GH_RELEASE" ] && [ "$CODE_VERSION" != "$GH_RELEASE" ]; then
-    echo ""
-    echo "! WARNING: Starting from mismatched state!"
-    echo "  Code version does not match GitHub release."
-    echo "  Fix this first before creating new release."
-    exit 1
-fi
-
-# 3. Calculate new version
-echo ""
-echo "→ Calculating new version..."
-LATEST="${GH_RELEASE#v}"
-NEW_VERSION=$(bash ~/projects/bump-version.sh "$LATEST" "$BUMP_TYPE")
-echo "  New version: v$NEW_VERSION"
-
-# 4. Update code
-echo ""
-echo "→ Updating code version..."
-sed -i "s/Version\s*=\s*\"[^\"]*\"/Version   = \"$NEW_VERSION\"/" cmd/*/main.go
-
-# 5. Update changelog if exists
-if [ -f docs/changelog.md ]; then
-    echo "→ Updating changelog..."
-    TODAY=$(date +%Y-%m-%d)
-    # Prepend to changelog
-    TEMP=$(mktemp)
-    cat > "$TEMP" << EOF
-# Changelog
-
-## [$NEW_VERSION] - $TODAY
-
-### Changed
-- Version bump to v$NEW_VERSION
-
-EOF
-    tail -n +3 docs/changelog.md >> "$TEMP"
-    mv "$TEMP" docs/changelog.md
-fi
-
-# 6. Commit
-echo ""
-echo "→ Committing changes..."
-git add -A
-git commit -m "chore(release): bump version to v$NEW_VERSION"
-
-# 7. Push
-echo ""
-echo "→ Pushing to develop..."
-git push origin develop
-
-echo ""
-echo "=== Release Preparation Complete ==="
-echo ""
-echo "Next steps:"
-echo "  1. Merge develop to main:"
-echo "     git checkout main && git merge develop"
-echo "  2. Push main: git push origin main"
-echo "  3. Create tag: git tag -a v$NEW_VERSION -m 'Release v$NEW_VERSION'"
-echo "  4. Push tag: git push origin v$NEW_VERSION"
-echo "  5. Return to develop: git checkout develop"
-echo ""
-echo "Or run: cd $REPO_DIR && ./scripts/release/publish.sh v$NEW_VERSION"
+echo "[OK] Release complete. Now on develop branch - ready for shipping."
 ```
 
 ---
 
 ## 4. Quick Reference
 
+### Automated Bump (Preferred)
+```bash
+gh workflow run bump-version.yml -f bump=patch
+```
+
+### Local Bump (Fallback)
+```bash
+cd ~/projects/agent-harness
+./scripts/bump-version.sh patch
+git push && git push origin v0.1.5
+```
+
 ### Check Versions (Remote-First)
 ```bash
 cd ~/projects/agent-harness
-make check-remote
-# or: ./scripts/release/check-remote.sh
-```
-
-### Create New Release (Safe)
-```bash
-cd ~/projects/agent-harness
-make release    # checks remote, then builds
-# or: ./scripts/release/release.sh patch
+git fetch --tags origin
+CODE_VERSION=$(grep 'Version\s*=' cmd/agent-harness/main.go | sed 's/.*"\(.*\)".*/\1/')
+GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
+GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
+echo "Code: $CODE_VERSION  Git: $GIT_TAG  GitHub: $GH_RELEASE"
 ```
 
 ### Manual Version Fix (Emergency)
 ```bash
 # If version is out of sync:
 1. Fetch remote: git fetch --tags origin
-2. Check mismatch: ./scripts/release/check-remote.sh
+2. Check mismatch: compare CODE_VERSION, GIT_TAG, GH_RELEASE
 3. Checkout correct tag: git checkout v0.1.1
 4. Fix code: Edit cmd/agent-harness/main.go → update Version string
 5. Commit: git add -A && git commit -m "fix: align version with release"
 6. Push: git push origin develop
-```
-
-### Makefile Targets
-```bash
-make check-remote   # Validate local == remote (safe)
-make release        # check-remote + build (creates release binary)
-make build          # Build only (uses local git state)
 ```
 
 ---
@@ -362,12 +306,11 @@ make build          # Build only (uses local git state)
 
 | File | Purpose |
 |------|---------|
-| `scripts/release/check-remote.sh` | Fetches remote, validates local == remote |
-| `scripts/release/release.sh` | Full release process (remote-first) |
-| `scripts/release/bump-version.sh` | Calculates next semver version |
-| `scripts/release/check-version.sh` | Local validation only (legacy) |
-| `Makefile` | `make release` = check-remote + build |
-| `.githooks/pre-push` | Optional: prevents bad tag pushes |
+| `.github/workflows/bump-version.yml` | GitHub Actions workflow for automated version bump |
+| `.github/workflows/release.yml` | Builds and publishes binaries on tag push |
+| `scripts/bump-version.sh` | Local semver bump script |
+| `cmd/agent-harness/main.go` | Source of truth for code version (`Version` var) |
+| `docs/changelog.md` | Human-readable release history |
 
 ---
 
@@ -420,6 +363,6 @@ This ensures:
 
 ---
 
-> **Last Updated:** 2026-04-12  
-> **Changes:** Added remote-first validation (check-remote.sh, Makefile `release` target)  
+> **Last Updated:** 2026-04-13  
+> **Changes:** Added GitHub Actions bump-version workflow and local bump-version.sh script  
 > **Purpose:** Never have version mismatches again.

@@ -278,6 +278,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle slash commands
 			trimmed := strings.TrimSpace(input)
 			if strings.HasPrefix(trimmed, "/") {
+				m.AddMessage("user", trimmed)
 				if m.delegate != nil {
 					m.delegate.OnCommand(trimmed)
 				}

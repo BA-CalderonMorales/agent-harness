@@ -768,9 +768,8 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 		"/diff":          true,
 		"/version":       true,
 		"/config":        true,
-		"/memory":        true,
+		"/workspace":     true,
 		"/quit":          true,
-		"/exit":          true,
 		"/current-model": true,
 		"/reset":         true,
 		"/agents":        true,
@@ -780,7 +779,8 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 	cmdName := selected.Command
 	if noArgCommands[cmdName] {
 		if a.onUserCommand != nil {
-			go a.onUserCommand(cmdName, *a)
+			a.chatModel.AddMessage("user", cmdName)
+			a.onUserCommand(cmdName, *a)
 		}
 		return *a, nil
 	}

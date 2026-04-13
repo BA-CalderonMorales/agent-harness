@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.1.5] - 2026-04-13
+
+### Changed
+- Version bump to v0.1.5
+
+## [0.1.4] - 2026-04-13
+
+### Fixed
+- Slash command help deduplication: removed duplicate /exit and /memory entries
+- Race condition in command palette execution (removed goroutine mutation of TUI state)
+- Deterministic /help output by using ordered category slices
+- Missing user message logging for slash commands in chat history
+- Missing /workspace command in help and command palette
+
+## [0.1.3] - 2026-04-13
+
+### Fixed
+- Respect AGENT_HARNESS_PROVIDER and AGENT_HARNESS_MODEL environment variables
+- Prevent secure credentials from overriding explicit env-based provider/model selection
+
 ## [0.0.54] - 2026-04-06
 
 ### Changed
