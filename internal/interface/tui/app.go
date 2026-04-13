@@ -364,7 +364,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// These are handled HERE ONLY to avoid double-processing
 	// -------------------------------------------------------------------------
 	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg,
-		AgentStartMsg, AgentChunkMsg, AgentToolStartMsg, AgentToolDoneMsg, AgentDoneMsg, AgentErrorMsg:
+		AgentStartMsg, AgentChunkMsg, AgentToolStartMsg, AgentToolDoneMsg, AgentDoneMsg, AgentErrorMsg, AgentConnectingMsg:
 		chatModel, cmd := a.chatModel.Update(msg)
 		a.chatModel = chatModel.(ChatModel)
 		if cmd != nil {

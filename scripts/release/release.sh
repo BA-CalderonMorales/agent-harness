@@ -14,6 +14,25 @@ echo "Repository: $REPO_DIR"
 echo "Bump type: $BUMP_TYPE"
 echo ""
 
+# 0. ALWAYS check remote first (prevents release version mismatch)
+echo "=== Remote Version Check (Source of Truth) ==="
+git fetch --tags origin 2>/dev/null || {
+    echo "[!] ERROR: Cannot fetch remote. Check network access."
+    exit 1
+}
+
+REMOTE_TAG=$(git ls-remote --tags origin 2>/dev/null | \
+    grep -o 'refs/tags/v[0-9]\+\.[0-9]\+\.[0-9]\+' | \
+    sort -V | tail -1 | sed 's/refs\/tags\///')
+
+if [ -z "$REMOTE_TAG" ]; then
+    echo "[!] No remote version tags found"
+    exit 1
+fi
+
+echo "Remote latest: $REMOTE_TAG"
+echo ""
+
 # 1. Ensure we're on develop
 echo "→ Checking branch..."
 CURRENT_BRANCH=$(git branch --show-current)
@@ -35,7 +54,7 @@ echo ""
 echo "→ Checking current versions..."
 CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
 GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
-GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
+GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "$REMOTE_TAG")
 
 echo "  Code:   $CODE_VERSION"
 echo "  Git:    $GIT_TAG"
@@ -56,10 +75,10 @@ if [ "$CODE_V" != "$GH_RELEASE" ] && [ "$CODE_VERSION" != "$GH_RELEASE" ]; then
     fi
 fi
 
-# 4. Calculate new version
+# 4. Calculate new version (use remote tag as source of truth)
 echo ""
 echo "→ Calculating new version..."
-LATEST="${GH_RELEASE#v}"
+LATEST="${REMOTE_TAG#v}"
 if [ "$LATEST" = "NONE" ]; then
     LATEST="0.0.0"
 fi

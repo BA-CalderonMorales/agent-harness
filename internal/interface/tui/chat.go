@@ -330,6 +330,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.chunkCount = 0
 		return m, m.startTimer()
 
+	case AgentConnectingMsg:
+		// Show connecting state to user so they know we're trying
+		m.thinking = true
+		m.thinkingText = fmt.Sprintf("Connecting to %s...", msg.Endpoint)
+		return m, nil
+
 	case AgentChunkMsg:
 		if m.streaming {
 			m.streamBuffer += msg.Text
