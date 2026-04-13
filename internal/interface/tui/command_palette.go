@@ -56,7 +56,6 @@ func getAgentHarnessCommands() []commandInfo {
 		{Command: "/session", Args: "[list|load <id>]", Description: "Manage sessions", Category: "Session"},
 		{Command: "/reset", Description: "Reset agent harness (destructive)", Category: "Session"},
 		{Command: "/quit", Description: "Exit application", Category: "Session"},
-		{Command: "/exit", Description: "Exit application (alias)", Category: "Session"},
 
 		{Command: "/model", Args: "[model-id]", Description: "Show or change model", Category: "Model"},
 		{Command: "/current-model", Description: "Show current model", Category: "Model"},
@@ -65,7 +64,7 @@ func getAgentHarnessCommands() []commandInfo {
 		{Command: "/version", Description: "Show version", Category: "System"},
 		{Command: "/config", Description: "Show configuration", Category: "System"},
 		{Command: "/permissions", Args: "[mode]", Description: "Show or change permission mode", Category: "System"},
-		{Command: "/memory", Description: "Show session memory info", Category: "System"},
+		{Command: "/workspace", Description: "Show workspace information", Category: "System"},
 		{Command: "/agents", Description: "Show available agents", Category: "Tools"},
 		{Command: "/skills", Description: "Show available skills", Category: "Tools"},
 	}
