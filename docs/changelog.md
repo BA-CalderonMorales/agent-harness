@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.4] - 2026-04-13
+
+### Fixed
+- Slash command help deduplication: removed duplicate /exit and /memory entries
+- Race condition in command palette execution (removed goroutine mutation of TUI state)
+- Deterministic /help output by using ordered category slices
+- Missing user message logging for slash commands in chat history
+- Missing /workspace command in help and command palette
+
 ## [0.1.3] - 2026-04-13
 
 ### Fixed
