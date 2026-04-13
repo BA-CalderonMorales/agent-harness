@@ -91,6 +91,12 @@ type AgentErrorMsg struct {
 	Timestamp time.Time
 }
 
+// AgentConnectingMsg signals that we're establishing connection to LLM
+type AgentConnectingMsg struct {
+	Endpoint  string
+	Timestamp time.Time
+}
+
 // AgentToolStartMsg signals a tool is being invoked
 type AgentToolStartMsg struct {
 	ToolID       string

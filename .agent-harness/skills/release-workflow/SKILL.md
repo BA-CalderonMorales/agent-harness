@@ -7,6 +7,22 @@
 
 ---
 
+## 0. The Golden Rule (CRITICAL)
+
+**Remote tag is ALWAYS the source of truth.**
+
+```
+Local:  v0.1.0 (old)
+Remote: v0.1.1 (current)
+
+WRONG:  Use local → calculates v0.1.1 (already exists!)
+RIGHT:  Fetch remote → calculates v0.1.2 (correct!)
+```
+
+All scripts in `scripts/release/` fetch remote first to prevent mismatches.
+
+---
+
 ## 1. The Problem
 
 Version mismatches happen when:
@@ -14,23 +30,38 @@ Version mismatches happen when:
 - Git tag doesn't match the GitHub release
 - Multiple sources of truth for version numbers
 - Manual steps are forgotten
+- **Local tags are stale (don't fetch remote)**
 
-## The Problem
+### Example Mismatch (What We Fixed)
 ```
-GitHub Release: v0.0.42
-Code Version:   "0.0.41"  [MISMATCH!]
-Git Tag:        v0.0.42
+GitHub Release: v0.1.1
+Git Tag Local:  v0.1.0  (stale!)
+Code Version:   "0.0.55" (fallback)
+
+User runs release.sh → calculates v0.1.1 → ERROR: already exists!
+```
+
+### After Fix
+```
+$ make release
+=== Remote Version Check ===
+Fetching remote tags...
+Remote latest: v0.1.1
+[OK] Local matches remote: v0.1.1
+→ New version: v0.1.2
 ```
 
 ---
 
 ## 2. Pre-Release Validation Checklist
 
-### 2.1 Check Current State
+### 2.1 Check Current State (Remote-First)
+
+Uses `scripts/release/check-remote.sh`:
 
 ```bash
 #!/bin/bash
-# save as: ~/projects/check-version.sh
+# ALWAYS fetches remote tags first (prevents version mismatch)
 
 REPO_DIR="${1:-.}"
 cd "$REPO_DIR" || exit 1
@@ -75,15 +106,25 @@ if [ -z "$MISMATCH" ]; then
 else
     echo ""
     echo "[ERROR] Version mismatch detected!"
+    echo "Fix: git fetch --tags origin && git checkout $REMOTE_TAG"
     exit 1
 fi
 ```
 
+**Quick check:**
+```bash
+cd ~/projects/agent-harness
+make check-remote
+# or: ./scripts/release/check-remote.sh
+```
+
 ### 2.2 Determine Next Version
+
+Uses `scripts/release/bump-version.sh`:
 
 ```bash
 #!/bin/bash
-# save as: ~/projects/bump-version.sh
+# Calculates next version from current
 
 CURRENT_VERSION="${1:-}"
 BUMP_TYPE="${2:-patch}"  # patch, minor, major
@@ -133,14 +174,15 @@ echo "$MAJOR.$MINOR.$PATCH"
 git checkout develop
 git pull origin develop
 
-# 2. Check current versions
-~/projects/check-version.sh
+# 2. Check current versions (ALWAYS check remote first!)
+./scripts/release/check-remote.sh
 
-# 3. If mismatch found, fix code version first
-# Edit cmd/*/main.go to match GitHub release
+# 3. If mismatch found, fix first
+git fetch --tags origin
+git checkout develop  # ensure on correct branch
 
 # 4. Determine next version
-NEW_VERSION=$(~/projects/bump-version.sh v0.0.42 patch)  # or minor/major
+NEW_VERSION=$(./scripts/release/bump-version.sh v0.1.1 patch)  # uses remote as source
 echo "Next version: v$NEW_VERSION"
 
 # 5. Update code version
@@ -183,10 +225,12 @@ echo "✓ Release complete. Now on develop branch - ready for shipping."
 
 ### 3.2 One-Command Release Script
 
+Uses `scripts/release/release.sh`:
+
 ```bash
 #!/bin/bash
-# save as: ~/projects/release.sh
-# Usage: release.sh [patch|minor|major]
+# Usage: ./scripts/release/release.sh [patch|minor|major]
+# CRITICAL: Fetches remote tags FIRST (prevents mismatch)
 
 set -e
 
@@ -280,29 +324,54 @@ echo "Or run: cd $REPO_DIR && ./scripts/release/publish.sh v$NEW_VERSION"
 
 ## 4. Quick Reference
 
-### Check Versions Anywhere
+### Check Versions (Remote-First)
 ```bash
 cd ~/projects/agent-harness
-~/projects/check-version.sh
+make check-remote
+# or: ./scripts/release/check-remote.sh
 ```
 
-### Create New Release
+### Create New Release (Safe)
 ```bash
 cd ~/projects/agent-harness
-~/projects/release.sh patch   # or minor, major
+make release    # checks remote, then builds
+# or: ./scripts/release/release.sh patch
 ```
 
 ### Manual Version Fix (Emergency)
 ```bash
 # If version is out of sync:
-1. Edit cmd/agent-harness/main.go → update Version string
-2. git add -A && git commit -m "fix: align version with release"
-3. git push origin develop
+1. Fetch remote: git fetch --tags origin
+2. Check mismatch: ./scripts/release/check-remote.sh
+3. Checkout correct tag: git checkout v0.1.1
+4. Fix code: Edit cmd/agent-harness/main.go → update Version string
+5. Commit: git add -A && git commit -m "fix: align version with release"
+6. Push: git push origin develop
+```
+
+### Makefile Targets
+```bash
+make check-remote   # Validate local == remote (safe)
+make release        # check-remote + build (creates release binary)
+make build          # Build only (uses local git state)
 ```
 
 ---
 
-## 5. Version Format
+## 5. Files in This Workflow
+
+| File | Purpose |
+|------|---------|
+| `scripts/release/check-remote.sh` | Fetches remote, validates local == remote |
+| `scripts/release/release.sh` | Full release process (remote-first) |
+| `scripts/release/bump-version.sh` | Calculates next semver version |
+| `scripts/release/check-version.sh` | Local validation only (legacy) |
+| `Makefile` | `make release` = check-remote + build |
+| `.githooks/pre-push` | Optional: prevents bad tag pushes |
+
+---
+
+## 6. Version Format
 
 We follow **Semantic Versioning** (semver):
 ```
@@ -323,7 +392,7 @@ Examples:
 
 ---
 
-## 6. Troubleshooting
+## 7. Troubleshooting
 
 | Problem | Solution |
 |---------|----------|
@@ -334,7 +403,7 @@ Examples:
 
 ---
 
-## 7. Shipping Mode Protocol
+## 8. Shipping Mode Protocol
 
 > **Rule:** Always end a release back on the `develop` branch.
 
@@ -351,5 +420,6 @@ This ensures:
 
 ---
 
-> **Last Updated:** 2026-04-04  
+> **Last Updated:** 2026-04-12  
+> **Changes:** Added remote-first validation (check-remote.sh, Makefile `release` target)  
 > **Purpose:** Never have version mismatches again.
