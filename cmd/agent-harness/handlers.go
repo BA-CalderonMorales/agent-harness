@@ -65,7 +65,15 @@ func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
 
 // handleAgentLoopAsync runs the full agent loop asynchronously.
 func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
+	// PRE-FLIGHT: Check common config issues before calling LLM
+	if err := app.validateConfig(); err != nil {
+		tuiApp.Send(tui.AgentErrorMsg{Error: err, Timestamp: time.Now()})
+		return
+	}
+
 	tuiApp.Send(tui.AgentStartMsg{Timestamp: time.Now()})
+	// Show connecting state so user knows something is happening
+	tuiApp.Send(tui.AgentConnectingMsg{Endpoint: app.config.Provider})
 
 	sysPrompt := app.buildSystemPrompt()
 	ctx, cancel := context.WithCancel(context.Background())
@@ -230,6 +238,21 @@ func (app *App) handleToolUseStart(b types.ToolUseBlock, tuiApp *tui.App) {
 		ActivityDesc: activityDesc,
 		Input:        b.Input,
 	})
+}
+
+// validateConfig checks pre-flight configuration before calling LLM.
+func (app *App) validateConfig() error {
+	// Check API key for non-local providers
+	if app.config.Provider != "ollama" && app.config.Provider != "local" {
+		if app.config.APIKey == "" {
+			return fmt.Errorf("no API key configured. Run setup or set AGENT_HARNESS_API_KEY / OPENROUTER_API_KEY")
+		}
+	}
+	// Check model is set
+	if app.session.Model == "" {
+		return fmt.Errorf("no model selected. Use /model <name> to select a model")
+	}
+	return nil
 }
 
 // tuiChatDelegate connects TUI chat to the app.

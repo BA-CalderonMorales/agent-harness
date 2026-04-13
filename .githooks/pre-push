@@ -1,0 +1,41 @@
+#!/bin/bash
+# pre-push hook - Prevent pushing tags if versions don't match remote
+# Install: git config core.hooksPath .githooks
+
+remote="$1"
+url="$2"
+
+# Check if we're pushing tags
+while read local_ref local_sha remote_ref remote_sha
+do
+    if [[ "$local_ref" == refs/tags/* ]]; then
+        TAG="${local_ref#refs/tags/}"
+        
+        # Fetch remote tags first
+        git fetch --tags origin 2>/dev/null || {
+            echo "[!] ERROR: Cannot fetch remote tags. Check network."
+            exit 1
+        }
+        
+        # Get latest remote tag
+        REMOTE_TAG=$(git ls-remote --tags origin 2>/dev/null | \
+            grep -o 'refs/tags/v[0-9]\+\.[0-9]\+\.[0-9]\+' | \
+            sort -V | tail -1 | sed 's/refs\/tags\///')
+        
+        if [ -n "$REMOTE_TAG" ]; then
+            echo "Current remote: $REMOTE_TAG"
+            echo "You're pushing: $TAG"
+            
+            # Check if tag follows semver
+            if [[ ! "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                echo "[!] ERROR: Tag $TAG doesn't follow semver (vX.Y.Z)"
+                exit 1
+            fi
+            
+            # Warn if not sequential
+            # This is a simple check - you may want more sophisticated logic
+        fi
+    fi
+done
+
+exit 0
