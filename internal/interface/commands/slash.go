@@ -4,6 +4,7 @@ package commands
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -95,18 +96,21 @@ func (sr *SlashRegistry) GetHelp() string {
 	lines = append(lines, "Available commands:")
 	lines = append(lines, "")
 
-	// Group commands by category
-	categories := map[string][]string{
-		"Session":  {"help", "status", "clear", "compact", "session", "reset", "quit", "exit"},
-		"Model":    {"model", "current-model"},
-		"Settings": {"permissions", "config", "memory"},
-		"Output":   {"cost", "diff", "export", "version"},
-		"Tools":    {"agents", "skills"},
+	// Group commands by category (slice for deterministic order)
+	categories := []struct {
+		name string
+		cmds []string
+	}{
+		{"Session", []string{"help", "status", "clear", "compact", "session", "reset", "quit", "workspace"}},
+		{"Model", []string{"model", "current-model"}},
+		{"Settings", []string{"permissions", "config"}},
+		{"Output", []string{"cost", "diff", "export", "version"}},
+		{"Tools", []string{"agents", "skills"}},
 	}
 
-	for category, cmds := range categories {
-		lines = append(lines, category+":")
-		for _, cmd := range cmds {
+	for _, cat := range categories {
+		lines = append(lines, cat.name+":")
+		for _, cmd := range cat.cmds {
 			if desc, exists := sr.help[cmd]; exists {
 				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
 			}
@@ -121,8 +125,12 @@ func (sr *SlashRegistry) GetHelp() string {
 func (sr *SlashRegistry) GetCompletions() []string {
 	completions := make([]string, 0, len(sr.commands))
 	for name := range sr.commands {
+		if name == "exit" {
+			continue // hide alias from completions
+		}
 		completions = append(completions, "/"+name)
 	}
+	sort.Strings(completions)
 	return completions
 }
 

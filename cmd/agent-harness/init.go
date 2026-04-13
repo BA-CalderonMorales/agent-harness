@@ -290,11 +290,6 @@ func (app *App) initCommands() {
 			},
 		))
 
-	app.cmdRegistry.Register("memory", "Show session memory info",
-		commands.MemoryHandler(func() string {
-			return app.sessionManager.FormatSessionReport()
-		}))
-
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			return "Available agents:\n  default  Standard agent with full tool access\n  okabe    Experimental reasoning agent"
