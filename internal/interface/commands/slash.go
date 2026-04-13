@@ -160,9 +160,6 @@ func StatusHandler(getStatus func() string) SlashHandler {
 // ClearHandler clears the session and optionally the TUI chat
 func ClearHandler(clearFn func() error, clearChatFn func()) SlashHandler {
 	return func(args string) (string, error) {
-		if args != "--confirm" && args != "-y" {
-			return "clear: confirmation required; rerun with /clear --confirm", nil
-		}
 		if err := clearFn(); err != nil {
 			return "", err
 		}

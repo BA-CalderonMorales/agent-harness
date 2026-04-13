@@ -1,0 +1,96 @@
+name: Bump Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Bump type (patch, minor, major) or explicit version (e.g., 0.2.0)'
+        required: true
+        default: 'patch'
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  bump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Determine new version
+        id: version
+        run: |
+          set -e
+          CURRENT=$(grep 'Version\s*=' cmd/agent-harness/main.go | sed 's/.*"\(.*\)".*/\1/')
+          INPUT="${{ github.event.inputs.bump }}"
+
+          if [[ "$INPUT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            NEW_VERSION="$INPUT"
+          else
+            MAJOR=$(echo "$CURRENT" | cut -d. -f1)
+            MINOR=$(echo "$CURRENT" | cut -d. -f2)
+            PATCH=$(echo "$CURRENT" | cut -d. -f3)
+
+            case "$INPUT" in
+              major) MAJOR=$((MAJOR + 1)); MINOR=0; PATCH=0 ;;
+              minor) MINOR=$((MINOR + 1)); PATCH=0 ;;
+              patch|*) PATCH=$((PATCH + 1)) ;;
+            esac
+
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+          fi
+
+          echo "current=$CURRENT" >> "$GITHUB_OUTPUT"
+          echo "new=$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$NEW_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Bumping from $CURRENT -> $NEW_VERSION"
+
+      - name: Update version in main.go
+        run: |
+          sed -i 's/Version   = ".*"/Version   = "${{ steps.version.outputs.new }}"/' cmd/agent-harness/main.go
+
+      - name: Update changelog
+        run: |
+          python3 << 'PYEOF'
+          import datetime, sys
+
+          version = "${{ steps.version.outputs.new }}"
+          date = datetime.date.today().isoformat()
+          path = "docs/changelog.md"
+
+          with open(path, "r") as f:
+              content = f.read()
+
+          new_entry = f"""## [{version}] - {date}
+
+### Changed
+- Version bump to v{version}
+
+"""
+
+          if content.startswith("# Changelog"):
+              content = "# Changelog\n\n" + new_entry + content[len("# Changelog\n\n"):]
+          else:
+              content = "# Changelog\n\n" + new_entry + content
+
+          with open(path, "w") as f:
+              f.write(content)
+          PYEOF
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add cmd/agent-harness/main.go docs/changelog.md
+          git diff --cached --quiet && echo "No changes to commit" && exit 0
+          git commit -m "chore(release): bump version to ${{ steps.version.outputs.tag }}"
+          git push origin HEAD
+
+      - name: Create and push tag
+        run: |
+          git tag "${{ steps.version.outputs.tag }}"
+          git push origin "${{ steps.version.outputs.tag }}"
