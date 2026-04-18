@@ -65,12 +65,7 @@ jobs:
           with open(path, "r") as f:
               content = f.read()
 
-          new_entry = f"""## [{version}] - {date}
-
-### Changed
-- Version bump to v{version}
-
-"""
+          new_entry = "## [{}] - {}\n\n### Changed\n- Version bump to v{}\n\n".format(version, date, version)
 
           if content.startswith("# Changelog"):
               content = "# Changelog\n\n" + new_entry + content[len("# Changelog\n\n"):]

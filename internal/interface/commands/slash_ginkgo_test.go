@@ -834,9 +834,9 @@ var _ = Describe("Slash Commands", func() {
 
 	Describe("WorktreeHandler", func() {
 		var (
-			added    []string
-			removed  string
-			handler  SlashHandler
+			added   []string
+			removed string
+			handler SlashHandler
 		)
 
 		BeforeEach(func() {
