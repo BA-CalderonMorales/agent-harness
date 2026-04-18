@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -215,9 +216,37 @@ func (app *App) buildWelcomeMessage() string {
 		parts = append(parts, sprintf("  Dir: %s", app.cwd))
 	}
 
+	if projType := detectProjectType(app.cwd); projType != "" {
+		parts = append(parts, sprintf("  Project: %s", projType))
+	}
+
 	parts = append(parts, "")
 	parts = append(parts, "Type /help for commands")
 	return strings.Join(parts, "\n")
+}
+
+// detectProjectType guesses the project language from common marker files.
+func detectProjectType(dir string) string {
+	markers := []struct {
+		file string
+		name string
+	}{
+		{"go.mod", "Go"},
+		{"package.json", "Node"},
+		{"Cargo.toml", "Rust"},
+		{"pyproject.toml", "Python"},
+		{"requirements.txt", "Python"},
+		{"composer.json", "PHP"},
+		{"Gemfile", "Ruby"},
+		{"pom.xml", "Java"},
+		{"build.gradle", "Java"},
+	}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(dir, m.file)); err == nil {
+			return m.name
+		}
+	}
+	return ""
 }
 
 // isReadOnlyTool checks if a tool is read-only.

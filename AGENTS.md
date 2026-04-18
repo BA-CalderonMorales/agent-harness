@@ -6,6 +6,15 @@
 - **Run**: `./scripts/run-termux.sh` or `~/buckets/usr/bin/agent-harness`
 - **Local LLM**: `./scripts/ah-fast.sh` (gemma4:2b) or `./scripts/ah-local.sh` (gemma4:4b)
 - **Prune Branches**: `./scripts/prune-branches.sh` (or `--dry-run`)
+- **Commit from TUI**: `/commit <message>` — stages all changes and commits
+
+## Recent DX Improvements
+
+- **Rich startup context**: system prompt auto-includes git status, recent commits, project file tree
+- **Session auto-resume**: loads the most recent session on startup for continuity
+- **Tool output truncation**: bash and read outputs are silently capped to protect context budget
+- **Loop auto-compaction**: old messages are trimmed automatically when approaching token limits
+- **Edit tool**: supports `replace_all` and gives actionable errors on mismatch
 
 ## Cross-Repo
 

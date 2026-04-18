@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**006: Native /commit slash command for one-step git commits**
-> Agent harness can stage and commit changes directly from the chat, eliminating the need to switch to a terminal for common git workflows.
+**007: Project type detection in welcome + AGENTS.md freshness**
+> Agent harness welcome message shows the detected project language, and AGENTS.md stays current with recent capabilities.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -18,7 +18,8 @@
 | 003 | auto-resume-session | If we load the most recent session on startup instead of always creating a new one, users experience seamless continuity across restarts. | validated |
 | 004 | edit-tool-reliability | If we add replace_all and better error messages to the edit tool, failed edits drop and user trust rises. | validated |
 | 005 | loop-auto-compact | If the loop auto-compacts old messages when token count exceeds 80% of limit, long sessions won't hit hard blocking errors. | validated |
-| 006 | slash-commit | If we add a /commit command that stages and commits, users stay in flow without leaving the TUI. | active |
+| 006 | slash-commit | If we add a /commit command that stages and commits, users stay in flow without leaving the TUI. | validated |
+| 007 | project-type-welcome | If the welcome message detects go.mod/package.json/etc., users immediately know the agent understands their stack. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
