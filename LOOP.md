@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**009: `/plan` slash command activates multi-step planning mode**
-> Agent harness supports plan mode where the LLM outlines its approach before executing tools, giving users visibility and control over complex multi-step tasks.
+**010: Sub-agent tool executes delegated tasks with clean context**
+> Agent harness can spawn sub-agents that actually run queries with fresh context, enabling parallel work and task delegation like Claude Code.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -21,7 +21,8 @@
 | 006 | slash-commit | If we add a /commit command that stages and commits, users stay in flow without leaving the TUI. | validated |
 | 007 | project-type-welcome | If the welcome message detects go.mod/package.json/etc., users immediately know the agent understands their stack. | validated |
 | 008 | slash-branch | If we add a /branch command for create/switch/list/delete, users manage branches without leaving the TUI. | validated |
-| 009 | slash-plan | If we add a /plan command that puts the agent into planning mode, users get visibility into multi-step tasks before execution. | active |
+| 009 | slash-plan | If we add a /plan command that puts the agent into planning mode, users get visibility into multi-step tasks before execution. | validated |
+| 010 | sub-agent-execution | If the agent tool actually runs a sub-query with fresh context and returns results, users can delegate parallel tasks. | active |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
