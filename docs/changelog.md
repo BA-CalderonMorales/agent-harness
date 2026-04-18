@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.9] - 2026-04-18
+
+### Fixed
+- Suggestion dropdown scrolls window as user navigates past visible items
+- ModelChangedMsg now syncs model value to settings tab
+- ClearChatMsg handler keeps async message listener alive
+- Add /logout and /login commands for auth re-prompt flow
+
 ## [0.1.8] - 2026-04-18
 
 ### Fixed
