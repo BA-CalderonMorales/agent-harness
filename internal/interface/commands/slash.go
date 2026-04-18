@@ -402,6 +402,13 @@ func AgentsHandler(handleFn func(args string) string) SlashHandler {
 	}
 }
 
+// TestHandler handles running project tests
+func TestHandler(runFn func() (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		return runFn()
+	}
+}
+
 // SkillsHandler handles skill-related commands
 func SkillsHandler(handleFn func(args string) string) SlashHandler {
 	return func(args string) (string, error) {
