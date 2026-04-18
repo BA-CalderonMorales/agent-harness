@@ -604,6 +604,16 @@ func (app *App) initCommands() {
 			return app.reset()
 		}))
 
+	app.cmdRegistry.Register("logout", "Log out and clear credentials",
+		commands.LogoutHandler(func() error {
+			return app.logout()
+		}))
+
+	app.cmdRegistry.Register("login", "Log in with new credentials",
+		commands.LoginHandler(func() error {
+			return app.startLogin()
+		}))
+
 	app.cmdRegistry.Register("quit", "Exit the application", commands.QuitHandler())
 	app.cmdRegistry.Register("exit", "Exit the application", commands.QuitHandler())
 }
@@ -620,6 +630,27 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 				tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: msg})
 			},
 		))
+}
+
+// logout clears credentials from memory and secure storage.
+func (app *App) logout() error {
+	app.config.APIKey = ""
+	app.secureConfig = nil
+	credManager := config.NewCredentialManager()
+	if err := credManager.ClearSecureConfig(); err != nil {
+		return errf("failed to clear credentials: %w", err)
+	}
+	return nil
+}
+
+// startLogin begins the TUI login wizard.
+func (app *App) startLogin() error {
+	if app.tuiApp == nil {
+		return errf("login wizard only available in TUI mode")
+	}
+	app.loginState = loginProvider
+	app.tuiApp.AddMessage("system", "Login wizard started.\nChoose provider:\n  1) OpenRouter\n  2) OpenAI\n  3) Anthropic\n  4) Ollama (local)\nEnter choice (1-4) [1]:")
+	return nil
 }
 
 // reset clears all credentials and sessions.
