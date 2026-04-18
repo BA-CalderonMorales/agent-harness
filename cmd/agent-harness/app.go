@@ -45,7 +45,7 @@ type App struct {
 	mcpManager     *mcp.Manager
 
 	// Login wizard state
-	loginState      LoginState
+	loginState       LoginState
 	loginProviderTmp string
 	loginModelTmp    string
 }
