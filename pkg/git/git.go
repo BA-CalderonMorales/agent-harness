@@ -117,3 +117,37 @@ func (r *Repo) DeleteBranch(name string) error {
 	}
 	return nil
 }
+
+// HasGhCLI returns true if the GitHub CLI is available.
+func HasGhCLI() bool {
+	_, err := exec.LookPath("gh")
+	return err == nil
+}
+
+// CreatePR creates a pull request using gh CLI.
+func (r *Repo) CreatePR(title, body string) (string, error) {
+	args := []string{"pr", "create", "--title", title}
+	if body != "" {
+		args = append(args, "--body", body)
+	} else {
+		args = append(args, "--fill")
+	}
+	cmd := exec.Command("gh", args...)
+	cmd.Dir = r.Path
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gh pr create failed: %s", string(out))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// ListPRs lists open pull requests using gh CLI.
+func (r *Repo) ListPRs() (string, error) {
+	cmd := exec.Command("gh", "pr", "list", "--limit", "10")
+	cmd.Dir = r.Path
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("gh pr list failed: %s", string(out))
+	}
+	return strings.TrimSpace(string(out)), nil
+}

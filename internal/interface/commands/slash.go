@@ -334,6 +334,38 @@ func PlanHandler(getMode func() bool, setMode func(bool) string) SlashHandler {
 	}
 }
 
+// PRHandler handles pull request operations via gh CLI.
+func PRHandler(createFn func(title, body string) (string, error), listFn func() (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			return listFn()
+		}
+		// /pr create "title" [body]
+		if strings.HasPrefix(args, "create ") {
+			rest := strings.TrimPrefix(args, "create ")
+			// Simple parsing: first quoted string is title, rest is body
+			if strings.HasPrefix(rest, "\"") {
+				end := strings.Index(rest[1:], "\"")
+				if end == -1 {
+					return "Usage: /pr create \"title\" [body]", nil
+				}
+				title := rest[1 : end+1]
+				body := strings.TrimSpace(rest[end+2:])
+				return createFn(title, body)
+			}
+			// Unquoted: first word is title
+			parts := strings.SplitN(rest, " ", 2)
+			title := parts[0]
+			body := ""
+			if len(parts) > 1 {
+				body = parts[1]
+			}
+			return createFn(title, body)
+		}
+		return "Usage: /pr [list|create \"title\" [body]]", nil
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {
