@@ -316,6 +316,30 @@ func (app *App) initCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("pr", "Manage pull requests",
+		commands.PRHandler(
+			func(title, body string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				if !git.HasGhCLI() {
+					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.CreatePR(title, body)
+			},
+			func() (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				if !git.HasGhCLI() {
+					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.ListPRs()
+			},
+		))
+
 	app.cmdRegistry.Register("branch", "Manage git branches",
 		commands.BranchHandler(
 			func() (string, error) {
