@@ -73,3 +73,47 @@ func (r *Repo) Add(paths ...string) error {
 	}
 	return nil
 }
+
+// ListBranches returns all local branches with the current one marked.
+func (r *Repo) ListBranches() ([]string, error) {
+	cmd := exec.Command("git", "-C", r.Path, "branch")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("git branch failed: %s", string(out))
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return []string{}, nil
+	}
+	return lines, nil
+}
+
+// CreateBranch creates a new branch and switches to it.
+func (r *Repo) CreateBranch(name string) error {
+	cmd := exec.Command("git", "-C", r.Path, "checkout", "-b", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git checkout -b failed: %s", string(out))
+	}
+	return nil
+}
+
+// SwitchBranch switches to an existing branch.
+func (r *Repo) SwitchBranch(name string) error {
+	cmd := exec.Command("git", "-C", r.Path, "checkout", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git checkout failed: %s", string(out))
+	}
+	return nil
+}
+
+// DeleteBranch deletes a local branch.
+func (r *Repo) DeleteBranch(name string) error {
+	cmd := exec.Command("git", "-C", r.Path, "branch", "-d", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git branch -d failed: %s", string(out))
+	}
+	return nil
+}

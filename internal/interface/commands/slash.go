@@ -280,6 +280,40 @@ func CommitHandler(commitFn func(message string) (string, error)) SlashHandler {
 	}
 }
 
+// BranchHandler handles git branch operations.
+func BranchHandler(listFn func() (string, error), createFn func(string) (string, error), switchFn func(string) (string, error), deleteFn func(string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			return listFn()
+		}
+		parts := strings.SplitN(args, " ", 2)
+		subcmd := parts[0]
+		name := ""
+		if len(parts) > 1 {
+			name = parts[1]
+		}
+		switch subcmd {
+		case "create":
+			if name == "" {
+				return "Usage: /branch create <name>", nil
+			}
+			return createFn(name)
+		case "switch":
+			if name == "" {
+				return "Usage: /branch switch <name>", nil
+			}
+			return switchFn(name)
+		case "delete":
+			if name == "" {
+				return "Usage: /branch delete <name>", nil
+			}
+			return deleteFn(name)
+		default:
+			return fmt.Sprintf("Unknown branch command: %s\nUsage: /branch [list|create <name>|switch <name>|delete <name>]", subcmd), nil
+		}
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {

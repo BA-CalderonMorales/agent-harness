@@ -114,7 +114,7 @@ This document tracks the feature parity between agent-harness and the claw-code 
 - [ ] **/skills** - List/manage skills
 - [ ] **/memory** - Show memory context
 - [ ] **/init** - Initialize project
-- [ ] **/commit** - Git commit helper
+- [x] **/commit** - Git commit helper
 - [ ] **/pr** - Pull request helper
 - [ ] **/branch** - Branch management
 - [ ] **/worktree** - Worktree management
