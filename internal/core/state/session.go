@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -132,6 +133,42 @@ func (s *Session) SaveToFile(path string) error {
 	}
 
 	return nil
+}
+
+// ExportToMarkdown exports the session as a human-readable Markdown transcript.
+func (s *Session) ExportToMarkdown() string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("# Session %s\n\n", s.ID[:8]))
+	b.WriteString(fmt.Sprintf("- **Model**: %s\n", s.Model))
+	b.WriteString(fmt.Sprintf("- **Created**: %s\n", s.CreatedAt.Format(time.RFC3339)))
+	b.WriteString(fmt.Sprintf("- **Turns**: %d\n", s.Turns))
+	b.WriteString(fmt.Sprintf("- **Messages**: %d\n\n", len(s.Messages)))
+
+	for _, msg := range s.Messages {
+		if msg.Role == "system" {
+			continue
+		}
+		roleTitle := strings.Title(string(msg.Role))
+		b.WriteString(fmt.Sprintf("## %s\n\n", roleTitle))
+		for _, block := range msg.Content {
+			switch v := block.(type) {
+			case types.TextBlock:
+				b.WriteString(v.Text)
+				b.WriteString("\n\n")
+			case types.ToolUseBlock:
+				b.WriteString(fmt.Sprintf("**Tool**: `%s`\n\n", v.Name))
+				inputJSON, _ := json.MarshalIndent(v.Input, "", "  ")
+				b.WriteString("```json\n")
+				b.WriteString(string(inputJSON))
+				b.WriteString("\n```\n\n")
+			case types.ToolResultBlock:
+				b.WriteString("**Result**:\n\n```\n")
+				b.WriteString(v.Content)
+				b.WriteString("\n```\n\n")
+			}
+		}
+	}
+	return b.String()
 }
 
 // LoadSession loads a session from a file

@@ -267,9 +267,33 @@ func (app *App) initCommands() {
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
-		commands.ExportHandler(func(path string) (string, error) {
+		commands.ExportHandler(func(args string) (string, error) {
+			path := args
+			format := "json"
+			if strings.HasPrefix(args, "--format ") {
+				parts := strings.SplitN(args, " ", 3)
+				if len(parts) >= 2 {
+					format = parts[1]
+					if len(parts) >= 3 {
+						path = parts[2]
+					} else {
+						path = ""
+					}
+				}
+			}
 			if path == "" {
-				path = sprintf("session-%s.json", app.session.ID[:8])
+				ext := "json"
+				if format == "markdown" || format == "md" {
+					ext = "md"
+				}
+				path = sprintf("session-%s.%s", app.session.ID[:8], ext)
+			}
+			if strings.HasSuffix(path, ".md") || format == "markdown" || format == "md" {
+				md := app.session.ExportToMarkdown()
+				if err := os.WriteFile(path, []byte(md), 0644); err != nil {
+					return "", err
+				}
+				return path, nil
 			}
 			if err := app.session.SaveToFile(path); err != nil {
 				return "", err
