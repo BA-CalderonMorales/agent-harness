@@ -377,6 +377,13 @@ func InitHandler(initFn func(projectType string) (string, error)) SlashHandler {
 	}
 }
 
+// MemoryHandler shows system prompt and context state.
+func MemoryHandler(getMemory func() string) SlashHandler {
+	return func(args string) (string, error) {
+		return getMemory(), nil
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {
@@ -385,13 +392,6 @@ func VersionHandler(version, buildInfo string) SlashHandler {
 			result += "\n" + buildInfo
 		}
 		return result, nil
-	}
-}
-
-// MemoryHandler shows memory information
-func MemoryHandler(getMemory func() string) SlashHandler {
-	return func(args string) (string, error) {
-		return getMemory(), nil
 	}
 }
 
