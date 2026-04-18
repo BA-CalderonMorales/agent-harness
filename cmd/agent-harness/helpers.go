@@ -196,6 +196,11 @@ func (app *App) buildWelcomeMessage() string {
 	var parts []string
 	parts = append(parts, sprintf("Agent Harness %s", Version))
 
+	if app.session != nil && len(app.session.Messages) > 0 {
+		parts = append(parts, sprintf("  Resumed session %s (%d messages, %d turns)",
+			app.session.ID[:8], len(app.session.Messages), app.session.Turns))
+	}
+
 	if app.gitContext != nil && app.gitContext.IsRepo {
 		parts = append(parts, sprintf("  Git: %s (%s)", app.gitContext.Root, app.gitContext.Branch))
 		if len(app.gitContext.RecentCommits) > 0 {
