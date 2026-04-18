@@ -272,15 +272,21 @@ func (app *App) initCommands() {
 			path := args
 			format := "json"
 			if strings.HasPrefix(args, "--format ") {
-				parts := strings.SplitN(args, " ", 3)
-				if len(parts) >= 2 {
-					format = parts[1]
-					if len(parts) >= 3 {
-						path = parts[2]
-					} else {
-						path = ""
-					}
+				rest := strings.TrimPrefix(args, "--format ")
+				parts := strings.SplitN(rest, " ", 2)
+				format = strings.TrimSpace(parts[0])
+				if len(parts) > 1 {
+					path = strings.TrimSpace(parts[1])
+				} else {
+					path = ""
 				}
+			}
+			// Validate format to prevent silent surprises
+			switch format {
+			case "json", "markdown", "md":
+				// supported
+			default:
+				return "", fmt.Errorf("unsupported format: %q (supported: json, markdown, md)", format)
 			}
 			if path == "" {
 				ext := "json"
@@ -331,8 +337,8 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("commit", "Stage all changes and commit",
 		commands.CommitHandler(func(message string) (string, error) {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "", fmt.Errorf("not in a git repository")
+			if err := app.requireGitRepo(); err != nil {
+				return "", err
 			}
 			repo := git.NewRepo(app.gitContext.Root)
 			if err := repo.Add("-A"); err != nil {
@@ -390,8 +396,8 @@ func (app *App) initCommands() {
 	app.cmdRegistry.Register("pr", "Manage pull requests",
 		commands.PRHandler(
 			func(title, body string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				if !git.HasGhCLI() {
 					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
@@ -400,8 +406,8 @@ func (app *App) initCommands() {
 				return repo.CreatePR(title, body)
 			},
 			func() (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				if !git.HasGhCLI() {
 					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
@@ -414,8 +420,8 @@ func (app *App) initCommands() {
 	app.cmdRegistry.Register("branch", "Manage git branches",
 		commands.BranchHandler(
 			func() (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				branches, err := repo.ListBranches()
@@ -439,8 +445,8 @@ func (app *App) initCommands() {
 				return strings.Join(lines, "\n"), nil
 			},
 			func(name string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				if err := repo.CreateBranch(name); err != nil {
@@ -449,8 +455,8 @@ func (app *App) initCommands() {
 				return fmt.Sprintf("Created and switched to branch: %s", name), nil
 			},
 			func(name string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				if err := repo.SwitchBranch(name); err != nil {
@@ -459,8 +465,8 @@ func (app *App) initCommands() {
 				return fmt.Sprintf("Switched to branch: %s", name), nil
 			},
 			func(name string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				if err := repo.DeleteBranch(name); err != nil {
@@ -508,15 +514,15 @@ func (app *App) initCommands() {
 	app.cmdRegistry.Register("worktree", "Manage git worktrees",
 		commands.WorktreeHandler(
 			func() (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				return repo.ListWorktrees()
 			},
 			func(path, branch string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				if branch == "" {
@@ -528,8 +534,8 @@ func (app *App) initCommands() {
 				return sprintf("Created worktree at %s for branch %s", path, branch), nil
 			},
 			func(path string) (string, error) {
-				if app.gitContext == nil || !app.gitContext.IsRepo {
-					return "", fmt.Errorf("not in a git repository")
+				if err := app.requireGitRepo(); err != nil {
+					return "", err
 				}
 				repo := git.NewRepo(app.gitContext.Root)
 				if err := repo.RemoveWorktree(path); err != nil {
@@ -632,6 +638,14 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 		))
 }
 
+// requireGitRepo returns an error if the app is not inside a git repository.
+func (app *App) requireGitRepo() error {
+	if app.gitContext == nil || !app.gitContext.IsRepo {
+		return fmt.Errorf("not in a git repository")
+	}
+	return nil
+}
+
 // logout clears credentials from memory and secure storage.
 func (app *App) logout() error {
 	app.config.APIKey = ""
@@ -720,6 +734,9 @@ func formatSessionList(sessions []state.SessionMetadata, currentID string) strin
 
 // formatSkillsList formats skills for display.
 func formatSkillsList(skills []skills.Skill) string {
+	if len(skills) == 0 {
+		return "No skills available."
+	}
 	var lines []string
 	lines = append(lines, "Available skills:")
 	lines = append(lines, "Use /skills <name> to view full content.")
