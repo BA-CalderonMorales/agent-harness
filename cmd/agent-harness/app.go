@@ -17,6 +17,16 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 )
 
+// LoginState tracks which step of the login wizard is active.
+type LoginState int
+
+const (
+	loginIdle LoginState = iota
+	loginProvider
+	loginAPIKey
+	loginModel
+)
+
 // App holds the application state and coordinates all components.
 type App struct {
 	config         *config.LayeredConfig
@@ -33,6 +43,11 @@ type App struct {
 	tuiApp         *tui.App
 	executionMode  approval.ExecutionMode
 	mcpManager     *mcp.Manager
+
+	// Login wizard state
+	loginState      LoginState
+	loginProviderTmp string
+	loginModelTmp    string
 }
 
 // newApp creates and initializes a new App instance.

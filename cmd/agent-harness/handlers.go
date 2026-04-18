@@ -22,6 +22,12 @@ import (
 
 // handleUserSubmit processes user message submission.
 func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
+	// Login wizard intercept
+	if app.loginState != loginIdle {
+		app.handleLoginStep(text, tuiApp)
+		return
+	}
+
 	validator := ui.NewTermuxValidator()
 	normalizedInput, valid := validator.ValidateInput(text)
 	if !valid {
@@ -38,6 +44,84 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	app.session.AddMessage(userMsg)
 
 	app.handleAgentLoopAsync(normalizedInput, tuiApp)
+}
+
+// handleLoginStep processes one step of the login wizard.
+func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
+	switch app.loginState {
+	case loginProvider:
+		provider := resolveProviderInput(text)
+		app.loginProviderTmp = provider
+		app.config.Provider = provider
+		if provider == "ollama" {
+			app.config.APIKey = "ollama"
+			app.loginState = loginModel
+			tuiApp.AddMessage("system", "Provider: ollama (local)\nEnter model [gemma4:2b]:")
+		} else {
+			app.loginState = loginAPIKey
+			tuiApp.AddMessage("system", sprintf("Provider: %s\nEnter API key (input visible - type carefully):", provider))
+		}
+
+	case loginAPIKey:
+		key := strings.TrimSpace(text)
+		if key == "" {
+			tuiApp.AddMessage("system", "API key cannot be empty. Enter API key:")
+			return
+		}
+		app.config.APIKey = key
+		app.loginState = loginModel
+		tuiApp.RemoveLastUserMessage() // hide key from chat history
+		tuiApp.AddMessage("system", "API key received.\nEnter model (or press Enter for default):")
+
+	case loginModel:
+		model := strings.TrimSpace(text)
+		if model == "" {
+			model = getDefaultModel(app.loginProviderTmp)
+		}
+		app.loginModelTmp = model
+		app.config.Model = model
+		app.session.Model = model
+		app.costTracker.SetModel(model)
+
+		// Save credentials
+		credManager := config.NewCredentialManager()
+		secureCfg := &config.SecureConfig{
+			Provider: app.loginProviderTmp,
+			APIKey:   app.config.APIKey,
+			Model:    model,
+		}
+		if err := credManager.SaveSecure(secureCfg); err != nil {
+			tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
+		} else {
+			tuiApp.AddMessage("system", "Credentials saved.")
+		}
+
+		// Recreate LLM client
+		app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
+		app.loop = agent.NewLoop(app.client)
+
+		// Update TUI
+		tuiApp.SetChatModel(model)
+		tuiApp.SetSettings(app.getSettings())
+		tuiApp.SetModels(app.getModelItems())
+
+		app.loginState = loginIdle
+		tuiApp.AddMessage("system", sprintf("Logged in. Provider: %s | Model: %s", app.loginProviderTmp, model))
+	}
+}
+
+// resolveProviderInput maps numeric or name input to provider.
+func resolveProviderInput(input string) string {
+	switch strings.TrimSpace(input) {
+	case "2", "openai":
+		return "openai"
+	case "3", "anthropic":
+		return "anthropic"
+	case "4", "ollama":
+		return "ollama"
+	default:
+		return "openrouter"
+	}
 }
 
 // handleUserCommand processes slash commands.

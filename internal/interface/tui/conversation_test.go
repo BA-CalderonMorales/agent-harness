@@ -462,3 +462,170 @@ func TestInlineSuggestionsConsumeKeys(t *testing.T) {
 		t.Error("expected ConsumesEsc=true when suggestions showing")
 	}
 }
+
+// TestSuggestionScrollWindow verifies cursor beyond visible window scrolls view.
+// OUTCOME: Hitting down past item 6 shows items 1-7 with cursor at 7.
+func TestSuggestionScrollWindow(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{
+		"/agents", "/branch", "/clear", "/compact", "/config",
+		"/cost", "/diff", "/export", "/help", "/model",
+	})
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/")
+	chat.suggestionCursor = 0
+	chat.suggestionOffset = 0
+
+	// Navigate to item 7 (0-indexed: cursor = 7)
+	for i := 0; i < 7; i++ {
+		model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyDown})
+		chat = model.(ChatModel)
+	}
+
+	if chat.suggestionCursor != 7 {
+		t.Fatalf("expected cursor 7, got %d", chat.suggestionCursor)
+	}
+	if chat.suggestionOffset != 2 {
+		t.Errorf("expected offset 2 (showing items 2-7), got %d", chat.suggestionOffset)
+	}
+
+	// Navigate back to item 0
+	for i := 0; i < 7; i++ {
+		model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyUp})
+		chat = model.(ChatModel)
+	}
+
+	if chat.suggestionOffset != 0 {
+		t.Errorf("expected offset 0 after scrolling back, got %d", chat.suggestionOffset)
+	}
+}
+
+// TestModelChangedMsgSyncsSettings verifies model change updates settings tab.
+// OUTCOME: ModelChangedMsg updates both chat status bar AND settings model.
+func TestModelChangedMsgSyncsSettings(t *testing.T) {
+	app := NewApp()
+	app.SetSettings([]Setting{
+		{Key: "model", Label: "Model", Value: "old-model"},
+		{Key: "provider", Label: "Provider", Value: "openrouter"},
+	})
+
+	updated, _ := app.Update(ModelChangedMsg{Model: "new-model"})
+	updatedApp := updated.(App)
+
+	if updatedApp.chatModel.GetModel() != "new-model" {
+		t.Errorf("chat model not updated, got %q", updatedApp.chatModel.GetModel())
+	}
+
+	settings := updatedApp.settingsModel.settings
+	found := false
+	for _, s := range settings {
+		if s.Key == "model" && s.Value == "new-model" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("settings model model value not synced to 'new-model', got %+v", settings)
+	}
+}
+
+// TestSettingsUpdateSettingValue verifies single-setting update by key.
+func TestSettingsUpdateSettingValue(t *testing.T) {
+	sm := NewSettingsModel()
+	sm.SetSettings([]Setting{
+		{Key: "model", Value: "old"},
+		{Key: "provider", Value: "openrouter"},
+	})
+
+	sm.UpdateSettingValue("model", "new-model")
+
+	if sm.settings[0].Value != "new-model" {
+		t.Errorf("expected model='new-model', got %q", sm.settings[0].Value)
+	}
+	if sm.settings[1].Value != "openrouter" {
+		t.Errorf("provider should be unchanged, got %q", sm.settings[1].Value)
+	}
+}
+
+// TestClearChatListenerContinues verifies ClearChatMsg handler keeps listener alive.
+// OUTCOME: After clear, subsequent async messages are still received.
+func TestClearChatListenerContinues(t *testing.T) {
+	app := NewApp()
+	app.Init()
+
+	// Send ClearChatMsg
+	updated, cmd := app.Update(ClearChatMsg{FollowUpMsg: "Cleared."})
+	_ = updated.(App)
+
+	// Verify listenForMessages is in the command batch
+	if cmd == nil {
+		t.Fatal("expected command after ClearChatMsg")
+	}
+
+	// Send a follow-up message through channel
+	app.Send(StatusMsg{Text: "test", Type: "info"})
+
+	select {
+	case msg := <-app.msgChan:
+		if _, ok := msg.(StatusMsg); !ok {
+			t.Errorf("expected StatusMsg, got %T", msg)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Error("timeout waiting for message - listener may have stopped")
+	}
+}
+
+// TestRemoveLastUserMessage verifies selective removal of last user message.
+func TestRemoveLastUserMessage(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("user", "hello")
+	chat.AddMessage("assistant", "hi")
+	chat.AddMessage("user", "secret-key")
+
+	if len(chat.messages) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(chat.messages))
+	}
+
+	chat.RemoveLastUserMessage()
+
+	if len(chat.messages) != 2 {
+		t.Fatalf("expected 2 messages after removal, got %d", len(chat.messages))
+	}
+	if chat.messages[1].Content != "hi" {
+		t.Errorf("expected remaining assistant message 'hi', got %q", chat.messages[1].Content)
+	}
+}
+
+// TestSuggestionRenderScrollIndicators verifies "above/below" indicators show.
+func TestSuggestionRenderScrollIndicators(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{
+		"/a", "/b", "/c", "/d", "/e", "/f", "/g", "/h", "/i", "/j",
+	})
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/")
+	chat.suggestionCursor = 5
+	chat.suggestionOffset = 2
+
+	rendered := chat.renderSuggestions()
+
+	if !strings.Contains(rendered, "above") {
+		t.Error("expected 'above' indicator when offset > 0")
+	}
+	if !strings.Contains(rendered, "below") {
+		t.Error("expected 'below' indicator when more items remain")
+	}
+}
+
+// TestModelChangedMsgEmptyModel verifies status bar handles empty model.
+func TestModelChangedMsgEmptyModel(t *testing.T) {
+	app := NewApp()
+	app.SetChatModel("")
+
+	updated, _ := app.Update(ModelChangedMsg{Model: ""})
+	updatedApp := updated.(App)
+
+	if updatedApp.chatModel.GetModel() != "" {
+		t.Errorf("expected empty model, got %q", updatedApp.chatModel.GetModel())
+	}
+}

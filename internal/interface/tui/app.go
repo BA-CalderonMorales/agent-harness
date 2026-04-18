@@ -394,10 +394,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 
 	// -------------------------------------------------------------------------
-	// Model changed - update chat model so status bar reflects new model
+	// Model changed - update chat model AND settings so all tabs reflect new model
 	// -------------------------------------------------------------------------
 	case ModelChangedMsg:
 		a.chatModel.SetModel(msg.Model)
+		a.settingsModel.UpdateSettingValue("model", msg.Model)
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
@@ -410,6 +411,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
@@ -727,6 +729,11 @@ func (a *App) GetInput() string {
 // ClearInput clears the chat input.
 func (a *App) ClearInput() {
 	a.chatModel.ClearInput()
+}
+
+// RemoveLastUserMessage removes the most recent user message from chat display.
+func (a *App) RemoveLastUserMessage() {
+	a.chatModel.RemoveLastUserMessage()
 }
 
 // SetThinking sets the thinking state.

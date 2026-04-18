@@ -68,6 +68,16 @@ func (m *SettingsModel) SetSettings(settings []Setting) {
 	m.settings = settings
 }
 
+// UpdateSettingValue updates a single setting value by key.
+func (m *SettingsModel) UpdateSettingValue(key, value string) {
+	for i := range m.settings {
+		if m.settings[i].Key == key {
+			m.settings[i].Value = value
+			return
+		}
+	}
+}
+
 // Init initializes the settings model.
 func (m SettingsModel) Init() tea.Cmd {
 	return nil
