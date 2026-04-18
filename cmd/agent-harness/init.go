@@ -324,6 +324,31 @@ func (app *App) initCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("memory", "Show system prompt and context state",
+		commands.MemoryHandler(func() string {
+			var b strings.Builder
+			b.WriteString("System Prompt\n")
+			b.WriteString(strings.Repeat("-", 40) + "\n")
+			b.WriteString(app.buildSystemPrompt())
+			b.WriteString("\n\nSession\n")
+			b.WriteString(strings.Repeat("-", 40) + "\n")
+			b.WriteString(fmt.Sprintf("Messages: %d\n", len(app.session.Messages)))
+			b.WriteString(fmt.Sprintf("Turns: %d\n", app.session.Turns))
+			b.WriteString(fmt.Sprintf("Model: %s\n", app.session.Model))
+			b.WriteString(fmt.Sprintf("Plan mode: %v\n", app.session.PlanMode))
+			if len(app.session.Messages) > 0 {
+				b.WriteString("\nRecent messages:\n")
+				start := len(app.session.Messages) - 5
+				if start < 0 {
+					start = 0
+				}
+				for i, msg := range app.session.Messages[start:] {
+					b.WriteString(fmt.Sprintf("  %d. %s\n", start+i+1, msg.Role))
+				}
+			}
+			return b.String()
+		}))
+
 	app.cmdRegistry.Register("init", "Initialize project with standard files",
 		commands.InitHandler(func(projectType string) (string, error) {
 			return app.initProject(projectType)
