@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -23,6 +24,7 @@ type Session struct {
 	Model     string          `json:"model"`
 	Turns     int             `json:"turns"`
 	Version   int             `json:"version"`
+	PlanMode  bool            `json:"plan_mode"`
 }
 
 // SessionMetadata contains lightweight session info
@@ -49,6 +51,9 @@ type CompactionConfig struct {
 	MaxMessages        int
 	MaxEstimatedTokens int
 	PreserveRecent     int // Always preserve this many recent messages
+	// Summarizer optionally summarizes removed messages before dropping them.
+	// If nil, a generic compaction notice is inserted instead.
+	Summarizer func(messages []types.Message) (string, error)
 }
 
 // DefaultCompactionConfig returns a sensible default config
@@ -130,6 +135,42 @@ func (s *Session) SaveToFile(path string) error {
 	return nil
 }
 
+// ExportToMarkdown exports the session as a human-readable Markdown transcript.
+func (s *Session) ExportToMarkdown() string {
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("# Session %s\n\n", s.ID[:8]))
+	b.WriteString(fmt.Sprintf("- **Model**: %s\n", s.Model))
+	b.WriteString(fmt.Sprintf("- **Created**: %s\n", s.CreatedAt.Format(time.RFC3339)))
+	b.WriteString(fmt.Sprintf("- **Turns**: %d\n", s.Turns))
+	b.WriteString(fmt.Sprintf("- **Messages**: %d\n\n", len(s.Messages)))
+
+	for _, msg := range s.Messages {
+		if msg.Role == "system" {
+			continue
+		}
+		roleTitle := strings.Title(string(msg.Role))
+		b.WriteString(fmt.Sprintf("## %s\n\n", roleTitle))
+		for _, block := range msg.Content {
+			switch v := block.(type) {
+			case types.TextBlock:
+				b.WriteString(v.Text)
+				b.WriteString("\n\n")
+			case types.ToolUseBlock:
+				b.WriteString(fmt.Sprintf("**Tool**: `%s`\n\n", v.Name))
+				inputJSON, _ := json.MarshalIndent(v.Input, "", "  ")
+				b.WriteString("```json\n")
+				b.WriteString(string(inputJSON))
+				b.WriteString("\n```\n\n")
+			case types.ToolResultBlock:
+				b.WriteString("**Result**:\n\n```\n")
+				b.WriteString(v.Content)
+				b.WriteString("\n```\n\n")
+			}
+		}
+	}
+	return b.String()
+}
+
 // LoadSession loads a session from a file
 func LoadSession(path string) (*Session, error) {
 	data, err := os.ReadFile(path)
@@ -166,28 +207,34 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 		preserveCount = currentCount / 2
 	}
 
+	// Calculate start index for preserved messages
+	startIdx := currentCount - preserveCount
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
 	// Keep recent messages and compact older ones
 	keptMessages := make([]types.Message, 0, preserveCount+1)
 
 	// Add a compaction summary message
+	summaryText := fmt.Sprintf("[Earlier conversation history was compacted. %d messages removed, %d kept]",
+		currentCount-preserveCount, preserveCount)
+	if config.Summarizer != nil {
+		if summarized, err := config.Summarizer(s.Messages[:startIdx]); err == nil && summarized != "" {
+			summaryText = fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
+		}
+	}
 	summaryMsg := types.Message{
 		UUID:      uuid.New().String(),
 		Role:      types.RoleSystem,
 		Timestamp: time.Now(),
 		Content: []types.ContentBlock{
-			types.TextBlock{
-				Text: fmt.Sprintf("[Earlier conversation history was compacted. %d messages removed, %d kept]",
-					currentCount-preserveCount, preserveCount),
-			},
+			types.TextBlock{Text: summaryText},
 		},
 	}
 	keptMessages = append(keptMessages, summaryMsg)
 
 	// Add the preserved recent messages
-	startIdx := currentCount - preserveCount
-	if startIdx < 0 {
-		startIdx = 0
-	}
 	keptMessages = append(keptMessages, s.Messages[startIdx:]...)
 
 	newSession := &Session{
@@ -218,6 +265,7 @@ func (s *Session) Clear() *Session {
 		Model:     s.Model,
 		Turns:     0,
 		Version:   s.Version + 1,
+		PlanMode:  s.PlanMode,
 	}
 }
 
@@ -353,6 +401,43 @@ func (sm *SessionManager) GetDefaultSessionPath() string {
 		return ""
 	}
 	return filepath.Join(sm.sessionsDir, sm.current.ID+".json")
+}
+
+// ResumeLatestSession loads the most recently updated session if one exists.
+// Returns the session and true if resumed, nil and false if no sessions found.
+func (sm *SessionManager) ResumeLatestSession() (*Session, bool) {
+	entries, err := os.ReadDir(sm.sessionsDir)
+	if err != nil {
+		return nil, false
+	}
+
+	var latestPath string
+	var latestTime time.Time
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestPath = filepath.Join(sm.sessionsDir, entry.Name())
+		}
+	}
+
+	if latestPath == "" {
+		return nil, false
+	}
+
+	session, err := LoadSession(latestPath)
+	if err != nil {
+		return nil, false
+	}
+
+	sm.current = session
+	return session, true
 }
 
 // FormatSessionReport returns a formatted session report

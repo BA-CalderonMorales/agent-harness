@@ -8,6 +8,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 )
 
 // ConfigSource represents the source of a configuration entry
@@ -49,7 +52,7 @@ type LayeredConfig struct {
 	ExecutionMode  string // "interactive" or "yolo"
 	AlwaysAllow    []string
 	AlwaysDeny     []string
-	McpServers     map[string]McpServerConfig
+	McpServers     map[string]mcp.McpServerConfig
 	CustomEnv      map[string]string
 
 	// Granular permissions (override PermissionMode when set)
@@ -108,15 +111,6 @@ func ParsePermissionMode(s string) (PermissionMode, error) {
 	}
 }
 
-// McpServerConfig represents an MCP server configuration
-type McpServerConfig struct {
-	Transport string            `json:"transport"`
-	Command   string            `json:"command,omitempty"`
-	Args      []string          `json:"args,omitempty"`
-	URL       string            `json:"url,omitempty"`
-	Env       map[string]string `json:"env,omitempty"`
-}
-
 // LayeredLoader handles loading and merging configuration layers
 type LayeredLoader struct {
 	cwd        string
@@ -148,8 +142,10 @@ func (ll *LayeredLoader) Discover() []ConfigEntry {
 	entries := []ConfigEntry{
 		// User-level configs
 		{Source: SourceUser, Path: filepath.Join(ll.configHome, "settings.json")},
+		{Source: SourceUser, Path: filepath.Join(ll.configHome, ".mcp.json")},
 		// Project-level configs
 		{Source: SourceProject, Path: filepath.Join(ll.cwd, ".agent-harness", "settings.json")},
+		{Source: SourceProject, Path: filepath.Join(ll.cwd, ".mcp.json")},
 		// Local configs (gitignored)
 		{Source: SourceLocal, Path: filepath.Join(ll.cwd, ".agent-harness", "settings.local.json")},
 	}
@@ -161,11 +157,26 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 	config := &LayeredConfig{
 		merged:        make(map[string]interface{}),
 		loadedEntries: make([]ConfigEntry, 0),
-		McpServers:    make(map[string]McpServerConfig),
+		McpServers:    make(map[string]mcp.McpServerConfig),
 		CustomEnv:     make(map[string]string),
 	}
 
 	for _, entry := range ll.Discover() {
+		if strings.HasSuffix(entry.Path, ".mcp.json") {
+			servers, err := mcp.LoadFile(entry.Path)
+			if err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				return nil, fmt.Errorf("failed to load %s: %w", entry.Path, err)
+			}
+			for name, cfg := range servers {
+				config.McpServers[name] = cfg
+			}
+			config.loadedEntries = append(config.loadedEntries, entry)
+			continue
+		}
+
 		data, err := ll.loadFile(entry.Path)
 		if err != nil {
 			if os.IsNotExist(err) {
@@ -291,10 +302,10 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 }
 
-func parseMcpServerConfig(data map[string]interface{}) McpServerConfig {
-	config := McpServerConfig{}
-	if v, ok := data["transport"].(string); ok {
-		config.Transport = v
+func parseMcpServerConfig(data map[string]interface{}) mcp.McpServerConfig {
+	config := mcp.McpServerConfig{}
+	if v, ok := data["type"].(string); ok {
+		config.Type = v
 	}
 	if v, ok := data["command"].(string); ok {
 		config.Command = v

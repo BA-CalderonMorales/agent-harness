@@ -2,10 +2,13 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -13,11 +16,15 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
+	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // initConfig loads configuration from all sources.
@@ -118,7 +125,7 @@ func (app *App) migrateLegacyCredentials(credManager *config.CredentialManager) 
 	}
 }
 
-// initSession initializes the session manager and creates a session.
+// initSession initializes the session manager and creates or resumes a session.
 func (app *App) initSession() error {
 	sessionManager, err := state.NewSessionManager()
 	if err != nil {
@@ -130,9 +137,20 @@ func (app *App) initSession() error {
 	if model == "" {
 		model = "nvidia/nemotron-3-super-120b-a12b:free"
 	}
-	app.session = sessionManager.CreateSession(model)
+
+	// Try to resume the most recent session for continuity
+	if resumed, ok := sessionManager.ResumeLatestSession(); ok {
+		app.session = resumed
+		// Ensure model stays current if config changed
+		if app.config.Model != "" && app.config.Model != resumed.Model {
+			resumed.Model = app.config.Model
+		}
+	} else {
+		app.session = sessionManager.CreateSession(model)
+	}
+
 	app.costTracker = agent.NewCostTracker()
-	app.costTracker.SetModel(model)
+	app.costTracker.SetModel(app.session.Model)
 	app.initExecutionMode()
 
 	return nil
@@ -153,7 +171,7 @@ func (app *App) initExecutionMode() {
 	}
 }
 
-// initTools registers all built-in tools.
+// initTools registers all built-in tools and MCP tools.
 func (app *App) initTools() {
 	app.toolRegistry = tools.NewRegistry()
 	app.toolRegistry.RegisterBuiltIn(builtin.BashTool)
@@ -166,6 +184,19 @@ func (app *App) initTools() {
 	app.toolRegistry.RegisterBuiltIn(builtin.TodoWriteTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebFetchTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebSearchTool)
+
+	app.mcpManager = mcp.NewManager()
+	if len(app.config.McpServers) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := app.mcpManager.LoadAndConnect(ctx, app.config.McpServers); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to connect MCP servers: %v\n", err)
+		} else {
+			for _, def := range app.mcpManager.AllToolDefs() {
+				app.toolRegistry.RegisterMCP(toolmcp.Wrap(def, app.mcpManager))
+			}
+		}
+	}
 }
 
 // initCommands registers all slash commands.
@@ -188,7 +219,14 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("compact", "Compact session to reduce token usage",
 		commands.CompactHandler(func() (string, error) {
-			result := app.session.Compact(state.DefaultCompactionConfig())
+			cfg := state.DefaultCompactionConfig()
+			// Wire LLM summarization if client is available
+			if app.client != nil {
+				cfg.Summarizer = func(msgs []types.Message) (string, error) {
+					return app.summarizeMessages(msgs)
+				}
+			}
+			result := app.session.Compact(cfg)
 			app.session = result.CompactedSession
 			return sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
@@ -210,6 +248,12 @@ func (app *App) initCommands() {
 				return nil
 			},
 			func() []string {
+				if hc, ok := app.client.(*llm.HTTPClient); ok && hc != nil {
+					models, err := hc.ListModels()
+					if err == nil && len(models) > 0 {
+						return models
+					}
+				}
 				return []string{
 					"nvidia/nemotron-3-super-120b-a12b:free",
 					"claude-3-5-sonnet-20241022",
@@ -223,9 +267,33 @@ func (app *App) initCommands() {
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
-		commands.ExportHandler(func(path string) (string, error) {
+		commands.ExportHandler(func(args string) (string, error) {
+			path := args
+			format := "json"
+			if strings.HasPrefix(args, "--format ") {
+				parts := strings.SplitN(args, " ", 3)
+				if len(parts) >= 2 {
+					format = parts[1]
+					if len(parts) >= 3 {
+						path = parts[2]
+					} else {
+						path = ""
+					}
+				}
+			}
 			if path == "" {
-				path = sprintf("session-%s.json", app.session.ID[:8])
+				ext := "json"
+				if format == "markdown" || format == "md" {
+					ext = "md"
+				}
+				path = sprintf("session-%s.%s", app.session.ID[:8], ext)
+			}
+			if strings.HasSuffix(path, ".md") || format == "markdown" || format == "md" {
+				md := app.session.ExportToMarkdown()
+				if err := os.WriteFile(path, []byte(md), 0644); err != nil {
+					return "", err
+				}
+				return path, nil
 			}
 			if err := app.session.SaveToFile(path); err != nil {
 				return "", err
@@ -260,6 +328,147 @@ func (app *App) initCommands() {
 			return git.FormatDiff()
 		}))
 
+	app.cmdRegistry.Register("commit", "Stage all changes and commit",
+		commands.CommitHandler(func(message string) (string, error) {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			if err := repo.Add("-A"); err != nil {
+				return "", fmt.Errorf("failed to stage changes: %w", err)
+			}
+			if err := repo.Commit(message); err != nil {
+				return "", fmt.Errorf("failed to commit: %w", err)
+			}
+			branch, _ := repo.CurrentBranch()
+			return fmt.Sprintf("Committed to %s: %s", branch, message), nil
+		}))
+
+	app.cmdRegistry.Register("plan", "Toggle plan mode",
+		commands.PlanHandler(
+			func() bool { return app.session.PlanMode },
+			func(on bool) string {
+				app.session.PlanMode = on
+				if on {
+					return "Plan mode ON. The agent will outline its approach before executing tools."
+				}
+				return "Plan mode OFF. The agent will execute tools directly."
+			},
+		))
+
+	app.cmdRegistry.Register("memory", "Show system prompt and context state",
+		commands.MemoryHandler(func() string {
+			var b strings.Builder
+			b.WriteString("System Prompt\n")
+			b.WriteString(strings.Repeat("-", 40) + "\n")
+			b.WriteString(app.buildSystemPrompt())
+			b.WriteString("\n\nSession\n")
+			b.WriteString(strings.Repeat("-", 40) + "\n")
+			b.WriteString(fmt.Sprintf("Messages: %d\n", len(app.session.Messages)))
+			b.WriteString(fmt.Sprintf("Turns: %d\n", app.session.Turns))
+			b.WriteString(fmt.Sprintf("Model: %s\n", app.session.Model))
+			b.WriteString(fmt.Sprintf("Plan mode: %v\n", app.session.PlanMode))
+			if len(app.session.Messages) > 0 {
+				b.WriteString("\nRecent messages:\n")
+				start := len(app.session.Messages) - 5
+				if start < 0 {
+					start = 0
+				}
+				for i, msg := range app.session.Messages[start:] {
+					b.WriteString(fmt.Sprintf("  %d. %s\n", start+i+1, msg.Role))
+				}
+			}
+			return b.String()
+		}))
+
+	app.cmdRegistry.Register("init", "Initialize project with standard files",
+		commands.InitHandler(func(projectType string) (string, error) {
+			return app.initProject(projectType)
+		}))
+
+	app.cmdRegistry.Register("pr", "Manage pull requests",
+		commands.PRHandler(
+			func(title, body string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				if !git.HasGhCLI() {
+					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.CreatePR(title, body)
+			},
+			func() (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				if !git.HasGhCLI() {
+					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.ListPRs()
+			},
+		))
+
+	app.cmdRegistry.Register("branch", "Manage git branches",
+		commands.BranchHandler(
+			func() (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			branches, err := repo.ListBranches()
+			if err != nil {
+				return "", err
+			}
+			current, _ := repo.CurrentBranch()
+			var lines []string
+			lines = append(lines, "Branches:")
+			for _, b := range branches {
+				b = strings.TrimSpace(b)
+				marker := "  "
+				if strings.TrimPrefix(b, "* ") == current {
+					marker = "● "
+					b = strings.TrimPrefix(b, "* ")
+				} else {
+					b = strings.TrimPrefix(b, "  ")
+				}
+				lines = append(lines, marker+b)
+			}
+			return strings.Join(lines, "\n"), nil
+		},
+		func(name string) (string, error) {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			if err := repo.CreateBranch(name); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Created and switched to branch: %s", name), nil
+		},
+		func(name string) (string, error) {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			if err := repo.SwitchBranch(name); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Switched to branch: %s", name), nil
+		},
+		func(name string) (string, error) {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			if err := repo.DeleteBranch(name); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf("Deleted branch: %s", name), nil
+		},
+		))
+
 	app.cmdRegistry.Register("version", "Show version",
 		commands.VersionHandler(Version, sprintf("Built: %s Git: %s", BuildTime, GitSHA)))
 
@@ -290,9 +499,78 @@ func (app *App) initCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("test", "Run project tests",
+		commands.TestHandler(func() (string, error) {
+			return app.runTests()
+		}))
+
+	app.cmdRegistry.Register("worktree", "Manage git worktrees",
+		commands.WorktreeHandler(
+			func() (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.ListWorktrees()
+			},
+			func(path, branch string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if branch == "" {
+					branch = filepath.Base(path)
+				}
+				if err := repo.AddWorktree(path, branch); err != nil {
+					return "", err
+				}
+				return sprintf("Created worktree at %s for branch %s", path, branch), nil
+			},
+			func(path string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if err := repo.RemoveWorktree(path); err != nil {
+					return "", err
+				}
+				return sprintf("Removed worktree at %s", path), nil
+			},
+		))
+
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
-			return "Available agents:\n  default  Standard agent with full tool access\n  okabe    Experimental reasoning agent"
+			agentTypes := []struct {
+				name        string
+				description string
+			}{
+				{"default", "Standard agent with full tool access. Good for general tasks."},
+				{"reviewer", "Focuses on code review, critique, and suggesting improvements."},
+				{"tester", "Generates test cases and verifies code correctness."},
+				{"debugger", "Investigates errors, traces execution, and suggests fixes."},
+				{"explainer", "Explains code and concepts without making changes."},
+			}
+			if args != "" && args != "list" {
+				for _, a := range agentTypes {
+					if a.name == args {
+						return sprintf("Agent: %s\n%s", a.name, a.description)
+					}
+				}
+				var names []string
+				for _, a := range agentTypes {
+					names = append(names, a.name)
+				}
+				return sprintf("Agent not found: %s\n\nAvailable agents: %s", args, strings.Join(names, ", "))
+			}
+			var lines []string
+			lines = append(lines, "Available agents:")
+			lines = append(lines, "Use /agents <name> to view details.")
+			lines = append(lines, "Use the agent tool with agent_type to delegate.")
+			lines = append(lines, "")
+			for _, a := range agentTypes {
+				lines = append(lines, sprintf("  %-12s %s", a.name, a.description))
+			}
+			return strings.Join(lines, "\n")
 		}))
 
 	app.cmdRegistry.Register("skills", "Show available skills",
@@ -300,6 +578,13 @@ func (app *App) initCommands() {
 			skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
 			if err != nil {
 				return sprintf("No skills loaded: %v", err)
+			}
+			if args != "" && args != "list" {
+				sk, ok := skillReg.Get(args)
+				if !ok {
+					return sprintf("Skill not found: %s\n\n%s", args, formatSkillsList(skillReg.All()))
+				}
+				return formatSkillDetail(sk)
 			}
 			skillsList := skillReg.All()
 			if len(skillsList) == 0 {
@@ -354,6 +639,36 @@ func (app *App) reset() error {
 	return nil
 }
 
+// runTests detects the project type and runs the appropriate test command.
+func (app *App) runTests() (string, error) {
+	markers := []struct {
+		file    string
+		name    string
+		command string
+	}{
+		{"go.mod", "Go", "go test ./..."},
+		{"package.json", "Node", "npm test"},
+		{"Cargo.toml", "Rust", "cargo test"},
+		{"pyproject.toml", "Python", "pytest"},
+		{"requirements.txt", "Python", "pytest"},
+		{"pom.xml", "Java", "mvn test"},
+		{"build.gradle", "Java", "./gradlew test"},
+	}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(app.cwd, m.file)); err == nil {
+			cmd := exec.CommandContext(context.Background(), "sh", "-c", m.command)
+			cmd.Dir = app.cwd
+			out, err := cmd.CombinedOutput()
+			result := string(out)
+			if err != nil {
+				return sprintf("[%s tests] exited with error\n\n%s", m.name, result), nil
+			}
+			return sprintf("[%s tests]\n\n%s", m.name, result), nil
+		}
+	}
+	return "", fmt.Errorf("no recognized test framework found in %s", app.cwd)
+}
+
 // formatSessionList formats sessions for display.
 func formatSessionList(sessions []state.SessionMetadata, currentID string) string {
 	if len(sessions) == 0 {
@@ -375,12 +690,34 @@ func formatSessionList(sessions []state.SessionMetadata, currentID string) strin
 func formatSkillsList(skills []skills.Skill) string {
 	var lines []string
 	lines = append(lines, "Available skills:")
+	lines = append(lines, "Use /skills <name> to view full content.")
+	lines = append(lines, "")
 	for _, sk := range skills {
-		desc := sk.Description
+		desc := firstLine(sk.Description)
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		lines = append(lines, sprintf("  %-24s %s", sk.Name, desc))
+		lineCount := strings.Count(sk.Content, "\n") + 1
+		lines = append(lines, sprintf("  %-20s %s (%d lines)", sk.Name, desc, lineCount))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// formatSkillDetail shows full content of a single skill.
+func formatSkillDetail(sk skills.Skill) string {
+	var lines []string
+	lines = append(lines, sprintf("Skill: %s", sk.Name))
+	lines = append(lines, sprintf("Path:  %s", sk.Path))
+	lines = append(lines, "")
+	lines = append(lines, sk.Content)
+	return strings.Join(lines, "\n")
+}
+
+// firstLine extracts the first non-empty line from a string.
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "\n"); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
 }

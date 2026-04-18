@@ -138,6 +138,9 @@ type Context struct {
 	PreserveToolUseResults  bool
 	RequireCanUseTool       bool
 	RenderedSystemPrompt    string
+	// SubAgentQuery executes a sub-agent query with fresh context.
+	// If nil, sub-agent spawning falls back to placeholder behavior.
+	SubAgentQuery func(prompt string) (string, error)
 }
 
 // QueryChainTracking prevents infinite recursion.
