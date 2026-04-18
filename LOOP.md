@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**019: `/worktree` command for git worktree management**
-> The /worktree command lists, creates, and switches git worktrees, which is especially useful on Termux where switching branches without stashing is painful.
+**020: `/export` supports Markdown format for human-readable output**
+> /export produces a clean Markdown transcript instead of raw JSON, making it easy to share conversations or paste into documentation.
 
 ## Experiments
 
@@ -33,6 +33,7 @@
 | 016 | dynamic-model-list | If /model fetches live models from the provider API, users see current offerings without manual updates. | validated |
 | 017 | slash-agents | If /agents shows available agent types with descriptions, users can delegate effectively. | validated |
 | 018 | slash-test | If /test auto-detects and runs project tests, users stay in flow during TDD. | validated |
+| 019 | slash-worktree | If /worktree manages git worktrees, users switch branches without stashing on Termux. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
