@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**014: `/memory` command reveals system prompt and context state**
-> Agent harness lets users inspect the current system prompt, recent messages, and token budget via `/memory`, making context debugging transparent.
+**015: `/skills` command displays actual skill content for discovery**
+> Agent harness `/skills` command shows not just names but actual skill prompts and content, making loaded capabilities discoverable and understandable.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -26,7 +26,8 @@
 | 011 | slash-pr | If we add a /pr command that creates PRs via gh CLI, users complete the full git workflow inside the TUI. | validated |
 | 012 | slash-init | If we add a /init command that scaffolds standard project files, users bootstrap projects without leaving the TUI. | validated |
 | 013 | llm-summarize-compact | If we summarize old messages with the LLM before dropping them, context quality stays high in long sessions. | validated |
-| 014 | slash-memory | If we add a /memory command that shows system prompt and recent context, users can debug what the LLM sees. | active |
+| 014 | slash-memory | If we add a /memory command that shows system prompt and recent context, users can debug what the LLM sees. | validated |
+| 015 | slash-skills-content | If /skills shows actual skill prompts instead of just names, users understand what capabilities are loaded. | active |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.

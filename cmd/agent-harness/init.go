@@ -478,6 +478,13 @@ func (app *App) initCommands() {
 			if err != nil {
 				return sprintf("No skills loaded: %v", err)
 			}
+			if args != "" && args != "list" {
+				sk, ok := skillReg.Get(args)
+				if !ok {
+					return sprintf("Skill not found: %s\n\n%s", args, formatSkillsList(skillReg.All()))
+				}
+				return formatSkillDetail(sk)
+			}
 			skillsList := skillReg.All()
 			if len(skillsList) == 0 {
 				return "No skills available in .agent-harness/skills"
@@ -552,12 +559,34 @@ func formatSessionList(sessions []state.SessionMetadata, currentID string) strin
 func formatSkillsList(skills []skills.Skill) string {
 	var lines []string
 	lines = append(lines, "Available skills:")
+	lines = append(lines, "Use /skills <name> to view full content.")
+	lines = append(lines, "")
 	for _, sk := range skills {
-		desc := sk.Description
+		desc := firstLine(sk.Description)
 		if len(desc) > 60 {
 			desc = desc[:57] + "..."
 		}
-		lines = append(lines, sprintf("  %-24s %s", sk.Name, desc))
+		lineCount := strings.Count(sk.Content, "\n") + 1
+		lines = append(lines, sprintf("  %-20s %s (%d lines)", sk.Name, desc, lineCount))
 	}
 	return strings.Join(lines, "\n")
+}
+
+// formatSkillDetail shows full content of a single skill.
+func formatSkillDetail(sk skills.Skill) string {
+	var lines []string
+	lines = append(lines, sprintf("Skill: %s", sk.Name))
+	lines = append(lines, sprintf("Path:  %s", sk.Path))
+	lines = append(lines, "")
+	lines = append(lines, sk.Content)
+	return strings.Join(lines, "\n")
+}
+
+// firstLine extracts the first non-empty line from a string.
+func firstLine(s string) string {
+	s = strings.TrimSpace(s)
+	if i := strings.Index(s, "\n"); i >= 0 {
+		return strings.TrimSpace(s[:i])
+	}
+	return s
 }
