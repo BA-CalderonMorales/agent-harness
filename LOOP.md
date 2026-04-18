@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**012: `/init` command scaffolds new projects with standard files**
-> Agent harness can initialize a new project with README, .gitignore, LICENSE, and language-specific boilerplate directly from the chat.
+**013: Context compaction uses LLM summarization instead of silent deletion**
+> Agent harness summarizes old conversation history during compaction, preserving context quality in long sessions like Claude Code does.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -24,7 +24,8 @@
 | 009 | slash-plan | If we add a /plan command that puts the agent into planning mode, users get visibility into multi-step tasks before execution. | validated |
 | 010 | sub-agent-execution | If the agent tool actually runs a sub-query with fresh context and returns results, users can delegate parallel tasks. | validated |
 | 011 | slash-pr | If we add a /pr command that creates PRs via gh CLI, users complete the full git workflow inside the TUI. | validated |
-| 012 | slash-init | If we add a /init command that scaffolds standard project files, users bootstrap projects without leaving the TUI. | active |
+| 012 | slash-init | If we add a /init command that scaffolds standard project files, users bootstrap projects without leaving the TUI. | validated |
+| 013 | llm-summarize-compact | If we summarize old messages with the LLM before dropping them, context quality stays high in long sessions. | active |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.

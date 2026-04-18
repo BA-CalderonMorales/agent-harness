@@ -50,6 +50,9 @@ type CompactionConfig struct {
 	MaxMessages        int
 	MaxEstimatedTokens int
 	PreserveRecent     int // Always preserve this many recent messages
+	// Summarizer optionally summarizes removed messages before dropping them.
+	// If nil, a generic compaction notice is inserted instead.
+	Summarizer func(messages []types.Message) (string, error)
 }
 
 // DefaultCompactionConfig returns a sensible default config
@@ -167,28 +170,34 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 		preserveCount = currentCount / 2
 	}
 
+	// Calculate start index for preserved messages
+	startIdx := currentCount - preserveCount
+	if startIdx < 0 {
+		startIdx = 0
+	}
+
 	// Keep recent messages and compact older ones
 	keptMessages := make([]types.Message, 0, preserveCount+1)
 
 	// Add a compaction summary message
+	summaryText := fmt.Sprintf("[Earlier conversation history was compacted. %d messages removed, %d kept]",
+		currentCount-preserveCount, preserveCount)
+	if config.Summarizer != nil {
+		if summarized, err := config.Summarizer(s.Messages[:startIdx]); err == nil && summarized != "" {
+			summaryText = fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
+		}
+	}
 	summaryMsg := types.Message{
 		UUID:      uuid.New().String(),
 		Role:      types.RoleSystem,
 		Timestamp: time.Now(),
 		Content: []types.ContentBlock{
-			types.TextBlock{
-				Text: fmt.Sprintf("[Earlier conversation history was compacted. %d messages removed, %d kept]",
-					currentCount-preserveCount, preserveCount),
-			},
+			types.TextBlock{Text: summaryText},
 		},
 	}
 	keptMessages = append(keptMessages, summaryMsg)
 
 	// Add the preserved recent messages
-	startIdx := currentCount - preserveCount
-	if startIdx < 0 {
-		startIdx = 0
-	}
 	keptMessages = append(keptMessages, s.Messages[startIdx:]...)
 
 	newSession := &Session{

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -394,21 +395,76 @@ func (l *Loop) autoCompactMessages(state *loopState) string {
 	removed := len(state.messages) - preserve
 	state.messages = state.messages[removed:]
 
+	// Summarize removed messages if LLM client is available
+	summaryText := fmt.Sprintf("[Context compacted: removed %d older messages]", removed)
+	if l.Client != nil {
+		if summarized, err := l.summarizeMessages(context.Background(), state.messages[:removed]); err == nil && summarized != "" {
+			summaryText = fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
+		}
+	}
+
 	// Insert compaction summary
 	summary := types.Message{
 		UUID:      uuid.New().String(),
 		Role:      types.RoleSystem,
 		Timestamp: time.Now(),
 		Content: []types.ContentBlock{
-			types.TextBlock{
-				Text: fmt.Sprintf("[Context compacted: removed %d older messages to stay within token limits]", removed),
-			},
+			types.TextBlock{Text: summaryText},
 		},
 	}
 	state.messages = append([]types.Message{summary}, state.messages...)
 
 	return fmt.Sprintf("[Auto-compacted: removed %d older messages, %d estimated tokens → %d]",
 		removed, current, estimateTokens(state.messages))
+}
+
+// summarizeMessages sends old messages to the LLM for summarization.
+func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (string, error) {
+	if l.Client == nil {
+		return "", fmt.Errorf("no LLM client available")
+	}
+
+	var b strings.Builder
+	b.WriteString("Summarize the following conversation concisely. Preserve key decisions, facts, and context:\n\n")
+	for _, msg := range msgs {
+		b.WriteString(fmt.Sprintf("%s: ", msg.Role))
+		for _, block := range msg.Content {
+			switch blk := block.(type) {
+			case types.TextBlock:
+				b.WriteString(blk.Text)
+			case types.ToolUseBlock:
+				b.WriteString(fmt.Sprintf("[tool: %s]", blk.Name))
+			case types.ToolResultBlock:
+				b.WriteString(fmt.Sprintf("[result: %v]", blk.Content))
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	req := llm.Request{
+		Messages: []types.Message{
+			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: b.String()}}, Timestamp: time.Now()},
+		},
+		SystemPrompt: "You are a context summarizer. Summarize conversation history in 2-3 sentences. Be concise but preserve all key facts, decisions, and context.",
+		Model:        "nvidia/nemotron-3-super-120b-a12b:free",
+		MaxTokens:    512,
+	}
+
+	stream, err := l.Client.Stream(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	var result strings.Builder
+	for event := range stream {
+		switch e := event.(type) {
+		case types.LLMTextDelta:
+			result.WriteString(e.Delta)
+		case types.LLMError:
+			return result.String(), e.Error
+		}
+	}
+	return strings.TrimSpace(result.String()), nil
 }
 
 func createAssistantErrorMessage(content string) types.Message {

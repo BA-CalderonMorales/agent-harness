@@ -22,6 +22,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // initConfig loads configuration from all sources.
@@ -216,7 +217,14 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("compact", "Compact session to reduce token usage",
 		commands.CompactHandler(func() (string, error) {
-			result := app.session.Compact(state.DefaultCompactionConfig())
+			cfg := state.DefaultCompactionConfig()
+			// Wire LLM summarization if client is available
+			if app.client != nil {
+				cfg.Summarizer = func(msgs []types.Message) (string, error) {
+					return app.summarizeMessages(msgs)
+				}
+			}
+			result := app.session.Compact(cfg)
 			app.session = result.CompactedSession
 			return sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
