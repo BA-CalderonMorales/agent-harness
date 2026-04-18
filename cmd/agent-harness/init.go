@@ -288,6 +288,22 @@ func (app *App) initCommands() {
 			return git.FormatDiff()
 		}))
 
+	app.cmdRegistry.Register("commit", "Stage all changes and commit",
+		commands.CommitHandler(func(message string) (string, error) {
+			if app.gitContext == nil || !app.gitContext.IsRepo {
+				return "", fmt.Errorf("not in a git repository")
+			}
+			repo := git.NewRepo(app.gitContext.Root)
+			if err := repo.Add("-A"); err != nil {
+				return "", fmt.Errorf("failed to stage changes: %w", err)
+			}
+			if err := repo.Commit(message); err != nil {
+				return "", fmt.Errorf("failed to commit: %w", err)
+			}
+			branch, _ := repo.CurrentBranch()
+			return fmt.Sprintf("Committed to %s: %s", branch, message), nil
+		}))
+
 	app.cmdRegistry.Register("version", "Show version",
 		commands.VersionHandler(Version, sprintf("Built: %s Git: %s", BuildTime, GitSHA)))
 
