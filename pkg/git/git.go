@@ -151,3 +151,33 @@ func (r *Repo) ListPRs() (string, error) {
 	}
 	return strings.TrimSpace(string(out)), nil
 }
+
+// ListWorktrees returns all git worktrees.
+func (r *Repo) ListWorktrees() (string, error) {
+	cmd := exec.Command("git", "-C", r.Path, "worktree", "list")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return "", fmt.Errorf("git worktree list failed: %s", string(out))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// AddWorktree creates a new worktree for the given branch.
+func (r *Repo) AddWorktree(path, branch string) error {
+	cmd := exec.Command("git", "-C", r.Path, "worktree", "add", path, branch)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git worktree add failed: %s", string(out))
+	}
+	return nil
+}
+
+// RemoveWorktree removes a worktree at the given path.
+func (r *Repo) RemoveWorktree(path string) error {
+	cmd := exec.Command("git", "-C", r.Path, "worktree", "remove", path)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("git worktree remove failed: %s", string(out))
+	}
+	return nil
+}

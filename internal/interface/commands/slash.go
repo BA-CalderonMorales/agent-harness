@@ -395,6 +395,36 @@ func VersionHandler(version, buildInfo string) SlashHandler {
 	}
 }
 
+// WorktreeHandler handles git worktree commands
+func WorktreeHandler(listFn func() (string, error), addFn func(path, branch string) (string, error), removeFn func(path string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			return listFn()
+		}
+		parts := strings.SplitN(args, " ", 2)
+		switch parts[0] {
+		case "add":
+			if len(parts) < 2 {
+				return "Usage: /worktree add <path> [branch]", nil
+			}
+			addParts := strings.SplitN(parts[1], " ", 2)
+			path := addParts[0]
+			branch := ""
+			if len(addParts) > 1 {
+				branch = addParts[1]
+			}
+			return addFn(path, branch)
+		case "remove":
+			if len(parts) < 2 {
+				return "Usage: /worktree remove <path>", nil
+			}
+			return removeFn(parts[1])
+		default:
+			return "Usage: /worktree [list|add <path> [branch]|remove <path>]", nil
+		}
+	}
+}
+
 // AgentsHandler handles agent-related commands
 func AgentsHandler(handleFn func(args string) string) SlashHandler {
 	return func(args string) (string, error) {

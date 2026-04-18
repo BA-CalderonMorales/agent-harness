@@ -480,6 +480,40 @@ func (app *App) initCommands() {
 			return app.runTests()
 		}))
 
+	app.cmdRegistry.Register("worktree", "Manage git worktrees",
+		commands.WorktreeHandler(
+			func() (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				return repo.ListWorktrees()
+			},
+			func(path, branch string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if branch == "" {
+					branch = filepath.Base(path)
+				}
+				if err := repo.AddWorktree(path, branch); err != nil {
+					return "", err
+				}
+				return sprintf("Created worktree at %s for branch %s", path, branch), nil
+			},
+			func(path string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if err := repo.RemoveWorktree(path); err != nil {
+					return "", err
+				}
+				return sprintf("Removed worktree at %s", path), nil
+			},
+		))
+
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			agentTypes := []struct {
