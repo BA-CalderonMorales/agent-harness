@@ -13,14 +13,15 @@ import (
 // FileEditTool performs string-replace edits on files with stale-write protection.
 var FileEditTool = tools.NewTool(tools.Tool{
 	Name:        "edit",
-	Description: "Edit a file by replacing one string with another. The old_string must match exactly. Protected against concurrent modifications.",
+	Description: "Edit a file by replacing one string with another. The old_string must match exactly. Supports replace_all for renaming across the file. Protected against concurrent modifications.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
 			"properties": map[string]any{
-				"file_path":  map[string]any{"type": "string"},
-				"old_string": map[string]any{"type": "string"},
-				"new_string": map[string]any{"type": "string"},
+				"file_path":   map[string]any{"type": "string"},
+				"old_string":  map[string]any{"type": "string"},
+				"new_string":  map[string]any{"type": "string"},
+				"replace_all": map[string]any{"type": "boolean", "description": "Replace all occurrences of old_string (default false)"},
 			},
 			"required": []string{"file_path", "old_string", "new_string"},
 		}
@@ -51,6 +52,10 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		path := getString(input, "file_path")
 		oldStr := getString(input, "old_string")
 		newStr := getString(input, "new_string")
+		replaceAll := false
+		if v, ok := input["replace_all"].(bool); ok {
+			replaceAll = v
+		}
 
 		data, err := os.ReadFile(path)
 		if err != nil {
@@ -58,8 +63,13 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 
 		content := string(data)
-		if !strings.Contains(content, oldStr) {
-			return tools.ToolResult{}, fmt.Errorf("old_string not found in file")
+
+		// Normalize quotes for more forgiving matches
+		normalizedOld := normalizeQuotes(oldStr)
+		normalizedContent := normalizeQuotes(content)
+
+		if !strings.Contains(normalizedContent, normalizedOld) {
+			return tools.ToolResult{}, fmt.Errorf("old_string not found in file. The file may have changed — use the 'read' tool to see current contents, then try again with an exact match")
 		}
 
 		// Stale write protection: check if file was modified since last read
@@ -67,7 +77,12 @@ var FileEditTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{}, fmt.Errorf("stale write detected: %w; the file may have been modified by another process - please re-read and try again", err)
 		}
 
-		updated := strings.Replace(content, oldStr, newStr, 1)
+		var updated string
+		if replaceAll {
+			updated = strings.ReplaceAll(content, oldStr, newStr)
+		} else {
+			updated = strings.Replace(content, oldStr, newStr, 1)
+		}
 
 		// Write atomically: write to temp file then rename
 		tempPath := path + ".tmp"
@@ -104,3 +119,14 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		return "Editing file"
 	},
 })
+
+// normalizeQuotes converts curly quotes to straight quotes for forgiving matches.
+func normalizeQuotes(s string) string {
+	replacer := strings.NewReplacer(
+		"'", "'",
+		"'", "'",
+		"\"", "\"",
+		"\"", "\"",
+	)
+	return replacer.Replace(s)
+}
