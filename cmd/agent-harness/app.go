@@ -71,11 +71,11 @@ func (app *App) run() error {
 	app.initCommandsForTUI(tuiApp)
 
 	// Set up handlers
-	tuiApp.SetUserSubmitHandler(func(text string, ta tui.App) {
-		app.handleUserSubmit(text, &ta)
+	tuiApp.SetUserSubmitHandler(func(text string, ta *tui.App) {
+		app.handleUserSubmit(text, ta)
 	})
-	tuiApp.SetUserCommandHandler(func(cmd string, ta tui.App) {
-		app.handleUserCommand(cmd, &ta)
+	tuiApp.SetUserCommandHandler(func(cmd string, ta *tui.App) {
+		app.handleUserCommand(cmd, ta)
 	})
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})

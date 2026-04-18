@@ -162,6 +162,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 				}
 			}
 			app.session.AddMessage(e.Message)
+		case types.StreamError:
+			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 		}
 	}
 

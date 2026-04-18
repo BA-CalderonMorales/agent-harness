@@ -71,8 +71,8 @@ type App struct {
 	msgChan chan tea.Msg
 
 	// Handlers for user actions (set by main.go)
-	onUserSubmit  func(string, App)
-	onUserCommand func(string, App)
+	onUserSubmit  func(string, *App)
+	onUserCommand func(string, *App)
 
 	// Agent cancellation context
 	agentCancelFunc context.CancelFunc
@@ -108,12 +108,12 @@ func (a *App) CancelAgent() {
 }
 
 // SetUserSubmitHandler sets the handler for user message submissions.
-func (a *App) SetUserSubmitHandler(handler func(string, App)) {
+func (a *App) SetUserSubmitHandler(handler func(string, *App)) {
 	a.onUserSubmit = handler
 }
 
 // SetUserCommandHandler sets the handler for slash commands.
-func (a *App) SetUserCommandHandler(handler func(string, App)) {
+func (a *App) SetUserCommandHandler(handler func(string, *App)) {
 	a.onUserCommand = handler
 }
 
@@ -204,7 +204,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if selected := a.modelPicker.SelectedModel(); selected != nil {
 					cmdText := "/model " + selected.ID
 					if a.onUserCommand != nil {
-						go a.onUserCommand(cmdText, a)
+						a.onUserCommand(cmdText, &a)
 					}
 				}
 			}
@@ -342,21 +342,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
-	// User submission (non-blocking) - spawn handler in goroutine
+	// User submission - handled synchronously so mutations are captured
 	// -------------------------------------------------------------------------
 	case UserSubmitMsg:
 		if a.onUserSubmit != nil {
-			// Spawn handler in goroutine to avoid blocking Update loop
-			go a.onUserSubmit(msg.Text, a)
+			a.onUserSubmit(msg.Text, &a)
 		}
 
 	// -------------------------------------------------------------------------
-	// User command (non-blocking) - spawn handler in goroutine
+	// User command - handled synchronously so mutations are captured
 	// -------------------------------------------------------------------------
 	case UserCommandMsg:
 		if a.onUserCommand != nil {
-			// Spawn handler in goroutine to avoid blocking Update loop
-			go a.onUserCommand(msg.Command, a)
+			a.onUserCommand(msg.Command, &a)
 		}
 
 	// -------------------------------------------------------------------------
@@ -780,7 +778,7 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 	if noArgCommands[cmdName] {
 		if a.onUserCommand != nil {
 			a.chatModel.AddMessage("user", cmdName)
-			a.onUserCommand(cmdName, *a)
+			a.onUserCommand(cmdName, a)
 		}
 		return *a, nil
 	}

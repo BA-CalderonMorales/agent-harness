@@ -97,6 +97,12 @@ type AgentConnectingMsg struct {
 	Timestamp time.Time
 }
 
+// ModelChangedMsg signals that the active model has changed.
+// Handled in App.Update to ensure status bar reflects the change.
+type ModelChangedMsg struct {
+	Model string
+}
+
 // AgentToolStartMsg signals a tool is being invoked
 type AgentToolStartMsg struct {
 	ToolID       string

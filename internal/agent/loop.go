@@ -63,6 +63,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		select {
 		case out <- types.StreamRequestStart{}:
 		case <-ctx.Done():
+			out <- types.StreamError{Error: ctx.Err()}
 			return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 		}
 
@@ -83,6 +84,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 					Content: []types.ContentBlock{types.TextBlock{Text: compactMsg}},
 				}}:
 				case <-ctx.Done():
+					out <- types.StreamError{Error: ctx.Err()}
 					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 				}
 			}
@@ -109,6 +111,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		// Call LLM
 		llmEvents, err := l.Client.Stream(ctx, req)
 		if err != nil {
+			out <- types.StreamError{Error: err}
 			return Terminal{Reason: TerminalReasonError, Error: err}
 		}
 
@@ -130,6 +133,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			}
 
 			if streamErr != nil {
+				out <- types.StreamError{Error: streamErr}
 				return Terminal{Reason: TerminalReasonError, Error: streamErr}
 			}
 		}
@@ -231,7 +235,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
 				}
 				if len(msg.Content) == 0 {
-					return nil, nil, nil
+					return nil, nil, fmt.Errorf("empty response from LLM: no content received")
 				}
 				return &msg, toolUses, nil
 			}

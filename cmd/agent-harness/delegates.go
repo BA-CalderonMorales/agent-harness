@@ -148,7 +148,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	d.app.session.Model = value
 	d.app.costTracker.SetModel(value)
-	d.tuiApp.SetChatModel(value)
+	d.tuiApp.Send(tui.ModelChangedMsg{Model: value})
 
 	credManager := config.NewCredentialManager()
 	if err := credManager.UpdateDefaultModel(value); err != nil {

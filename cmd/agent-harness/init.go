@@ -243,7 +243,7 @@ func (app *App) initCommands() {
 				app.session.Model = m
 				app.costTracker.SetModel(m)
 				if app.tuiApp != nil {
-					app.tuiApp.SetChatModel(m)
+					app.tuiApp.Send(tui.ModelChangedMsg{Model: m})
 				}
 				return nil
 			},
