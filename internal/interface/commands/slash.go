@@ -64,6 +64,9 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 // ParseSlashCommand parses a slash command from input
 func ParseSlashCommand(input string) SlashCommand {
 	input = strings.TrimPrefix(input, "/")
+	if input == "" {
+		return SlashCommand{Name: "", Raw: ""}
+	}
 	parts := strings.SplitN(input, " ", 2)
 
 	cmd := SlashCommand{
@@ -108,9 +111,31 @@ func (sr *SlashRegistry) GetHelp() string {
 		{"Tools", []string{"agents", "skills"}},
 	}
 
+	// Track which commands have been categorized
+	categorized := make(map[string]bool)
 	for _, cat := range categories {
 		lines = append(lines, cat.name+":")
 		for _, cmd := range cat.cmds {
+			categorized[cmd] = true
+			if desc, exists := sr.help[cmd]; exists {
+				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
+			}
+		}
+		lines = append(lines, "")
+	}
+
+	// Catch any registered commands not in the hardcoded categories
+	// (skip hidden aliases like "exit")
+	var other []string
+	for cmd := range sr.commands {
+		if !categorized[cmd] && cmd != "exit" {
+			other = append(other, cmd)
+		}
+	}
+	sort.Strings(other)
+	if len(other) > 0 {
+		lines = append(lines, "Other:")
+		for _, cmd := range other {
 			if desc, exists := sr.help[cmd]; exists {
 				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
 			}
@@ -346,6 +371,9 @@ func PRHandler(createFn func(title, body string) (string, error), listFn func() 
 		// /pr create "title" [body]
 		if strings.HasPrefix(args, "create ") {
 			rest := strings.TrimPrefix(args, "create ")
+			if rest == "" {
+				return "Usage: /pr create \"title\" [body]", nil
+			}
 			// Simple parsing: first quoted string is title, rest is body
 			if strings.HasPrefix(rest, "\"") {
 				end := strings.Index(rest[1:], "\"")
