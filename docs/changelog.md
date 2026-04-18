@@ -1,12 +1,16 @@
 # Changelog
 
-## [0.1.6] - 2026-04-18
+## [0.1.7] - 2026-04-18
+
+### Fixed
+- Chat loop: errors now visible instead of silent failures
+- Model status bar: updates correctly when switching models
+- CI: all staticcheck and gofmt issues resolved
 
 ### Added
-- 21 new features across slash commands, tools, context, and reliability
-- /commit, /branch, /plan, /pr, /init, /memory, /skills, /agents, /test, /worktree slash commands
-- Auto-context injection, output truncation, auto-resume, loop compaction
-- Dynamic model list, sub-agent execution, markdown export, graceful shutdown
+- StreamError event type for error propagation
+- ModelChangedMsg for Bubble Tea event loop integration
+- Loop tests for error and empty stream edge cases
 
 ## [0.1.5] - 2026-04-13
 

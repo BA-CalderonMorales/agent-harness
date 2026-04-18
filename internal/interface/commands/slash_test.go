@@ -40,11 +40,11 @@ func TestHandle(t *testing.T) {
 	sr.Register("compact", "Compact", func(string) (string, error) { return "compacted", nil })
 
 	tests := []struct {
-		name       string
-		input      string
-		wantResult string
+		name        string
+		input       string
+		wantResult  string
 		wantHandled bool
-		wantErr    bool
+		wantErr     bool
 	}{
 		{"non-slash", "hello", "", false, false},
 		{"exact match", "/help", "help text", true, false},

@@ -25,7 +25,6 @@ type stdioTransport struct {
 	stdout *bufio.Reader
 	stderr io.ReadCloser
 	mu     sync.Mutex
-	nextID int
 	env    map[string]string
 }
 
