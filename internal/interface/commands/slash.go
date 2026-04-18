@@ -314,6 +314,26 @@ func BranchHandler(listFn func() (string, error), createFn func(string) (string,
 	}
 }
 
+// PlanHandler toggles plan mode.
+func PlanHandler(getMode func() bool, setMode func(bool) string) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" {
+			if getMode() {
+				return setMode(false), nil
+			}
+			return setMode(true), nil
+		}
+		switch args {
+		case "on":
+			return setMode(true), nil
+		case "off":
+			return setMode(false), nil
+		default:
+			return "Usage: /plan [on|off]\nToggles plan mode. In plan mode the agent outlines steps before executing.", nil
+		}
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {

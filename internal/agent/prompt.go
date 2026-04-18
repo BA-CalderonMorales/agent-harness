@@ -18,6 +18,7 @@ type SystemPromptConfig struct {
 	RecentCommits    []string
 	StatusFiles      []string
 	TopLevelFiles    []string
+	PlanMode         bool
 }
 
 // BuildSystemPrompt creates a comprehensive system prompt with clear guidance
@@ -68,6 +69,20 @@ For CODING TASKS and WORK:
 - Use "edit" for targeted changes (preferred for modifications)
 - When editing, match old_string exactly including indentation
 - After editing, verify the change looks correct`)
+
+	// Plan mode guidance
+	if config.PlanMode {
+		parts = append(parts, `
+## Plan Mode
+
+You are in PLAN MODE. Before executing any tools:
+1. Outline your step-by-step approach
+2. Explain WHY each step is needed
+3. Wait for user confirmation (they will tell you to proceed)
+4. Only then execute the planned steps
+
+DO NOT execute tools until the user confirms the plan.`)
+	}
 
 	// Rich workspace context
 	parts = append(parts, buildWorkspaceContext(config))
