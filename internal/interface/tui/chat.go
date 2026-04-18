@@ -103,6 +103,12 @@ type ChatModel struct {
 
 	// Delegate
 	delegate ChatDelegate
+
+	// Inline command suggestions (replaces modal palette)
+	showSuggestions  bool
+	suggestions      []string
+	suggestionCursor int
+	allCommands      []string
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -212,6 +218,26 @@ func (m *ChatModel) SetDelegate(delegate ChatDelegate) {
 	m.delegate = delegate
 }
 
+// SetCommandCompletions sets available slash commands for inline autocomplete.
+func (m *ChatModel) SetCommandCompletions(commands []string) {
+	m.allCommands = commands
+}
+
+// filterSuggestions returns commands matching the current input.
+func (m *ChatModel) filterSuggestions(input string) []string {
+	if input == "" || input == "/" {
+		return m.allCommands
+	}
+	var filtered []string
+	query := strings.ToLower(input)
+	for _, cmd := range m.allCommands {
+		if strings.HasPrefix(strings.ToLower(cmd), query) {
+			filtered = append(filtered, cmd)
+		}
+	}
+	return filtered
+}
+
 // SetModel sets the model name.
 func (m *ChatModel) SetModel(model string) {
 	m.model = model
@@ -257,9 +283,47 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Open command palette when "/" is typed in empty input
+		// Inline suggestion navigation
+		if m.showSuggestions {
+			switch msg.String() {
+			case "down", "j":
+				if m.suggestionCursor < len(m.suggestions)-1 {
+					m.suggestionCursor++
+				}
+				return m, nil
+			case "up", "k":
+				if m.suggestionCursor > 0 {
+					m.suggestionCursor--
+				}
+				return m, nil
+			case "enter":
+				if len(m.suggestions) > 0 && m.suggestionCursor < len(m.suggestions) {
+					m.textarea.SetValue(m.suggestions[m.suggestionCursor] + " ")
+					m.showSuggestions = false
+					return m, nil
+				}
+			case "tab":
+				if len(m.suggestions) > 0 {
+					m.textarea.SetValue(m.suggestions[0] + " ")
+					m.showSuggestions = false
+					return m, nil
+				}
+			case "esc":
+				m.showSuggestions = false
+				return m, nil
+			case "ctrl+c":
+				m.showSuggestions = false
+				return m, nil
+			}
+		}
+
+		// Trigger inline suggestions when "/" is typed in empty input
 		if msg.String() == "/" && m.textarea.Value() == "" {
-			return m, func() tea.Msg { return openCommandPaletteMsg{} }
+			m.showSuggestions = true
+			m.suggestions = m.filterSuggestions("/")
+			m.suggestionCursor = 0
+			m.textarea.InsertString("/")
+			return m, nil
 		}
 
 		switch msg.Type {
@@ -269,6 +333,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.textarea.InsertString("\n")
 				return m, nil
 			}
+
+			m.showSuggestions = false
 
 			input := m.textarea.Value()
 			if input == "" {
@@ -306,6 +372,17 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		newTA, cmd := m.textarea.Update(msg)
 		m.textarea = newTA
 		cmds = append(cmds, cmd)
+
+		// Refresh suggestions if showing
+		if m.showSuggestions {
+			val := m.textarea.Value()
+			if !strings.HasPrefix(val, "/") || strings.Contains(val, " ") {
+				m.showSuggestions = false
+			} else {
+				m.suggestions = m.filterSuggestions(val)
+				m.suggestionCursor = 0
+			}
+		}
 
 	// -------------------------------------------------------------------------
 	// Timer tick for elapsed time display
@@ -483,6 +560,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.completedToolMsg = nil
 		m.toolAnimation = nil
 		m.currentTool = nil
+		if msg.FollowUpMsg != "" {
+			m.AddMessage("system", msg.FollowUpMsg)
+		}
 		m.refreshViewport()
 		return m, nil
 	}
@@ -563,9 +643,42 @@ func (m ChatModel) View() string {
 		inputContent = prompt + m.textarea.View() + "\n" + statusLine
 	}
 
+	// Inline suggestions dropdown
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		inputContent += "\n" + m.renderSuggestions()
+	}
+
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderSuggestions renders the inline suggestion dropdown.
+func (m ChatModel) renderSuggestions() string {
+	var b strings.Builder
+	maxVisible := 6
+	if len(m.suggestions) < maxVisible {
+		maxVisible = len(m.suggestions)
+	}
+
+	for i := 0; i < maxVisible; i++ {
+		sug := m.suggestions[i]
+		indicator := "  "
+		style := HelpDimStyle
+		if i == m.suggestionCursor {
+			indicator = IndicatorSelected + " "
+			style = InfoStyle
+		}
+		b.WriteString(style.Render(indicator + sug))
+		if i < maxVisible-1 {
+			b.WriteString("\n")
+		}
+	}
+	if len(m.suggestions) > maxVisible {
+		b.WriteString("\n")
+		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  ...and %d more", len(m.suggestions)-maxVisible)))
+	}
+	return b.String()
 }
 
 // Focus focuses the chat input.
@@ -840,13 +953,15 @@ func formatElapsed(d time.Duration) string {
 }
 
 // ConsumesTab returns whether this view consumes Tab key.
+// When inline suggestions are showing, Tab is used for auto-completion.
 func (m ChatModel) ConsumesTab() bool {
-	return false
+	return m.showSuggestions
 }
 
 // ConsumesEsc returns whether this view consumes Esc key.
+// When inline suggestions are showing, Esc dismisses them.
 func (m ChatModel) ConsumesEsc() bool {
-	return false
+	return m.showSuggestions
 }
 
 // Scroll scrolls the viewport.

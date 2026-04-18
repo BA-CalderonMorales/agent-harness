@@ -394,6 +394,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Quit
 
 	// -------------------------------------------------------------------------
+	// Model changed - update chat model so status bar reflects new model
+	// -------------------------------------------------------------------------
+	case ModelChangedMsg:
+		a.chatModel.SetModel(msg.Model)
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
 	// Clear chat request - handle globally so it works from any view
 	// -------------------------------------------------------------------------
 	case ClearChatMsg:
@@ -750,6 +758,11 @@ func (a *App) SetModels(models []ModelItem) {
 // SetChatModel sets the current model name for display in the status bar.
 func (a *App) SetChatModel(model string) {
 	a.chatModel.SetModel(model)
+}
+
+// SetCommandCompletions sets available slash commands for inline autocomplete.
+func (a *App) SetCommandCompletions(commands []string) {
+	a.chatModel.SetCommandCompletions(commands)
 }
 
 // handlePaletteSelection handles a command selected from the palette.

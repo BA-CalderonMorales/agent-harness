@@ -175,15 +175,16 @@ func TestClearHandler(t *testing.T) {
 
 	h := ClearHandler(
 		func() error { cleared = true; return nil },
-		func() { chatCleared = true },
+		func(msg string) { chatCleared = true },
 	)
 
 	result, err := h("")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
-	if result != "Session cleared." {
-		t.Errorf("unexpected result: %q", result)
+	// When clearChatFn is provided, result is empty to avoid double-adding the message
+	if result != "" {
+		t.Errorf("expected empty result when clearChatFn provided, got %q", result)
 	}
 	if !cleared {
 		t.Error("expected clearFn to be called")

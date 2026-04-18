@@ -55,8 +55,11 @@ type openCommandPaletteMsg struct{}
 // openModelPickerMsg signals the model picker should open
 type openModelPickerMsg struct{}
 
-// ClearChatMsg signals the chat should be cleared
-type ClearChatMsg struct{}
+// ClearChatMsg signals the chat should be cleared.
+// If FollowUpMsg is set, it is added after clearing (atomically, avoiding races).
+type ClearChatMsg struct {
+	FollowUpMsg string
+}
 
 // ToolExecutingMsg is sent when a tool is about to execute (for visibility)
 type ToolExecutingMsg struct {
