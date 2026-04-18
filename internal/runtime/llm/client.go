@@ -278,8 +278,8 @@ type modelCache struct {
 }
 
 var (
-	modelCacheMu sync.Mutex
-	modelCaches  = make(map[string]*modelCache)
+	modelCacheMu  sync.Mutex
+	modelCaches   = make(map[string]*modelCache)
 	modelCacheTTL = 5 * time.Minute
 )
 

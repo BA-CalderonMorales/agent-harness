@@ -311,7 +311,7 @@ func (app *App) summarizeMessages(msgs []types.Message) (string, error) {
 // initProject scaffolds standard files for a new project.
 func (app *App) initProject(projectType string) (string, error) {
 	files := map[string]string{
-		"README.md": fmt.Sprintf("# %s\n\nProject initialized with agent-harness.\n", filepath.Base(app.cwd)),
+		"README.md":  fmt.Sprintf("# %s\n\nProject initialized with agent-harness.\n", filepath.Base(app.cwd)),
 		".gitignore": "# Agent harness\n.agent-harness/sessions/\nbuild/\ndist/\n\n# OS\n.DS_Store\nThumbs.db\n",
 		"LICENSE":    "MIT License\n\nCopyright (c) " + fmt.Sprintf("%d", time.Now().Year()) + "\n\nPermission is hereby granted...\n",
 	}
