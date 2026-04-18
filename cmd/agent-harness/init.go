@@ -2,10 +2,12 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -13,8 +15,10 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
+	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
@@ -118,7 +122,7 @@ func (app *App) migrateLegacyCredentials(credManager *config.CredentialManager) 
 	}
 }
 
-// initSession initializes the session manager and creates a session.
+// initSession initializes the session manager and creates or resumes a session.
 func (app *App) initSession() error {
 	sessionManager, err := state.NewSessionManager()
 	if err != nil {
@@ -130,9 +134,20 @@ func (app *App) initSession() error {
 	if model == "" {
 		model = "nvidia/nemotron-3-super-120b-a12b:free"
 	}
-	app.session = sessionManager.CreateSession(model)
+
+	// Try to resume the most recent session for continuity
+	if resumed, ok := sessionManager.ResumeLatestSession(); ok {
+		app.session = resumed
+		// Ensure model stays current if config changed
+		if app.config.Model != "" && app.config.Model != resumed.Model {
+			resumed.Model = app.config.Model
+		}
+	} else {
+		app.session = sessionManager.CreateSession(model)
+	}
+
 	app.costTracker = agent.NewCostTracker()
-	app.costTracker.SetModel(model)
+	app.costTracker.SetModel(app.session.Model)
 	app.initExecutionMode()
 
 	return nil
@@ -153,7 +168,7 @@ func (app *App) initExecutionMode() {
 	}
 }
 
-// initTools registers all built-in tools.
+// initTools registers all built-in tools and MCP tools.
 func (app *App) initTools() {
 	app.toolRegistry = tools.NewRegistry()
 	app.toolRegistry.RegisterBuiltIn(builtin.BashTool)
@@ -166,6 +181,19 @@ func (app *App) initTools() {
 	app.toolRegistry.RegisterBuiltIn(builtin.TodoWriteTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebFetchTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebSearchTool)
+
+	app.mcpManager = mcp.NewManager()
+	if len(app.config.McpServers) > 0 {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if err := app.mcpManager.LoadAndConnect(ctx, app.config.McpServers); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: failed to connect MCP servers: %v\n", err)
+		} else {
+			for _, def := range app.mcpManager.AllToolDefs() {
+				app.toolRegistry.RegisterMCP(toolmcp.Wrap(def, app.mcpManager))
+			}
+		}
+	}
 }
 
 // initCommands registers all slash commands.

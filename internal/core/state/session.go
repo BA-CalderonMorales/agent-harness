@@ -355,6 +355,43 @@ func (sm *SessionManager) GetDefaultSessionPath() string {
 	return filepath.Join(sm.sessionsDir, sm.current.ID+".json")
 }
 
+// ResumeLatestSession loads the most recently updated session if one exists.
+// Returns the session and true if resumed, nil and false if no sessions found.
+func (sm *SessionManager) ResumeLatestSession() (*Session, bool) {
+	entries, err := os.ReadDir(sm.sessionsDir)
+	if err != nil {
+		return nil, false
+	}
+
+	var latestPath string
+	var latestTime time.Time
+	for _, entry := range entries {
+		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
+			continue
+		}
+		info, err := entry.Info()
+		if err != nil {
+			continue
+		}
+		if info.ModTime().After(latestTime) {
+			latestTime = info.ModTime()
+			latestPath = filepath.Join(sm.sessionsDir, entry.Name())
+		}
+	}
+
+	if latestPath == "" {
+		return nil, false
+	}
+
+	session, err := LoadSession(latestPath)
+	if err != nil {
+		return nil, false
+	}
+
+	sm.current = session
+	return session, true
+}
+
 // FormatSessionReport returns a formatted session report
 func (sm *SessionManager) FormatSessionReport() string {
 	if sm.current == nil {
