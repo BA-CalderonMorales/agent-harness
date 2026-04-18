@@ -471,16 +471,6 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (str
 	return strings.TrimSpace(result.String()), nil
 }
 
-func createAssistantErrorMessage(content string) types.Message {
-	return types.Message{
-		UUID:      uuid.New().String(),
-		Role:      types.RoleAssistant,
-		Content:   []types.ContentBlock{types.TextBlock{Text: content}},
-		Timestamp: time.Now(),
-		APIError:  "invalid_request",
-	}
-}
-
 // attemptRecovery tries to recover from recoverable errors.
 // Returns true with results if recovery succeeded, false with error if all attempts failed.
 func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *loopState, recErr *recoverableError, out chan<- types.StreamEvent) (bool, *types.Message, []types.ToolUseBlock, error) {
