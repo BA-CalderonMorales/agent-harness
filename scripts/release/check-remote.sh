@@ -1,7 +1,10 @@
 #!/bin/bash
 # check-remote.sh - ALWAYS check remote version before release
 # Usage: ./scripts/release/check-remote.sh
-# This prevents the "local tag != remote tag" release issue
+#
+# CRITICAL: Uses git ls-remote (not git describe) because git describe
+# returns the latest tag reachable from HEAD, which on 'develop' may be
+# far behind the actual latest release tag (which is on 'main').
 
 set -e
 
@@ -15,9 +18,10 @@ git fetch --tags origin 2>/dev/null || {
     exit 1
 }
 
-# Get remote tags (sorted by version)
+# Get latest remote tag using ls-remote (sorted by version)
+# This is correct regardless of which branch you're on.
 REMOTE_TAG=$(git ls-remote --tags origin 2>/dev/null | \
-    grep -o 'refs/tags/v[0-9]\+\.[0-9]\+\.[0-9]\+' | \
+    grep -oE 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' | \
     sort -V | tail -1 | sed 's/refs\/tags\///')
 
 if [ -z "$REMOTE_TAG" ]; then
@@ -27,7 +31,7 @@ fi
 
 echo "Remote latest: $REMOTE_TAG"
 
-# Also check GitHub releases API (different from git tags)
+# Cross-check with GitHub releases API
 if command -v gh >/dev/null 2>&1; then
     GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null || echo "NONE")
     if [ "$GH_RELEASE" != "NONE" ] && [ "$GH_RELEASE" != "$REMOTE_TAG" ]; then
@@ -37,21 +41,25 @@ if command -v gh >/dev/null 2>&1; then
     fi
 fi
 
-# Get local tag for comparison
-LOCAL_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "NONE")
-echo "Local latest:  $LOCAL_TAG"
+# Show local code version for comparison
+CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+CODE_V="v${CODE_VERSION}"
+echo "Code version:  $CODE_V"
 
-# Validate match
-if [ "$LOCAL_TAG" != "$REMOTE_TAG" ]; then
+# Validate alignment
+if [ "$CODE_V" != "$REMOTE_TAG" ]; then
     echo ""
-    echo "[!] MISMATCH DETECTED!"
-    echo "    Local:  $LOCAL_TAG"
-    echo "    Remote: $REMOTE_TAG"
-    echo ""
-    echo "Fix: git fetch --tags origin && git checkout $REMOTE_TAG"
+    echo "[!] MISMATCH: Code ($CODE_V) != Remote ($REMOTE_TAG)"
+    echo "    Fix: git fetch --tags origin && git checkout main && git pull"
     exit 1
 fi
 
-echo "[OK] Local matches remote: $REMOTE_TAG"
+echo "[OK] All aligned at $REMOTE_TAG"
 echo ""
-echo "Next version: $(bash "$(dirname "$0")/bump-version.sh" "${REMOTE_TAG#v}" patch)"
+
+# Show next versions
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+echo "Next versions:"
+echo "  patch: $(bash "$SCRIPT_DIR/bump-version.sh" "${REMOTE_TAG#v}" patch)"
+echo "  minor: $(bash "$SCRIPT_DIR/bump-version.sh" "${REMOTE_TAG#v}" minor)"
+echo "  major: $(bash "$SCRIPT_DIR/bump-version.sh" "${REMOTE_TAG#v}" major)"
