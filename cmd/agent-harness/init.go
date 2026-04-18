@@ -415,58 +415,58 @@ func (app *App) initCommands() {
 			func() (string, error) {
 				if app.gitContext == nil || !app.gitContext.IsRepo {
 					return "", fmt.Errorf("not in a git repository")
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			branches, err := repo.ListBranches()
-			if err != nil {
-				return "", err
-			}
-			current, _ := repo.CurrentBranch()
-			var lines []string
-			lines = append(lines, "Branches:")
-			for _, b := range branches {
-				b = strings.TrimSpace(b)
-				marker := "  "
-				if strings.TrimPrefix(b, "* ") == current {
-					marker = "● "
-					b = strings.TrimPrefix(b, "* ")
-				} else {
-					b = strings.TrimPrefix(b, "  ")
 				}
-				lines = append(lines, marker+b)
-			}
-			return strings.Join(lines, "\n"), nil
-		},
-		func(name string) (string, error) {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "", fmt.Errorf("not in a git repository")
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			if err := repo.CreateBranch(name); err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("Created and switched to branch: %s", name), nil
-		},
-		func(name string) (string, error) {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "", fmt.Errorf("not in a git repository")
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			if err := repo.SwitchBranch(name); err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("Switched to branch: %s", name), nil
-		},
-		func(name string) (string, error) {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "", fmt.Errorf("not in a git repository")
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			if err := repo.DeleteBranch(name); err != nil {
-				return "", err
-			}
-			return fmt.Sprintf("Deleted branch: %s", name), nil
-		},
+				repo := git.NewRepo(app.gitContext.Root)
+				branches, err := repo.ListBranches()
+				if err != nil {
+					return "", err
+				}
+				current, _ := repo.CurrentBranch()
+				var lines []string
+				lines = append(lines, "Branches:")
+				for _, b := range branches {
+					b = strings.TrimSpace(b)
+					marker := "  "
+					if strings.TrimPrefix(b, "* ") == current {
+						marker = "● "
+						b = strings.TrimPrefix(b, "* ")
+					} else {
+						b = strings.TrimPrefix(b, "  ")
+					}
+					lines = append(lines, marker+b)
+				}
+				return strings.Join(lines, "\n"), nil
+			},
+			func(name string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if err := repo.CreateBranch(name); err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("Created and switched to branch: %s", name), nil
+			},
+			func(name string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if err := repo.SwitchBranch(name); err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("Switched to branch: %s", name), nil
+			},
+			func(name string) (string, error) {
+				if app.gitContext == nil || !app.gitContext.IsRepo {
+					return "", fmt.Errorf("not in a git repository")
+				}
+				repo := git.NewRepo(app.gitContext.Root)
+				if err := repo.DeleteBranch(name); err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("Deleted branch: %s", name), nil
+			},
 		))
 
 	app.cmdRegistry.Register("version", "Show version",
