@@ -6,5 +6,3 @@ func WorkspaceHandler(infoFunc func() string) func(string) (string, error) {
 		return infoFunc(), nil
 	}
 }
-
-
