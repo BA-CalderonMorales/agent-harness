@@ -36,6 +36,13 @@ type ProgressMessage struct {
 
 func (ProgressMessage) isStreamEvent() {}
 
+// StreamError yields an error that occurred during streaming.
+type StreamError struct {
+	Error error
+}
+
+func (StreamError) isStreamEvent() {}
+
 // LLMEvent is a single event from the LLM stream.
 type LLMEvent interface {
 	isLLMEvent()

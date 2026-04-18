@@ -148,7 +148,7 @@ func (s *Session) ExportToMarkdown() string {
 		if msg.Role == "system" {
 			continue
 		}
-		roleTitle := strings.Title(string(msg.Role))
+		roleTitle := strings.ToUpper(string(msg.Role)[:1]) + string(msg.Role)[1:]
 		b.WriteString(fmt.Sprintf("## %s\n\n", roleTitle))
 		for _, block := range msg.Content {
 			switch v := block.(type) {
