@@ -97,7 +97,7 @@ This document tracks the feature parity between agent-harness and the claw-code 
 ### Advanced Features
 - [ ] **OAuth authentication** with browser flow
 - [ ] **Plugin system** with hooks
-- [ ] **MCP (Model Context Protocol)** client
+- [x] **MCP (Model Context Protocol)** client
 - [ ] **LSP integration**
 - [ ] **HTTP/SSE server** mode
 - [ ] **Sub-agent orchestration**
