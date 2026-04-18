@@ -304,6 +304,18 @@ func (app *App) initCommands() {
 			return fmt.Sprintf("Committed to %s: %s", branch, message), nil
 		}))
 
+	app.cmdRegistry.Register("plan", "Toggle plan mode",
+		commands.PlanHandler(
+			func() bool { return app.session.PlanMode },
+			func(on bool) string {
+				app.session.PlanMode = on
+				if on {
+					return "Plan mode ON. The agent will outline its approach before executing tools."
+				}
+				return "Plan mode OFF. The agent will execute tools directly."
+			},
+		))
+
 	app.cmdRegistry.Register("branch", "Manage git branches",
 		commands.BranchHandler(
 			func() (string, error) {

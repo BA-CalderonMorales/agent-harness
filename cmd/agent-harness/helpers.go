@@ -173,6 +173,7 @@ func (app *App) buildSystemPrompt() string {
 		RecentCommits:    recentCommits,
 		StatusFiles:      statusFiles,
 		TopLevelFiles:    topFiles,
+		PlanMode:         app.session.PlanMode,
 	}
 
 	return agent.BuildSystemPrompt(cfg)
@@ -218,6 +219,10 @@ func (app *App) buildWelcomeMessage() string {
 
 	if projType := detectProjectType(app.cwd); projType != "" {
 		parts = append(parts, sprintf("  Project: %s", projType))
+	}
+
+	if app.session.PlanMode {
+		parts = append(parts, "  Mode: plan — outline before executing")
 	}
 
 	parts = append(parts, "")
