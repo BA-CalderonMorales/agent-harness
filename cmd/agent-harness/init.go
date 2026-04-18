@@ -476,7 +476,37 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
-			return "Available agents:\n  default  Standard agent with full tool access\n  okabe    Experimental reasoning agent"
+			agentTypes := []struct {
+				name        string
+				description string
+			}{
+				{"default", "Standard agent with full tool access. Good for general tasks."},
+				{"reviewer", "Focuses on code review, critique, and suggesting improvements."},
+				{"tester", "Generates test cases and verifies code correctness."},
+				{"debugger", "Investigates errors, traces execution, and suggests fixes."},
+				{"explainer", "Explains code and concepts without making changes."},
+			}
+			if args != "" && args != "list" {
+				for _, a := range agentTypes {
+					if a.name == args {
+						return sprintf("Agent: %s\n%s", a.name, a.description)
+					}
+				}
+				var names []string
+				for _, a := range agentTypes {
+					names = append(names, a.name)
+				}
+				return sprintf("Agent not found: %s\n\nAvailable agents: %s", args, strings.Join(names, ", "))
+			}
+			var lines []string
+			lines = append(lines, "Available agents:")
+			lines = append(lines, "Use /agents <name> to view details.")
+			lines = append(lines, "Use the agent tool with agent_type to delegate.")
+			lines = append(lines, "")
+			for _, a := range agentTypes {
+				lines = append(lines, sprintf("  %-12s %s", a.name, a.description))
+			}
+			return strings.Join(lines, "\n")
 		}))
 
 	app.cmdRegistry.Register("skills", "Show available skills",
