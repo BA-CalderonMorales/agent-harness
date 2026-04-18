@@ -86,5 +86,7 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 		}
 	}
 
+	result = truncateBashOutput(result)
+
 	return tools.ToolResult{Data: result}, nil
 }
