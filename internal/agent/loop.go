@@ -72,11 +72,19 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			sysPrompt += fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k)
 		}
 
-		// Token blocking check (simplified)
+		// Token blocking check with auto-compaction
 		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(messagesForQuery) {
-			errMsg := createAssistantErrorMessage("Context window is at the blocking limit. Please use /compact or start a new session.")
-			state.messages = append(state.messages, errMsg)
-			return Terminal{Reason: TerminalReasonBlockingLimit, Message: &errMsg}
+			compactMsg := l.autoCompactMessages(state)
+			if compactMsg != "" {
+				select {
+				case out <- types.StreamMessage{Message: types.Message{
+					Role:    types.RoleSystem,
+					Content: []types.ContentBlock{types.TextBlock{Text: compactMsg}},
+				}}:
+				case <-ctx.Done():
+					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
+				}
+			}
 		}
 
 		// Determine model
@@ -338,9 +346,69 @@ func containsAt(s, substr string, start int) bool {
 }
 
 func (l *Loop) isAtBlockingLimit(msgs []types.Message) bool {
-	// Simplified token estimation
-	// Real implementation would use a tokenizer
-	return false
+	return estimateTokens(msgs) > l.Config.BlockingTokenLimit
+}
+
+// estimateTokens provides a rough character-based token estimate.
+func estimateTokens(msgs []types.Message) int {
+	total := 0
+	for _, msg := range msgs {
+		for _, block := range msg.Content {
+			switch b := block.(type) {
+			case types.TextBlock:
+				total += len(b.Text) / 4
+			case types.ToolUseBlock:
+				total += len(b.Name) / 4
+				if inputJSON, err := json.Marshal(b.Input); err == nil {
+					total += len(inputJSON) / 4
+				}
+			case types.ToolResultBlock:
+				total += len(fmt.Sprintf("%v", b.Content)) / 4
+			}
+		}
+	}
+	return total
+}
+
+// autoCompactMessages trims old messages when approaching the token limit.
+// Returns a description of what was compacted, or empty string if no compaction needed.
+func (l *Loop) autoCompactMessages(state *loopState) string {
+	limit := l.Config.BlockingTokenLimit
+	if limit <= 0 {
+		limit = 180000
+	}
+	// Target: 80% of limit to leave headroom
+	target := limit * 8 / 10
+	current := estimateTokens(state.messages)
+	if current <= target {
+		return ""
+	}
+
+	// Preserve recent messages (last 20) and compact older ones
+	preserve := 20
+	if len(state.messages) <= preserve {
+		// Not enough history to trim meaningfully
+		return ""
+	}
+
+	removed := len(state.messages) - preserve
+	state.messages = state.messages[removed:]
+
+	// Insert compaction summary
+	summary := types.Message{
+		UUID:      uuid.New().String(),
+		Role:      types.RoleSystem,
+		Timestamp: time.Now(),
+		Content: []types.ContentBlock{
+			types.TextBlock{
+				Text: fmt.Sprintf("[Context compacted: removed %d older messages to stay within token limits]", removed),
+			},
+		},
+	}
+	state.messages = append([]types.Message{summary}, state.messages...)
+
+	return fmt.Sprintf("[Auto-compacted: removed %d older messages, %d estimated tokens → %d]",
+		removed, current, estimateTokens(state.messages))
 }
 
 func createAssistantErrorMessage(content string) types.Message {
