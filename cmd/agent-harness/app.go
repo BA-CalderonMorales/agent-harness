@@ -12,6 +12,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 )
@@ -31,6 +32,7 @@ type App struct {
 	cwd            string
 	tuiApp         *tui.App
 	executionMode  approval.ExecutionMode
+	mcpManager     *mcp.Manager
 }
 
 // newApp creates and initializes a new App instance.
@@ -80,7 +82,8 @@ func (app *App) run() error {
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
 
 	// Initial data
-	tuiApp.AddMessage("system", sprintf("Agent Harness %s - Type /help for commands", Version))
+	welcome := app.buildWelcomeMessage()
+	tuiApp.AddMessage("system", welcome)
 	tuiApp.RefreshSessions(app.getSessionInfos())
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetModels(app.getModelItems())

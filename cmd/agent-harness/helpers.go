@@ -145,13 +145,23 @@ func (app *App) getWorkspaceInfo() string {
 func (app *App) buildSystemPrompt() string {
 	gitContext := ""
 	if app.gitContext != nil && app.gitContext.IsRepo {
-		gitContext = sprintf("Working in: %s", app.gitContext.Root)
+		gitContext = sprintf("%s", app.gitContext.Root)
 		if app.gitContext.Branch != "" {
-			gitContext += sprintf(" (branch: %s)", app.gitContext.Branch)
+			gitContext += sprintf(" (branch: %s, commit: %s)", app.gitContext.Branch, app.gitContext.Commit)
+		}
+		if app.gitContext.HasChanges {
+			gitContext += " — has uncommitted changes"
 		}
 	}
 
 	skillPrompts := loadSkillPrompts()
+
+	var recentCommits, statusFiles, topFiles []string
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		recentCommits = app.gitContext.RecentCommits
+		statusFiles = app.gitContext.StatusFiles
+		topFiles = app.gitContext.TopLevelFiles
+	}
 
 	cfg := agent.SystemPromptConfig{
 		PersonaName:      "Agent",
@@ -159,6 +169,9 @@ func (app *App) buildSystemPrompt() string {
 		PermissionMode:   app.config.PermissionMode.String(),
 		WorkingDirectory: app.cwd,
 		Skills:           skillPrompts,
+		RecentCommits:    recentCommits,
+		StatusFiles:      statusFiles,
+		TopLevelFiles:    topFiles,
 	}
 
 	return agent.BuildSystemPrompt(cfg)
@@ -176,6 +189,30 @@ func loadSkillPrompts() []string {
 		prompts = append(prompts, sk.FormatPrompt())
 	}
 	return prompts
+}
+
+// buildWelcomeMessage creates a contextual welcome message.
+func (app *App) buildWelcomeMessage() string {
+	var parts []string
+	parts = append(parts, sprintf("Agent Harness %s", Version))
+
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		parts = append(parts, sprintf("  Git: %s (%s)", app.gitContext.Root, app.gitContext.Branch))
+		if len(app.gitContext.RecentCommits) > 0 {
+			parts = append(parts, sprintf("  Last commit: %s", app.gitContext.RecentCommits[0]))
+		}
+		if app.gitContext.HasChanges {
+			parts = append(parts, "  Status: uncommitted changes present")
+		} else {
+			parts = append(parts, "  Status: clean")
+		}
+	} else {
+		parts = append(parts, sprintf("  Dir: %s", app.cwd))
+	}
+
+	parts = append(parts, "")
+	parts = append(parts, "Type /help for commands")
+	return strings.Join(parts, "\n")
 }
 
 // isReadOnlyTool checks if a tool is read-only.
