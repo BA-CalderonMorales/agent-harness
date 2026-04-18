@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.10] - 2026-04-18
+
+### Changed
+- Version bump to v0.1.10
+
 ## [0.1.9] - 2026-04-18
 
 ### Fixed
