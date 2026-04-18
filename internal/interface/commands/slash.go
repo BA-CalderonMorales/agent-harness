@@ -270,6 +270,16 @@ func DiffHandler(getDiff func() string) SlashHandler {
 	}
 }
 
+// CommitHandler stages changes and commits with the given message.
+func CommitHandler(commitFn func(message string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" {
+			return "Usage: /commit <message>\nStages all changes and commits.", nil
+		}
+		return commitFn(args)
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {
