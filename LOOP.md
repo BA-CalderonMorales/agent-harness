@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**016: Dynamic model list from OpenRouter API**
-> /model command fetches available models from the provider API instead of showing a hardcoded list, so users always see current offerings including new releases.
+**017: `/agents` command lists and manages sub-agents**
+> The /agents command shows available sub-agent configurations and lets users switch between them, making the agent delegation system (experiment 010) fully discoverable.
 
 ## Experiments
 
@@ -30,6 +30,7 @@
 | 013 | llm-summarize-compact | If we summarize old messages with the LLM before dropping them, context quality stays high in long sessions. | validated |
 | 014 | slash-memory | If we add a /memory command that shows system prompt and recent context, users can debug what the LLM sees. | validated |
 | 015 | slash-skills-content | If /skills shows actual skill prompts instead of just names, users understand what capabilities are loaded. | validated |
+| 016 | dynamic-model-list | If /model fetches live models from the provider API, users see current offerings without manual updates. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
