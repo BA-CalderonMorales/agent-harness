@@ -2,8 +2,10 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -12,8 +14,10 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // getSessionInfos returns session info for TUI.
@@ -145,13 +149,23 @@ func (app *App) getWorkspaceInfo() string {
 func (app *App) buildSystemPrompt() string {
 	gitContext := ""
 	if app.gitContext != nil && app.gitContext.IsRepo {
-		gitContext = sprintf("Working in: %s", app.gitContext.Root)
+		gitContext = sprintf("%s", app.gitContext.Root)
 		if app.gitContext.Branch != "" {
-			gitContext += sprintf(" (branch: %s)", app.gitContext.Branch)
+			gitContext += sprintf(" (branch: %s, commit: %s)", app.gitContext.Branch, app.gitContext.Commit)
+		}
+		if app.gitContext.HasChanges {
+			gitContext += " — has uncommitted changes"
 		}
 	}
 
 	skillPrompts := loadSkillPrompts()
+
+	var recentCommits, statusFiles, topFiles []string
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		recentCommits = app.gitContext.RecentCommits
+		statusFiles = app.gitContext.StatusFiles
+		topFiles = app.gitContext.TopLevelFiles
+	}
 
 	cfg := agent.SystemPromptConfig{
 		PersonaName:      "Agent",
@@ -159,6 +173,10 @@ func (app *App) buildSystemPrompt() string {
 		PermissionMode:   app.config.PermissionMode.String(),
 		WorkingDirectory: app.cwd,
 		Skills:           skillPrompts,
+		RecentCommits:    recentCommits,
+		StatusFiles:      statusFiles,
+		TopLevelFiles:    topFiles,
+		PlanMode:         app.session.PlanMode,
 	}
 
 	return agent.BuildSystemPrompt(cfg)
@@ -176,6 +194,153 @@ func loadSkillPrompts() []string {
 		prompts = append(prompts, sk.FormatPrompt())
 	}
 	return prompts
+}
+
+// buildWelcomeMessage creates a contextual welcome message.
+func (app *App) buildWelcomeMessage() string {
+	var parts []string
+	parts = append(parts, sprintf("Agent Harness %s", Version))
+
+	if app.session != nil && len(app.session.Messages) > 0 {
+		parts = append(parts, sprintf("  Resumed session %s (%d messages, %d turns)",
+			app.session.ID[:8], len(app.session.Messages), app.session.Turns))
+	}
+
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		parts = append(parts, sprintf("  Git: %s (%s)", app.gitContext.Root, app.gitContext.Branch))
+		if len(app.gitContext.RecentCommits) > 0 {
+			parts = append(parts, sprintf("  Last commit: %s", app.gitContext.RecentCommits[0]))
+		}
+		if app.gitContext.HasChanges {
+			parts = append(parts, "  Status: uncommitted changes present")
+		} else {
+			parts = append(parts, "  Status: clean")
+		}
+	} else {
+		parts = append(parts, sprintf("  Dir: %s", app.cwd))
+	}
+
+	if projType := detectProjectType(app.cwd); projType != "" {
+		parts = append(parts, sprintf("  Project: %s", projType))
+	}
+
+	if app.session.PlanMode {
+		parts = append(parts, "  Mode: plan — outline before executing")
+	}
+
+	parts = append(parts, "")
+	parts = append(parts, "Type /help for commands")
+	return strings.Join(parts, "\n")
+}
+
+// detectProjectType guesses the project language from common marker files.
+func detectProjectType(dir string) string {
+	markers := []struct {
+		file string
+		name string
+	}{
+		{"go.mod", "Go"},
+		{"package.json", "Node"},
+		{"Cargo.toml", "Rust"},
+		{"pyproject.toml", "Python"},
+		{"requirements.txt", "Python"},
+		{"composer.json", "PHP"},
+		{"Gemfile", "Ruby"},
+		{"pom.xml", "Java"},
+		{"build.gradle", "Java"},
+	}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(dir, m.file)); err == nil {
+			return m.name
+		}
+	}
+	return ""
+}
+
+// summarizeMessages sends messages to the LLM for summarization.
+func (app *App) summarizeMessages(msgs []types.Message) (string, error) {
+	if app.client == nil {
+		return "", fmt.Errorf("no LLM client")
+	}
+	var b strings.Builder
+	b.WriteString("Summarize the following conversation concisely. Preserve key decisions, facts, and context:\n\n")
+	for _, msg := range msgs {
+		b.WriteString(fmt.Sprintf("%s: ", msg.Role))
+		for _, block := range msg.Content {
+			switch blk := block.(type) {
+			case types.TextBlock:
+				b.WriteString(blk.Text)
+			case types.ToolUseBlock:
+				b.WriteString(fmt.Sprintf("[tool: %s]", blk.Name))
+			case types.ToolResultBlock:
+				b.WriteString(fmt.Sprintf("[result: %v]", blk.Content))
+			}
+		}
+		b.WriteString("\n")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	req := llm.Request{
+		Messages: []types.Message{
+			{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: b.String()}}, Timestamp: time.Now()},
+		},
+		SystemPrompt: "You are a context summarizer. Summarize conversation history in 2-3 sentences. Be concise but preserve all key facts, decisions, and context.",
+		Model:        app.session.Model,
+		MaxTokens:    512,
+	}
+
+	stream, err := app.client.Stream(ctx, req)
+	if err != nil {
+		return "", err
+	}
+
+	var result strings.Builder
+	for event := range stream {
+		switch e := event.(type) {
+		case types.LLMTextDelta:
+			result.WriteString(e.Delta)
+		case types.LLMError:
+			return result.String(), e.Error
+		}
+	}
+	return strings.TrimSpace(result.String()), nil
+}
+
+// initProject scaffolds standard files for a new project.
+func (app *App) initProject(projectType string) (string, error) {
+	files := map[string]string{
+		"README.md": fmt.Sprintf("# %s\n\nProject initialized with agent-harness.\n", filepath.Base(app.cwd)),
+		".gitignore": "# Agent harness\n.agent-harness/sessions/\nbuild/\ndist/\n\n# OS\n.DS_Store\nThumbs.db\n",
+		"LICENSE":    "MIT License\n\nCopyright (c) " + fmt.Sprintf("%d", time.Now().Year()) + "\n\nPermission is hereby granted...\n",
+	}
+
+	switch projectType {
+	case "go", "Go":
+		files["go.mod"] = fmt.Sprintf("module %s\n\ngo 1.24\n", filepath.Base(app.cwd))
+		files["main.go"] = "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello, world!\")\n}\n"
+		files["Makefile"] = ".PHONY: build run test\n\nbuild:\n\tgo build -o build/app .\n\nrun:\n\tgo run .\n\ntest:\n\tgo test ./...\n"
+	case "node", "Node":
+		files["package.json"] = fmt.Sprintf("{\n  \"name\": \"%s\",\n  \"version\": \"0.1.0\",\n  \"main\": \"index.js\"\n}\n", filepath.Base(app.cwd))
+		files["index.js"] = "console.log('Hello, world!');\n"
+	}
+
+	created := []string{}
+	for name, content := range files {
+		path := filepath.Join(app.cwd, name)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				return "", fmt.Errorf("failed to write %s: %w", name, err)
+			}
+			created = append(created, name)
+		}
+	}
+
+	if len(created) == 0 {
+		return "No files created — they already exist.", nil
+	}
+	return fmt.Sprintf("Initialized %s project. Created: %s", projectType, strings.Join(created, ", ")), nil
 }
 
 // isReadOnlyTool checks if a tool is read-only.

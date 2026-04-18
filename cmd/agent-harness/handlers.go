@@ -13,6 +13,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/permissions"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
@@ -89,6 +90,35 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			Debug:         false,
 		},
 		AbortController: ctx,
+		SubAgentQuery: func(prompt string) (string, error) {
+			// Sub-agent runs a single-turn query with fresh context
+			subCtx, subCancel := context.WithTimeout(ctx, 60*time.Second)
+			defer subCancel()
+			req := llm.Request{
+				Messages: []types.Message{
+					{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()},
+				},
+				SystemPrompt: app.buildSystemPrompt(),
+				Model:        app.session.Model,
+				MaxTokens:    4096,
+			}
+			stream, err := app.client.Stream(subCtx, req)
+			if err != nil {
+				return "", err
+			}
+			var result strings.Builder
+			for event := range stream {
+				switch e := event.(type) {
+				case types.LLMTextDelta:
+					result.WriteString(e.Delta)
+				case types.LLMMessageStop:
+					// done
+				case types.LLMError:
+					return result.String(), e.Error
+				}
+			}
+			return result.String(), nil
+		},
 	}
 
 	canUseTool := app.createToolPermissionFunc(tuiApp)

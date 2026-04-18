@@ -2,12 +2,10 @@ package builtin
 
 import (
 	"fmt"
-	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
-	"github.com/google/uuid"
 )
 
 // AgentTool spawns a sub-agent with its own message context.
@@ -55,25 +53,18 @@ var AgentTool = tools.NewTool(tools.Tool{
 			agentType = "default"
 		}
 
-		// In a full implementation, this constructs a fresh agent.Loop
-		// with a copy of tools but empty messages.
-		// Here we demonstrate the pattern.
-		_ = agent.NewLoop(nil) // Would be the actual LLM client
-
-		// Sub-agent gets fresh messages but shares tool registry
-		subMessages := []types.Message{
-			{
-				UUID:      uuid.New().String(),
-				Role:      types.RoleUser,
-				Content:   []types.ContentBlock{types.TextBlock{Text: prompt}},
-				Timestamp: time.Now(),
-			},
+		// If SubAgentQuery is wired, use it for real execution
+		if ctx.SubAgentQuery != nil {
+			result, err := ctx.SubAgentQuery(prompt)
+			if err != nil {
+				return tools.ToolResult{}, fmt.Errorf("sub-agent failed: %w", err)
+			}
+			return tools.ToolResult{Data: fmt.Sprintf("[Sub-agent %s]\n%s", agentType, result)}, nil
 		}
 
-		// The result would come from running the sub-agent loop
+		// Fallback: demonstrate the pattern without real execution
+		_ = agent.NewLoop(nil)
 		result := fmt.Sprintf("[Sub-agent %s completed]\nTask: %s\nResult: (sub-agent execution would run here)", agentType, prompt)
-
-		_ = subMessages // used to satisfy compiler in pattern demo
 		return tools.ToolResult{Data: result}, nil
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {

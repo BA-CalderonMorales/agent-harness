@@ -113,6 +113,9 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		// Record read for stale-write protection
 		fs.DefaultStaleTracker.RecordRead(path, data, info)
 
+		// Truncate large outputs to prevent context overflow
+		content = truncateReadOutput(content)
+
 		// Cache the result
 		fs.DefaultCache.Set(cacheKey, content)
 
