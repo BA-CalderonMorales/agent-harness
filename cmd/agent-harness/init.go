@@ -15,6 +15,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
@@ -246,6 +247,12 @@ func (app *App) initCommands() {
 				return nil
 			},
 			func() []string {
+				if hc, ok := app.client.(*llm.HTTPClient); ok && hc != nil {
+					models, err := hc.ListModels()
+					if err == nil && len(models) > 0 {
+						return models
+					}
+				}
 				return []string{
 					"nvidia/nemotron-3-super-120b-a12b:free",
 					"claude-3-5-sonnet-20241022",
