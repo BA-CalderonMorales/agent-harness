@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.1.7] - 2026-04-18
+
+### Fixed
+- Chat loop: errors now visible instead of silent failures
+- Model status bar: updates correctly when switching models
+- CI: all staticcheck and gofmt issues resolved
+
+### Added
+- StreamError event type for error propagation
+- ModelChangedMsg for Bubble Tea event loop integration
+- Loop tests for error and empty stream edge cases
+
 ## [0.1.5] - 2026-04-13
 
 ### Changed
