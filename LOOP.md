@@ -7,8 +7,14 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**021: Graceful shutdown saves session on SIGINT/SIGTERM**
-> The harness catches interrupt signals and persists the current session before exiting, preventing data loss from abrupt termination.
+_None. Batch complete. 21 experiments validated._
+
+## Next Candidate Outcomes
+1. **Visual diff rendering** - Structured diffs in TUI instead of raw git diff
+2. **Session forking** - `/session fork` to branch conversations
+3. **OAuth authentication** - Browser flow for cloud model providers
+4. **Plugin system** - Hook-based extensibility
+5. **Update parity.md** - Document is severely outdated vs actual state
 
 ## Experiments
 
@@ -35,6 +41,7 @@
 | 018 | slash-test | If /test auto-detects and runs project tests, users stay in flow during TDD. | validated |
 | 019 | slash-worktree | If /worktree manages git worktrees, users switch branches without stashing on Termux. | validated |
 | 020 | markdown-export | If /export produces Markdown transcripts, conversations become shareable and human-readable. | validated |
+| 021 | graceful-shutdown | If SIGINT/SIGTERM triggers session save before exit, abrupt termination never loses conversation state. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
