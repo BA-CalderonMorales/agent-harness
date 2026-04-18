@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**017: `/agents` command lists and manages sub-agents**
-> The /agents command shows available sub-agent configurations and lets users switch between them, making the agent delegation system (experiment 010) fully discoverable.
+**018: `/test` command auto-detects and runs project tests**
+> The /test command detects the test framework (go test, npm test, cargo test, pytest) and runs the appropriate command, showing results in the TUI. Stays in flow without remembering test commands.
 
 ## Experiments
 
@@ -31,6 +31,7 @@
 | 014 | slash-memory | If we add a /memory command that shows system prompt and recent context, users can debug what the LLM sees. | validated |
 | 015 | slash-skills-content | If /skills shows actual skill prompts instead of just names, users understand what capabilities are loaded. | validated |
 | 016 | dynamic-model-list | If /model fetches live models from the provider API, users see current offerings without manual updates. | validated |
+| 017 | slash-agents | If /agents shows available agent types with descriptions, users can delegate effectively. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.

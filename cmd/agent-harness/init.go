@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -474,6 +475,11 @@ func (app *App) initCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("test", "Run project tests",
+		commands.TestHandler(func() (string, error) {
+			return app.runTests()
+		}))
+
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			agentTypes := []struct {
@@ -573,6 +579,36 @@ func (app *App) reset() error {
 	}
 	app.session = app.session.Clear()
 	return nil
+}
+
+// runTests detects the project type and runs the appropriate test command.
+func (app *App) runTests() (string, error) {
+	markers := []struct {
+		file    string
+		name    string
+		command string
+	}{
+		{"go.mod", "Go", "go test ./..."},
+		{"package.json", "Node", "npm test"},
+		{"Cargo.toml", "Rust", "cargo test"},
+		{"pyproject.toml", "Python", "pytest"},
+		{"requirements.txt", "Python", "pytest"},
+		{"pom.xml", "Java", "mvn test"},
+		{"build.gradle", "Java", "./gradlew test"},
+	}
+	for _, m := range markers {
+		if _, err := os.Stat(filepath.Join(app.cwd, m.file)); err == nil {
+			cmd := exec.CommandContext(context.Background(), "sh", "-c", m.command)
+			cmd.Dir = app.cwd
+			out, err := cmd.CombinedOutput()
+			result := string(out)
+			if err != nil {
+				return sprintf("[%s tests] exited with error\n\n%s", m.name, result), nil
+			}
+			return sprintf("[%s tests]\n\n%s", m.name, result), nil
+		}
+	}
+	return "", fmt.Errorf("no recognized test framework found in %s", app.cwd)
 }
 
 // formatSessionList formats sessions for display.
