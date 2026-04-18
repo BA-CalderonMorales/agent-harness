@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.1.8] - 2026-04-18
+
+### Fixed
+- Model status bar now updates when switching models via /model or Settings
+- Inline autocomplete replaces modal command palette (type / to filter commands)
+- /clear race condition fixed: confirmation message preserved atomically
+- HTTP client recreated on provider change, fixing 401 auth errors
+- Settings tab model changes now sync to chat status bar
+
 ## [0.1.7] - 2026-04-18
 
 ### Fixed

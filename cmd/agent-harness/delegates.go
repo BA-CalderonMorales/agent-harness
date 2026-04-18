@@ -9,6 +9,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -124,6 +125,11 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleModelChange(value)
 	case "provider":
 		d.app.config.Provider = value
+		// Recreate LLM client with new provider base URL
+		d.app.client = llm.NewHTTPClient(d.app.config.Provider, d.app.config.APIKey)
+		// Refresh model list for new provider
+		d.tuiApp.SetModels(d.app.getModelItems())
+		d.tuiApp.AddMessage("system", sprintf("Provider updated to: %s", value))
 	case "permissions":
 		d.handlePermissionModeChange(value)
 	case "execution_mode":
