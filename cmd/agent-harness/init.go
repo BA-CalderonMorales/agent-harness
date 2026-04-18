@@ -244,6 +244,7 @@ func (app *App) initCommands() {
 				app.costTracker.SetModel(m)
 				if app.tuiApp != nil {
 					app.tuiApp.Send(tui.ModelChangedMsg{Model: m})
+					app.tuiApp.SetSettings(app.getSettings())
 				}
 				return nil
 			},
@@ -615,8 +616,8 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 				app.session = app.session.Clear()
 				return nil
 			},
-			func() {
-				tuiApp.Send(tui.ClearChatMsg{})
+			func(msg string) {
+				tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: msg})
 			},
 		))
 }

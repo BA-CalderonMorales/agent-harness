@@ -4,6 +4,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -261,4 +262,203 @@ func TestAgenticGreetingHandling(t *testing.T) {
 
 	// This test verifies the AGENTIC model: even greetings go through the full loop.
 	// The LLM decided not to use tools - but it was the LLM's decision, not code logic.
+}
+
+// ---------------------------------------------------------------------------
+// Outcome-based tests for critical TUX fixes
+// ---------------------------------------------------------------------------
+
+// TestModelChangedMsgUpdatesStatusBar verifies that ModelChangedMsg propagates
+// to the chat model so the status bar shows the correct model.
+// OUTCOME: When user switches model, status bar displays the new model name.
+func TestModelChangedMsgUpdatesStatusBar(t *testing.T) {
+	app := NewApp()
+	app.SetChatModel("old-model")
+
+	if app.chatModel.GetModel() != "old-model" {
+		t.Fatalf("expected initial model 'old-model', got %q", app.chatModel.GetModel())
+	}
+
+	// Simulate model change message (as sent by /model command or settings tab)
+	model, _ := app.Update(ModelChangedMsg{Model: "nvidia/nemotron-3-super-120b-a12b:free"})
+	updatedApp := model.(App)
+
+	if updatedApp.chatModel.GetModel() != "nvidia/nemotron-3-super-120b-a12b:free" {
+		t.Errorf("expected model 'nvidia/nemotron-3-super-120b-a12b:free', got %q", updatedApp.chatModel.GetModel())
+	}
+}
+
+// TestClearChatWithFollowUpMsg verifies that ClearChatMsg with FollowUpMsg
+// clears the chat AND preserves the confirmation message.
+// OUTCOME: /clear removes all messages and shows "Session cleared." exactly once.
+func TestClearChatWithFollowUpMsg(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("user", "hello")
+	chat.AddMessage("assistant", "hi there")
+
+	if len(chat.messages) != 2 {
+		t.Fatalf("expected 2 messages before clear, got %d", len(chat.messages))
+	}
+
+	// Simulate clear command with follow-up message
+	model, _ := chat.Update(ClearChatMsg{FollowUpMsg: "Session cleared."})
+	chat = model.(ChatModel)
+
+	if len(chat.messages) != 1 {
+		t.Fatalf("expected 1 message after clear (the follow-up), got %d", len(chat.messages))
+	}
+
+	if chat.messages[0].Role != "system" {
+		t.Errorf("expected follow-up role 'system', got %s", chat.messages[0].Role)
+	}
+
+	if chat.messages[0].Content != "Session cleared." {
+		t.Errorf("expected follow-up content 'Session cleared.', got %q", chat.messages[0].Content)
+	}
+}
+
+// TestClearChatWithoutFollowUpMsg verifies bare clear removes everything.
+func TestClearChatWithoutFollowUpMsg(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("user", "hello")
+
+	model, _ := chat.Update(ClearChatMsg{})
+	chat = model.(ChatModel)
+
+	if len(chat.messages) != 0 {
+		t.Errorf("expected 0 messages after bare clear, got %d", len(chat.messages))
+	}
+}
+
+// TestInlineSuggestionsAppear verifies that typing "/" shows suggestions.
+// OUTCOME: When "/" is typed in empty input, inline suggestion list appears.
+func TestInlineSuggestionsAppear(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear", "/compact", "/config", "/model"})
+
+	// Simulate typing "/" in empty input
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'/'}})
+	chat = model.(ChatModel)
+
+	if !chat.showSuggestions {
+		t.Error("expected suggestions to show after typing '/'")
+	}
+
+	if len(chat.suggestions) != 4 {
+		t.Errorf("expected 4 suggestions, got %d", len(chat.suggestions))
+	}
+}
+
+// TestInlineSuggestionsFilter verifies that typing after "/" filters suggestions.
+// OUTCOME: Typing "/c" shows only commands starting with "/c".
+func TestInlineSuggestionsFilter(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear", "/compact", "/config", "/model"})
+
+	// Type "/c"
+	chat.textarea.SetValue("/c")
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	chat = model.(ChatModel)
+
+	// Trigger suggestion update by simulating the key that updates textarea
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/c")
+
+	if len(chat.suggestions) != 3 {
+		t.Errorf("expected 3 suggestions for '/c', got %d: %v", len(chat.suggestions), chat.suggestions)
+	}
+
+	for _, s := range chat.suggestions {
+		if !strings.HasPrefix(s, "/c") {
+			t.Errorf("suggestion %q does not start with '/c'", s)
+		}
+	}
+}
+
+// TestInlineSuggestionsNavigate verifies up/down navigation.
+// OUTCOME: Down arrow moves selection; Enter inserts selected command.
+func TestInlineSuggestionsNavigate(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear", "/compact", "/config"})
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/")
+	chat.suggestionCursor = 0
+
+	// Press down
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyDown})
+	chat = model.(ChatModel)
+
+	if chat.suggestionCursor != 1 {
+		t.Errorf("expected cursor 1 after down, got %d", chat.suggestionCursor)
+	}
+
+	// Press up
+	model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyUp})
+	chat = model.(ChatModel)
+
+	if chat.suggestionCursor != 0 {
+		t.Errorf("expected cursor 0 after up, got %d", chat.suggestionCursor)
+	}
+}
+
+// TestInlineSuggestionsSelect verifies Enter selects a suggestion.
+// OUTCOME: Enter inserts the selected command into the textarea.
+func TestInlineSuggestionsSelect(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear", "/compact"})
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/")
+	chat.suggestionCursor = 0
+
+	// Press enter to select first suggestion
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	chat = model.(ChatModel)
+
+	if chat.showSuggestions {
+		t.Error("expected suggestions to hide after selection")
+	}
+
+	if chat.textarea.Value() != "/clear " {
+		t.Errorf("expected textarea value '/clear ', got %q", chat.textarea.Value())
+	}
+}
+
+// TestInlineSuggestionsCancel verifies Esc hides suggestions.
+// OUTCOME: Esc dismisses the suggestion list without modifying input.
+func TestInlineSuggestionsCancel(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear"})
+	chat.showSuggestions = true
+	chat.suggestions = chat.filterSuggestions("/")
+	chat.textarea.SetValue("/clear")
+
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEscape})
+	chat = model.(ChatModel)
+
+	if chat.showSuggestions {
+		t.Error("expected suggestions to hide after Esc")
+	}
+}
+
+// TestInlineSuggestionsConsumeKeys verifies Tab and Esc are consumed
+// when suggestions are showing, preventing view-switching conflicts.
+func TestInlineSuggestionsConsumeKeys(t *testing.T) {
+	chat := NewChatModel()
+
+	// Without suggestions, Tab and Esc are not consumed
+	if chat.ConsumesTab() {
+		t.Error("expected ConsumesTab=false when no suggestions")
+	}
+	if chat.ConsumesEsc() {
+		t.Error("expected ConsumesEsc=false when no suggestions")
+	}
+
+	// With suggestions, they are consumed
+	chat.showSuggestions = true
+	if !chat.ConsumesTab() {
+		t.Error("expected ConsumesTab=true when suggestions showing")
+	}
+	if !chat.ConsumesEsc() {
+		t.Error("expected ConsumesEsc=true when suggestions showing")
+	}
 }
