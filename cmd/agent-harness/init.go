@@ -316,6 +316,11 @@ func (app *App) initCommands() {
 			},
 		))
 
+	app.cmdRegistry.Register("init", "Initialize project with standard files",
+		commands.InitHandler(func(projectType string) (string, error) {
+			return app.initProject(projectType)
+		}))
+
 	app.cmdRegistry.Register("pr", "Manage pull requests",
 		commands.PRHandler(
 			func(title, body string) (string, error) {
