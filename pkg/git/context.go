@@ -12,12 +12,15 @@ import (
 
 // Context holds git context information
 type Context struct {
-	IsRepo     bool
-	Root       string
-	Branch     string
-	Commit     string
-	HasChanges bool
-	RemoteURL  string
+	IsRepo         bool
+	Root           string
+	Branch         string
+	Commit         string
+	HasChanges     bool
+	RemoteURL      string
+	RecentCommits  []string
+	StatusFiles    []string
+	TopLevelFiles  []string
 }
 
 // GetContext retrieves git context for the current directory
@@ -50,6 +53,21 @@ func GetContext() (*Context, error) {
 	// Get remote URL
 	if remote, err := getRemoteURL(); err == nil {
 		ctx.RemoteURL = remote
+	}
+
+	// Rich context: recent commits
+	if commits, err := getRecentCommits(3); err == nil {
+		ctx.RecentCommits = commits
+	}
+
+	// Rich context: status files (capped)
+	if status, err := getStatusShort(20); err == nil {
+		ctx.StatusFiles = status
+	}
+
+	// Rich context: top-level files (capped)
+	if files, err := getTopLevelFiles(15); err == nil {
+		ctx.TopLevelFiles = files
 	}
 
 	return ctx, nil
@@ -103,6 +121,57 @@ func getRemoteURL() (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+// getRecentCommits returns the last n commit messages (one-line)
+func getRecentCommits(n int) ([]string, error) {
+	cmd := exec.Command("git", "log", "--oneline", "-n", fmt.Sprintf("%d", n))
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(lines) == 1 && lines[0] == "" {
+		return []string{}, nil
+	}
+	return lines, nil
+}
+
+// getStatusShort returns git status --short lines capped at max
+func getStatusShort(max int) ([]string, error) {
+	cmd := exec.Command("git", "status", "--short")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+	all := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(all) == 1 && all[0] == "" {
+		return []string{}, nil
+	}
+	if len(all) > max {
+		all = all[:max]
+		all = append(all, "...")
+	}
+	return all, nil
+}
+
+// getTopLevelFiles returns top-level non-hidden files/dirs capped at max
+func getTopLevelFiles(max int) ([]string, error) {
+	cmd := exec.Command("git", "ls-tree", "--name-only", "HEAD")
+	out, err := cmd.Output()
+	if err != nil {
+		// Fallback to ls if not a git repo or no HEAD
+		return nil, err
+	}
+	all := strings.Split(strings.TrimSpace(string(out)), "\n")
+	if len(all) == 1 && all[0] == "" {
+		return []string{}, nil
+	}
+	if len(all) > max {
+		all = all[:max]
+		all = append(all, "...")
+	}
+	return all, nil
 }
 
 // GetDiff returns the current git diff
@@ -169,16 +238,4 @@ func IsIgnored(path string) bool {
 	cmd := exec.Command("git", "check-ignore", "-q", path)
 	err := cmd.Run()
 	return err == nil
-}
-
-// GetRecentCommits returns recent commit messages
-func GetRecentCommits(n int) ([]string, error) {
-	cmd := exec.Command("git", "log", "--oneline", "-n", fmt.Sprintf("%d", n))
-	out, err := cmd.Output()
-	if err != nil {
-		return nil, err
-	}
-
-	lines := strings.Split(strings.TrimSpace(string(out)), "\n")
-	return lines, nil
 }

@@ -15,6 +15,9 @@ type SystemPromptConfig struct {
 	PermissionMode   string
 	WorkingDirectory string
 	Skills           []string
+	RecentCommits    []string
+	StatusFiles      []string
+	TopLevelFiles    []string
 }
 
 // BuildSystemPrompt creates a comprehensive system prompt with clear guidance
@@ -66,19 +69,8 @@ For CODING TASKS and WORK:
 - When editing, match old_string exactly including indentation
 - After editing, verify the change looks correct`)
 
-	// Context about current environment
-	if config.GitContext != "" {
-		parts = append(parts, fmt.Sprintf("\n## Workspace Context\n\n%s", config.GitContext))
-	}
-
-	if config.WorkingDirectory != "" {
-		parts = append(parts, fmt.Sprintf("\nWorking directory: %s", config.WorkingDirectory))
-	}
-
-	// Permission mode context
-	if config.PermissionMode != "" {
-		parts = append(parts, fmt.Sprintf("\nPermission mode: %s", config.PermissionMode))
-	}
+	// Rich workspace context
+	parts = append(parts, buildWorkspaceContext(config))
 
 	// Response format guidance
 	parts = append(parts, `
@@ -94,6 +86,49 @@ For CODING TASKS and WORK:
 	if len(config.Skills) > 0 {
 		parts = append(parts, "\n## Additional Context\n")
 		parts = append(parts, config.Skills...)
+	}
+
+	return strings.Join(parts, "\n")
+}
+
+// buildWorkspaceContext formats git and project context for the LLM
+func buildWorkspaceContext(config SystemPromptConfig) string {
+	var parts []string
+	parts = append(parts, "\n## Workspace Context\n")
+
+	if config.WorkingDirectory != "" {
+		parts = append(parts, fmt.Sprintf("Working directory: %s", config.WorkingDirectory))
+	}
+
+	if config.GitContext != "" {
+		parts = append(parts, fmt.Sprintf("Git: %s", config.GitContext))
+	}
+
+	if len(config.RecentCommits) > 0 {
+		parts = append(parts, "\nRecent commits:")
+		for _, c := range config.RecentCommits {
+			parts = append(parts, fmt.Sprintf("  %s", c))
+		}
+	}
+
+	if len(config.StatusFiles) > 0 {
+		parts = append(parts, "\nUncommitted changes:")
+		for _, s := range config.StatusFiles {
+			parts = append(parts, fmt.Sprintf("  %s", s))
+		}
+	} else if config.GitContext != "" {
+		parts = append(parts, "\nWorking tree: clean")
+	}
+
+	if len(config.TopLevelFiles) > 0 {
+		parts = append(parts, "\nProject root entries:")
+		for _, f := range config.TopLevelFiles {
+			parts = append(parts, fmt.Sprintf("  %s", f))
+		}
+	}
+
+	if config.PermissionMode != "" {
+		parts = append(parts, fmt.Sprintf("\nPermission mode: %s", config.PermissionMode))
 	}
 
 	return strings.Join(parts, "\n")
