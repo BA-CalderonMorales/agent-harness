@@ -366,6 +366,17 @@ func PRHandler(createFn func(title, body string) (string, error), listFn func() 
 	}
 }
 
+// InitHandler scaffolds a new project with standard files.
+func InitHandler(initFn func(projectType string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		projectType := args
+		if projectType == "" {
+			projectType = "generic"
+		}
+		return initFn(projectType)
+	}
+}
+
 // VersionHandler returns version information
 func VersionHandler(version, buildInfo string) SlashHandler {
 	return func(args string) (string, error) {

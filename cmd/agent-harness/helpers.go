@@ -254,6 +254,41 @@ func detectProjectType(dir string) string {
 	return ""
 }
 
+// initProject scaffolds standard files for a new project.
+func (app *App) initProject(projectType string) (string, error) {
+	files := map[string]string{
+		"README.md": fmt.Sprintf("# %s\n\nProject initialized with agent-harness.\n", filepath.Base(app.cwd)),
+		".gitignore": "# Agent harness\n.agent-harness/sessions/\nbuild/\ndist/\n\n# OS\n.DS_Store\nThumbs.db\n",
+		"LICENSE":    "MIT License\n\nCopyright (c) " + fmt.Sprintf("%d", time.Now().Year()) + "\n\nPermission is hereby granted...\n",
+	}
+
+	switch projectType {
+	case "go", "Go":
+		files["go.mod"] = fmt.Sprintf("module %s\n\ngo 1.24\n", filepath.Base(app.cwd))
+		files["main.go"] = "package main\n\nimport \"fmt\"\n\nfunc main() {\n\tfmt.Println(\"Hello, world!\")\n}\n"
+		files["Makefile"] = ".PHONY: build run test\n\nbuild:\n\tgo build -o build/app .\n\nrun:\n\tgo run .\n\ntest:\n\tgo test ./...\n"
+	case "node", "Node":
+		files["package.json"] = fmt.Sprintf("{\n  \"name\": \"%s\",\n  \"version\": \"0.1.0\",\n  \"main\": \"index.js\"\n}\n", filepath.Base(app.cwd))
+		files["index.js"] = "console.log('Hello, world!');\n"
+	}
+
+	created := []string{}
+	for name, content := range files {
+		path := filepath.Join(app.cwd, name)
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+				return "", fmt.Errorf("failed to write %s: %w", name, err)
+			}
+			created = append(created, name)
+		}
+	}
+
+	if len(created) == 0 {
+		return "No files created — they already exist.", nil
+	}
+	return fmt.Sprintf("Initialized %s project. Created: %s", projectType, strings.Join(created, ", ")), nil
+}
+
 // isReadOnlyTool checks if a tool is read-only.
 func isReadOnlyTool(name string) bool {
 	readOnly := []string{"read", "glob", "grep", "search", "web_fetch", "web_search"}

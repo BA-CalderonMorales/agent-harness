@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**011: `/pr` slash command creates pull requests via GitHub CLI**
-> Agent harness can create pull requests directly from the TUI, completing the git workflow without leaving the chat.
+**012: `/init` command scaffolds new projects with standard files**
+> Agent harness can initialize a new project with README, .gitignore, LICENSE, and language-specific boilerplate directly from the chat.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -23,7 +23,8 @@
 | 008 | slash-branch | If we add a /branch command for create/switch/list/delete, users manage branches without leaving the TUI. | validated |
 | 009 | slash-plan | If we add a /plan command that puts the agent into planning mode, users get visibility into multi-step tasks before execution. | validated |
 | 010 | sub-agent-execution | If the agent tool actually runs a sub-query with fresh context and returns results, users can delegate parallel tasks. | validated |
-| 011 | slash-pr | If we add a /pr command that creates PRs via gh CLI, users complete the full git workflow inside the TUI. | active |
+| 011 | slash-pr | If we add a /pr command that creates PRs via gh CLI, users complete the full git workflow inside the TUI. | validated |
+| 012 | slash-init | If we add a /init command that scaffolds standard project files, users bootstrap projects without leaving the TUI. | active |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
