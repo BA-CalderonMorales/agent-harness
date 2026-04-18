@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.6] - 2026-04-18
+
+### Added
+- 21 new features across slash commands, tools, context, and reliability
+- /commit, /branch, /plan, /pr, /init, /memory, /skills, /agents, /test, /worktree slash commands
+- Auto-context injection, output truncation, auto-resume, loop compaction
+- Dynamic model list, sub-agent execution, markdown export, graceful shutdown
+
 ## [0.1.5] - 2026-04-13
 
 ### Changed
