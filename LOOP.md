@@ -7,8 +7,10 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**015: `/skills` command displays actual skill content for discovery**
-> Agent harness `/skills` command shows not just names but actual skill prompts and content, making loaded capabilities discoverable and understandable.
+**016: Dynamic model list from OpenRouter API**
+> /model command fetches available models from the provider API instead of showing a hardcoded list, so users always see current offerings including new releases.
+
+## Experiments
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -27,7 +29,7 @@
 | 012 | slash-init | If we add a /init command that scaffolds standard project files, users bootstrap projects without leaving the TUI. | validated |
 | 013 | llm-summarize-compact | If we summarize old messages with the LLM before dropping them, context quality stays high in long sessions. | validated |
 | 014 | slash-memory | If we add a /memory command that shows system prompt and recent context, users can debug what the LLM sees. | validated |
-| 015 | slash-skills-content | If /skills shows actual skill prompts instead of just names, users understand what capabilities are loaded. | active |
+| 015 | slash-skills-content | If /skills shows actual skill prompts instead of just names, users understand what capabilities are loaded. | validated |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
