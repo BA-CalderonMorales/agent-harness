@@ -13,7 +13,7 @@ type mockTransport struct {
 }
 
 func (m *mockTransport) Start(ctx context.Context) error { return nil }
-func (m *mockTransport) Close() error                     { return nil }
+func (m *mockTransport) Close() error                    { return nil }
 func (m *mockTransport) Send(ctx context.Context, req JSONRPCRequest) (*JSONRPCResponse, error) {
 	if m.index >= len(m.responses) {
 		return nil, fmt.Errorf("no more responses")

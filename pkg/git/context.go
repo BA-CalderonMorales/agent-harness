@@ -12,15 +12,15 @@ import (
 
 // Context holds git context information
 type Context struct {
-	IsRepo         bool
-	Root           string
-	Branch         string
-	Commit         string
-	HasChanges     bool
-	RemoteURL      string
-	RecentCommits  []string
-	StatusFiles    []string
-	TopLevelFiles  []string
+	IsRepo        bool
+	Root          string
+	Branch        string
+	Commit        string
+	HasChanges    bool
+	RemoteURL     string
+	RecentCommits []string
+	StatusFiles   []string
+	TopLevelFiles []string
 }
 
 // GetContext retrieves git context for the current directory
