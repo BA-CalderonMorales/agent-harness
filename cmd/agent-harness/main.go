@@ -10,9 +10,12 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 )
@@ -64,6 +67,22 @@ func run() error {
 		return err
 	}
 
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-sigCh
+		fmt.Println("\nSaving session before exit...")
+		if app.session != nil {
+			_ = app.session.SaveToFile(app.getSessionsDir() + "/" + app.session.ID + ".json")
+		}
+		cancel()
+		os.Exit(0)
+	}()
+
+	_ = ctx
 	return app.run()
 }
 
