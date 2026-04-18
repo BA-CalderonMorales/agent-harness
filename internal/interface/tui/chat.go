@@ -108,6 +108,7 @@ type ChatModel struct {
 	showSuggestions  bool
 	suggestions      []string
 	suggestionCursor int
+	suggestionOffset int // scroll window start
 	allCommands      []string
 }
 
@@ -289,11 +290,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "down", "j":
 				if m.suggestionCursor < len(m.suggestions)-1 {
 					m.suggestionCursor++
+					m.syncSuggestionOffset()
 				}
 				return m, nil
 			case "up", "k":
 				if m.suggestionCursor > 0 {
 					m.suggestionCursor--
+					m.syncSuggestionOffset()
 				}
 				return m, nil
 			case "enter":
@@ -653,6 +656,17 @@ func (m ChatModel) View() string {
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
+// syncSuggestionOffset keeps cursor inside visible window.
+func (m *ChatModel) syncSuggestionOffset() {
+	maxVisible := 6
+	if m.suggestionCursor < m.suggestionOffset {
+		m.suggestionOffset = m.suggestionCursor
+	}
+	if m.suggestionCursor >= m.suggestionOffset+maxVisible {
+		m.suggestionOffset = m.suggestionCursor - maxVisible + 1
+	}
+}
+
 // renderSuggestions renders the inline suggestion dropdown.
 func (m ChatModel) renderSuggestions() string {
 	var b strings.Builder
@@ -661,7 +675,16 @@ func (m ChatModel) renderSuggestions() string {
 		maxVisible = len(m.suggestions)
 	}
 
-	for i := 0; i < maxVisible; i++ {
+	start := m.suggestionOffset
+	if start < 0 {
+		start = 0
+	}
+	end := start + maxVisible
+	if end > len(m.suggestions) {
+		end = len(m.suggestions)
+	}
+
+	for i := start; i < end; i++ {
 		sug := m.suggestions[i]
 		indicator := "  "
 		style := HelpDimStyle
@@ -670,13 +693,20 @@ func (m ChatModel) renderSuggestions() string {
 			style = InfoStyle
 		}
 		b.WriteString(style.Render(indicator + sug))
-		if i < maxVisible-1 {
+		if i < end-1 {
 			b.WriteString("\n")
 		}
 	}
 	if len(m.suggestions) > maxVisible {
 		b.WriteString("\n")
-		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  ...and %d more", len(m.suggestions)-maxVisible)))
+		if start > 0 {
+			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  ...%d above", start)))
+			if end < len(m.suggestions) {
+				b.WriteString(HelpDimStyle.Render(fmt.Sprintf(" | %d below", len(m.suggestions)-end)))
+			}
+		} else {
+			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  ...and %d more", len(m.suggestions)-end)))
+		}
 	}
 	return b.String()
 }
@@ -850,6 +880,17 @@ func (m ChatModel) GetInput() string {
 // ClearInput clears the input.
 func (m *ChatModel) ClearInput() {
 	m.textarea.SetValue("")
+}
+
+// RemoveLastUserMessage removes the most recent user message from display.
+func (m *ChatModel) RemoveLastUserMessage() {
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == "user" {
+			m.messages = append(m.messages[:i], m.messages[i+1:]...)
+			m.refreshViewport()
+			return
+		}
+	}
 }
 
 // SetThinking sets the thinking state.

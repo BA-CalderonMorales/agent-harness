@@ -479,6 +479,26 @@ func ResetHandler(resetFn func() error) SlashHandler {
 	}
 }
 
+// LogoutHandler handles logout - clears credentials from memory and storage.
+func LogoutHandler(logoutFn func() error) SlashHandler {
+	return func(args string) (string, error) {
+		if err := logoutFn(); err != nil {
+			return "", err
+		}
+		return "Logged out. Credentials cleared from memory and storage. Run /login to authenticate.", nil
+	}
+}
+
+// LoginHandler handles login - starts the login wizard.
+func LoginHandler(startLoginFn func() error) SlashHandler {
+	return func(args string) (string, error) {
+		if err := startLoginFn(); err != nil {
+			return "", err
+		}
+		return "", nil
+	}
+}
+
 // IsReset checks if the result is a reset command
 func IsReset(result string) bool {
 	return result == "__RESET__"
