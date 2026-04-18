@@ -157,14 +157,17 @@ func StatusHandler(getStatus func() string) SlashHandler {
 	}
 }
 
-// ClearHandler clears the session and optionally the TUI chat
-func ClearHandler(clearFn func() error, clearChatFn func()) SlashHandler {
+// ClearHandler clears the session and optionally the TUI chat.
+// When clearChatFn is provided, it receives the confirmation message to display;
+// the handler returns an empty string to avoid double-adding the message.
+func ClearHandler(clearFn func() error, clearChatFn func(string)) SlashHandler {
 	return func(args string) (string, error) {
 		if err := clearFn(); err != nil {
 			return "", err
 		}
 		if clearChatFn != nil {
-			clearChatFn()
+			clearChatFn("Session cleared.")
+			return "", nil
 		}
 		return "Session cleared.", nil
 	}

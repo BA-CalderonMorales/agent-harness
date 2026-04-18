@@ -88,6 +88,7 @@ func (app *App) run() error {
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetModels(app.getModelItems())
 	tuiApp.SetChatModel(app.session.Model)
+	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
 
 	return tui.Run(tuiApp)
 }
