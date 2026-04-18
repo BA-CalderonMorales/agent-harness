@@ -7,8 +7,8 @@
 - KISS: minimal changes, maximum DX impact
 
 ## Active Outcome
-**007: Project type detection in welcome + AGENTS.md freshness**
-> Agent harness welcome message shows the detected project language, and AGENTS.md stays current with recent capabilities.
+**008: `/branch` slash command for git branch management**
+> Agent harness supports listing, creating, switching, and deleting branches directly from the TUI, eliminating another common reason to leave the chat.
 
 ## Experiments
 | ID | Name | Hypothesis | Status |
@@ -20,6 +20,7 @@
 | 005 | loop-auto-compact | If the loop auto-compacts old messages when token count exceeds 80% of limit, long sessions won't hit hard blocking errors. | validated |
 | 006 | slash-commit | If we add a /commit command that stages and commits, users stay in flow without leaving the TUI. | validated |
 | 007 | project-type-welcome | If the welcome message detects go.mod/package.json/etc., users immediately know the agent understands their stack. | validated |
+| 008 | slash-branch | If we add a /branch command for create/switch/list/delete, users manage branches without leaving the TUI. | active |
 
 ## Picks
 - **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
