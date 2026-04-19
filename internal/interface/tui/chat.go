@@ -30,6 +30,11 @@ type UserCommandMsg struct {
 	Command string
 }
 
+// submitTimerMsg is sent when the Enter-debounce timer fires.
+type submitTimerMsg struct {
+	generation int
+}
+
 // ---------------------------------------------------------------------------
 // ChatDelegate handles chat actions
 // ---------------------------------------------------------------------------
@@ -69,6 +74,10 @@ const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
 )
+
+// SubmitDebounceDuration is the window after Enter during which another
+// keystroke causes the Enter to be treated as a newline (paste continuation).
+var SubmitDebounceDuration = 80 * time.Millisecond
 
 // ---------------------------------------------------------------------------
 // ChatModel is the chat view model
@@ -119,6 +128,10 @@ type ChatModel struct {
 
 	// Paste detection state
 	pasteDetected bool // true if current input was detected as a paste
+
+	// Debounce state for distinguishing intentional Enter from pasted newlines
+	pendingSubmit    bool
+	pendingSubmitGen int
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -358,39 +371,19 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Handle slash commands
-			trimmed := strings.TrimSpace(input)
-			if strings.HasPrefix(trimmed, "/") {
-				m.AddMessage("user", trimmed)
-				if m.delegate != nil {
-					m.delegate.OnCommand(trimmed)
-				}
-			} else {
-				// Regular message: collapse pasted text in display when it is
-				// multiline or exceeds the character threshold.
-				displayText := input
-				if m.pasteDetected {
-					lineCount := strings.Count(input, "\n") + 1
-					if lineCount > 1 {
-						displayText = fmt.Sprintf("[Pasted text, %d lines, %d characters]", lineCount, len(input))
-					} else if len(input) > PasteDisplayThreshold {
-						displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
-					}
-				}
-				m.AddMessage("user", displayText)
-				if m.delegate != nil {
-					cmd := m.delegate.OnSubmit(input)
-					m.textarea.SetValue("")
-					m.pasteDetected = false
-					m.refreshViewport()
-					return m, cmd
-				}
+			// If a submit is already pending, this Enter is part of a paste stream.
+			if m.pendingSubmit {
+				m.textarea.InsertString("\n")
+				return m, m.startSubmitTimer()
 			}
 
-			m.pasteDetected = false
-			m.textarea.SetValue("")
-			m.refreshViewport()
-			return m, nil
+			// Debounce: start submit timer. If another key arrives before the
+			// timer fires, the Enter is treated as a pasted newline.
+			if SubmitDebounceDuration <= 0 {
+				return m.doSubmit()
+			}
+			m.pendingSubmit = true
+			return m, m.startSubmitTimer()
 
 		case tea.KeyCtrlC:
 			// Allow Ctrl+C to propagate for quit
@@ -401,8 +394,21 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Treat Ctrl+J (line feed) as newline insertion.
 			// This preserves pasted newlines from terminals that send
 			// raw LF instead of bracketed paste events.
+			if m.pendingSubmit {
+				m.pendingSubmit = false
+				m.pendingSubmitGen++
+			}
 			m.textarea.InsertString("\n")
 			return m, nil
+		}
+
+		// If another key arrives while a submit is pending, the previous
+		// Enter was part of a paste stream — cancel the submit and insert
+		// the newline that Enter would have represented.
+		if m.pendingSubmit {
+			m.pendingSubmit = false
+			m.pendingSubmitGen++
+			m.textarea.InsertString("\n")
 		}
 
 		// Update textarea
@@ -441,6 +447,19 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Always continue ticking - timer controls whether to update elapsed
 		return m, m.startTimer()
+
+	// -------------------------------------------------------------------------
+	// Submit debounce timer
+	// -------------------------------------------------------------------------
+	case submitTimerMsg:
+		if !m.focused {
+			return m, nil
+		}
+		if msg.generation == m.pendingSubmitGen && m.pendingSubmit {
+			m.pendingSubmit = false
+			return m.doSubmit()
+		}
+		return m, nil
 
 	// -------------------------------------------------------------------------
 	// Async agent messages - real-time streaming
@@ -766,6 +785,8 @@ func (m *ChatModel) Focus() {
 func (m *ChatModel) Blur() {
 	m.focused = false
 	m.textarea.Blur()
+	m.pendingSubmit = false
+	m.pendingSubmitGen++
 }
 
 // AddMessage adds a message to the chat.
@@ -968,6 +989,57 @@ func (m *ChatModel) startTimer() tea.Cmd {
 // timerTickMsg is sent on each timer tick
 type timerTickMsg struct {
 	time time.Time
+}
+
+// doSubmit performs the actual message submission after the debounce window.
+func (m ChatModel) doSubmit() (ChatModel, tea.Cmd) {
+	input := m.textarea.Value()
+	if input == "" {
+		return m, nil
+	}
+
+	// Handle slash commands
+	trimmed := strings.TrimSpace(input)
+	if strings.HasPrefix(trimmed, "/") {
+		m.AddMessage("user", trimmed)
+		if m.delegate != nil {
+			m.delegate.OnCommand(trimmed)
+		}
+	} else {
+		// Regular message: collapse pasted text in display when it is
+		// multiline or exceeds the character threshold.
+		displayText := input
+		if m.pasteDetected {
+			lineCount := strings.Count(input, "\n") + 1
+			if lineCount > 1 {
+				displayText = fmt.Sprintf("[Pasted text, %d lines, %d characters]", lineCount, len(input))
+			} else if len(input) > PasteDisplayThreshold {
+				displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
+			}
+		}
+		m.AddMessage("user", displayText)
+		if m.delegate != nil {
+			cmd := m.delegate.OnSubmit(input)
+			m.textarea.SetValue("")
+			m.pasteDetected = false
+			m.refreshViewport()
+			return m, cmd
+		}
+	}
+
+	m.pasteDetected = false
+	m.textarea.SetValue("")
+	m.refreshViewport()
+	return m, nil
+}
+
+// startSubmitTimer returns a command that fires after SubmitDebounceDuration.
+func (m *ChatModel) startSubmitTimer() tea.Cmd {
+	m.pendingSubmitGen++
+	gen := m.pendingSubmitGen
+	return tea.Tick(SubmitDebounceDuration, func(t time.Time) tea.Msg {
+		return submitTimerMsg{generation: gen}
+	})
 }
 
 // renderStatusLine renders the thinking/streaming status with timer

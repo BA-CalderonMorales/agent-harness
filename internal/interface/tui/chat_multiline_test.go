@@ -10,6 +10,10 @@ import (
 // TestMultilinePasteScenarios covers edge cases for multiline paste handling.
 // These are table-driven complements to the Ginkgo paste-detection specs.
 func TestMultilinePasteScenarios(t *testing.T) {
+	oldDebounce := SubmitDebounceDuration
+	SubmitDebounceDuration = 0 // immediate submit for legacy scenarios
+	defer func() { SubmitDebounceDuration = oldDebounce }()
+
 	delegate := &testChatDelegate{}
 
 	tests := []struct {

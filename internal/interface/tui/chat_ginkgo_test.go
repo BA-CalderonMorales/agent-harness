@@ -48,6 +48,7 @@ var _ = Describe("ChatModel", func() {
 		chat = NewChatModel()
 		delegate = &testChatDelegate{}
 		chat.SetDelegate(delegate)
+		SubmitDebounceDuration = 0 // immediate submit for legacy specs
 	})
 
 	// ========================================================================
