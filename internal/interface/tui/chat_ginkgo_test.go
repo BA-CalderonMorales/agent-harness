@@ -53,6 +53,128 @@ var _ = Describe("ChatModel", func() {
 	})
 
 	// ========================================================================
+	// Tool Display — Single-line replacement and status line
+	// ========================================================================
+	Describe("Tool Display", func() {
+		Context("Given a tool starts during an agent turn", func() {
+			It("should show the tool message in the viewport", func() {
+				By("starting the agent turn")
+				chat.AddMessage("user", "run a command")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("receiving a tool start message")
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "tool-1",
+					ToolName:     "bash",
+					DisplayName:  "Shell",
+					ActivityDesc: "ls -la",
+				})
+				chat = model.(ChatModel)
+
+				By("verifying the tool message was created")
+				Expect(chat.currentToolMsg).ToNot(BeNil())
+				Expect(chat.currentToolMsg.ToolName).To(Equal("bash"))
+				Expect(chat.currentToolMsg.ToolStatus).To(Equal(ToolStatusRunning))
+			})
+		})
+
+		Context("Given a tool completes successfully", func() {
+			It("should update the tool status to success", func() {
+				chat.AddMessage("user", "run a command")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "tool-1",
+					ToolName:     "bash",
+					DisplayName:  "Shell",
+					ActivityDesc: "ls -la",
+				})
+				chat = model.(ChatModel)
+
+				By("receiving tool done")
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
+				chat = model.(ChatModel)
+
+				By("verifying the completed tool is stored")
+				Expect(chat.completedToolMsg).ToNot(BeNil())
+				Expect(chat.completedToolMsg.ToolStatus).To(Equal(ToolStatusSuccess))
+				Expect(chat.currentToolMsg).To(BeNil())
+			})
+		})
+
+		Context("Given the agent turn completes after a tool ran", func() {
+			It("should move the completed tool into message history", func() {
+				chat.AddMessage("user", "run a command")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "tool-1",
+					ToolName:     "bash",
+					DisplayName:  "Shell",
+					ActivityDesc: "ls -la",
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
+				chat = model.(ChatModel)
+
+				By("completing the agent turn")
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "Done"})
+				chat = model.(ChatModel)
+
+				By("verifying the tool is in message history")
+				Expect(chat.completedToolMsg).To(BeNil())
+				var toolMsgs []ChatMessage
+				for _, msg := range chat.messages {
+					if msg.IsTool {
+						toolMsgs = append(toolMsgs, msg)
+					}
+				}
+				Expect(toolMsgs).To(HaveLen(1))
+				Expect(toolMsgs[0].ToolStatus).To(Equal(ToolStatusSuccess))
+			})
+		})
+
+		Context("Given multiple tools run in one turn", func() {
+			It("should clear the previous completed tool when a new one starts", func() {
+				chat.AddMessage("user", "run commands")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("starting first tool")
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "tool-1",
+					ToolName:     "read",
+					DisplayName:  "Read File",
+					ActivityDesc: "cat main.go",
+				})
+				chat = model.(ChatModel)
+
+				By("completing first tool")
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
+				chat = model.(ChatModel)
+
+				By("starting second tool")
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "tool-2",
+					ToolName:     "bash",
+					DisplayName:  "Shell",
+					ActivityDesc: "go test",
+				})
+				chat = model.(ChatModel)
+
+				By("verifying the previous completed tool was cleared")
+				Expect(chat.completedToolMsg).To(BeNil())
+				Expect(chat.currentToolMsg).ToNot(BeNil())
+				Expect(chat.currentToolMsg.ToolName).To(Equal("bash"))
+			})
+		})
+	})
+
+	// ========================================================================
 	// Paste Detection — Display Behaviour
 	// ========================================================================
 	Describe("Paste Detection", func() {
@@ -820,6 +942,194 @@ var _ = Describe("ChatModel", func() {
 				By("verifying suggestions were dismissed")
 				Expect(chat.showSuggestions).To(BeFalse())
 				Expect(chat.textarea.Value()).To(Equal("/" + pasted))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Follow-up Question Rendering
+	// ========================================================================
+	Describe("Follow-up Question Rendering", func() {
+		Context("Given a user asks a question, agent responds, then user asks a follow-up", func() {
+			It("should keep both user messages visible in the message list", func() {
+				By("submitting the first question")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q1")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("simulating agent start")
+				model, _ = chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("simulating agent response")
+				model, _ = chat.Update(AgentChunkMsg{Text: "a1"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "a1"})
+				chat = model.(ChatModel)
+
+				By("submitting the follow-up question")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q2")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying all three messages are present")
+				Expect(chat.messages).To(HaveLen(3))
+				Expect(chat.messages[0].Role).To(Equal("user"))
+				Expect(chat.messages[0].Content).To(Equal("q1"))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Content).To(Equal("a1"))
+				Expect(chat.messages[2].Role).To(Equal("user"))
+				Expect(chat.messages[2].Content).To(Equal("q2"))
+			})
+		})
+
+		Context("Given a follow-up is submitted while the agent is still thinking", func() {
+			It("should refresh the viewport so the new user message is visible", func() {
+				By("submitting the first question and starting agent")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q1")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("submitting a follow-up while thinking")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q2")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying both user messages exist")
+				Expect(chat.messages).To(HaveLen(2))
+				Expect(chat.messages[0].Content).To(Equal("q1"))
+				Expect(chat.messages[1].Content).To(Equal("q2"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Streaming robustness — mid-stream messages
+	// ========================================================================
+	Describe("Streaming Robustness", func() {
+		Context("Given a system message is added while the agent is streaming", func() {
+			It("should continue updating the correct assistant message", func() {
+				By("starting the agent response")
+				chat.AddMessage("user", "hello")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("receiving the first chunk")
+				model, _ = chat.Update(AgentChunkMsg{Text: "Hello"})
+				chat = model.(ChatModel)
+				Expect(chat.messages).To(HaveLen(2))
+				Expect(chat.messages[1].Content).To(Equal("Hello"))
+
+				By("adding a system message mid-stream (simulating /steer confirmation)")
+				chat.AddMessage("system", "Steered: check tests")
+
+				By("receiving the next chunk")
+				model, _ = chat.Update(AgentChunkMsg{Text: " world"})
+				chat = model.(ChatModel)
+
+				By("verifying the assistant message was updated, not a new one created")
+				Expect(chat.messages).To(HaveLen(3))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Content).To(Equal("Hello world"))
+				Expect(chat.messages[2].Role).To(Equal("system"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Steer Queue
+	// ========================================================================
+	Describe("Steer Queue", func() {
+		Context("Given a steer message is queued during an agent turn", func() {
+			It("should auto-submit the steer message after AgentDoneMsg", func() {
+				By("starting an agent turn")
+				chat.AddMessage("user", "hello")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("queuing a steer message")
+				chat.QueueSteer("check the tests")
+				Expect(chat.GetSteerQueue()).To(HaveLen(1))
+
+				By("completing the agent turn")
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "done"})
+				chat = model.(ChatModel)
+
+				By("verifying the steer message was added to chat")
+				Expect(chat.messages).To(HaveLen(3)) // user, assistant, steer-user
+				Expect(chat.messages[2].Role).To(Equal("user"))
+				Expect(chat.messages[2].Content).To(Equal("check the tests"))
+
+				By("verifying the delegate received the steer text")
+				Expect(delegate.submittedText).To(Equal("check the tests"))
+				Expect(chat.GetSteerQueue()).To(HaveLen(0))
+			})
+		})
+
+		Context("Given multiple steer messages are queued", func() {
+			It("should submit only the first one after AgentDoneMsg", func() {
+				chat.AddMessage("user", "hello")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				chat.QueueSteer("first")
+				chat.QueueSteer("second")
+
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "done"})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(3))
+				Expect(chat.messages[2].Content).To(Equal("first"))
+				Expect(chat.GetSteerQueue()).To(HaveLen(1))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Paste detection via pending-submit Enter
+	// ========================================================================
+	Describe("Paste Detection via Debounce Enter", func() {
+		BeforeEach(func() {
+			SubmitDebounceDuration = 10 * time.Millisecond
+		})
+
+		AfterEach(func() {
+			SubmitDebounceDuration = 0
+		})
+
+		Context("Given Enter arrives while a submit is pending", func() {
+			It("should mark pasteDetected so the final display collapses", func() {
+				By("typing a long first line and pressing Enter")
+				longLine := strings.Repeat("a", PasteDisplayThreshold+1)
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(longLine)})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("receiving another Enter while pending (simulating pasted newline)")
+				Expect(chat.pendingSubmit).To(BeTrue())
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying pasteDetected was set")
+				Expect(chat.pasteDetected).To(BeTrue())
+
+				By("submitting after the paste")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+				gen := chat.pendingSubmitGen
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying the display is collapsed")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
 			})
 		})
 	})
