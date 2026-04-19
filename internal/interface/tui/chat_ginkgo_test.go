@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
@@ -439,6 +440,439 @@ var _ = Describe("ChatModel", func() {
 				Expect(chat.messages).To(HaveLen(1))
 				Expect(delegate.submittedText).To(Equal("go " + strings.Repeat("x", 25) + "\nsecond line"))
 				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Submit Debounce — Termux paste spam prevention
+	// ========================================================================
+	Describe("Submit Debounce", func() {
+		BeforeEach(func() {
+			SubmitDebounceDuration = 10 * time.Millisecond
+		})
+
+		AfterEach(func() {
+			SubmitDebounceDuration = 0
+		})
+
+		Context("Given a Termux paste where newlines arrive as KeyEnter", func() {
+			It("should submit exactly one message after the timer fires", func() {
+				By("pasting the first line")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("line1")})
+				chat = model.(ChatModel)
+
+				By("receiving Enter as a pasted newline")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("pasting the second line before the debounce fires")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("line2")})
+				chat = model.(ChatModel)
+
+				By("verifying no messages were submitted yet")
+				Expect(chat.messages).To(HaveLen(0))
+				Expect(chat.textarea.Value()).To(Equal("line1\nline2"))
+
+				By("pressing Enter to submit after the paste")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("firing the debounce timer")
+				gen := chat.pendingSubmitGen
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying exactly one message was submitted")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(delegate.submittedText).To(Equal("line1\nline2"))
+			})
+		})
+
+		Context("Given consecutive Enter events during a paste", func() {
+			It("should treat them as blank lines and still submit once", func() {
+				By("typing a character")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+				chat = model.(ChatModel)
+
+				By("receiving two consecutive Enters in the paste")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("typing the next line")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("b")})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit after the paste")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("firing the debounce timer")
+				gen := chat.pendingSubmitGen
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying the message contains blank lines")
+				Expect(delegate.submittedText).To(Equal("a\n\nb"))
+			})
+		})
+
+		Context("Given Ctrl+J arrives while a submit is pending", func() {
+			It("should cancel the pending submit and insert a newline", func() {
+				By("typing a character and pressing Enter")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("pressing Ctrl+J before the timer fires")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyCtrlJ})
+				chat = model.(ChatModel)
+
+				By("verifying the textarea has a newline but no submit yet")
+				Expect(chat.textarea.Value()).To(Equal("a\n"))
+				Expect(chat.messages).To(HaveLen(0))
+
+				By("firing the stale timer")
+				gen := chat.pendingSubmitGen - 1
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying the stale timer did not submit")
+				Expect(chat.messages).To(HaveLen(0))
+			})
+		})
+
+		Context("Given an empty input and Enter is pressed", func() {
+			It("should not start a debounce timer", func() {
+				By("pressing Enter with empty input")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying no pending submit was started")
+				Expect(chat.pendingSubmit).To(BeFalse())
+			})
+		})
+
+		Context("Given a backspace arrives while a submit is pending", func() {
+			It("should cancel the pending submit and NOT insert a newline", func() {
+				By("typing 'ab' and pressing Enter")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("ab")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("pressing Backspace before the timer fires")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+				chat = model.(ChatModel)
+
+				By("verifying the textarea reflects a backspace, not a newline")
+				Expect(chat.textarea.Value()).To(Equal("a"))
+				Expect(chat.pendingSubmit).To(BeFalse())
+			})
+		})
+
+		Context("Given an escape key arrives while a submit is pending", func() {
+			It("should cancel the pending submit and NOT insert a newline", func() {
+				By("typing text and pressing Enter")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("pressing Escape before the timer fires")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				chat = model.(ChatModel)
+
+				By("verifying the textarea is unchanged and submit was cancelled")
+				Expect(chat.textarea.Value()).To(Equal("hello"))
+				Expect(chat.pendingSubmit).To(BeFalse())
+			})
+		})
+
+		Context("Given a spam paste of 5 short lines in Termux", func() {
+			It("should result in exactly one submission with collapsed display", func() {
+				lines := []string{
+					"Line 1: First requirement",
+					"Line 2: Second requirement",
+					"Line 3: Third requirement",
+					"Line 4: Fourth requirement",
+					"Line 5: Fifth requirement",
+				}
+
+				By("simulating Termux paste with Enter-separated short lines")
+				for i, line := range lines {
+					model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(line)})
+					chat = model.(ChatModel)
+
+					if i < len(lines)-1 {
+						model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+						chat = model.(ChatModel)
+					}
+				}
+
+				By("verifying zero messages mid-paste")
+				Expect(chat.messages).To(HaveLen(0))
+
+				By("pressing Enter to submit")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("firing the debounce timer")
+				gen := chat.pendingSubmitGen
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying exactly one collapsed message")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(delegate.submittedText).To(ContainSubstring("Line 1"))
+				Expect(delegate.submittedText).To(ContainSubstring("Line 5"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Short multiline paste detection (Termux without bracketed paste)
+	// ========================================================================
+	Describe("Short Multiline Paste Detection", func() {
+		BeforeEach(func() {
+			SubmitDebounceDuration = 10 * time.Millisecond
+		})
+
+		AfterEach(func() {
+			SubmitDebounceDuration = 0
+		})
+
+		Context("Given 5 short lines pasted in Termux (no bracketed paste)", func() {
+			It("should collapse because the second line triggers paste detection", func() {
+				By("pasting line 1 (short, does not trigger heuristic)")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hi")})
+				chat = model.(ChatModel)
+
+				By("receiving Enter then line 2 (paste stream detected)")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("bye")})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit after the paste")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("firing the debounce timer")
+				gen := chat.pendingSubmitGen
+				model, _ = chat.Update(submitTimerMsg{generation: gen})
+				chat = model.(ChatModel)
+
+				By("verifying the display is collapsed")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(delegate.submittedText).To(Equal("hi\nbye"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Edge Cases
+	// ========================================================================
+	Describe("Edge Cases", func() {
+		Context("Given a paste at exactly the display threshold", func() {
+			It("should NOT collapse a single-line paste of exactly 200 chars", func() {
+				pasted := strings.Repeat("x", PasteDisplayThreshold)
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal(pasted))
+			})
+		})
+
+		Context("Given a paste one character above the threshold", func() {
+			It("should collapse a single-line paste of 201 chars", func() {
+				pasted := strings.Repeat("x", PasteDisplayThreshold+1)
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 201 characters]"))
+			})
+		})
+
+		Context("Given a paste with leading and trailing whitespace", func() {
+			It("should preserve whitespace in submitted text but collapse display", func() {
+				pasted := "  " + strings.Repeat("a", PasteDisplayThreshold) + "  "
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 204 characters]"))
+				Expect(delegate.submittedText).To(Equal(pasted))
+			})
+		})
+
+		Context("Given a very long single-line paste", func() {
+			It("should show the exact character count in the collapse placeholder", func() {
+				pasted := strings.Repeat("z", 10000)
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 10000 characters]"))
+			})
+		})
+
+		Context("Given a paste containing only newlines", func() {
+			It("should collapse and show line count", func() {
+				pasted := "\n\n\n"
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 4 lines, 3 characters]"))
+			})
+		})
+
+		Context("Given two consecutive pastes without clearing", func() {
+			It("should collapse both independently", func() {
+				By("pasting the first long text")
+				pasted1 := strings.Repeat("a", PasteDisplayThreshold+10)
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted1),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("pasting the second long text")
+				pasted2 := strings.Repeat("b", PasteDisplayThreshold+20)
+				model, _ = chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted2),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying both messages are collapsed")
+				Expect(chat.messages).To(HaveLen(2))
+				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[1].Content).To(ContainSubstring("[Pasted text,"))
+			})
+		})
+
+		Context("Given suggestions are showing and a paste arrives with a space", func() {
+			It("should dismiss suggestions and accept the pasted text", func() {
+				By("typing '/' to trigger suggestions")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("/")})
+				chat = model.(ChatModel)
+				Expect(chat.showSuggestions).To(BeTrue())
+
+				By("pasting text containing a space (no longer a slash command)")
+				pasted := strings.Repeat("x", PasteDisplayThreshold+10) + " world"
+				model, _ = chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				By("verifying suggestions were dismissed")
+				Expect(chat.showSuggestions).To(BeFalse())
+				Expect(chat.textarea.Value()).To(Equal("/" + pasted))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Focus / Blur interactions
+	// ========================================================================
+	Describe("Focus and Blur", func() {
+		BeforeEach(func() {
+			SubmitDebounceDuration = 10 * time.Millisecond
+		})
+
+		AfterEach(func() {
+			SubmitDebounceDuration = 0
+		})
+
+		Context("Given the view is blurred while a submit is pending", func() {
+			It("should cancel the pending submit", func() {
+				By("typing text and pressing Enter")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.pendingSubmit).To(BeTrue())
+
+				By("blurring the chat view")
+				chat.Blur()
+
+				By("verifying the pending submit was cancelled")
+				Expect(chat.pendingSubmit).To(BeFalse())
+			})
+		})
+
+		Context("Given a stale timer fires after blur", func() {
+			It("should NOT submit because generation no longer matches", func() {
+				By("typing text and pressing Enter")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				oldGen := chat.pendingSubmitGen
+
+				By("blurring the view (increments generation)")
+				chat.Blur()
+
+				By("firing a timer with the old generation")
+				model, _ = chat.Update(submitTimerMsg{generation: oldGen})
+				chat = model.(ChatModel)
+
+				By("verifying no message was submitted")
+				Expect(chat.messages).To(HaveLen(0))
 			})
 		})
 	})
