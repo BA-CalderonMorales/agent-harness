@@ -323,4 +323,122 @@ var _ = Describe("ChatModel", func() {
 			})
 		})
 	})
+
+	// ========================================================================
+	// Multiline Paste Truncation
+	// ========================================================================
+	Describe("Multiline Paste Truncation", func() {
+		Context("Given a bracketed paste with multiple lines below the char threshold", func() {
+			It("should collapse and show line count", func() {
+				By("pasting a short multiline block via bracketed paste")
+				pasted := "Line one\nLine two\nLine three"
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying the collapsed placeholder shows line count")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Role).To(Equal("user"))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 3 lines, 28 characters]"))
+				Expect(delegate.submittedText).To(Equal(pasted))
+			})
+		})
+
+		Context("Given a bracketed paste with multiple lines above the char threshold", func() {
+			It("should collapse and show line count", func() {
+				By("pasting a long multiline block via bracketed paste")
+				pasted := strings.Repeat("a", 100) + "\n" + strings.Repeat("b", 110)
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying the collapsed placeholder shows line count and chars")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 2 lines, 211 characters]"))
+			})
+		})
+
+		Context("Given a single-line bracketed paste below the threshold", func() {
+			It("should display the full text", func() {
+				By("pasting a short single-line block via bracketed paste")
+				pasted := "Short single line"
+				model, _ := chat.Update(tea.KeyMsg{
+					Type:  tea.KeyRunes,
+					Runes: []rune(pasted),
+					Paste: true,
+				})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying the full text is displayed")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages[0].Content).To(Equal(pasted))
+			})
+		})
+
+		Context("Given Ctrl+J (line feed) during manual typing", func() {
+			It("should insert a newline in the textarea", func() {
+				By("typing 'hello'")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("hello")})
+				chat = model.(ChatModel)
+
+				By("pressing Ctrl+J to insert a newline")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyCtrlJ})
+				chat = model.(ChatModel)
+
+				By("typing 'world'")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("world")})
+				chat = model.(ChatModel)
+
+				By("verifying the textarea contains the newline")
+				Expect(chat.textarea.Value()).To(Equal("hello\nworld"))
+			})
+		})
+
+		Context("Given a heuristic paste containing Ctrl+J line feeds", func() {
+			It("should preserve newlines and submit as one message", func() {
+				By("typing a short prefix")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("go ")})
+				chat = model.(ChatModel)
+
+				By("simulating a paste of 25 characters")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("x", 25))})
+				chat = model.(ChatModel)
+
+				By("receiving a Ctrl+J line feed from the terminal")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyCtrlJ})
+				chat = model.(ChatModel)
+
+				By("typing more text after the line feed")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("second line")})
+				chat = model.(ChatModel)
+
+				By("pressing Enter to submit")
+				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				By("verifying a single message was submitted with newlines preserved")
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(delegate.submittedText).To(Equal("go " + strings.Repeat("x", 25) + "\nsecond line"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+			})
+		})
+	})
 })
