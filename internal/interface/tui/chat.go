@@ -64,6 +64,12 @@ const (
 	ToolStatusComplete ToolStatus = "complete" // Generic completion (no success/error distinction)
 )
 
+// Paste detection thresholds.
+const (
+	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
+	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
+)
+
 // ---------------------------------------------------------------------------
 // ChatModel is the chat view model
 // ---------------------------------------------------------------------------
@@ -110,6 +116,9 @@ type ChatModel struct {
 	suggestionCursor int
 	suggestionOffset int // scroll window start
 	allCommands      []string
+
+	// Paste detection state
+	pasteDetected bool // true if current input was detected as a paste
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -284,6 +293,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Detect bracketed paste from terminal
+		if msg.Paste {
+			m.pasteDetected = true
+		}
+
 		// Inline suggestion navigation
 		if m.showSuggestions {
 			switch msg.String() {
@@ -352,28 +366,46 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.delegate.OnCommand(trimmed)
 				}
 			} else {
-				// Regular message
-				m.AddMessage("user", input)
+				// Regular message: collapse long pasted text in display
+				displayText := input
+				if m.pasteDetected && len(input) > PasteDisplayThreshold {
+					displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
+				}
+				m.AddMessage("user", displayText)
 				if m.delegate != nil {
 					cmd := m.delegate.OnSubmit(input)
 					m.textarea.SetValue("")
+					m.pasteDetected = false
 					m.refreshViewport()
 					return m, cmd
 				}
 			}
 
+			m.pasteDetected = false
 			m.textarea.SetValue("")
 			m.refreshViewport()
 			return m, nil
 
 		case tea.KeyCtrlC:
 			// Allow Ctrl+C to propagate for quit
+			m.pasteDetected = false
 			return m, nil
 		}
 
 		// Update textarea
+		lastLen := len(m.textarea.Value())
 		newTA, cmd := m.textarea.Update(msg)
 		m.textarea = newTA
+
+		// Heuristic paste detection for terminals without bracketed paste
+		if !msg.Paste && len(m.textarea.Value())-lastLen > PasteHeuristicThreshold {
+			m.pasteDetected = true
+		}
+		// Reset paste flag if input was cleared
+		if len(m.textarea.Value()) == 0 {
+			m.pasteDetected = false
+		}
+
 		cmds = append(cmds, cmd)
 
 		// Refresh suggestions if showing
