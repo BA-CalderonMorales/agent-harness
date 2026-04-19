@@ -532,6 +532,18 @@ func IsReset(result string) bool {
 	return result == "__RESET__"
 }
 
+// SteerHandler queues a message for the current chat turn without interrupting
+// the agent. The queued message is auto-submitted after the turn completes.
+func SteerHandler(queueFn func(string)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" {
+			return "Usage: /steer <message>\nQueue a message for the current chat without interrupting the agent.", nil
+		}
+		queueFn(args)
+		return "", nil
+	}
+}
+
 // QuitHandler handles quitting
 func QuitHandler() SlashHandler {
 	return func(args string) (string, error) {

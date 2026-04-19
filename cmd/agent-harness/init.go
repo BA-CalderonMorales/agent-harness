@@ -636,6 +636,12 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 				tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: msg})
 			},
 		))
+
+	app.cmdRegistry.Register("steer", "Queue a message for the current turn",
+		commands.SteerHandler(func(msg string) {
+			tuiApp.QueueSteer(msg)
+			tuiApp.AddMessage("system", "Steered: "+msg)
+		}))
 }
 
 // requireGitRepo returns an error if the app is not inside a git repository.
