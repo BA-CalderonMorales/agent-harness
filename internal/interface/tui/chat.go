@@ -175,7 +175,14 @@ func getMarkdownRenderer() (*glamour.TermRenderer, error) {
 
 // renderMarkdown converts markdown text to ANSI-styled text
 // In Termux, this returns plain text to avoid performance issues
-func renderMarkdown(content string, width int) string {
+func renderMarkdown(content string, width int) (result string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] renderMarkdown: %v\n", r)
+			result = content
+		}
+	}()
+
 	if strings.TrimSpace(content) == "" {
 		return content
 	}
@@ -405,10 +412,15 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// If another key arrives while a submit is pending, the previous
 		// Enter was part of a paste stream — cancel the submit and insert
 		// the newline that Enter would have represented.
+		// Only do this for character keys (runes/space); control keys like
+		// Backspace or Escape should simply cancel the pending submit.
 		if m.pendingSubmit {
 			m.pendingSubmit = false
 			m.pendingSubmitGen++
-			m.textarea.InsertString("\n")
+			if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+				m.textarea.InsertString("\n")
+				m.pasteDetected = true
+			}
 		}
 
 		// Update textarea
@@ -992,10 +1004,23 @@ type timerTickMsg struct {
 }
 
 // doSubmit performs the actual message submission after the debounce window.
-func (m ChatModel) doSubmit() (ChatModel, tea.Cmd) {
+func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
+	// Defensive: recover from any panic during submission to prevent the
+	// entire TUI from crashing.
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] chat.doSubmit: %v\n", r)
+			model = m
+			cmd = nil
+			m.pasteDetected = false
+			m.textarea.SetValue("")
+		}
+	}()
+
 	input := m.textarea.Value()
 	if input == "" {
-		return m, nil
+		model = m
+		return
 	}
 
 	// Handle slash commands
@@ -1019,18 +1044,20 @@ func (m ChatModel) doSubmit() (ChatModel, tea.Cmd) {
 		}
 		m.AddMessage("user", displayText)
 		if m.delegate != nil {
-			cmd := m.delegate.OnSubmit(input)
+			cmd = m.delegate.OnSubmit(input)
 			m.textarea.SetValue("")
 			m.pasteDetected = false
 			m.refreshViewport()
-			return m, cmd
+			model = m
+			return
 		}
 	}
 
 	m.pasteDetected = false
 	m.textarea.SetValue("")
 	m.refreshViewport()
-	return m, nil
+	model = m
+	return
 }
 
 // startSubmitTimer returns a command that fires after SubmitDebounceDuration.
@@ -1231,8 +1258,12 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	b.WriteString("\n")
 
 	// Content - render markdown for rich formatting
-	renderedContent := renderMarkdown(msg.Content, m.width-4)
-	content := MessageBubbleUser.Width(m.width - 4).Render(renderedContent)
+	width := m.width - 4
+	if width < 1 {
+		width = 1
+	}
+	renderedContent := renderMarkdown(msg.Content, width)
+	content := MessageBubbleUser.Width(width).Render(renderedContent)
 	b.WriteString(content)
 
 	return b.String()
@@ -1254,8 +1285,12 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	b.WriteString("\n")
 
 	// Content - render markdown for rich formatting (code blocks, bold, italic, etc.)
-	renderedContent := renderMarkdown(msg.Content, m.width-4)
-	content := MessageBubbleAssistant.Width(m.width - 4).Render(renderedContent)
+	width := m.width - 4
+	if width < 1 {
+		width = 1
+	}
+	renderedContent := renderMarkdown(msg.Content, width)
+	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
 	b.WriteString(content)
 
 	return b.String()
