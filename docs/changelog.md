@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.14] - 2026-04-18
+
+### Changed
+- Version bump to v0.1.14
+
 ## [0.1.13] - 2026-04-18
 
 ### Changed
