@@ -132,6 +132,10 @@ type ChatModel struct {
 	// Debounce state for distinguishing intentional Enter from pasted newlines
 	pendingSubmit    bool
 	pendingSubmitGen int
+
+	// Steer queue holds user messages to be auto-submitted after the current
+	// agent turn completes (like Claude Code's /btw).
+	steerQueue []string
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -380,6 +384,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// If a submit is already pending, this Enter is part of a paste stream.
 			if m.pendingSubmit {
+				m.pasteDetected = true
 				m.textarea.InsertString("\n")
 				return m, m.startSubmitTimer()
 			}
@@ -425,7 +430,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update textarea
 		lastLen := len(m.textarea.Value())
-		newTA, cmd := m.textarea.Update(msg)
+		var newTA textarea.Model
+		var cmd tea.Cmd
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] textarea.Update: %v\n", r)
+				}
+			}()
+			newTA, cmd = m.textarea.Update(msg)
+		}()
 		m.textarea = newTA
 
 		// Heuristic paste detection for terminals without bracketed paste
@@ -485,6 +499,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timerRunning = true
 		m.elapsed = 0
 		m.chunkCount = 0
+		m.refreshViewport() // Ensure viewport scrolls to bottom after input height change
 		return m, m.startTimer()
 
 	case AgentConnectingMsg:
@@ -588,6 +603,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.completedToolMsg = nil
 		}
 		m.refreshViewport()
+
+		// If there are queued steer messages, submit the next one automatically.
+		if len(m.steerQueue) > 0 {
+			steer := m.steerQueue[0]
+			m.steerQueue = m.steerQueue[1:]
+			m.AddMessage("user", steer)
+			if m.delegate != nil {
+				return m, m.delegate.OnSubmit(steer)
+			}
+		}
 		return m, nil
 
 	case AgentErrorMsg:
@@ -971,6 +996,17 @@ func (m *ChatModel) RemoveLastUserMessage() {
 	}
 }
 
+// QueueSteer adds a message to the steer queue. It will be auto-submitted as a
+// user message after the current agent turn completes.
+func (m *ChatModel) QueueSteer(text string) {
+	m.steerQueue = append(m.steerQueue, text)
+}
+
+// GetSteerQueue returns the current steer queue (for testing).
+func (m ChatModel) GetSteerQueue() []string {
+	return m.steerQueue
+}
+
 // SetThinking sets the thinking state.
 // When thinking is set to true, this also starts the response timer.
 func (m *ChatModel) SetThinking(thinking bool, text string) {
@@ -1168,14 +1204,20 @@ func (m *ChatModel) GotoBottom() {
 	m.viewport.GotoBottom()
 }
 
-// updateOrCreateStreamingMessage updates the last assistant message or creates one
+// updateOrCreateStreamingMessage updates the last assistant message or creates one.
+// It scans backwards so that system/user messages added mid-stream do not break
+// the update target (required for /steer and other concurrent UI updates).
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
-	// Check if the last message is an assistant message we're streaming into
-	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
-		// Update existing streaming message
-		m.messages[len(m.messages)-1].Content = content
+	lastAssistantIdx := -1
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == "assistant" {
+			lastAssistantIdx = i
+			break
+		}
+	}
+	if lastAssistantIdx >= 0 && m.streaming {
+		m.messages[lastAssistantIdx].Content = content
 	} else {
-		// Create new streaming message
 		m.messages = append(m.messages, ChatMessage{
 			Role:      "assistant",
 			Content:   content,
@@ -1185,15 +1227,22 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	m.refreshViewport()
 }
 
-// finalizeStreamingMessage finalizes the streaming message
+// finalizeStreamingMessage finalizes the streaming message.
+// It scans backwards so that system/user messages added mid-stream do not break
+// the update target.
 func (m *ChatModel) finalizeStreamingMessage(content string) {
-	if len(m.messages) > 0 && m.messages[len(m.messages)-1].Role == "assistant" {
-		// Update existing assistant message
-		m.messages[len(m.messages)-1].Content = content
-		m.messages[len(m.messages)-1].Timestamp = time.Now()
-		m.messages[len(m.messages)-1].ResponseTime = m.elapsed
+	lastAssistantIdx := -1
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		if m.messages[i].Role == "assistant" {
+			lastAssistantIdx = i
+			break
+		}
+	}
+	if lastAssistantIdx >= 0 {
+		m.messages[lastAssistantIdx].Content = content
+		m.messages[lastAssistantIdx].Timestamp = time.Now()
+		m.messages[lastAssistantIdx].ResponseTime = m.elapsed
 	} else {
-		// Create new assistant message (for non-streamed responses)
 		m.messages = append(m.messages, ChatMessage{
 			Role:         "assistant",
 			Content:      content,
