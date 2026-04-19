@@ -1411,6 +1411,30 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
+	Describe("SteerHandler", func() {
+		It("should queue a message and return empty", func() {
+			By("given a steer handler")
+			queued := ""
+			handler := SteerHandler(func(msg string) { queued = msg })
+
+			By("when invoking /steer check the tests")
+			result, err := handler("check the tests")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(BeEmpty())
+			Expect(queued).To(Equal("check the tests"))
+		})
+
+		It("should return usage when no args provided", func() {
+			By("given a steer handler")
+			handler := SteerHandler(func(msg string) {})
+
+			By("when invoking /steer with no args")
+			result, err := handler("")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(ContainSubstring("Usage: /steer"))
+		})
+	})
+
 	Describe("IsReset", func() {
 		It("should detect reset signal", func() {
 			By("checking __RESET__")

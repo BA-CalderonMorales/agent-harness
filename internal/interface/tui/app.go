@@ -736,6 +736,12 @@ func (a *App) RemoveLastUserMessage() {
 	a.chatModel.RemoveLastUserMessage()
 }
 
+// QueueSteer adds a message to the steer queue for auto-submission after the
+// current agent turn completes.
+func (a *App) QueueSteer(text string) {
+	a.chatModel.QueueSteer(text)
+}
+
 // SetThinking sets the thinking state.
 func (a *App) SetThinking(thinking bool, text string) {
 	a.chatModel.SetThinking(thinking, text)
