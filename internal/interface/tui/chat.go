@@ -366,10 +366,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.delegate.OnCommand(trimmed)
 				}
 			} else {
-				// Regular message: collapse long pasted text in display
+				// Regular message: collapse pasted text in display when it is
+				// multiline or exceeds the character threshold.
 				displayText := input
-				if m.pasteDetected && len(input) > PasteDisplayThreshold {
-					displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
+				if m.pasteDetected {
+					lineCount := strings.Count(input, "\n") + 1
+					if lineCount > 1 {
+						displayText = fmt.Sprintf("[Pasted text, %d lines, %d characters]", lineCount, len(input))
+					} else if len(input) > PasteDisplayThreshold {
+						displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
+					}
 				}
 				m.AddMessage("user", displayText)
 				if m.delegate != nil {
@@ -389,6 +395,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case tea.KeyCtrlC:
 			// Allow Ctrl+C to propagate for quit
 			m.pasteDetected = false
+			return m, nil
+
+		case tea.KeyCtrlJ:
+			// Treat Ctrl+J (line feed) as newline insertion.
+			// This preserves pasted newlines from terminals that send
+			// raw LF instead of bracketed paste events.
+			m.textarea.InsertString("\n")
 			return m, nil
 		}
 
