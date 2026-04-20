@@ -122,6 +122,13 @@ setup_local_protection() {
         git config --local alias.prune-dry '!bash scripts/prune-branches.sh --dry-run'
     fi
     
+    # Install email guard pre-commit hook
+    if [ -f "$PROJECTS_DIR/agent-harness/scripts/pre-commit-email-guard" ]; then
+        cp "$PROJECTS_DIR/agent-harness/scripts/pre-commit-email-guard" .git/hooks/pre-commit
+        chmod +x .git/hooks/pre-commit
+        print_status ok "Email guard hook installed"
+    fi
+    
     # Setup pre-push hook
     if [ ! -f ".git/hooks/pre-push" ]; then
         cat > .git/hooks/pre-push << 'HOOK'

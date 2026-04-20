@@ -1,0 +1,22 @@
+#!/bin/sh
+# pre-commit-email-guard
+# Reject commits using placeholder or unsafe emails that can be squatted
+
+FORBIDDEN_DOMAINS="example.com test.com localhost"
+EMAIL=$(git config user.email)
+
+for domain in $FORBIDDEN_DOMAINS; do
+    case "$EMAIL" in
+        *@$domain)
+            echo "✗ COMMIT REJECTED"
+            echo "  Your git email uses a forbidden domain: $EMAIL"
+            echo "  This makes you vulnerable to email squatting attacks."
+            echo ""
+            echo "  Fix with:"
+            echo "    git config user.email \"62074841+BA-CalderonMorales@users.noreply.github.com\""
+            exit 1
+            ;;
+    esac
+done
+
+exit 0
