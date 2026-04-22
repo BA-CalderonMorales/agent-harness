@@ -278,9 +278,17 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
 		}
 
+		// Check permission mode first: non-interactive denials before approval UI
+		permDecision := app.checkPermissionMode(toolName)
+		if permDecision.Behavior == tools.Deny {
+			app.logAudit(toolName, false, "deny")
+			return permDecision, nil
+		}
+
 		var decisionStr string
 
-		if approval.RequiresApproval(toolName) {
+		needsApproval := approval.RequiresApproval(toolName) || permDecision.Behavior == tools.Ask
+		if needsApproval {
 			cmd := app.extractCommandForDisplay(toolName, toolInput)
 
 			tuiApp.Send(tui.ToolExecutingMsg{
@@ -308,11 +316,6 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			} else {
 				decisionStr = "auto"
 			}
-		}
-
-		if decision := app.checkPermissionMode(toolName); decision.Behavior != tools.Allow {
-			app.logAudit(toolName, false, "deny")
-			return decision, nil
 		}
 
 		for _, allowed := range app.config.AlwaysAllow {
@@ -393,6 +396,10 @@ func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecisi
 	case "write", "edit":
 		if !app.config.PermWrite {
 			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Write permission disabled"}
+		}
+	case "delete", "rm", "mv":
+		if !app.config.PermDelete {
+			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Delete permission disabled"}
 		}
 	case "bash", "shell", "execute_command":
 		if !app.config.PermExecute {

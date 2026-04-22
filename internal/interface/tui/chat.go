@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -1378,16 +1379,9 @@ func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
 
 // emptyStateHint returns a contextual hint based on the current persona.
 func (m ChatModel) emptyStateHint() string {
-	switch m.persona {
-	case "designer":
-		return "Describe the UI challenge or component to design"
-	case "pm":
-		return "Describe the requirement or decision to document"
-	case "scientist":
-		return "Describe the data or experiment to analyze"
-	case "explorer":
-		return "Ask about anything — I'm here to help you learn"
-	default:
-		return "Describe a feature to build or a bug to fix"
+	p, err := persona.Parse(m.persona)
+	if err != nil {
+		return persona.Default().EmptyStateHint()
 	}
+	return p.EmptyStateHint()
 }
