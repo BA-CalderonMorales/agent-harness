@@ -147,12 +147,18 @@ func FormatEntries(entries []Entry) string {
 		if !e.Approved {
 			status = "✗"
 		}
+
+		inputHash := "-"
+		if len(e.InputHash) >= 8 {
+			inputHash = e.InputHash[:8]
+		}
+
 		lines = append(lines, fmt.Sprintf("  %s %s  %-12s %-10s %s",
 			status,
 			e.Timestamp.Format("15:04:05"),
 			e.ToolName,
 			e.Decision,
-			e.InputHash[:8],
+			inputHash,
 		))
 	}
 
