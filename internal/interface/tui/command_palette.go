@@ -67,6 +67,8 @@ func getAgentHarnessCommands() []commandInfo {
 		{Command: "/workspace", Description: "Show workspace information", Category: "System"},
 		{Command: "/agents", Description: "Show available agents", Category: "Tools"},
 		{Command: "/skills", Description: "Show available skills", Category: "Tools"},
+		{Command: "/persona", Args: "[name]", Description: "Show or change persona", Category: "Tools"},
+		{Command: "/audit", Description: "Show recent tool activity", Category: "System"},
 	}
 }
 

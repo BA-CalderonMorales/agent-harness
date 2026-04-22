@@ -25,6 +25,7 @@ type Session struct {
 	Turns     int             `json:"turns"`
 	Version   int             `json:"version"`
 	PlanMode  bool            `json:"plan_mode"`
+	Persona   string          `json:"persona"`
 }
 
 // SessionMetadata contains lightweight session info
@@ -76,6 +77,7 @@ func NewSession(model string) *Session {
 		Model:     model,
 		Turns:     0,
 		Version:   1,
+		Persona:   "developer",
 	}
 }
 
@@ -266,6 +268,7 @@ func (s *Session) Clear() *Session {
 		Turns:     0,
 		Version:   s.Version + 1,
 		PlanMode:  s.PlanMode,
+		Persona:   s.Persona,
 	}
 }
 

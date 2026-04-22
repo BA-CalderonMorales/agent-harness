@@ -60,6 +60,9 @@ type LayeredConfig struct {
 	PermWrite   bool // Allow write/edit tools
 	PermDelete  bool // Allow delete/remove tools
 	PermExecute bool // Allow execute/bash tools
+
+	// Persona determines the agent's behavioral mode
+	Persona string
 }
 
 // PermissionMode controls what tools can do
@@ -239,6 +242,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	if v, ok := config.merged["model"].(string); ok {
 		config.Model = v
 	}
+	if v, ok := config.merged["persona"].(string); ok {
+		config.Persona = v
+	}
 
 	// Environment variables override config file values
 	// Short form (AH_*) and long form (AGENT_HARNESS_*)
@@ -256,6 +262,11 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 		config.APIKey = envAPIKey
 	} else if envAPIKey := os.Getenv("AGENT_HARNESS_API_KEY"); envAPIKey != "" {
 		config.APIKey = envAPIKey
+	}
+	if envPersona := os.Getenv("AH_PERSONA"); envPersona != "" {
+		config.Persona = envPersona
+	} else if envPersona := os.Getenv("AGENT_HARNESS_PERSONA"); envPersona != "" {
+		config.Persona = envPersona
 	}
 	if v, ok := config.merged["permission_mode"].(string); ok {
 		if mode, err := ParsePermissionMode(v); err == nil {
@@ -355,6 +366,7 @@ func (ll *LayeredLoader) Save(source ConfigSource, config *LayeredConfig) error 
 		"provider":        config.Provider,
 		"model":           config.Model,
 		"permission_mode": config.PermissionMode.String(),
+		"persona":         config.Persona,
 	}
 
 	if len(config.AlwaysAllow) > 0 {
@@ -392,6 +404,7 @@ func (lc *LayeredConfig) GetConfigReport() string {
 	result += fmt.Sprintf("  Provider         %s\n", lc.Provider)
 	result += fmt.Sprintf("  Model            %s\n", lc.Model)
 	result += fmt.Sprintf("  Permission mode  %s\n", lc.PermissionMode.String())
+	result += fmt.Sprintf("  Persona          %s\n", lc.Persona)
 	result += "\n"
 
 	result += "Loaded from\n"

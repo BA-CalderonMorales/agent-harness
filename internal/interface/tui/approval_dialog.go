@@ -289,6 +289,40 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 		sections = append(sections, desc)
 	}
 
+	// Preview of what will change
+	if cmd.Preview != "" {
+		sections = append(sections, "")
+		previewHeader := WarningStyle.Render("Preview of changes:")
+		sections = append(sections, previewHeader)
+
+		previewWidth := m.width - 16
+		if previewWidth < 1 {
+			previewWidth = 1
+		}
+		wrapWidth := m.width - 20
+		if wrapWidth < 1 {
+			wrapWidth = 1
+		}
+
+		previewStyle := lipgloss.NewStyle().
+			Background(ColorHighlight).
+			Foreground(ColorText).
+			Padding(1, 2).
+			Width(previewWidth)
+
+		wrappedPreview := wrapText(cmd.Preview, wrapWidth)
+		sections = append(sections, previewStyle.Render(wrappedPreview))
+	}
+
+	// Risk assessment for shell commands
+	if cmd.ToolName == "bash" || cmd.ToolName == "shell" || cmd.ToolName == "execute_command" || cmd.ToolName == "exec" {
+		risk := m.assessRisk(cmd.Command)
+		if risk != "" {
+			sections = append(sections, "")
+			sections = append(sections, WarningStyle.Render("Risk assessment: "+risk))
+		}
+	}
+
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
@@ -358,6 +392,29 @@ func (m ApprovalDialogModel) renderNotification() string {
 type ApprovalDecisionMsg struct {
 	Decision  approval.Decision
 	RequestID string
+}
+
+// assessRisk evaluates the danger level of a bash command.
+func (m ApprovalDialogModel) assessRisk(command string) string {
+	cmd := strings.ToLower(command)
+	switch {
+	case strings.Contains(cmd, "rm -rf") || strings.Contains(cmd, "rm -fr"):
+		return "HIGH — recursive deletion detected"
+	case strings.Contains(cmd, "rm "):
+		return "MEDIUM — file deletion detected"
+	case strings.Contains(cmd, "dd "):
+		return "HIGH — disk write detected"
+	case strings.Contains(cmd, "> /dev/") || strings.Contains(cmd, ">/dev/"):
+		return "HIGH — direct device access detected"
+	case strings.Contains(cmd, "curl") && strings.Contains(cmd, "|"):
+		return "HIGH — piped network download detected"
+	case strings.Contains(cmd, "sudo") || strings.Contains(cmd, "su -"):
+		return "MEDIUM — privilege escalation detected"
+	case strings.Contains(cmd, "chmod") || strings.Contains(cmd, "chown"):
+		return "LOW — permission modification detected"
+	default:
+		return ""
+	}
 }
 
 // wrapText wraps text to a maximum width

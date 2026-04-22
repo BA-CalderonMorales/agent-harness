@@ -92,6 +92,7 @@ type CommandInfo struct {
 	DisplayName   string
 	Command       string // The actual command being executed
 	Description   string // Human-readable description of what it does
+	Preview       string // Preview of what will change (diff, file content, etc.)
 	IsDestructive bool
 	Timestamp     time.Time
 }

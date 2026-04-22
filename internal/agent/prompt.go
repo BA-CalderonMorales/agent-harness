@@ -6,11 +6,14 @@ package agent
 import (
 	"fmt"
 	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 )
 
 // SystemPromptConfig holds configuration for building the system prompt
 type SystemPromptConfig struct {
 	PersonaName      string
+	Persona          string
 	GitContext       string
 	PermissionMode   string
 	WorkingDirectory string
@@ -30,6 +33,16 @@ func BuildSystemPrompt(config SystemPromptConfig) string {
 You have access to tools and full agency to decide when to use them.
 Your purpose is to help users write, edit, understand, and maintain code.
 You work in the user's workspace and respect their environment.`, config.PersonaName))
+
+	// Persona-specific behavioral guidance
+	if config.Persona != "" {
+		if p, err := persona.Parse(config.Persona); err == nil {
+			frag := p.PromptFragment()
+			if frag != "" {
+				parts = append(parts, "\n## Persona: "+p.DisplayName()+"\n\n"+frag)
+			}
+		}
+	}
 
 	// Critical: The LLM decides when to use tools
 	parts = append(parts, `

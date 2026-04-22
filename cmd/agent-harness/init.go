@@ -11,7 +11,9 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -35,6 +37,7 @@ func (app *App) initConfig() error {
 		return errf("failed to load configuration: %w", err)
 	}
 	app.config = layeredConfig
+	app.syncGranularPermissions()
 
 	credManager := config.NewCredentialManager()
 	if err := app.loadCredentials(credManager); err != nil {
@@ -145,8 +148,20 @@ func (app *App) initSession() error {
 		if app.config.Model != "" && app.config.Model != resumed.Model {
 			resumed.Model = app.config.Model
 		}
+		// Apply configured persona if valid and session has no persona set
+		if app.config.Persona != "" && resumed.Persona == "" {
+			if p, err := persona.Parse(app.config.Persona); err == nil {
+				resumed.Persona = p.String()
+			}
+		}
 	} else {
 		app.session = sessionManager.CreateSession(model)
+		// Apply configured persona to new session
+		if app.config.Persona != "" {
+			if p, err := persona.Parse(app.config.Persona); err == nil {
+				app.session.Persona = p.String()
+			}
+		}
 	}
 
 	app.costTracker = agent.NewCostTracker()
@@ -614,6 +629,49 @@ func (app *App) initCommands() {
 		commands.LogoutHandler(func() error {
 			return app.logout()
 		}))
+
+	app.cmdRegistry.Register("audit", "Show recent tool activity",
+		commands.AuditHandler(func() string {
+			if app.auditLogger == nil {
+				return "Audit logging is not available."
+			}
+			entries, err := app.auditLogger.Recent(20)
+			if err != nil {
+				return fmt.Sprintf("Failed to load audit log: %v", err)
+			}
+			return audit.FormatEntries(entries)
+		}))
+
+	app.cmdRegistry.Register("persona", "Show or change persona",
+		commands.PersonaHandler(
+			func() string { return app.session.Persona },
+			func(p string) error {
+				parsed, err := persona.Parse(p)
+				if err != nil {
+					return err
+				}
+				app.session.Persona = parsed.String()
+				if app.tuiApp != nil {
+					app.tuiApp.SetSettings(app.getSettings())
+					app.tuiApp.SetChatPersona(app.session.Persona)
+					app.tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
+				}
+				return nil
+			},
+			func() string {
+				var lines []string
+				lines = append(lines, "Available personas:")
+				lines = append(lines, "")
+				for _, p := range persona.All() {
+					marker := "  "
+					if p.String() == app.session.Persona {
+						marker = "● "
+					}
+					lines = append(lines, fmt.Sprintf("%s%-12s %s", marker, p.String(), p.Description()))
+				}
+				return strings.Join(lines, "\n")
+			},
+		))
 
 	app.cmdRegistry.Register("login", "Log in with new credentials",
 		commands.LoginHandler(func() error {
