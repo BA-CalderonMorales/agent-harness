@@ -314,8 +314,8 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 		sections = append(sections, previewStyle.Render(wrappedPreview))
 	}
 
-	// Risk assessment for bash commands
-	if cmd.ToolName == "bash" || cmd.ToolName == "shell" {
+	// Risk assessment for shell commands
+	if cmd.ToolName == "bash" || cmd.ToolName == "shell" || cmd.ToolName == "execute_command" || cmd.ToolName == "exec" {
 		risk := m.assessRisk(cmd.Command)
 		if risk != "" {
 			sections = append(sections, "")
