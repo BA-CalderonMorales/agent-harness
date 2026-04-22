@@ -64,6 +64,10 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 // ParseSlashCommand parses a slash command from input
 func ParseSlashCommand(input string) SlashCommand {
 	input = strings.TrimPrefix(input, "/")
+	
+	// Handle edge case where user types "/ " (slash followed by space)
+	input = strings.TrimLeft(input, " ")
+	
 	if input == "" {
 		return SlashCommand{Name: "", Raw: ""}
 	}
@@ -528,7 +532,14 @@ func AuditHandler(getAudit func() string) SlashHandler {
 func PersonaHandler(getPersona func() string, setPersona func(string) error, listPersonas func() string) SlashHandler {
 	return func(args string) (string, error) {
 		if args == "" || args == "list" {
+			if listPersonas == nil {
+				return "", fmt.Errorf("persona listing is not available")
+			}
 			return listPersonas(), nil
+		}
+
+		if getPersona == nil || setPersona == nil {
+			return "", fmt.Errorf("persona switching is not available")
 		}
 
 		previous := getPersona()

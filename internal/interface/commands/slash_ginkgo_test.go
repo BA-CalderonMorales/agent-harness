@@ -146,6 +146,9 @@ var _ = Describe("Slash Commands", func() {
 			Entry("model with spaces", "/model  claude-3-5-sonnet  with spaces", "model", "claude-3-5-sonnet  with spaces"),
 			Entry("reset confirm", "/reset --confirm", "reset", "--confirm"),
 			Entry("session load", "/session load abc-123", "session", "load abc-123"),
+			Entry("slash with trailing spaces", "/   ", "", ""),
+			Entry("slash with leading space before command", "/ help", "help", ""),
+			Entry("slash with leading space and args", "/ model gpt", "model", "gpt"),
 		)
 	})
 
@@ -1432,6 +1435,45 @@ var _ = Describe("Slash Commands", func() {
 			result, err := handler("")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(ContainSubstring("Usage: /steer"))
+		})
+	})
+
+	Describe("PersonaHandler", func() {
+		It("should list personas on empty or 'list' arg", func() {
+			handler := PersonaHandler(nil, nil, func() string { return "Available: developer, designer" })
+			
+			res1, err1 := handler("")
+			Expect(err1).ToNot(HaveOccurred())
+			Expect(res1).To(Equal("Available: developer, designer"))
+			
+			res2, err2 := handler("list")
+			Expect(err2).ToNot(HaveOccurred())
+			Expect(res2).To(Equal("Available: developer, designer"))
+		})
+
+		It("should change persona and return success message", func() {
+			current := "developer"
+			handler := PersonaHandler(
+				func() string { return current },
+				func(p string) error { current = p; return nil },
+				nil,
+			)
+
+			res, err := handler("designer")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(res).To(ContainSubstring("Persona updated"))
+			Expect(res).To(ContainSubstring("Previous         developer"))
+			Expect(res).To(ContainSubstring("Current          designer"))
+		})
+
+		It("should handle nil dependencies", func() {
+			handlerListOnly := PersonaHandler(nil, nil, nil)
+			_, err := handlerListOnly("")
+			Expect(err).To(MatchError("persona listing is not available"))
+
+			handlerSwitchOnly := PersonaHandler(nil, nil, func() string { return "" })
+			_, err = handlerSwitchOnly("designer")
+			Expect(err).To(MatchError("persona switching is not available"))
 		})
 	})
 

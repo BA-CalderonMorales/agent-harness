@@ -5,6 +5,8 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"os"
 	"strconv"
 	"strings"
 
@@ -172,6 +174,13 @@ func (a App) listenForMessages() tea.Cmd {
 
 // Update handles messages and user input.
 func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Defensive: recover from any panic during update to prevent total app crash
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] App.Update: %v\n", r)
+		}
+	}()
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
@@ -326,28 +335,40 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Propagate to sub-models
-		homeModel, cmd := a.homeModel.Update(contentMsg)
-		a.homeModel = homeModel.(*HomeModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if homeModel, cmd := a.homeModel.Update(contentMsg); homeModel != nil {
+			if m, ok := homeModel.(*HomeModel); ok {
+				a.homeModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
-		chatModel, cmd := a.chatModel.Update(contentMsg)
-		a.chatModel = chatModel.(ChatModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if chatModel, cmd := a.chatModel.Update(contentMsg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
-		sessionsModel, cmd := a.sessionsModel.Update(contentMsg)
-		a.sessionsModel = sessionsModel.(SessionsModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if sessionsModel, cmd := a.sessionsModel.Update(contentMsg); sessionsModel != nil {
+			if m, ok := sessionsModel.(SessionsModel); ok {
+				a.sessionsModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
-		settingsModel, cmd := a.settingsModel.Update(contentMsg)
-		a.settingsModel = settingsModel.(SettingsModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if settingsModel, cmd := a.settingsModel.Update(contentMsg); settingsModel != nil {
+			if m, ok := settingsModel.(SettingsModel); ok {
+				a.settingsModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 
 		return a, tea.Batch(cmds...)
@@ -385,10 +406,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case StreamStartMsg, StreamChunkMsg, StreamMessageMsg, StreamErrorMsg, StreamDoneMsg,
 		AgentStartMsg, AgentChunkMsg, AgentToolStartMsg, AgentToolDoneMsg, AgentDoneMsg, AgentErrorMsg, AgentConnectingMsg:
-		chatModel, cmd := a.chatModel.Update(msg)
-		a.chatModel = chatModel.(ChatModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 		// Continue listening for more messages
 		cmds = append(cmds, a.listenForMessages())
@@ -428,10 +452,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Clear chat request - handle globally so it works from any view
 	// -------------------------------------------------------------------------
 	case ClearChatMsg:
-		chatModel, cmd := a.chatModel.Update(msg)
-		a.chatModel = chatModel.(ChatModel)
-		if cmd != nil {
-			cmds = append(cmds, cmd)
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
@@ -466,21 +493,33 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch a.activeView {
 	case viewHome:
-		model, c := a.homeModel.Update(msg)
-		a.homeModel = model.(*HomeModel)
-		cmd = c
+		if model, c := a.homeModel.Update(msg); model != nil {
+			if m, ok := model.(*HomeModel); ok {
+				a.homeModel = m
+			}
+			cmd = c
+		}
 	case viewChat:
-		model, c := a.chatModel.Update(msg)
-		a.chatModel = model.(ChatModel)
-		cmd = c
+		if model, c := a.chatModel.Update(msg); model != nil {
+			if m, ok := model.(ChatModel); ok {
+				a.chatModel = m
+			}
+			cmd = c
+		}
 	case viewSessions:
-		model, c := a.sessionsModel.Update(msg)
-		a.sessionsModel = model.(SessionsModel)
-		cmd = c
+		if model, c := a.sessionsModel.Update(msg); model != nil {
+			if m, ok := model.(SessionsModel); ok {
+				a.sessionsModel = m
+			}
+			cmd = c
+		}
 	case viewSettings:
-		model, c := a.settingsModel.Update(msg)
-		a.settingsModel = model.(SettingsModel)
-		cmd = c
+		if model, c := a.settingsModel.Update(msg); model != nil {
+			if m, ok := model.(SettingsModel); ok {
+				a.settingsModel = m
+			}
+			cmd = c
+		}
 	}
 	if cmd != nil {
 		cmds = append(cmds, cmd)
@@ -586,6 +625,8 @@ func (a App) renderStatusBar() string {
 
 	// Left: Status indicator based on state
 	status := StatusOnline.Render("[ready]")
+
+	// Get current model name for display
 	modelName := a.chatModel.GetModel()
 
 	// If no model configured, show warning indicator
