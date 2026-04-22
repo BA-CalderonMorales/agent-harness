@@ -274,14 +274,14 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 	return func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
 		t, ok := app.toolRegistry.FindToolByName(toolName)
 		if !ok {
-			app.logAudit(toolName, false, "deny")
+			app.logAudit(toolName, toolInput, false, "deny")
 			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
 		}
 
 		// Check permission mode first: non-interactive denials before approval UI
 		permDecision := app.checkPermissionMode(toolName)
 		if permDecision.Behavior == tools.Deny {
-			app.logAudit(toolName, false, "deny")
+			app.logAudit(toolName, toolInput, false, "deny")
 			return permDecision, nil
 		}
 
@@ -299,14 +299,14 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			if app.executionMode == approval.ModeInteractive {
 				decision, err := app.requestCommandApproval(toolName, cmd, toolInput)
 				if err != nil {
-					app.logAudit(toolName, false, "deny")
+					app.logAudit(toolName, toolInput, false, "deny")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  sprintf("Approval failed: %v", err),
 					}, nil
 				}
 				if !decision.IsApproved() {
-					app.logAudit(toolName, false, "reject")
+					app.logAudit(toolName, toolInput, false, "reject")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  "Command rejected by user",
@@ -320,7 +320,7 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 
 		for _, allowed := range app.config.AlwaysAllow {
 			if allowed == toolName {
-				app.logAudit(toolName, true, "auto")
+				app.logAudit(toolName, toolInput, true, "auto")
 				return tools.PermissionDecision{Behavior: tools.Allow}, nil
 			}
 		}
@@ -331,22 +331,23 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			if decisionStr == "" {
 				decisionStr = "auto"
 			}
-			app.logAudit(toolName, true, decisionStr)
+			app.logAudit(toolName, toolInput, true, decisionStr)
 		} else {
-			app.logAudit(toolName, false, "deny")
+			app.logAudit(toolName, toolInput, false, "deny")
 		}
 		return result, nil
 	}
 }
 
 // logAudit records a tool execution to the audit log.
-func (app *App) logAudit(toolName string, approved bool, decision string) {
+func (app *App) logAudit(toolName string, toolInput map[string]any, approved bool, decision string) {
 	if app.auditLogger == nil {
 		return
 	}
 	_ = app.auditLogger.Log(audit.Entry{
 		SessionID:      app.session.ID,
 		ToolName:       toolName,
+		InputHash:      audit.HashInput(toolInput),
 		Approved:       approved,
 		Decision:       decision,
 		Persona:        app.session.Persona,
@@ -381,13 +382,30 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 	return tools.PermissionDecision{Behavior: tools.Allow}
 }
 
-// checkGranularPermissions checks individual permission toggles.
-func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
-	// If no granular permissions are explicitly set, allow through
-	if !app.config.PermRead && !app.config.PermWrite && !app.config.PermDelete && !app.config.PermExecute {
-		return tools.PermissionDecision{Behavior: tools.Allow}
+// syncGranularPermissions initializes granular toggles from the active permission mode.
+func (app *App) syncGranularPermissions() {
+	// If any granular permission is already set (non-zero), don't override
+	// (Simple heuristic: if all are false, it's likely first run/not configured)
+	if app.config.PermRead || app.config.PermWrite || app.config.PermDelete || app.config.PermExecute {
+		return
 	}
 
+	switch app.config.PermissionMode {
+	case config.PermissionReadOnly:
+		app.config.PermRead = true
+	case config.PermissionWorkspaceWrite:
+		app.config.PermRead = true
+		app.config.PermWrite = true
+	case config.PermissionDangerFullAccess:
+		app.config.PermRead = true
+		app.config.PermWrite = true
+		app.config.PermDelete = true
+		app.config.PermExecute = true
+	}
+}
+
+// checkGranularPermissions checks individual permission toggles.
+func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
 	switch toolName {
 	case "read", "glob", "grep", "search", "web_fetch", "web_search":
 		if !app.config.PermRead {

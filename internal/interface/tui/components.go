@@ -419,6 +419,11 @@ func (h Help) renderContent() string {
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("h"), HelpDimStyle.Render("Go to Home")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("c"), HelpDimStyle.Render("Go to Chat")))
 	lines = append(lines, "")
+	lines = append(lines, CategoryStyle.Render("  Modes"))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("i"), HelpDimStyle.Render("Enter insert mode (type)")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Esc"), HelpDimStyle.Render("Return to normal mode")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+n"), HelpDimStyle.Render("Return to normal mode")))
+	lines = append(lines, "")
 
 	// Chat
 	lines = append(lines, CategoryStyle.Render("  Chat"))
