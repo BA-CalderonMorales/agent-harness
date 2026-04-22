@@ -4,12 +4,20 @@
 
 - **Source**: `cmd/agent-harness/main.go`
 - **Run**: `./scripts/run-termux.sh` or `~/buckets/usr/bin/agent-harness`
+- **Persona**: `/persona <name>` — switch behavior mode (developer|designer|pm|scientist|explorer)
+- **Audit**: `/audit` — show recent tool activity
+- **Home tab**: `h` — jump to dashboard, `c` — jump to chat
 - **Local LLM**: `./scripts/ah-fast.sh` (gemma4:2b) or `./scripts/ah-local.sh` (gemma4:4b)
 - **Prune Branches**: `./scripts/prune-branches.sh` (or `--dry-run`)
 - **Commit from TUI**: `/commit <message>` — stages all changes and commits
 
 ## Recent DX Improvements
 
+- **Persona system**: 5 functional personas (developer, designer, pm, scientist, explorer) adapt prompts, tools, and UI
+- **Home dashboard**: project overview, quick actions, recent sessions, contextual hints
+- **Audit logging**: append-only log of tool executions and approvals at `~/.agent-harness/audit/`
+- **Sandbox preview**: approval dialog shows diff preview for write/edit and risk level for bash
+- **Granular permissions**: individual toggles for read/write/delete/execute with mode presets
 - **Rich startup context**: system prompt auto-includes git status, recent commits, project file tree
 - **Session auto-resume**: loads the most recent session on startup for continuity
 - **Tool output truncation**: bash and read outputs are silently capped to protect context budget
@@ -197,6 +205,9 @@ This pattern applies to all buckets:
 - Bash uses `exec.LookPath("sh")` for portability
 - Each bucket validates inputs before execution
 - Shell bucket has whitelist/blacklist pattern matching
+- Audit logging: all tool executions logged to `~/.agent-harness/audit/YYYY-MM-DD.log`
+- Sandbox preview: approval dialog shows file diff preview and bash risk assessment
+- Granular permissions: read/write/delete/execute toggles independent of mode presets
 
 ## Termux
 
@@ -209,6 +220,7 @@ This pattern applies to all buckets:
 - `AH_PROVIDER`: openrouter, openai, anthropic, ollama
 - `AH_MODEL`: model identifier
 - `AH_API_KEY`: API key (not needed for ollama)
+- `AH_PERSONA`: default persona (developer, designer, pm, scientist, explorer)
 - `OLLAMA_HOST`: Ollama server URL (default: http://localhost:11434)
 
 ## Testing

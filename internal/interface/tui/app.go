@@ -18,14 +18,15 @@ import (
 type viewID int
 
 const (
-	viewChat viewID = iota
+	viewHome viewID = iota
+	viewChat
 	viewSessions
 	viewSettings
 	viewCount
 )
 
 var viewLabels = [viewCount]string{
-	"Chat", "Sessions", "Settings",
+	"Home", "Chat", "Sessions", "Settings",
 }
 
 // ---------------------------------------------------------------------------
@@ -51,6 +52,7 @@ type App struct {
 	mode       Mode
 
 	// Sub-models
+	homeModel      *HomeModel
 	chatModel      ChatModel
 	sessionsModel  SessionsModel
 	settingsModel  SettingsModel
@@ -78,11 +80,13 @@ type App struct {
 	agentCancelFunc context.CancelFunc
 }
 
-// NewApp creates the root app model.
+// NewApp creates a new TUI application.
 func NewApp() *App {
+	home := NewHomeModel()
 	return &App{
-		activeView:     viewChat,
-		mode:           ModeInsert,
+		activeView:     viewHome,
+		mode:           ModeNormal,
+		homeModel:      &home,
 		chatModel:      NewChatModel(),
 		sessionsModel:  NewSessionsModel(),
 		settingsModel:  NewSettingsModel(),
@@ -127,6 +131,11 @@ func (a *App) SetSettingsDelegate(delegate SettingsDelegate) {
 	a.settingsModel.SetDelegate(delegate)
 }
 
+// SetHomeDelegate sets the home handler delegate.
+func (a *App) SetHomeDelegate(delegate HomeDelegate) {
+	a.homeModel.SetDelegate(delegate)
+}
+
 // SetChatDelegate sets the chat handler delegate.
 func (a *App) SetChatDelegate(delegate ChatDelegate) {
 	a.chatModel.SetDelegate(delegate)
@@ -145,6 +154,7 @@ func (a *App) Send(msg tea.Msg) {
 // Init initializes the TUI.
 func (a App) Init() tea.Cmd {
 	return tea.Batch(
+		a.homeModel.Init(),
 		a.chatModel.Init(),
 		a.sessionsModel.Init(),
 		a.settingsModel.Init(),
@@ -270,10 +280,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// View switching shortcuts
 		switch msg.String() {
 		case "ctrl+1", "1":
-			return a, a.switchView(viewChat)
+			return a, a.switchView(viewHome)
 		case "ctrl+2", "2":
-			return a, a.switchView(viewSessions)
+			return a, a.switchView(viewChat)
 		case "ctrl+3", "3":
+			return a, a.switchView(viewSessions)
+		case "ctrl+4", "4":
 			return a, a.switchView(viewSettings)
 		}
 
@@ -292,6 +304,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "G", "end":
 				a.gotoActiveViewBottom()
 				return a, nil
+			case "h":
+				return a, a.switchView(viewHome)
+			case "c":
+				return a, a.switchView(viewChat)
 			}
 		}
 
@@ -310,6 +326,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Propagate to sub-models
+		homeModel, cmd := a.homeModel.Update(contentMsg)
+		a.homeModel = homeModel.(*HomeModel)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 		chatModel, cmd := a.chatModel.Update(contentMsg)
 		a.chatModel = chatModel.(ChatModel)
 		if cmd != nil {
@@ -443,6 +465,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	var cmd tea.Cmd
 	switch a.activeView {
+	case viewHome:
+		model, c := a.homeModel.Update(msg)
+		a.homeModel = model.(*HomeModel)
+		cmd = c
 	case viewChat:
 		model, c := a.chatModel.Update(msg)
 		a.chatModel = model.(ChatModel)
@@ -537,6 +563,8 @@ func (a App) renderActiveView() string {
 	}
 
 	switch a.activeView {
+	case viewHome:
+		return lipgloss.NewStyle().Height(contentHeight).Render(a.homeModel.View())
 	case viewChat:
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
@@ -618,6 +646,8 @@ func (a *App) switchView(v viewID) tea.Cmd {
 func (a *App) focusActive() {
 	a.tabActivity[a.activeView] = false
 	switch a.activeView {
+	case viewHome:
+		a.homeModel.Focus()
 	case viewChat:
 		a.chatModel.Focus()
 	case viewSessions:
@@ -629,6 +659,8 @@ func (a *App) focusActive() {
 
 func (a *App) blurActive() {
 	switch a.activeView {
+	case viewHome:
+		a.homeModel.Blur()
 	case viewChat:
 		a.chatModel.Blur()
 	case viewSessions:
@@ -640,6 +672,8 @@ func (a *App) blurActive() {
 
 func (a *App) initActiveView() tea.Cmd {
 	switch a.activeView {
+	case viewHome:
+		return a.homeModel.Init()
 	case viewChat:
 		return a.chatModel.Init()
 	case viewSessions:
@@ -652,6 +686,8 @@ func (a *App) initActiveView() tea.Cmd {
 
 func (a *App) activeViewConsumesTab() bool {
 	switch a.activeView {
+	case viewHome:
+		return a.homeModel.ConsumesTab()
 	case viewChat:
 		return a.chatModel.ConsumesTab()
 	case viewSessions:
@@ -664,6 +700,8 @@ func (a *App) activeViewConsumesTab() bool {
 
 func (a *App) activeViewConsumesEsc() bool {
 	switch a.activeView {
+	case viewHome:
+		return a.homeModel.ConsumesEsc()
 	case viewChat:
 		return a.chatModel.ConsumesEsc()
 	case viewSessions:
@@ -676,6 +714,8 @@ func (a *App) activeViewConsumesEsc() bool {
 
 func (a *App) scrollActiveView(lines int) {
 	switch a.activeView {
+	case viewHome:
+		a.homeModel.Scroll(lines)
 	case viewChat:
 		a.chatModel.Scroll(lines)
 	case viewSessions:
@@ -687,6 +727,8 @@ func (a *App) scrollActiveView(lines int) {
 
 func (a *App) gotoActiveViewTop() {
 	switch a.activeView {
+	case viewHome:
+		a.homeModel.GotoTop()
 	case viewChat:
 		a.chatModel.GotoTop()
 	case viewSessions:
@@ -698,6 +740,8 @@ func (a *App) gotoActiveViewTop() {
 
 func (a *App) gotoActiveViewBottom() {
 	switch a.activeView {
+	case viewHome:
+		a.homeModel.GotoBottom()
 	case viewChat:
 		a.chatModel.GotoBottom()
 	case viewSessions:
@@ -771,6 +815,21 @@ func (a *App) SetModels(models []ModelItem) {
 // SetChatModel sets the current model name for display in the status bar.
 func (a *App) SetChatModel(model string) {
 	a.chatModel.SetModel(model)
+}
+
+// SetChatPersona sets the current persona for contextual UI behavior.
+func (a *App) SetChatPersona(persona string) {
+	a.chatModel.SetPersona(persona)
+}
+
+// SetProjectInfo updates the home dashboard project context.
+func (a *App) SetProjectInfo(info ProjectInfo) {
+	a.homeModel.SetProjectInfo(info)
+}
+
+// SetHomeStatus updates the home dashboard status line.
+func (a *App) SetHomeStatus(model, permissionMode, persona string, estimatedTokens int) {
+	a.homeModel.SetStatus(model, permissionMode, persona, estimatedTokens)
 }
 
 // SetCommandCompletions sets available slash commands for inline autocomplete.
