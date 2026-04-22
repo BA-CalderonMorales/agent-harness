@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -125,6 +126,9 @@ type ChatModel struct {
 	suggestionCursor int
 	suggestionOffset int // scroll window start
 	allCommands      []string
+
+	// Persona for contextual UI behavior
+	persona string
 
 	// Paste detection state
 	pasteDetected bool // true if current input was detected as a paste
@@ -275,6 +279,11 @@ func (m *ChatModel) filterSuggestions(input string) []string {
 // SetModel sets the model name.
 func (m *ChatModel) SetModel(model string) {
 	m.model = model
+}
+
+// SetPersona sets the persona for contextual hints.
+func (m *ChatModel) SetPersona(persona string) {
+	m.persona = persona
 }
 
 // GetModel returns the model name.
@@ -718,7 +727,8 @@ func (m ChatModel) View() string {
 	// Viewport for messages
 	vpContent := m.viewport.View()
 	if strings.TrimSpace(vpContent) == "" {
-		vpContent = HelpDimStyle.Render("  No messages yet. Start chatting!")
+		hint := m.emptyStateHint()
+		vpContent = HelpDimStyle.Render("  " + hint)
 	}
 
 	// Constrain viewport to calculated height
@@ -1365,4 +1375,13 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
 	return SystemMessageStyle.Render(msg.Content)
+}
+
+// emptyStateHint returns a contextual hint based on the current persona.
+func (m ChatModel) emptyStateHint() string {
+	p, err := persona.Parse(m.persona)
+	if err != nil {
+		return persona.Default().EmptyStateHint()
+	}
+	return p.EmptyStateHint()
 }
