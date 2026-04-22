@@ -3,6 +3,8 @@
 package audit
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -19,7 +21,7 @@ type Entry struct {
 	ToolName       string    `json:"tool_name"`
 	InputHash      string    `json:"input_hash"`
 	Approved       bool      `json:"approved"`
-	Decision       string    `json:"decision"` // "approve", "reject", "approve-all", "auto"
+	Decision       string    `json:"decision"` // "approve", "reject", "approve-all", "auto", "deny"
 	Persona        string    `json:"persona"`
 	PermissionMode string    `json:"permission_mode"`
 }
@@ -123,7 +125,16 @@ func (l *Logger) currentLogPath() string {
 	return filepath.Join(l.dir, time.Now().UTC().Format("2006-01-02")+".log")
 }
 
-// hashInput creates a deterministic hash of tool input for privacy.
+// HashInput creates a deterministic hash of tool input for privacy.
+func HashInput(input any) string {
+	data, err := json.Marshal(input)
+	if err != nil {
+		return ""
+	}
+	hash := sha256.Sum256(data)
+	return hex.EncodeToString(hash[:])
+}
+
 // FormatEntries returns a human-readable representation of audit entries.
 func FormatEntries(entries []Entry) string {
 	if len(entries) == 0 {

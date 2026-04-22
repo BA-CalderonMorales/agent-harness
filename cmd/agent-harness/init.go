@@ -37,6 +37,7 @@ func (app *App) initConfig() error {
 		return errf("failed to load configuration: %w", err)
 	}
 	app.config = layeredConfig
+	app.syncGranularPermissions()
 
 	credManager := config.NewCredentialManager()
 	if err := app.loadCredentials(credManager); err != nil {

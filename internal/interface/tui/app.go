@@ -52,7 +52,7 @@ type App struct {
 	mode       Mode
 
 	// Sub-models
-	homeModel      HomeModel
+	homeModel      *HomeModel
 	chatModel      ChatModel
 	sessionsModel  SessionsModel
 	settingsModel  SettingsModel
@@ -80,12 +80,13 @@ type App struct {
 	agentCancelFunc context.CancelFunc
 }
 
-// NewApp creates the root app model.
+// NewApp creates a new TUI application.
 func NewApp() *App {
+	home := NewHomeModel()
 	return &App{
 		activeView:     viewHome,
 		mode:           ModeNormal,
-		homeModel:      NewHomeModel(),
+		homeModel:      &home,
 		chatModel:      NewChatModel(),
 		sessionsModel:  NewSessionsModel(),
 		settingsModel:  NewSettingsModel(),
@@ -326,7 +327,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Propagate to sub-models
 		homeModel, cmd := a.homeModel.Update(contentMsg)
-		a.homeModel = homeModel.(HomeModel)
+		a.homeModel = homeModel.(*HomeModel)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
@@ -464,6 +465,10 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	var cmd tea.Cmd
 	switch a.activeView {
+	case viewHome:
+		model, c := a.homeModel.Update(msg)
+		a.homeModel = model.(*HomeModel)
+		cmd = c
 	case viewChat:
 		model, c := a.chatModel.Update(msg)
 		a.chatModel = model.(ChatModel)

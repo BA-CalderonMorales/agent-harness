@@ -200,11 +200,18 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	d.tuiApp.SetSettings(d.app.getSettings())
 }
 
+// refreshPersonaUI updates persona-dependent UI state after a persona change.
+func (d *tuiSettingsDelegate) refreshPersonaUI(persona string) {
+	d.tuiApp.SetChatPersona(persona)
+	d.tuiApp.SetSettings(d.app.getSettings())
+	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), persona, d.app.session.EstimateTokens())
+}
+
 // handlePersonaChange updates the persona and refreshes the UI.
 func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 	if p, err := persona.Parse(value); err == nil {
 		d.app.session.Persona = p.String()
-		d.tuiApp.SetChatPersona(p.String())
+		d.refreshPersonaUI(p.String())
 		d.tuiApp.AddMessage("system", sprintf("Persona switched to: %s — %s", p.DisplayName(), p.Description()))
 	} else {
 		d.tuiApp.AddMessage("system", sprintf("Invalid persona: %v", err))

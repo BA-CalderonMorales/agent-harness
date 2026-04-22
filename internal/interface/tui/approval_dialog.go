@@ -295,13 +295,22 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 		previewHeader := WarningStyle.Render("Preview of changes:")
 		sections = append(sections, previewHeader)
 
+		previewWidth := m.width - 16
+		if previewWidth < 1 {
+			previewWidth = 1
+		}
+		wrapWidth := m.width - 20
+		if wrapWidth < 1 {
+			wrapWidth = 1
+		}
+
 		previewStyle := lipgloss.NewStyle().
 			Background(ColorHighlight).
 			Foreground(ColorText).
 			Padding(1, 2).
-			Width(m.width - 16)
+			Width(previewWidth)
 
-		wrappedPreview := wrapText(cmd.Preview, m.width-20)
+		wrappedPreview := wrapText(cmd.Preview, wrapWidth)
 		sections = append(sections, previewStyle.Render(wrappedPreview))
 	}
 

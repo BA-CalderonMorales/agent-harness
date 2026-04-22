@@ -99,16 +99,18 @@ func (m *HomeModel) SetSetupRequired(required bool) {
 }
 
 // Init initializes the home model.
-func (m HomeModel) Init() tea.Cmd {
+func (m *HomeModel) Init() tea.Cmd {
+	m.rebuildActions()
 	return nil
 }
 
 // Update handles messages.
-func (m HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.rebuildActions()
 
 	case tea.KeyMsg:
 		if !m.focused {
@@ -128,6 +130,16 @@ func (m HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.actionCursor < len(m.actions) && m.actions[m.actionCursor].Handler != nil {
 				m.actions[m.actionCursor].Handler()
 			}
+		default:
+			// Handle individual action shortcuts
+			for _, action := range m.actions {
+				if action.Key != "" && msg.String() == action.Key {
+					if action.Handler != nil {
+						action.Handler()
+					}
+					return m, nil
+				}
+			}
 		}
 	}
 
@@ -135,12 +147,10 @@ func (m HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // View renders the home dashboard.
-func (m HomeModel) View() string {
+func (m *HomeModel) View() string {
 	if m.width == 0 {
 		return "  Loading dashboard..."
 	}
-
-	m.rebuildActions()
 
 	var sections []string
 
@@ -206,7 +216,7 @@ func (m *HomeModel) rebuildActions() {
 	}
 }
 
-func (m HomeModel) renderProjectCard() string {
+func (m *HomeModel) renderProjectCard() string {
 	var b strings.Builder
 
 	b.WriteString(HeaderSecondary.Render("  Project"))
@@ -248,7 +258,7 @@ func (m HomeModel) renderProjectCard() string {
 	return b.String()
 }
 
-func (m HomeModel) renderQuickActions() string {
+func (m *HomeModel) renderQuickActions() string {
 	var b strings.Builder
 
 	b.WriteString(HeaderSecondary.Render("  Quick Actions"))
@@ -261,7 +271,11 @@ func (m HomeModel) renderQuickActions() string {
 			prefix = IndicatorSelected + " "
 			style = ListSelectedStyle
 		}
-		line := fmt.Sprintf("%s%s", prefix, action.Label)
+		label := action.Label
+		if action.Key != "" {
+			label = fmt.Sprintf("%s (%s)", label, action.Key)
+		}
+		line := fmt.Sprintf("%s%s", prefix, label)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("     %s", action.Description)))
@@ -272,7 +286,7 @@ func (m HomeModel) renderQuickActions() string {
 	return b.String()
 }
 
-func (m HomeModel) renderRecentSessions() string {
+func (m *HomeModel) renderRecentSessions() string {
 	var b strings.Builder
 
 	b.WriteString(HeaderSecondary.Render("  Recent Sessions"))
@@ -306,7 +320,7 @@ func (m HomeModel) renderRecentSessions() string {
 	return b.String()
 }
 
-func (m HomeModel) renderStatusFooter() string {
+func (m *HomeModel) renderStatusFooter() string {
 	var parts []string
 
 	if m.model != "" {
@@ -329,7 +343,7 @@ func (m HomeModel) renderStatusFooter() string {
 	return HelpDimStyle.Render("  "+strings.Join(parts, "  ")) + "\n"
 }
 
-func (m HomeModel) renderSetupBanner() string {
+func (m *HomeModel) renderSetupBanner() string {
 	var b strings.Builder
 	b.WriteString(ErrorStyle.Render("  [!] Setup Required"))
 	b.WriteString("\n")
@@ -340,7 +354,7 @@ func (m HomeModel) renderSetupBanner() string {
 	return b.String()
 }
 
-func (m HomeModel) renderContextualHint() string {
+func (m *HomeModel) renderContextualHint() string {
 	if m.project.Type == "" {
 		return ""
 	}
