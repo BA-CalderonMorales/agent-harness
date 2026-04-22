@@ -533,7 +533,7 @@ func isPathInWorkspace(path, workspace string) bool {
 	if err != nil {
 		return false
 	}
-	return rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != "..")
+	return !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".."
 }
 
 // truncatePreviewLine truncates a single line for preview display.
