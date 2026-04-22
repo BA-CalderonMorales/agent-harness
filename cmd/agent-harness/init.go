@@ -640,6 +640,8 @@ func (app *App) initCommands() {
 				app.session.Persona = parsed.String()
 				if app.tuiApp != nil {
 					app.tuiApp.SetSettings(app.getSettings())
+					app.tuiApp.SetChatPersona(app.session.Persona)
+					app.tuiApp.SetHomeStatusLine(app.getHomeStatusLine())
 				}
 				return nil
 			},
