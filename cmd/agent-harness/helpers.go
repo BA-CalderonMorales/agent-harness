@@ -526,14 +526,21 @@ func isPathInWorkspace(path, workspace string) bool {
 		if parentErr != nil {
 			return false
 		}
+		if !isResolvedPathInWorkspace(resolvedWorkspace, resolvedParent) {
+			return false
+		}
 		resolvedPath = filepath.Join(resolvedParent, filepath.Base(absPath))
 	}
 
+	return isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath)
+}
+
+func isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath string) bool {
 	rel, err := filepath.Rel(resolvedWorkspace, resolvedPath)
 	if err != nil {
 		return false
 	}
-	return !strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != ".."
+	return rel == "." || !strings.HasPrefix(rel, "..")
 }
 
 // truncatePreviewLine truncates a single line for preview display.
