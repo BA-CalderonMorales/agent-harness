@@ -22,6 +22,7 @@ type tuiHomeDelegate struct {
 }
 
 func (d *tuiHomeDelegate) OnNewChat() {
+	d.app.session = d.app.session.Clear()
 	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: "Starting fresh conversation."})
 }
 

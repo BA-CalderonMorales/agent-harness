@@ -193,7 +193,7 @@ func (m *HomeModel) View() string {
 
 func (m *HomeModel) rebuildActions() {
 	m.actions = []homeAction{
-		{Label: "New chat", Key: "c", Description: "Start a fresh conversation", Handler: func() {
+		{Label: "New chat", Key: "n", Description: "Start a fresh conversation", Handler: func() {
 			if m.delegate != nil {
 				m.delegate.OnNewChat()
 			}

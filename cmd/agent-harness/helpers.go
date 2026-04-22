@@ -412,16 +412,22 @@ func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) s
 			return ""
 		}
 
+		resolvedPath := path
+		if !filepath.IsAbs(resolvedPath) {
+			resolvedPath = filepath.Join(app.cwd, resolvedPath)
+		}
+		resolvedPath = filepath.Clean(resolvedPath)
+
 		// Only generate previews for paths within the current workspace
-		if !isPathInWorkspace(path, app.cwd) {
-			return fmt.Sprintf("Will modify: %s (outside workspace — preview unavailable)", path)
+		if !isPathInWorkspace(resolvedPath, app.cwd) {
+			return fmt.Sprintf("Will modify: %s (outside workspace — preview unavailable)", resolvedPath)
 		}
 
 		// Check if file exists
 		var preview string
-		existing, err := os.ReadFile(path)
+		existing, err := os.ReadFile(resolvedPath)
 		if err == nil && len(existing) > 0 {
-			preview = fmt.Sprintf("Will overwrite: %s (%d bytes existing)", path, len(existing))
+			preview = fmt.Sprintf("Will overwrite: %s (%d bytes existing)", resolvedPath, len(existing))
 			if toolName == "edit" && len(existing) > 0 {
 				// Show first few lines of existing content
 				lines := strings.Split(string(existing), "\n")
@@ -435,7 +441,7 @@ func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) s
 				}
 			}
 		} else {
-			preview = fmt.Sprintf("Will create: %s", path)
+			preview = fmt.Sprintf("Will create: %s", resolvedPath)
 		}
 
 		if toolName == "edit" {
@@ -489,19 +495,45 @@ func getToolInputString(toolInput map[string]any, key string) string {
 
 // isPathInWorkspace checks if a path is within the given workspace directory.
 func isPathInWorkspace(path, workspace string) bool {
-	absPath, err := filepath.Abs(path)
+	workspaceAbs, err := filepath.Abs(workspace)
 	if err != nil {
 		return false
 	}
-	absWorkspace, err := filepath.Abs(workspace)
+	resolvedWorkspace, err := filepath.EvalSymlinks(workspaceAbs)
 	if err != nil {
 		return false
 	}
-	rel, err := filepath.Rel(absWorkspace, absPath)
+
+	pathToCheck := path
+	if !filepath.IsAbs(pathToCheck) {
+		pathToCheck = filepath.Join(workspaceAbs, pathToCheck)
+	}
+	pathToCheck = filepath.Clean(pathToCheck)
+
+	absPath, err := filepath.Abs(pathToCheck)
 	if err != nil {
 		return false
 	}
-	return !strings.HasPrefix(rel, "..") && rel != ".."
+
+	resolvedPath, err := filepath.EvalSymlinks(absPath)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			return false
+		}
+
+		parent := filepath.Dir(absPath)
+		resolvedParent, parentErr := filepath.EvalSymlinks(parent)
+		if parentErr != nil {
+			return false
+		}
+		resolvedPath = filepath.Join(resolvedParent, filepath.Base(absPath))
+	}
+
+	rel, err := filepath.Rel(resolvedWorkspace, resolvedPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (!strings.HasPrefix(rel, ".."+string(os.PathSeparator)) && rel != "..")
 }
 
 // truncatePreviewLine truncates a single line for preview display.
