@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -273,8 +274,11 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 	return func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
 		t, ok := app.toolRegistry.FindToolByName(toolName)
 		if !ok {
+			app.logAudit(toolName, false, "deny")
 			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
 		}
+
+		var decisionStr string
 
 		if approval.RequiresApproval(toolName) {
 			cmd := app.extractCommandForDisplay(toolName, toolInput)
@@ -287,37 +291,74 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			if app.executionMode == approval.ModeInteractive {
 				decision, err := app.requestCommandApproval(toolName, cmd, toolInput)
 				if err != nil {
+					app.logAudit(toolName, false, "deny")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  sprintf("Approval failed: %v", err),
 					}, nil
 				}
 				if !decision.IsApproved() {
+					app.logAudit(toolName, false, "reject")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  "Command rejected by user",
 					}, nil
 				}
+				decisionStr = "approve"
+			} else {
+				decisionStr = "auto"
 			}
 		}
 
 		if decision := app.checkPermissionMode(toolName); decision.Behavior != tools.Allow {
+			app.logAudit(toolName, false, "deny")
 			return decision, nil
 		}
 
 		for _, allowed := range app.config.AlwaysAllow {
 			if allowed == toolName {
+				app.logAudit(toolName, true, "auto")
 				return tools.PermissionDecision{Behavior: tools.Allow}, nil
 			}
 		}
 
 		permCtx := permissions.EmptyContext()
-		return permissions.Evaluate(t, toolInput, permCtx), nil
+		result := permissions.Evaluate(t, toolInput, permCtx)
+		if result.Behavior == tools.Allow {
+			if decisionStr == "" {
+				decisionStr = "auto"
+			}
+			app.logAudit(toolName, true, decisionStr)
+		} else {
+			app.logAudit(toolName, false, "deny")
+		}
+		return result, nil
 	}
 }
 
-// checkPermissionMode checks tool against permission mode.
+// logAudit records a tool execution to the audit log.
+func (app *App) logAudit(toolName string, approved bool, decision string) {
+	if app.auditLogger == nil {
+		return
+	}
+	_ = app.auditLogger.Log(audit.Entry{
+		SessionID:      app.session.ID,
+		ToolName:       toolName,
+		Approved:       approved,
+		Decision:       decision,
+		Persona:        app.session.Persona,
+		PermissionMode: app.config.PermissionMode.String(),
+	})
+}
+
+// checkPermissionMode checks tool against permission mode and granular settings.
 func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
+	// First check granular permissions (they override mode presets)
+	granular := app.checkGranularPermissions(toolName)
+	if granular.Behavior != tools.Allow {
+		return granular
+	}
+
 	switch app.config.PermissionMode {
 	case config.PermissionReadOnly:
 		if !isReadOnlyTool(toolName) {
@@ -332,6 +373,30 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 				Behavior: tools.Ask,
 				Message:  sprintf("Confirm: %s", toolName),
 			}
+		}
+	}
+	return tools.PermissionDecision{Behavior: tools.Allow}
+}
+
+// checkGranularPermissions checks individual permission toggles.
+func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
+	// If no granular permissions are explicitly set, allow through
+	if !app.config.PermRead && !app.config.PermWrite && !app.config.PermDelete && !app.config.PermExecute {
+		return tools.PermissionDecision{Behavior: tools.Allow}
+	}
+
+	switch toolName {
+	case "read", "glob", "grep", "search", "web_fetch", "web_search":
+		if !app.config.PermRead {
+			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Read permission disabled"}
+		}
+	case "write", "edit":
+		if !app.config.PermWrite {
+			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Write permission disabled"}
+		}
+	case "bash", "shell", "execute_command":
+		if !app.config.PermExecute {
+			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Execute permission disabled"}
 		}
 	}
 	return tools.PermissionDecision{Behavior: tools.Allow}
