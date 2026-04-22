@@ -521,15 +521,14 @@ func isPathInWorkspace(path, workspace string) bool {
 			return false
 		}
 
-		parent := filepath.Dir(absPath)
-		resolvedParent, parentErr := filepath.EvalSymlinks(parent)
-		if parentErr != nil {
+		resolvedCandidate, candidateErr := resolvePathViaExistingAncestor(absPath)
+		if candidateErr != nil {
 			return false
 		}
-		if !isResolvedPathInWorkspace(resolvedWorkspace, resolvedParent) {
+		if !isResolvedPathInWorkspace(resolvedWorkspace, resolvedCandidate) {
 			return false
 		}
-		resolvedPath = filepath.Join(resolvedParent, filepath.Base(absPath))
+		resolvedPath = resolvedCandidate
 	}
 
 	return isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath)
@@ -543,6 +542,33 @@ func isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath string) bool {
 		return false
 	}
 	return !strings.HasPrefix(rel, "..")
+}
+
+// resolvePathViaExistingAncestor resolves symlinks using the nearest existing ancestor of absPath.
+func resolvePathViaExistingAncestor(absPath string) (string, error) {
+	current := absPath
+	for {
+		resolved, err := filepath.EvalSymlinks(current)
+		if err == nil {
+			rel, relErr := filepath.Rel(current, absPath)
+			if relErr != nil {
+				return "", relErr
+			}
+			if rel == "." {
+				return resolved, nil
+			}
+			return filepath.Join(resolved, rel), nil
+		}
+		if !os.IsNotExist(err) {
+			return "", err
+		}
+
+		parent := filepath.Dir(current)
+		if parent == current {
+			return "", err
+		}
+		current = parent
+	}
 }
 
 // truncatePreviewLine truncates a single line for preview display.
