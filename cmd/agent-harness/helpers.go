@@ -404,10 +404,17 @@ func generateUUID() string {
 func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) string {
 	switch toolName {
 	case "write", "edit":
-		path, _ := toolInput["path"].(string)
-		content, _ := toolInput["content"].(string)
+		path := getToolInputString(toolInput, "file_path")
+		if path == "" {
+			path = getToolInputString(toolInput, "path")
+		}
 		if path == "" {
 			return ""
+		}
+
+		// Only generate previews for paths within the current workspace
+		if !isPathInWorkspace(path, app.cwd) {
+			return fmt.Sprintf("Will modify: %s (outside workspace — preview unavailable)", path)
 		}
 
 		// Check if file exists
@@ -431,18 +438,30 @@ func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) s
 			preview = fmt.Sprintf("Will create: %s", path)
 		}
 
-		if content != "" {
-			lines := strings.Split(content, "\n")
-			maxLines := 8
-			if len(lines) < maxLines {
-				maxLines = len(lines)
+		if toolName == "edit" {
+			oldStr := getToolInputString(toolInput, "old_string")
+			newStr := getToolInputString(toolInput, "new_string")
+			if oldStr != "" {
+				preview += "\nReplacing:\n  " + truncatePreviewLine(oldStr, 60)
 			}
-			preview += "\nNew content (first " + fmt.Sprintf("%d", maxLines) + " lines):\n"
-			for i := 0; i < maxLines; i++ {
-				preview += lines[i] + "\n"
+			if newStr != "" {
+				preview += "\nWith:\n  " + truncatePreviewLine(newStr, 60)
 			}
-			if len(lines) > maxLines {
-				preview += fmt.Sprintf("... and %d more lines", len(lines)-maxLines)
+		} else {
+			content := getToolInputString(toolInput, "content")
+			if content != "" {
+				lines := strings.Split(content, "\n")
+				maxLines := 8
+				if len(lines) < maxLines {
+					maxLines = len(lines)
+				}
+				preview += "\nNew content (first " + fmt.Sprintf("%d", maxLines) + " lines):\n"
+				for i := 0; i < maxLines; i++ {
+					preview += lines[i] + "\n"
+				}
+				if len(lines) > maxLines {
+					preview += fmt.Sprintf("... and %d more lines", len(lines)-maxLines)
+				}
 			}
 		}
 		return preview
@@ -458,6 +477,39 @@ func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) s
 	default:
 		return ""
 	}
+}
+
+// getToolInputString safely extracts a string value from tool input.
+func getToolInputString(toolInput map[string]any, key string) string {
+	if v, ok := toolInput[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// isPathInWorkspace checks if a path is within the given workspace directory.
+func isPathInWorkspace(path, workspace string) bool {
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	absWorkspace, err := filepath.Abs(workspace)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absWorkspace, absPath)
+	if err != nil {
+		return false
+	}
+	return !strings.HasPrefix(rel, "..") && rel != ".."
+}
+
+// truncatePreviewLine truncates a single line for preview display.
+func truncatePreviewLine(s string, maxLen int) string {
+	if len(s) <= maxLen {
+		return s
+	}
+	return s[:maxLen-3] + "..."
 }
 
 // extractCommandForDisplay extracts command string from tool input for display.
@@ -478,10 +530,15 @@ func (app *App) extractCommandForDisplay(toolName string, toolInput map[string]a
 // extractWriteEditDisplay extracts display for write/edit tools.
 func extractWriteEditDisplay(toolInput map[string]any) string {
 	var parts []string
-	if path, ok := toolInput["path"].(string); ok {
+	path := getToolInputString(toolInput, "file_path")
+	if path == "" {
+		path = getToolInputString(toolInput, "path")
+	}
+	if path != "" {
 		parts = append(parts, path)
 	}
-	if content, ok := toolInput["content"].(string); ok {
+	content := getToolInputString(toolInput, "content")
+	if content != "" {
 		lines := strings.Split(content, "\n")
 		if len(lines) > 0 {
 			display := lines[0]

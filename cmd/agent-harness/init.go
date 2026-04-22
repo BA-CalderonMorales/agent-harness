@@ -147,8 +147,20 @@ func (app *App) initSession() error {
 		if app.config.Model != "" && app.config.Model != resumed.Model {
 			resumed.Model = app.config.Model
 		}
+		// Apply configured persona if valid and session has no persona set
+		if app.config.Persona != "" && resumed.Persona == "" {
+			if p, err := persona.Parse(app.config.Persona); err == nil {
+				resumed.Persona = p.String()
+			}
+		}
 	} else {
 		app.session = sessionManager.CreateSession(model)
+		// Apply configured persona to new session
+		if app.config.Persona != "" {
+			if p, err := persona.Parse(app.config.Persona); err == nil {
+				app.session.Persona = p.String()
+			}
+		}
 	}
 
 	app.costTracker = agent.NewCostTracker()
@@ -641,7 +653,7 @@ func (app *App) initCommands() {
 				if app.tuiApp != nil {
 					app.tuiApp.SetSettings(app.getSettings())
 					app.tuiApp.SetChatPersona(app.session.Persona)
-					app.tuiApp.SetHomeStatusLine(app.getHomeStatusLine())
+					app.tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 				}
 				return nil
 			},

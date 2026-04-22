@@ -261,7 +261,7 @@ func (m HomeModel) renderQuickActions() string {
 			prefix = IndicatorSelected + " "
 			style = ListSelectedStyle
 		}
-		line := fmt.Sprintf("%s%s %s", prefix, action.Label, HelpDimStyle.Render("("+action.Key+")"))
+		line := fmt.Sprintf("%s%s", prefix, action.Label)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("     %s", action.Description)))
@@ -409,6 +409,9 @@ func (m *HomeModel) GotoBottom() {
 }
 
 func truncateString(s string, maxLen int) string {
+	if maxLen <= 0 {
+		return ""
+	}
 	if len(s) <= maxLen {
 		return s
 	}

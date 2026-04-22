@@ -3,8 +3,6 @@
 package audit
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -126,12 +124,6 @@ func (l *Logger) currentLogPath() string {
 }
 
 // hashInput creates a deterministic hash of tool input for privacy.
-func hashInput(input string) string {
-	h := sha256.New()
-	h.Write([]byte(input))
-	return hex.EncodeToString(h.Sum(nil))[:16]
-}
-
 // FormatEntries returns a human-readable representation of audit entries.
 func FormatEntries(entries []Entry) string {
 	if len(entries) == 0 {
