@@ -47,9 +47,6 @@ func NewLogger() (*Logger, error) {
 // Log records a tool execution event.
 func (l *Logger) Log(entry Entry) error {
 	entry.Timestamp = time.Now().UTC()
-	if entry.InputHash == "" && entry.ToolName != "" {
-		entry.InputHash = hashInput(entry.ToolName)
-	}
 
 	data, err := json.Marshal(entry)
 	if err != nil {
