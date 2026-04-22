@@ -38,8 +38,11 @@ func NewLogger() (*Logger, error) {
 		return nil, fmt.Errorf("failed to get home directory: %w", err)
 	}
 	dir := filepath.Join(home, ".agent-harness", "audit")
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create audit directory: %w", err)
+	}
+	if err := os.Chmod(dir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to secure audit directory permissions: %w", err)
 	}
 	return &Logger{dir: dir}, nil
 }
