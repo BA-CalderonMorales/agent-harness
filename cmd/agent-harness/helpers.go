@@ -535,12 +535,14 @@ func isPathInWorkspace(path, workspace string) bool {
 	return isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath)
 }
 
+// isResolvedPathInWorkspace checks whether resolvedPath remains within resolvedWorkspace.
+// Both inputs are expected to be absolute paths with symlinks already resolved.
 func isResolvedPathInWorkspace(resolvedWorkspace, resolvedPath string) bool {
 	rel, err := filepath.Rel(resolvedWorkspace, resolvedPath)
 	if err != nil {
 		return false
 	}
-	return rel == "." || !strings.HasPrefix(rel, "..")
+	return !strings.HasPrefix(rel, "..")
 }
 
 // truncatePreviewLine truncates a single line for preview display.
