@@ -24,27 +24,27 @@ type HomeDelegate interface {
 // ProjectInfo holds contextual project metadata
 // ---------------------------------------------------------------------------
 type ProjectInfo struct {
-	Name            string
-	Type            string // "Go", "Node", "Python", etc.
-	GitBranch       string
-	GitCommit       string
-	HasChanges      bool
+	Name             string
+	Type             string // "Go", "Node", "Python", etc.
+	GitBranch        string
+	GitCommit        string
+	HasChanges       bool
 	UncommittedCount int
-	LastCommitMsg   string
+	LastCommitMsg    string
 }
 
 // ---------------------------------------------------------------------------
 // HomeModel is the dashboard view model
 // ---------------------------------------------------------------------------
 type HomeModel struct {
-	width        int
-	height       int
-	focused      bool
-	project      ProjectInfo
-	sessions     []SessionInfo
-	model        string
-	permissionMode string
-	persona      string
+	width           int
+	height          int
+	focused         bool
+	project         ProjectInfo
+	sessions        []SessionInfo
+	model           string
+	permissionMode  string
+	persona         string
 	estimatedTokens int
 
 	// Quick action cursor
@@ -322,7 +322,7 @@ func (m HomeModel) renderStatusFooter() string {
 		return ""
 	}
 
-	return HelpDimStyle.Render("  " + strings.Join(parts, "  ")) + "\n"
+	return HelpDimStyle.Render("  "+strings.Join(parts, "  ")) + "\n"
 }
 
 func (m HomeModel) renderSetupBanner() string {

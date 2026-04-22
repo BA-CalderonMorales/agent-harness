@@ -16,14 +16,14 @@ import (
 
 // Entry represents a single audited event.
 type Entry struct {
-	Timestamp   time.Time `json:"timestamp"`
-	SessionID   string    `json:"session_id"`
-	ToolName    string    `json:"tool_name"`
-	InputHash   string    `json:"input_hash"`
-	Approved    bool      `json:"approved"`
-	Decision    string    `json:"decision"` // "approve", "reject", "approve-all", "auto"
-	Persona     string    `json:"persona"`
-	PermissionMode string `json:"permission_mode"`
+	Timestamp      time.Time `json:"timestamp"`
+	SessionID      string    `json:"session_id"`
+	ToolName       string    `json:"tool_name"`
+	InputHash      string    `json:"input_hash"`
+	Approved       bool      `json:"approved"`
+	Decision       string    `json:"decision"` // "approve", "reject", "approve-all", "auto"
+	Persona        string    `json:"persona"`
+	PermissionMode string    `json:"permission_mode"`
 }
 
 // Logger handles audit log writes.
