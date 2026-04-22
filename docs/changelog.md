@@ -2,8 +2,21 @@
 
 ## [0.2.0] - 2026-04-22
 
+### Added
+- Functional Persona system with 5 specialized roles (internal/core/persona)
+- Home dashboard tab in TUI with project overview and stats
+- Granular security permission toggles in Settings view
+- Audit logging and sandbox preview for tool execution
+- Red-team containment tooling and block-all-squatters utility
+
+### Fixed
+- Strengthened symlink-aware workspace containment for security
+- Resolved all outstanding Copilot review comments on Persona dashboard
+- Gofmt formatting and quality check alignment
+
 ### Changed
-- Version bump to v0.2.0
+- Refactored workspace containment return logic for simplicity
+- Simplified TUI/Security interaction for better responsiveness
 
 ## [0.1.15] - 2026-04-19
 
