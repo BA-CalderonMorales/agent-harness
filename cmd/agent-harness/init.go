@@ -18,6 +18,8 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
@@ -614,6 +616,47 @@ func (app *App) initCommands() {
 		commands.LogoutHandler(func() error {
 			return app.logout()
 		}))
+
+	app.cmdRegistry.Register("audit", "Show recent tool activity",
+		commands.AuditHandler(func() string {
+			if app.auditLogger == nil {
+				return "Audit logging is not available."
+			}
+			entries, err := app.auditLogger.Recent(20)
+			if err != nil {
+				return fmt.Sprintf("Failed to load audit log: %v", err)
+			}
+			return audit.FormatEntries(entries)
+		}))
+
+	app.cmdRegistry.Register("persona", "Show or change persona",
+		commands.PersonaHandler(
+			func() string { return app.session.Persona },
+			func(p string) error {
+				parsed, err := persona.Parse(p)
+				if err != nil {
+					return err
+				}
+				app.session.Persona = parsed.String()
+				if app.tuiApp != nil {
+					app.tuiApp.SetSettings(app.getSettings())
+				}
+				return nil
+			},
+			func() string {
+				var lines []string
+				lines = append(lines, "Available personas:")
+				lines = append(lines, "")
+				for _, p := range persona.All() {
+					marker := "  "
+					if p.String() == app.session.Persona {
+						marker = "● "
+					}
+					lines = append(lines, fmt.Sprintf("%s%-12s %s", marker, p.String(), p.Description()))
+				}
+				return strings.Join(lines, "\n")
+			},
+		))
 
 	app.cmdRegistry.Register("login", "Log in with new credentials",
 		commands.LoginHandler(func() error {

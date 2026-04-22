@@ -15,6 +15,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -68,6 +69,7 @@ func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Sess
 // getSettings returns current settings for TUI.
 func (app *App) getSettings() []tui.Setting {
 	return []tui.Setting{
+		{Key: "persona", Label: "Persona", Value: app.session.Persona, Description: "Agent behavior mode", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
 		{Key: "model", Label: "Model", Value: app.session.Model, Description: "The AI model to use", Type: "string"},
 		{Key: "provider", Label: "Provider", Value: app.config.Provider, Description: "API provider", Type: "string"},
 		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Description: "Tool permission level", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
@@ -115,6 +117,26 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "openai/gpt-4o", Name: "GPT-4o", Provider: "openrouter", ContextLen: 128000, IsDefault: currentModel == "openai/gpt-4o"},
 		}
 	}
+}
+
+// getProjectInfo returns project metadata for the home dashboard.
+func (app *App) getProjectInfo() tui.ProjectInfo {
+	info := tui.ProjectInfo{
+		Name: filepath.Base(app.cwd),
+	}
+
+	if app.gitContext != nil && app.gitContext.IsRepo {
+		info.GitBranch = app.gitContext.Branch
+		info.GitCommit = app.gitContext.Commit
+		info.HasChanges = app.gitContext.HasChanges
+		info.UncommittedCount = len(app.gitContext.StatusFiles)
+		if len(app.gitContext.RecentCommits) > 0 {
+			info.LastCommitMsg = app.gitContext.RecentCommits[0]
+		}
+	}
+
+	info.Type = detectProjectType(app.cwd)
+	return info
 }
 
 // getWorkspaceInfo returns formatted workspace information.
@@ -169,6 +191,7 @@ func (app *App) buildSystemPrompt() string {
 
 	cfg := agent.SystemPromptConfig{
 		PersonaName:      "Agent",
+		Persona:          app.session.Persona,
 		GitContext:       gitContext,
 		PermissionMode:   app.config.PermissionMode.String(),
 		WorkingDirectory: app.cwd,
@@ -200,6 +223,13 @@ func loadSkillPrompts() []string {
 func (app *App) buildWelcomeMessage() string {
 	var parts []string
 	parts = append(parts, sprintf("Agent Harness %s", Version))
+
+	// Persona-aware greeting
+	if app.session != nil && app.session.Persona != "" {
+		if p, err := persona.Parse(app.session.Persona); err == nil {
+			parts = append(parts, sprintf("  Mode: %s — %s", p.DisplayName(), p.WelcomeGreeting()))
+		}
+	}
 
 	if app.session != nil && len(app.session.Messages) > 0 {
 		parts = append(parts, sprintf("  Resumed session %s (%d messages, %d turns)",
@@ -370,6 +400,66 @@ func generateUUID() string {
 	return fmt.Sprintf("%d", time.Now().UnixNano())
 }
 
+// buildCommandPreview generates a preview of what a tool will do.
+func (app *App) buildCommandPreview(toolName string, toolInput map[string]any) string {
+	switch toolName {
+	case "write", "edit":
+		path, _ := toolInput["path"].(string)
+		content, _ := toolInput["content"].(string)
+		if path == "" {
+			return ""
+		}
+
+		// Check if file exists
+		var preview string
+		existing, err := os.ReadFile(path)
+		if err == nil && len(existing) > 0 {
+			preview = fmt.Sprintf("Will overwrite: %s (%d bytes existing)", path, len(existing))
+			if toolName == "edit" && len(existing) > 0 {
+				// Show first few lines of existing content
+				lines := strings.Split(string(existing), "\n")
+				maxLines := 5
+				if len(lines) < maxLines {
+					maxLines = len(lines)
+				}
+				preview += "\nExisting content (first " + fmt.Sprintf("%d", maxLines) + " lines):\n"
+				for i := 0; i < maxLines; i++ {
+					preview += lines[i] + "\n"
+				}
+			}
+		} else {
+			preview = fmt.Sprintf("Will create: %s", path)
+		}
+
+		if content != "" {
+			lines := strings.Split(content, "\n")
+			maxLines := 8
+			if len(lines) < maxLines {
+				maxLines = len(lines)
+			}
+			preview += "\nNew content (first " + fmt.Sprintf("%d", maxLines) + " lines):\n"
+			for i := 0; i < maxLines; i++ {
+				preview += lines[i] + "\n"
+			}
+			if len(lines) > maxLines {
+				preview += fmt.Sprintf("... and %d more lines", len(lines)-maxLines)
+			}
+		}
+		return preview
+
+	case "bash", "shell":
+		cmd, _ := toolInput["command"].(string)
+		if cmd == "" {
+			return ""
+		}
+		// Risk assessment is handled by the dialog itself
+		return ""
+
+	default:
+		return ""
+	}
+}
+
 // extractCommandForDisplay extracts command string from tool input for display.
 func (app *App) extractCommandForDisplay(toolName string, toolInput map[string]any) string {
 	switch toolName {
@@ -427,12 +517,15 @@ func (app *App) requestCommandApproval(toolName, command string, toolInput map[s
 	cmdID := generateUUID()
 	isDestructive := checkDestructive(toolName, command)
 
+	preview := app.buildCommandPreview(toolName, toolInput)
+
 	req := approval.NewApprovalRequest(approval.CommandInfo{
 		ID:            cmdID,
 		ToolName:      toolName,
 		DisplayName:   toolName,
 		Command:       command,
 		Description:   approval.FormatCommandForDisplay(toolName, command),
+		Preview:       preview,
 		IsDestructive: isDestructive,
 		Timestamp:     time.Now(),
 	})

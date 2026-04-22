@@ -517,6 +517,32 @@ func LogoutHandler(logoutFn func() error) SlashHandler {
 	}
 }
 
+// AuditHandler shows recent audit entries.
+func AuditHandler(getAudit func() string) SlashHandler {
+	return func(args string) (string, error) {
+		return getAudit(), nil
+	}
+}
+
+// PersonaHandler handles persona switching.
+func PersonaHandler(getPersona func() string, setPersona func(string) error, listPersonas func() string) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			return listPersonas(), nil
+		}
+
+		previous := getPersona()
+		if err := setPersona(args); err != nil {
+			return "", err
+		}
+
+		return fmt.Sprintf(`Persona updated
+  Previous         %s
+  Current          %s
+  Tip              Personality and tool hints updated for this session`, previous, args), nil
+	}
+}
+
 // LoginHandler handles login - starts the login wizard.
 func LoginHandler(startLoginFn func() error) SlashHandler {
 	return func(args string) (string, error) {

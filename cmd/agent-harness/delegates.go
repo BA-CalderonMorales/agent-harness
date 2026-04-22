@@ -1,17 +1,64 @@
 package main
 
 import (
+	"os"
 	"strings"
 
 	"github.com/atotto/clipboard"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+// tuiHomeDelegate connects TUI home dashboard to the app.
+type tuiHomeDelegate struct {
+	app    *App
+	tuiApp *tui.App
+}
+
+func (d *tuiHomeDelegate) OnNewChat() {
+	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: "Starting fresh conversation."})
+}
+
+func (d *tuiHomeDelegate) OnRunTests() {
+	result, err := d.app.runTests()
+	if err != nil {
+		d.tuiApp.AddMessage("system", sprintf("Tests failed: %v", err))
+		return
+	}
+	d.tuiApp.AddMessage("system", result)
+}
+
+func (d *tuiHomeDelegate) OnExportSession() {
+	path := sprintf("session-%s.md", d.app.session.ID[:8])
+	md := d.app.session.ExportToMarkdown()
+	if err := os.WriteFile(path, []byte(md), 0644); err != nil {
+		d.tuiApp.AddMessage("system", sprintf("Export failed: %v", err))
+		return
+	}
+	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
+}
+
+func (d *tuiHomeDelegate) OnSwitchPersona() {
+	d.tuiApp.AddMessage("system", "Use /persona <name> to switch. Available: developer, designer, pm, scientist, explorer")
+}
+
+func (d *tuiHomeDelegate) OnLoadSession(id string) {
+	session, err := d.app.sessionManager.LoadSession(id)
+	if err != nil {
+		d.tuiApp.AddMessage("system", sprintf("Failed to load session: %v", err))
+		return
+	}
+	d.app.session = session
+	d.tuiApp.SetChatPersona(session.Persona)
+	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
+	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+}
 
 // tuiSessionsDelegate connects TUI sessions to the app.
 type tuiSessionsDelegate struct {
@@ -27,6 +74,7 @@ func (d *tuiSessionsDelegate) OnSessionSelect(id string) {
 		return
 	}
 	d.app.session = session
+	d.tuiApp.SetChatPersona(session.Persona)
 	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
 	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
 }
@@ -121,6 +169,8 @@ type tuiSettingsDelegate struct {
 // OnSettingChange handles setting changes.
 func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	switch key {
+	case "persona":
+		d.handlePersonaChange(value)
 	case "model":
 		d.handleModelChange(value)
 	case "provider":
@@ -150,6 +200,17 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	d.tuiApp.SetSettings(d.app.getSettings())
 }
 
+// handlePersonaChange updates the persona and refreshes the UI.
+func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
+	if p, err := persona.Parse(value); err == nil {
+		d.app.session.Persona = p.String()
+		d.tuiApp.SetChatPersona(p.String())
+		d.tuiApp.AddMessage("system", sprintf("Persona switched to: %s — %s", p.DisplayName(), p.Description()))
+	} else {
+		d.tuiApp.AddMessage("system", sprintf("Invalid persona: %v", err))
+	}
+}
+
 // handleModelChange updates the model and saves to config.
 func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	d.app.session.Model = value
@@ -164,10 +225,29 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	}
 }
 
-// handlePermissionModeChange updates permission mode.
+// handlePermissionModeChange updates permission mode and syncs granular toggles.
 func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 	if mode, err := config.ParsePermissionMode(value); err == nil {
 		d.app.config.PermissionMode = mode
+		// Sync granular toggles to match the preset
+		switch mode {
+		case config.PermissionReadOnly:
+			d.app.config.PermRead = true
+			d.app.config.PermWrite = false
+			d.app.config.PermDelete = false
+			d.app.config.PermExecute = false
+		case config.PermissionWorkspaceWrite:
+			d.app.config.PermRead = true
+			d.app.config.PermWrite = true
+			d.app.config.PermDelete = false
+			d.app.config.PermExecute = false
+		case config.PermissionDangerFullAccess:
+			d.app.config.PermRead = true
+			d.app.config.PermWrite = true
+			d.app.config.PermDelete = true
+			d.app.config.PermExecute = true
+		}
+		d.tuiApp.AddMessage("system", sprintf("Permission mode: %s", mode.String()))
 	}
 }
 

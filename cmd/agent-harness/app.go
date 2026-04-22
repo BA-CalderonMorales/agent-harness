@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
@@ -43,6 +44,7 @@ type App struct {
 	tuiApp         *tui.App
 	executionMode  approval.ExecutionMode
 	mcpManager     *mcp.Manager
+	auditLogger    *audit.Logger
 
 	// Login wizard state
 	loginState       LoginState
@@ -58,6 +60,11 @@ func newApp() (*App, error) {
 	}
 
 	app := &App{cwd: cwd}
+
+	// Initialize audit logging (non-fatal if it fails)
+	if logger, err := audit.NewLogger(); err == nil {
+		app.auditLogger = logger
+	}
 
 	if err := app.initConfig(); err != nil {
 		return nil, err
@@ -92,6 +99,7 @@ func (app *App) run() error {
 	tuiApp.SetUserCommandHandler(func(cmd string, ta *tui.App) {
 		app.handleUserCommand(cmd, ta)
 	})
+	tuiApp.SetHomeDelegate(&tuiHomeDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
@@ -103,6 +111,9 @@ func (app *App) run() error {
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetModels(app.getModelItems())
 	tuiApp.SetChatModel(app.session.Model)
+	tuiApp.SetChatPersona(app.session.Persona)
+	tuiApp.SetProjectInfo(app.getProjectInfo())
+	tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
 
 	return tui.Run(tuiApp)
