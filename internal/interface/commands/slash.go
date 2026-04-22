@@ -535,11 +535,12 @@ func PersonaHandler(getPersona func() string, setPersona func(string) error, lis
 		if err := setPersona(args); err != nil {
 			return "", err
 		}
+		current := getPersona()
 
 		return fmt.Sprintf(`Persona updated
   Previous         %s
   Current          %s
-  Tip              Personality and tool hints updated for this session`, previous, args), nil
+  Tip              Personality and tool hints updated for this session`, previous, current), nil
 	}
 }
 
