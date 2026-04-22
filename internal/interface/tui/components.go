@@ -416,6 +416,8 @@ func (h Help) renderContent() string {
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Tab"), HelpDimStyle.Render("Switch to next tab")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Shift+Tab"), HelpDimStyle.Render("Switch to previous tab")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("1-4"), HelpDimStyle.Render("Jump to tab 1-4")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("h"), HelpDimStyle.Render("Go to Home")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("c"), HelpDimStyle.Render("Go to Chat")))
 	lines = append(lines, "")
 
 	// Chat
@@ -429,6 +431,7 @@ func (h Help) renderContent() string {
 	lines = append(lines, CategoryStyle.Render("  Session"))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("/clear"), HelpDimStyle.Render("Clear chat history")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("/export"), HelpDimStyle.Render("Export session")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("/persona"), HelpDimStyle.Render("Switch behavior mode")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("/quit"), HelpDimStyle.Render("Exit application")))
 	lines = append(lines, "")
 
