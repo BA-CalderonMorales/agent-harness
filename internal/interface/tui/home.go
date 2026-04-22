@@ -224,7 +224,11 @@ func (m HomeModel) renderProjectCard() string {
 	if m.project.GitBranch != "" {
 		gitStatus := m.project.GitBranch
 		if m.project.GitCommit != "" {
-			gitStatus += " @ " + m.project.GitCommit[:7]
+			commit := m.project.GitCommit
+			if len(commit) > 7 {
+				commit = commit[:7]
+			}
+			gitStatus += " @ " + commit
 		}
 		if m.project.HasChanges {
 			gitStatus += fmt.Sprintf(" (%d uncommitted)", m.project.UncommittedCount)
