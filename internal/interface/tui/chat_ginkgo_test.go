@@ -1186,4 +1186,61 @@ var _ = Describe("ChatModel", func() {
 			})
 		})
 	})
+
+	// ========================================================================
+	// Stability and Edge Cases — Panic prevention and UI robustness
+	// ========================================================================
+	Describe("Stability and Edge Cases", func() {
+		Context("Given a window resize during tool execution", func() {
+			It("should not panic and should maintain tool state", func() {
+				By("starting an agent turn and tool")
+				chat.AddMessage("user", "test")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolStartMsg{
+					ToolID: "t1", ToolName: "bash", DisplayName: "Shell",
+				})
+				chat = model.(ChatModel)
+
+				By("resizing the window")
+				Expect(func() {
+					model, _ = chat.Update(tea.WindowSizeMsg{Width: 40, Height: 10})
+					chat = model.(ChatModel)
+				}).NotTo(Panic())
+
+				By("verifying tool is still running")
+				Expect(chat.currentToolMsg).ToNot(BeNil())
+				Expect(chat.currentToolMsg.ID).To(Equal("t1"))
+			})
+		})
+
+		Context("Given a persona switch mid-agent turn", func() {
+			It("should update the persona but keep existing messages", func() {
+				By("starting an agent turn")
+				chat.AddMessage("user", "test")
+				chat.SetPersona("developer")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("switching persona")
+				chat.SetPersona("designer")
+
+				By("verifying state remains consistent")
+				Expect(chat.persona).To(Equal("designer"))
+				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.thinking).To(BeTrue())
+			})
+		})
+
+		Context("Given an empty message submission", func() {
+			It("should not trigger a delegate call or add a message", func() {
+				By("pressing Enter with empty input")
+				model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				chat = model.(ChatModel)
+
+				Expect(chat.messages).To(HaveLen(0))
+				Expect(delegate.submittedText).To(Equal(""))
+			})
+		})
+	})
 })
