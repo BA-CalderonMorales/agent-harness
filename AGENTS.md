@@ -24,14 +24,9 @@
 - **Loop auto-compaction**: old messages are trimmed automatically when approaching token limits
 - **Edit tool**: supports `replace_all` and gives actionable errors on mismatch
 
-## Cross-Repo
-
-- Related: terminal-jarvis (Rust ADK), lumina-bot (Go gateway), claude-termux (JS CLI)
-- Shared commands: `harness-status`, `sync-philosophy`
-
 ## Core Agent Loop
 
-All harnesses share identical control flow (`internal/agent/loop.go:queryLoop()`):
+Standard agent control flow (`internal/agent/loop.go:queryLoop()`):
 
 ```
 while not done:
