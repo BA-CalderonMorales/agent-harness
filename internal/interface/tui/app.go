@@ -327,8 +327,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.width = msg.Width
 		a.height = msg.Height
 
-		// Reserve space for tab bar (2) + status bar (1)
-		reserved := 3
+		// Reserve space for tab bar (3: padding top + content + border bottom)
+		// + status bar (2: content + padding bottom) = 5 total
+		reserved := 5
 		contentMsg := tea.WindowSizeMsg{
 			Width:  msg.Width,
 			Height: msg.Height - reserved,
