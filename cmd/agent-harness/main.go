@@ -41,12 +41,17 @@ func run() error {
 	flag.BoolVar(&showHelp, "help", false, "Show help")
 	flag.BoolVar(&showHelp, "h", false, "Show help (shorthand)")
 
+	var showDiagnose bool
+	flag.BoolVar(&showDiagnose, "diagnose", false, "Diagnose configuration issues")
+	flag.BoolVar(&showDiagnose, "d", false, "Diagnose configuration issues (shorthand)")
+
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "Usage: %s [options]\n\n", os.Args[0])
 		fmt.Fprintf(os.Stderr, "Agent Harness - AI-powered coding assistant\n\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		fmt.Fprintf(os.Stderr, "  -v, --version    Show version\n")
 		fmt.Fprintf(os.Stderr, "  -h, --help       Show help\n")
+		fmt.Fprintf(os.Stderr, "  -d, --diagnose   Diagnose configuration issues\n")
 		fmt.Fprintf(os.Stderr, "\nFor more: https://github.com/BA-CalderonMorales/agent-harness\n")
 	}
 
@@ -60,6 +65,10 @@ func run() error {
 	if showHelp {
 		flag.Usage()
 		return nil
+	}
+
+	if showDiagnose {
+		return runDiagnose()
 	}
 
 	app, err := newApp()
