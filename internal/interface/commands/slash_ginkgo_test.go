@@ -1441,11 +1441,11 @@ var _ = Describe("Slash Commands", func() {
 	Describe("PersonaHandler", func() {
 		It("should list personas on empty or 'list' arg", func() {
 			handler := PersonaHandler(nil, nil, func() string { return "Available: developer, designer" })
-			
+
 			res1, err1 := handler("")
 			Expect(err1).ToNot(HaveOccurred())
 			Expect(res1).To(Equal("Available: developer, designer"))
-			
+
 			res2, err2 := handler("list")
 			Expect(err2).ToNot(HaveOccurred())
 			Expect(res2).To(Equal("Available: developer, designer"))

@@ -1,0 +1,14 @@
+#!/bin/bash
+# pre-commit hook - Block session artifacts from being committed
+# Install: git config core.hooksPath .githooks
+
+BLOCKED=$(git diff --cached --name-only --diff-filter=ACM | grep -E '^session-.*\.json$' || true)
+
+if [ -n "$BLOCKED" ]; then
+    echo "[!] ERROR: Session artifact files are blocked from commits:"
+    echo "$BLOCKED"
+    echo "    These files are ephemeral and should not be tracked."
+    exit 1
+fi
+
+exit 0

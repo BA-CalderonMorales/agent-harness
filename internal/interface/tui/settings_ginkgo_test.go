@@ -76,11 +76,11 @@ var _ = Describe("SettingsModel", func() {
 			It("should toggle boolean settings immediately", func() {
 				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyDown}) // Go to auto_save
 				settings = m.(SettingsModel)
-				
+
 				By("pressing enter to toggle")
 				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				settings = m.(SettingsModel)
-				
+
 				Expect(settings.settings[1].BoolValue).To(BeTrue())
 				Expect(delegate.changedKey).To(Equal("auto_save"))
 				Expect(delegate.changedValue).To(Equal("true"))
@@ -105,7 +105,7 @@ var _ = Describe("SettingsModel", func() {
 				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
 				settings = m.(SettingsModel)
 				Expect(settings.editBuf).To(Equal("dar"))
-				
+
 				By("backspacing on empty buffer should not panic")
 				for i := 0; i < 10; i++ {
 					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
@@ -118,7 +118,7 @@ var _ = Describe("SettingsModel", func() {
 				settings = m.(SettingsModel)
 				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				settings = m.(SettingsModel)
-				
+
 				Expect(settings.editing).To(BeFalse())
 				Expect(settings.settings[0].Value).To(Equal("light"))
 				Expect(delegate.changedKey).To(Equal("theme"))
@@ -130,13 +130,13 @@ var _ = Describe("SettingsModel", func() {
 				settings = m.(SettingsModel)
 				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("changed")})
 				settings = m.(SettingsModel)
-				
+
 				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEsc})
 				settings = m.(SettingsModel)
-				
+
 				Expect(settings.editing).To(BeFalse())
 				Expect(settings.settings[0].Value).To(Equal("dark")) // original value
-				Expect(delegate.changedValue).To(Equal("")) // delegate not called
+				Expect(delegate.changedValue).To(Equal(""))          // delegate not called
 			})
 
 			It("should handle global R and r keys", func() {

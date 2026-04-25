@@ -64,10 +64,10 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 // ParseSlashCommand parses a slash command from input
 func ParseSlashCommand(input string) SlashCommand {
 	input = strings.TrimPrefix(input, "/")
-	
+
 	// Handle edge case where user types "/ " (slash followed by space)
 	input = strings.TrimLeft(input, " ")
-	
+
 	if input == "" {
 		return SlashCommand{Name: "", Raw: ""}
 	}
