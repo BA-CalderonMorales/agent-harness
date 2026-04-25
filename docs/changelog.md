@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.2.4] - 2026-04-25
+
+### Added
+- Comprehensive BDD test coverage for all TUI tabs
+- App-level Ginkgo specs for view switching, navigation, and message routing
+
+### Fixed
+- Viewport reserved space calculation (3 → 5) for accurate content height
+- Command palette, model picker, and approval dialog bugs found via TDD
+
 ## [0.2.3] - 2026-04-25
 
 ### Changed

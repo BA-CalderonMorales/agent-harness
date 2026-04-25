@@ -62,12 +62,15 @@ func (m *ModelPickerModel) Open(width, height int) {
 		panelW = 30
 	}
 
-	minHeight := 8
+	minHeight := 3
 	vpH := height - 6
 	if vpH < minHeight {
 		vpH = minHeight
 	}
 	maxVpH := height - 4
+	if maxVpH < minHeight {
+		maxVpH = minHeight
+	}
 	if vpH > maxVpH {
 		vpH = maxVpH
 	}

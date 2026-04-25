@@ -2,7 +2,6 @@ package tui
 
 import (
 	"strings"
-	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -14,10 +13,6 @@ import (
 // Test entry point
 // ---------------------------------------------------------------------------
 
-func TestChatModel(t *testing.T) {
-	RegisterFailHandler(Fail)
-	RunSpecs(t, "Chat Model Suite")
-}
 
 // ---------------------------------------------------------------------------
 // Test delegate

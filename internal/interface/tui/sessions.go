@@ -291,7 +291,11 @@ func (m SessionsModel) renderSessionDetail(session SessionInfo) string {
 	b.WriteString("\n\n")
 
 	// ID
-	b.WriteString(RenderField("ID", session.ID[:16]+"..."))
+	idDisplay := session.ID
+	if len(idDisplay) > 16 {
+		idDisplay = idDisplay[:16] + "..."
+	}
+	b.WriteString(RenderField("ID", idDisplay))
 	b.WriteString("\n")
 
 	// Title
