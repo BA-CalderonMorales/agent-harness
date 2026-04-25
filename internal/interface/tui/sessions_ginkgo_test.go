@@ -40,7 +40,7 @@ var _ = Describe("SessionsModel", func() {
 			It("should render an empty state", func() {
 				Expect(sessions.View()).To(ContainSubstring("No Sessions"))
 			})
-			
+
 			It("should not panic when pressing keys on empty list", func() {
 				Expect(func() {
 					sessions.Update(tea.KeyMsg{Type: tea.KeyEnter})
@@ -89,7 +89,7 @@ var _ = Describe("SessionsModel", func() {
 				By("pressing e to export")
 				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 				Expect(delegate.exportedSession).To(Equal("2"))
-				
+
 				By("pressing c to copy")
 				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 				Expect(delegate.copiedSession).To(Equal("2"))
@@ -108,12 +108,12 @@ var _ = Describe("SessionsModel", func() {
 				}
 				Expect(sessions.cursor).To(Equal(0))
 			})
-			
+
 			It("should update cursor if sessions are reduced", func() {
 				m, _ := sessions.Update(tea.KeyMsg{Type: tea.KeyDown})
 				sessions = m.(SessionsModel)
 				Expect(sessions.cursor).To(Equal(1))
-				
+
 				sessions.SetSessions([]SessionInfo{
 					{ID: "3", Title: "S3"},
 				})
