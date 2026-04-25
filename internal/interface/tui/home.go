@@ -400,12 +400,14 @@ func (m HomeModel) ConsumesEsc() bool {
 // Scroll scrolls the actions list.
 func (m *HomeModel) Scroll(lines int) {
 	if lines > 0 {
-		if m.actionCursor < len(m.actions)-1 {
-			m.actionCursor++
+		m.actionCursor += lines
+		if m.actionCursor >= len(m.actions) {
+			m.actionCursor = len(m.actions) - 1
 		}
 	} else {
-		if m.actionCursor > 0 {
-			m.actionCursor--
+		m.actionCursor += lines
+		if m.actionCursor < 0 {
+			m.actionCursor = 0
 		}
 	}
 }

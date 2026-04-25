@@ -113,6 +113,7 @@ func (m ApprovalDialogModel) IsShowingNotification() bool {
 // ClearNotification clears the notification
 func (m *ApprovalDialogModel) ClearNotification() {
 	m.notification = ""
+	m.notificationUntil = time.Time{}
 }
 
 // Init initializes the model
@@ -122,6 +123,14 @@ func (m ApprovalDialogModel) Init() tea.Cmd {
 
 // Update handles messages
 func (m ApprovalDialogModel) Update(msg tea.Msg) (ApprovalDialogModel, tea.Cmd) {
+	// Always process window size updates, even when not visible
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		m.width = msg.Width
+		m.height = msg.Height
+		return m, nil
+	}
+
 	if !m.visible {
 		// Handle notification timeout
 		if m.IsShowingNotification() {
@@ -179,9 +188,9 @@ func (m ApprovalDialogModel) Update(msg tea.Msg) (ApprovalDialogModel, tea.Cmd) 
 		}
 
 		// Check for direct key presses
-		key := strings.ToLower(msg.String())
+		key := msg.String()
 		for i, opt := range m.options {
-			if strings.ToLower(opt.Key) == key {
+			if opt.Key == key {
 				var reqID string
 				if m.request != nil {
 					m.request.Respond(opt.Decision)
