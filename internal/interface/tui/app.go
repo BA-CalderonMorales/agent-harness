@@ -335,13 +335,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Propagate to sub-models
-		if homeModel, cmd := a.homeModel.Update(contentMsg); homeModel != nil {
-			if m, ok := homeModel.(*HomeModel); ok {
-				a.homeModel = m
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
+		homeModel, cmd := a.homeModel.Update(contentMsg)
+		if m, ok := homeModel.(*HomeModel); ok {
+			a.homeModel = m
+		}
+		if cmd != nil {
+			cmds = append(cmds, cmd)
 		}
 
 		if chatModel, cmd := a.chatModel.Update(contentMsg); chatModel != nil {
@@ -493,12 +492,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch a.activeView {
 	case viewHome:
-		if model, c := a.homeModel.Update(msg); model != nil {
-			if m, ok := model.(*HomeModel); ok {
-				a.homeModel = m
-			}
-			cmd = c
+		model, c := a.homeModel.Update(msg)
+		if m, ok := model.(*HomeModel); ok {
+			a.homeModel = m
 		}
+		cmd = c
 	case viewChat:
 		if model, c := a.chatModel.Update(msg); model != nil {
 			if m, ok := model.(ChatModel); ok {
