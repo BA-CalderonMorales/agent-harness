@@ -66,6 +66,8 @@ func NewFixture(t *testing.T) *Fixture {
 	reg.RegisterBuiltIn(builtin.GlobTool)
 	reg.RegisterBuiltIn(builtin.GrepTool)
 	reg.RegisterBuiltIn(builtin.LsRecursiveTool)
+	reg.RegisterBuiltIn(builtin.ListDirectoryTool)
+	reg.RegisterBuiltIn(builtin.FindTool)
 	reg.RegisterBuiltIn(builtin.FileEditTool)
 	reg.RegisterBuiltIn(builtin.AskUserQuestionTool)
 	reg.RegisterBuiltIn(builtin.TodoWriteTool)

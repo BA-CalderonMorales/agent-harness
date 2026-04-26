@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.7] - 2026-04-26
+
+### Added
+- `ls` tool: single-directory listing with file/dir markers and counts
+- `find` tool: recursive filename search by glob pattern, skips ignored dirs
+- Ginkgo BDD specs for filesystem tools (ls, find, ls_recursive, glob)
+
+### Fixed
+- Registered `ls_recursive` tool (was implemented but never exposed to LLM)
+- `glob` tool description no longer falsely claims `**` recursive support
+- System prompt now directs LLM to use dedicated filesystem tools instead of bash
+
 ## [0.2.6] - 2026-04-26
 
 ### Changed

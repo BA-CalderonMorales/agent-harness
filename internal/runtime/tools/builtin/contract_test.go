@@ -77,6 +77,18 @@ func TestBuiltinTools_HappyPath(t *testing.T) {
 			wantContains: "a.go",
 		},
 		{
+			name:         "ls lists directory",
+			tool:         ListDirectoryTool,
+			input:        map[string]any{"path": tmpDir},
+			wantContains: "hello.txt",
+		},
+		{
+			name:         "find searches files",
+			tool:         FindTool,
+			input:        map[string]any{"pattern": "*.go", "path": tmpDir},
+			wantContains: "a.go",
+		},
+		{
 			name:         "bash echo",
 			tool:         BashTool,
 			input:        map[string]any{"command": "echo hi"},
