@@ -10,7 +10,7 @@ import (
 // GlobTool searches for files matching a pattern.
 var GlobTool = tools.NewTool(tools.Tool{
 	Name:        "glob",
-	Description: "Find files matching a glob pattern (e.g., '*.go', 'src/**/*.ts').",
+	Description: "Find files matching a glob pattern in a single directory (e.g., '*.go', '*.ts'). Does not search recursively; use find or ls_recursive for recursive search.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",

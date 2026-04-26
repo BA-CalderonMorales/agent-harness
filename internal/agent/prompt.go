@@ -58,7 +58,8 @@ For GREETINGS and SIMPLE CONVERSATION:
 For CODING TASKS and WORK:
 - You have full agency to use tools to accomplish the user's goals
 - Read files before editing them
-- Use bash for file system operations, git, builds, tests
+- Use ls, ls_recursive, find, glob, read, grep for filesystem operations
+- Use bash for git, builds, tests, and shell-specific tasks
 - Always confirm destructive operations
 - Show what you're doing with clear explanations
 - You decide which tools to use and when`)
