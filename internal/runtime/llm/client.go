@@ -125,10 +125,51 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 }
 
 func (c *HTTPClient) convertMessage(m types.Message) map[string]any {
-	role := string(m.Role)
-	if role == "tool" {
-		role = "user" // OpenAI compat: tool results go in user messages
+	// Tool result messages: OpenAI uses role "tool" with tool_call_id
+	if len(m.Content) == 1 {
+		if tr, ok := m.Content[0].(types.ToolResultBlock); ok {
+			return map[string]any{
+				"role":         "tool",
+				"tool_call_id": tr.ToolUseID,
+				"content":      tr.Content,
+			}
+		}
 	}
+
+	// Assistant messages with tool calls: OpenAI uses top-level tool_calls array
+	if m.Role == types.RoleAssistant {
+		var toolCalls []map[string]any
+		var textParts []string
+		for _, block := range m.Content {
+			switch v := block.(type) {
+			case types.TextBlock:
+				textParts = append(textParts, v.Text)
+			case types.ToolUseBlock:
+				inputJSON, _ := json.Marshal(v.Input)
+				toolCalls = append(toolCalls, map[string]any{
+					"id":   v.ID,
+					"type": "function",
+					"function": map[string]any{
+						"name":      v.Name,
+						"arguments": string(inputJSON),
+					},
+				})
+			}
+		}
+		msg := map[string]any{"role": "assistant"}
+		if len(textParts) > 0 {
+			msg["content"] = strings.Join(textParts, "")
+		} else {
+			msg["content"] = nil
+		}
+		if len(toolCalls) > 0 {
+			msg["tool_calls"] = toolCalls
+		}
+		return msg
+	}
+
+	// Default: user / system messages with standard content blocks
+	role := string(m.Role)
 	content := c.convertContent(m.Content)
 	return map[string]any{"role": role, "content": content}
 }
@@ -144,20 +185,6 @@ func (c *HTTPClient) convertContent(blocks []types.ContentBlock) any {
 		switch v := b.(type) {
 		case types.TextBlock:
 			out = append(out, map[string]any{"type": "text", "text": v.Text})
-		case types.ToolUseBlock:
-			out = append(out, map[string]any{
-				"type":  "tool_use",
-				"id":    v.ID,
-				"name":  v.Name,
-				"input": v.Input,
-			})
-		case types.ToolResultBlock:
-			out = append(out, map[string]any{
-				"type":        "tool_result",
-				"tool_use_id": v.ToolUseID,
-				"content":     v.Content,
-				"is_error":    v.IsError,
-			})
 		case types.ThinkingBlock:
 			out = append(out, map[string]any{
 				"type":      "thinking",
