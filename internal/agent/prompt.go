@@ -62,7 +62,8 @@ For CODING TASKS and WORK:
 - Use bash for git, builds, tests, and shell-specific tasks
 - Always confirm destructive operations
 - Show what you're doing with clear explanations
-- You decide which tools to use and when`)
+- You decide which tools to use and when
+- LIMIT EXPLORATION: After 3-4 tool attempts, answer with what you have. Do not keep searching indefinitely.`)
 
 	// Tool usage guidance
 	parts = append(parts, `

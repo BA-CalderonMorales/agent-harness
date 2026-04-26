@@ -1,8 +1,10 @@
 package builtin
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -49,6 +51,7 @@ var FindTool = tools.NewTool(tools.Tool{
 			root = "."
 		}
 
+		const maxResults = 200
 		var matches []string
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
@@ -75,14 +78,26 @@ var FindTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{Data: "error: " + err.Error()}, nil
 		}
 
-		result := ""
+		var b strings.Builder
+		fmt.Fprintf(&b, "Search: %s in %s\n", pattern, root)
+		fmt.Fprintf(&b, "Found %d matches\n\n", len(matches))
+
+		truncated := false
+		if len(matches) > maxResults {
+			matches = matches[:maxResults]
+			truncated = true
+		}
 		for _, m := range matches {
-			result += m + "\n"
+			b.WriteString(m)
+			b.WriteByte('\n')
 		}
-		if result == "" {
-			result = "(no files found)"
+		if truncated {
+			fmt.Fprintf(&b, "\n(... %d more matches not shown ...)", len(matches)-maxResults)
 		}
-		return tools.ToolResult{Data: result}, nil
+		if len(matches) == 0 {
+			b.WriteString("(no files found)")
+		}
+		return tools.ToolResult{Data: b.String()}, nil
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}

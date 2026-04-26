@@ -1,9 +1,9 @@
 package builtin
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	. "github.com/onsi/ginkgo/v2"
@@ -78,15 +78,15 @@ var _ = Describe("Filesystem Tools", func() {
 
 	Describe("FindTool", func() {
 		Context("Given a pattern matching multiple files recursively", func() {
-			It("should return all matching paths", func() {
+			It("should return all matching paths with a count", func() {
 				By("searching for '*.go' files")
 				result, err := FindTool.Call(map[string]any{"pattern": "*.go", "path": tmpDir}, ctx, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				By("verifying both .go files are found")
 				content, _ := result.Data.(string)
-				lines := strings.Split(strings.TrimSpace(content), "\n")
-				Expect(lines).To(HaveLen(2))
+				Expect(content).To(ContainSubstring("Search: *.go"))
+				Expect(content).To(ContainSubstring("Found 2 matches"))
 				Expect(content).To(ContainSubstring("beta.go"))
 				Expect(content).To(ContainSubstring("gamma.go"))
 			})
@@ -98,7 +98,8 @@ var _ = Describe("Filesystem Tools", func() {
 				Expect(err).ToNot(HaveOccurred())
 
 				content, _ := result.Data.(string)
-				Expect(content).To(Equal("(no files found)"))
+				Expect(content).To(ContainSubstring("Found 0 matches"))
+				Expect(content).To(ContainSubstring("(no files found)"))
 			})
 		})
 
@@ -131,14 +132,34 @@ var _ = Describe("Filesystem Tools", func() {
 
 	Describe("LsRecursiveTool", func() {
 		Context("Given a directory with nested contents", func() {
-			It("should list all paths up to the depth limit", func() {
+			It("should list all paths up to the depth limit with counts", func() {
 				result, err := LsRecursiveTool.Call(map[string]any{"path": tmpDir, "depth": 3}, ctx, nil, nil)
 				Expect(err).ToNot(HaveOccurred())
 
 				content, _ := result.Data.(string)
+				Expect(content).To(ContainSubstring("Recursive listing:"))
+				Expect(content).To(ContainSubstring("directories"))
+				Expect(content).To(ContainSubstring("files"))
 				Expect(content).To(ContainSubstring("alpha.txt"))
 				Expect(content).To(ContainSubstring("beta.go"))
 				Expect(content).To(ContainSubstring("gamma.go"))
+			})
+		})
+
+		Context("Given a directory with more than 200 entries", func() {
+			It("should truncate and show a count", func() {
+				bigDir := filepath.Join(tmpDir, "big")
+				Expect(os.MkdirAll(bigDir, 0755)).To(Succeed())
+				for i := 0; i < 250; i++ {
+					name := fmt.Sprintf("file%03d.txt", i)
+					Expect(os.WriteFile(filepath.Join(bigDir, name), []byte("x"), 0644)).To(Succeed())
+				}
+
+				result, err := LsRecursiveTool.Call(map[string]any{"path": bigDir, "depth": 1}, ctx, nil, nil)
+				Expect(err).ToNot(HaveOccurred())
+
+				content, _ := result.Data.(string)
+				Expect(content).To(ContainSubstring("more entries not shown"))
 			})
 		})
 	})

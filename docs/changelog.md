@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.8] - 2026-04-26
+
+### Added
+- `MaxToolCalls` limit (default 15) to agent loop to prevent runaway exploration
+- Ginkgo BDD specs for loop tool-call limits and max-turns behavior
+- Structured output with counts and truncation for `ls_recursive` and `find`
+- Truncation at 200 entries for `ls_recursive` and `find` to prevent context bloat
+
+### Fixed
+- Reduced `DefaultMaxTurns` from 100 to 10
+- Added explicit "stop exploring after 3-4 attempts" guidance to system prompt
+
 ## [0.2.7] - 2026-04-26
 
 ### Added
