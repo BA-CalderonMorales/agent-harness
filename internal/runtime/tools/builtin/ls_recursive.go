@@ -50,7 +50,9 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 		}
 		exclude, _ := input["exclude"].(string)
 
+		const maxResults = 200
 		var results []string
+		var dirs, files int
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
@@ -80,6 +82,11 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 				}
 			}
 
+			if info.IsDir() {
+				dirs++
+			} else {
+				files++
+			}
 			results = append(results, path)
 			if onProgress != nil {
 				onProgress("found: " + path)
@@ -91,7 +98,24 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{Data: "error: " + err.Error()}, nil
 		}
 
-		return tools.ToolResult{Data: strings.Join(results, "\n")}, nil
+		var b strings.Builder
+		fmt.Fprintf(&b, "Recursive listing: %s (depth=%d)\n", root, maxDepth)
+		fmt.Fprintf(&b, "Found %d directories, %d files\n\n", dirs, files)
+
+		truncated := false
+		if len(results) > maxResults {
+			results = results[:maxResults]
+			truncated = true
+		}
+		for _, r := range results {
+			b.WriteString(r)
+			b.WriteByte('\n')
+		}
+		if truncated {
+			fmt.Fprintf(&b, "\n(... %d more entries not shown ...)", dirs+files-maxResults)
+		}
+
+		return tools.ToolResult{Data: b.String()}, nil
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		content, _ := result.(string)

@@ -149,6 +149,26 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			return Terminal{Reason: TerminalReasonComplete, Message: assistantMsg}
 		}
 
+		// Enforce total tool call budget per query
+		maxToolCalls := l.Config.MaxToolCalls
+		if maxToolCalls <= 0 {
+			maxToolCalls = 15
+		}
+		if state.toolCallCount+len(toolUses) > maxToolCalls {
+			msg := fmt.Sprintf("[Tool call limit reached: %d total tools used. Stopping to prevent runaway exploration.]", state.toolCallCount)
+			select {
+			case out <- types.StreamMessage{Message: types.Message{
+				Role:    types.RoleSystem,
+				Content: []types.ContentBlock{types.TextBlock{Text: msg}},
+			}}:
+			case <-ctx.Done():
+				out <- types.StreamError{Error: ctx.Err()}
+				return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
+			}
+			return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg}
+		}
+		state.toolCallCount += len(toolUses)
+
 		// Execute tools
 		if l.Config.StreamingToolExecution {
 			executor := NewStreamingToolExecutor(params.ToolUseContext.Options.Tools, params.CanUseTool, params.ToolUseContext)

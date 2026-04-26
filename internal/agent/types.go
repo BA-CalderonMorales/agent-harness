@@ -61,6 +61,7 @@ type LoopConfig struct {
 	StreamingToolExecution  bool
 	MaxOutputTokensRecovery int
 	DefaultMaxTurns         int
+	MaxToolCalls            int
 	BlockingTokenLimit      int
 }
 
@@ -70,7 +71,8 @@ func DefaultLoopConfig() LoopConfig {
 		AutoCompactEnabled:      true,
 		StreamingToolExecution:  true,
 		MaxOutputTokensRecovery: 3,
-		DefaultMaxTurns:         100,
+		DefaultMaxTurns:         10,
+		MaxToolCalls:            15,
 		BlockingTokenLimit:      180000,
 	}
 }
@@ -89,6 +91,7 @@ type loopState struct {
 	hasAttemptedReactiveCompact  bool
 	maxOutputTokensOverride      int
 	turnCount                    int
+	toolCallCount                int
 }
 
 // Prominent token thresholds.
