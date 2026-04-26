@@ -13,7 +13,6 @@ import (
 // Test entry point
 // ---------------------------------------------------------------------------
 
-
 // ---------------------------------------------------------------------------
 // Test delegate
 // ---------------------------------------------------------------------------
@@ -93,8 +92,8 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				By("verifying the completed tool is stored")
-				Expect(chat.completedToolMsg).ToNot(BeNil())
-				Expect(chat.completedToolMsg.ToolStatus).To(Equal(ToolStatusSuccess))
+				Expect(chat.completedToolMsgs).To(HaveLen(1))
+				Expect(chat.completedToolMsgs[0].ToolStatus).To(Equal(ToolStatusSuccess))
 				Expect(chat.currentToolMsg).To(BeNil())
 			})
 		})
@@ -121,7 +120,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				By("verifying the tool is in message history")
-				Expect(chat.completedToolMsg).To(BeNil())
+				Expect(chat.completedToolMsgs).To(BeEmpty())
 				var toolMsgs []ChatMessage
 				for _, msg := range chat.messages {
 					if msg.IsTool {
@@ -134,7 +133,7 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given multiple tools run in one turn", func() {
-			It("should clear the previous completed tool when a new one starts", func() {
+			It("should keep the previous completed tool when a new one starts", func() {
 				chat.AddMessage("user", "run commands")
 				model, _ := chat.Update(AgentStartMsg{})
 				chat = model.(ChatModel)
@@ -161,8 +160,8 @@ var _ = Describe("ChatModel", func() {
 				})
 				chat = model.(ChatModel)
 
-				By("verifying the previous completed tool was cleared")
-				Expect(chat.completedToolMsg).To(BeNil())
+				By("verifying the previous completed tool is still present")
+				Expect(chat.completedToolMsgs).To(HaveLen(1))
 				Expect(chat.currentToolMsg).ToNot(BeNil())
 				Expect(chat.currentToolMsg.ToolName).To(Equal("bash"))
 			})
@@ -1235,6 +1234,150 @@ var _ = Describe("ChatModel", func() {
 
 				Expect(chat.messages).To(HaveLen(0))
 				Expect(delegate.submittedText).To(Equal(""))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Session History Retention — Issue #4 regression
+	// ========================================================================
+	Describe("Session History Retention", func() {
+		Context("Given a user asks a question, agent responds, then user asks a follow-up", func() {
+			It("should create a new assistant message instead of overwriting the previous reply", func() {
+				By("submitting the first question")
+				chat.AddMessage("user", "q1")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("receiving the first agent response")
+				model, _ = chat.Update(AgentChunkMsg{Text: "a1"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "a1"})
+				chat = model.(ChatModel)
+
+				By("submitting the follow-up question")
+				chat.AddMessage("user", "q2")
+				model, _ = chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("receiving the second agent response")
+				model, _ = chat.Update(AgentChunkMsg{Text: "a2"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "a2"})
+				chat = model.(ChatModel)
+
+				By("verifying both assistant replies are preserved")
+				Expect(chat.messages).To(HaveLen(4))
+				Expect(chat.messages[0].Role).To(Equal("user"))
+				Expect(chat.messages[0].Content).To(Equal("q1"))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Content).To(Equal("a1"))
+				Expect(chat.messages[2].Role).To(Equal("user"))
+				Expect(chat.messages[2].Content).To(Equal("q2"))
+				Expect(chat.messages[3].Role).To(Equal("assistant"))
+				Expect(chat.messages[3].Content).To(Equal("a2"))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Multi-Tool Display — All tool calls visible in a turn
+	// ========================================================================
+	Describe("Multi-Tool Display", func() {
+		Context("Given three tools run in a single agent turn", func() {
+			It("should retain all three completed tools in the turn buffer", func() {
+				chat.AddMessage("user", "run three commands")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("running the first tool")
+				model, _ = chat.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "read", DisplayName: "Read File", ActivityDesc: "cat a.go"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
+				chat = model.(ChatModel)
+
+				By("running the second tool")
+				model, _ = chat.Update(AgentToolStartMsg{ToolID: "t2", ToolName: "bash", DisplayName: "Shell", ActivityDesc: "go build"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "t2", Success: true})
+				chat = model.(ChatModel)
+
+				By("running the third tool")
+				model, _ = chat.Update(AgentToolStartMsg{ToolID: "t3", ToolName: "grep", DisplayName: "Grep", ActivityDesc: "grep main"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "t3", Success: true})
+				chat = model.(ChatModel)
+
+				By("verifying all three completed tools are tracked")
+				Expect(chat.completedToolMsgs).To(HaveLen(3))
+				Expect(chat.completedToolMsgs[0].ToolName).To(Equal("read"))
+				Expect(chat.completedToolMsgs[1].ToolName).To(Equal("bash"))
+				Expect(chat.completedToolMsgs[2].ToolName).To(Equal("grep"))
+			})
+		})
+
+		Context("Given the agent turn completes after multiple tools", func() {
+			It("should move all completed tools into message history", func() {
+				chat.AddMessage("user", "run commands")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "read", DisplayName: "Read File"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
+				chat = model.(ChatModel)
+
+				model, _ = chat.Update(AgentToolStartMsg{ToolID: "t2", ToolName: "bash", DisplayName: "Shell"})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentToolDoneMsg{ToolID: "t2", Success: true})
+				chat = model.(ChatModel)
+
+				By("completing the agent turn")
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "Done"})
+				chat = model.(ChatModel)
+
+				By("verifying all tools are in message history")
+				Expect(chat.completedToolMsgs).To(BeEmpty())
+				var toolMsgs []ChatMessage
+				for _, msg := range chat.messages {
+					if msg.IsTool {
+						toolMsgs = append(toolMsgs, msg)
+					}
+				}
+				Expect(toolMsgs).To(HaveLen(2))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Width-Aware Truncation — Termux phone display
+	// ========================================================================
+	Describe("Width-Aware Truncation", func() {
+		Context("Given a very long command on a narrow screen", func() {
+			It("should truncate the command to fit the terminal width", func() {
+				chat.AddMessage("user", "run a command")
+				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("setting a narrow width to simulate a phone")
+				model2, _ := chat.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
+				chat = model2.(ChatModel)
+
+				By("starting a tool with a long command")
+				longCmd := strings.Repeat("a", 100)
+				model2, _ = chat.Update(AgentToolStartMsg{
+					ToolID:       "t1",
+					ToolName:     "bash",
+					DisplayName:  "Shell",
+					ActivityDesc: longCmd,
+				})
+				chat = model2.(ChatModel)
+
+				By("verifying the command preview was truncated")
+				Expect(chat.currentToolMsg).ToNot(BeNil())
+				// Width 40 - "Shell" (5) - indicator/spaces (8) = ~27 chars max
+				Expect(len(chat.currentToolMsg.Content)).To(BeNumerically("<", 50))
+				Expect(chat.currentToolMsg.Content).To(ContainSubstring("..."))
 			})
 		})
 	})
