@@ -1,7 +1,6 @@
 package tui
 
 import (
-
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -20,7 +19,6 @@ func (d *testHomeDelegate) OnLoadSession(id string) {
 	d.loadSessionCalled = true
 	d.loadSessionID = id
 }
-
 
 var _ = Describe("HomeModel", func() {
 	var home HomeModel
@@ -72,9 +70,9 @@ var _ = Describe("HomeModel", func() {
 
 			It("should render git branch and commit", func() {
 				home.SetProjectInfo(ProjectInfo{
-					Name:      "agent-harness",
-					GitBranch: "main",
-					GitCommit: "abc1234def",
+					Name:       "agent-harness",
+					GitBranch:  "main",
+					GitCommit:  "abc1234def",
 					HasChanges: false,
 				})
 				view := home.View()

@@ -70,8 +70,16 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	go processPipe(stdoutPipe)
 	go processPipe(stderrPipe)
 
-	err := cmd.Wait()
+	// Wait for pipe readers to finish BEFORE calling cmd.Wait().
+	// Per Go docs: "It is thus incorrect to call Wait before all reads
+	// from the pipe have completed."
 	wg.Wait()
+
+	// Close pipes explicitly so cmd.Wait() can reap the process cleanly.
+	_ = stdoutPipe.Close()
+	_ = stderrPipe.Close()
+
+	err := cmd.Wait()
 
 	result := output.String()
 	if result == "" {

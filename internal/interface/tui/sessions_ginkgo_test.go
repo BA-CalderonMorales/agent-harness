@@ -8,7 +8,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-
 type testSessionsDelegate struct {
 	selectedSession string
 	deletedSession  string

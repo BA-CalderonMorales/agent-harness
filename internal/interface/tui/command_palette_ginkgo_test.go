@@ -1,7 +1,6 @@
 package tui
 
 import (
-
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -13,7 +12,6 @@ func maxInt(a, b int) int {
 	}
 	return b
 }
-
 
 var _ = Describe("CommandPaletteModel", func() {
 	var palette CommandPaletteModel

@@ -9,7 +9,6 @@ import (
 	. "github.com/onsi/gomega"
 )
 
-
 var _ = Describe("ApprovalDialogModel", func() {
 	var dialog ApprovalDialogModel
 	var req *approval.ApprovalRequest

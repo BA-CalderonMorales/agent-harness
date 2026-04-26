@@ -101,6 +101,11 @@ type ChatModel struct {
 	streamBuffer string
 	currentTool  *ToolUseBlock
 
+	// Index of the assistant message currently being streamed. Tracked so that
+	// mid-stream system/user messages do not break the update target, while
+	// ensuring a new user turn always gets a fresh assistant message.
+	currentStreamingAssistantIdx int
+
 	// Timer state for response tracking
 	startTime    time.Time
 	elapsed      time.Duration
@@ -113,9 +118,10 @@ type ChatModel struct {
 	// Current tool message for in-place updates (replaces previous tool display)
 	currentToolMsg *ChatMessage
 
-	// completedToolMsg tracks the finalized tool message to display in history
-	// This is separate from currentToolMsg to allow single-line replacement during execution
-	completedToolMsg *ChatMessage
+	// completedToolMsgs tracks all finalized tool messages for the current turn.
+	// Previously this was a single pointer for single-line replacement, but users
+	// want to see every tool call that happens during a conversation turn.
+	completedToolMsgs []ChatMessage
 
 	// Delegate
 	delegate ChatDelegate
@@ -504,6 +510,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinkingText = "Thinking..."
 		m.streaming = true
 		m.streamBuffer = ""
+		m.currentStreamingAssistantIdx = -1
 		m.startTime = time.Now()
 		m.timerRunning = true
 		m.elapsed = 0
@@ -547,11 +554,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			Frame:     0,
 		}
 
-		// SINGLE-LINE REPLACEMENT: Clear any previous completed tool before starting new one
-		// This ensures only the current tool is visible (no scrolling from multiple tool lines)
-		m.completedToolMsg = nil
+		// MULTI-TOOL DISPLAY: Do NOT clear previous completed tools when a new tool
+		// starts within the same turn. Users want to see the full chain of tool calls.
 
-		// Update current tool message for in-place display (replaces previous tool)
+		// Update current tool message for in-place display (replaces previous running tool)
 		m.currentToolMsg = &ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
@@ -566,8 +572,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentToolDoneMsg:
-		// Finalize current tool message and store as completed (but don't add to messages yet)
-		// This enables single-line replacement: only the most recent completed tool is shown
+		// Finalize current tool message and append to the completed list for this turn.
+		// All completed tools remain visible so users can see the full execution chain.
 		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
 			status := ToolStatusSuccess
 			if !msg.Success {
@@ -581,9 +587,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentToolMsg.ToolStatus = status
 			m.currentToolMsg.Timestamp = time.Now()
 
-			// Store as completed tool message (replaces any previous completed tool)
-			// This keeps the UI to a single line - only the most recent tool
-			m.completedToolMsg = m.currentToolMsg
+			m.completedToolMsgs = append(m.completedToolMsgs, *m.currentToolMsg)
 			m.currentToolMsg = nil
 		}
 		m.currentTool = nil
@@ -605,12 +609,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.streamBuffer = ""
 
-		// SINGLE-LINE REPLACEMENT: Commit the completed tool to message history
-		// This preserves the final tool result in the conversation after the turn completes
-		if m.completedToolMsg != nil {
-			m.messages = append(m.messages, *m.completedToolMsg)
-			m.completedToolMsg = nil
+		// Commit all completed tools from this turn into message history so the full
+		// execution chain is preserved in the conversation log.
+		for _, toolMsg := range m.completedToolMsgs {
+			m.messages = append(m.messages, toolMsg)
 		}
+		m.completedToolMsgs = nil
 		m.refreshViewport()
 
 		// If there are queued steer messages, submit the next one automatically.
@@ -670,7 +674,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.streamBuffer = ""
 		m.thinking = false
 		m.currentToolMsg = nil
-		m.completedToolMsg = nil
+		m.completedToolMsgs = nil
 		m.toolAnimation = nil
 		m.currentTool = nil
 		if msg.FollowUpMsg != "" {
@@ -904,7 +908,10 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	m.refreshViewport()
 }
 
-// formatToolContent formats tool message content based on status
+// formatToolContent formats tool message content based on status.
+// Command previews are truncated dynamically to fit the terminal width so
+// phone users (Termux) can still see the tool name and status even when
+// the command itself is very long.
 func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus) string {
 	var statusIndicator string
 	switch status {
@@ -921,6 +928,7 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 	}
 
 	if command != "" {
+		command = m.truncateCommandForWidth(toolDisplayName, command)
 		return fmt.Sprintf("%s %s %s", statusIndicator, toolDisplayName, ToolCommandPreviewStyle.Render(command))
 	}
 	return fmt.Sprintf("%s %s", statusIndicator, toolDisplayName)
@@ -972,12 +980,28 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 	return ""
 }
 
-// truncateCommand truncates a command for display with ellipsis
+// truncateCommand truncates a command for display with ellipsis.
+// Deprecated: use truncateCommandForWidth for responsive width-aware truncation.
 func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 	if len(cmd) <= maxLen {
 		return cmd
 	}
 	return cmd[:maxLen-3] + "..."
+}
+
+// truncateCommandForWidth truncates a command so the entire tool line fits
+// within the current terminal width, preserving space for the status indicator
+// and tool display name.
+func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string {
+	// Reserve space for indicator (2), spaces (2), tool name, and padding (4)
+	maxCmdLen := m.width - len(toolDisplayName) - 8
+	if maxCmdLen < 12 {
+		maxCmdLen = 12 // absolute minimum so something is visible
+	}
+	if len(cmd) <= maxCmdLen {
+		return cmd
+	}
+	return cmd[:maxCmdLen-3] + "..."
 }
 
 // SetInput sets the input text.
@@ -1137,7 +1161,7 @@ func (m *ChatModel) renderStatusLine() string {
 
 		spinner := ToolSpinnerRender(m.toolAnimation.Frame)
 		toolName := m.toolAnimation.ToolName
-		command := m.toolAnimation.Command
+		command := m.truncateCommandForWidth(toolName, m.toolAnimation.Command)
 
 		// Build animated tool line: spinner + tool name + grey command preview
 		var statusParts []string
@@ -1214,44 +1238,33 @@ func (m *ChatModel) GotoBottom() {
 	m.viewport.GotoBottom()
 }
 
-// updateOrCreateStreamingMessage updates the last assistant message or creates one.
-// It scans backwards so that system/user messages added mid-stream do not break
-// the update target (required for /steer and other concurrent UI updates).
+// updateOrCreateStreamingMessage updates the assistant message for the current
+// streaming turn or creates one. It uses currentStreamingAssistantIdx to track
+// the exact message so that mid-stream system/user messages do not break the
+// update target, while guaranteeing that a new user turn gets a fresh assistant
+// message (fixing the history overwrite bug in Issue #4).
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
-	lastAssistantIdx := -1
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		if m.messages[i].Role == "assistant" {
-			lastAssistantIdx = i
-			break
-		}
-	}
-	if lastAssistantIdx >= 0 && m.streaming {
-		m.messages[lastAssistantIdx].Content = content
+	if m.currentStreamingAssistantIdx >= 0 && m.currentStreamingAssistantIdx < len(m.messages) {
+		m.messages[m.currentStreamingAssistantIdx].Content = content
 	} else {
 		m.messages = append(m.messages, ChatMessage{
 			Role:      "assistant",
 			Content:   content,
 			Timestamp: time.Now(),
 		})
+		m.currentStreamingAssistantIdx = len(m.messages) - 1
 	}
 	m.refreshViewport()
 }
 
-// finalizeStreamingMessage finalizes the streaming message.
-// It scans backwards so that system/user messages added mid-stream do not break
-// the update target.
+// finalizeStreamingMessage finalizes the streaming message for the current turn.
+// Uses currentStreamingAssistantIdx to ensure the correct message is finalized
+// even when other messages were added mid-stream.
 func (m *ChatModel) finalizeStreamingMessage(content string) {
-	lastAssistantIdx := -1
-	for i := len(m.messages) - 1; i >= 0; i-- {
-		if m.messages[i].Role == "assistant" {
-			lastAssistantIdx = i
-			break
-		}
-	}
-	if lastAssistantIdx >= 0 {
-		m.messages[lastAssistantIdx].Content = content
-		m.messages[lastAssistantIdx].Timestamp = time.Now()
-		m.messages[lastAssistantIdx].ResponseTime = m.elapsed
+	if m.currentStreamingAssistantIdx >= 0 && m.currentStreamingAssistantIdx < len(m.messages) {
+		m.messages[m.currentStreamingAssistantIdx].Content = content
+		m.messages[m.currentStreamingAssistantIdx].Timestamp = time.Now()
+		m.messages[m.currentStreamingAssistantIdx].ResponseTime = m.elapsed
 	} else {
 		m.messages = append(m.messages, ChatMessage{
 			Role:         "assistant",
@@ -1260,6 +1273,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 			ResponseTime: m.elapsed,
 		})
 	}
+	m.currentStreamingAssistantIdx = -1
 	m.refreshViewport()
 }
 
@@ -1272,15 +1286,18 @@ func (m *ChatModel) refreshViewport() {
 		content.WriteString("\n\n")
 	}
 
-	// SINGLE-LINE REPLACEMENT: Show only the most recent completed tool (if any)
-	// This prevents multiple tool lines from accumulating and forcing scroll
-	if m.completedToolMsg != nil {
-		content.WriteString(m.renderMessage(*m.completedToolMsg))
+	// Show every completed tool from the current turn so users can see the
+	// full execution chain, not just the most recent one.
+	for i, toolMsg := range m.completedToolMsgs {
+		if i > 0 || content.Len() > 0 {
+			content.WriteString("\n\n")
+		}
+		content.WriteString(m.renderMessage(toolMsg))
 	}
 
 	// Add current tool message for in-place display (replaces previous running tool)
 	if m.currentToolMsg != nil {
-		if m.completedToolMsg != nil {
+		if len(m.completedToolMsgs) > 0 || content.Len() > 0 {
 			content.WriteString("\n\n")
 		}
 		content.WriteString(m.renderMessage(*m.currentToolMsg))

@@ -56,6 +56,11 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 				return err
 			}
 
+			// Skip common ignored directories for performance
+			if info.IsDir() && isCommonIgnoredDir(info.Name()) {
+				return filepath.SkipDir
+			}
+
 			// Check depth
 			rel, _ := filepath.Rel(root, path)
 			if rel != "." && strings.Count(rel, string(os.PathSeparator)) >= maxDepth {
