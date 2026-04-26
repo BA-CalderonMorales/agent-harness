@@ -118,7 +118,7 @@ jobs:
           path: sbom.spdx.json
           retention-days: 30
 
-  # Security scanning with Socket SFW
+  # Security scanning
   security:
     runs-on: ubuntu-latest
     permissions:
@@ -133,12 +133,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: Install Socket SFW
-        run: |
-          curl -L -o sfw https://github.com/SocketDev/sfw-free/releases/latest/download/sfw-linux-x86_64
-          chmod +x sfw
-          sudo mv sfw /usr/local/bin/
 
       - name: Download dependencies
         run: go mod download
