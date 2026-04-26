@@ -82,6 +82,25 @@ func TestBuiltinTools_HappyPath(t *testing.T) {
 			input:        map[string]any{"command": "echo hi"},
 			wantContains: "hi",
 		},
+		// Regression: int inputs must not silently fall back to defaults
+		{
+			name:         "read with int offset and limit",
+			tool:         FileReadTool,
+			input:        map[string]any{"file_path": testFile, "offset": int(1), "limit": int(1)},
+			wantContains: "line two",
+		},
+		{
+			name:         "ls_recursive with int depth",
+			tool:         LsRecursiveTool,
+			input:        map[string]any{"path": tmpDir, "depth": int(3)},
+			wantContains: "a.go",
+		},
+		{
+			name:         "bash with int timeout",
+			tool:         BashTool,
+			input:        map[string]any{"command": "echo timed", "timeout": int(30000)},
+			wantContains: "timed",
+		},
 	}
 
 	for _, tt := range tests {

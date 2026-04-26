@@ -53,7 +53,7 @@ var BashTool = tools.NewTool(tools.Tool{
 	Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		cmdStr := input["command"].(string)
 		timeoutMs := 60000
-		if t, ok := input["timeout"].(float64); ok {
+		if t, ok := getNumber(input, "timeout"); ok {
 			timeoutMs = int(t)
 		}
 
