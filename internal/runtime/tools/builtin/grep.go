@@ -60,7 +60,13 @@ var GrepTool = tools.NewTool(tools.Tool{
 
 		if info.IsDir() {
 			_ = filepath.Walk(searchPath, func(path string, fi os.FileInfo, err error) error {
-				if err != nil || fi.IsDir() {
+				if err != nil {
+					return nil
+				}
+				if fi.IsDir() {
+					if isCommonIgnoredDir(fi.Name()) {
+						return filepath.SkipDir
+					}
 					return nil
 				}
 				if include != "" {
