@@ -8,17 +8,18 @@ import (
 )
 
 type testHomeDelegate struct {
-	newChatCalled      bool
-	runTestsCalled     bool
+	newChatCalled       bool
 	exportSessionCalled bool
-	switchPersonaCalled bool
+	loadSessionCalled   bool
+	loadSessionID       string
 }
 
-func (d *testHomeDelegate) OnNewChat()      { d.newChatCalled = true }
-func (d *testHomeDelegate) OnRunTests()     { d.runTestsCalled = true }
+func (d *testHomeDelegate) OnNewChat()       { d.newChatCalled = true }
 func (d *testHomeDelegate) OnExportSession() { d.exportSessionCalled = true }
-func (d *testHomeDelegate) OnSwitchPersona() { d.switchPersonaCalled = true }
-func (d *testHomeDelegate) OnLoadSession(id string) {}
+func (d *testHomeDelegate) OnLoadSession(id string) {
+	d.loadSessionCalled = true
+	d.loadSessionID = id
+}
 
 
 var _ = Describe("HomeModel", func() {
@@ -101,35 +102,50 @@ var _ = Describe("HomeModel", func() {
 			})
 		})
 
-		Context("Given contextual hints based on project type", func() {
-			It("should show Go hint for Go projects", func() {
-				home.SetProjectInfo(ProjectInfo{Type: "Go"})
+	})
+
+	Describe("Session Selection and Loading", func() {
+		BeforeEach(func() {
+			m, _ := home.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
+			home = *m.(*HomeModel)
+			home.Init()
+			home.Focus()
+			home.SetSessions([]SessionInfo{
+				{ID: "sess-alpha", Title: "Alpha", MessageCount: 2, Turns: 1},
+				{ID: "sess-beta", Title: "Beta", MessageCount: 4, Turns: 2},
+			})
+		})
+
+		Context("Given recent sessions are displayed", func() {
+			It("should highlight the selected session in the view", func() {
+				By("navigating down past actions to first session")
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				Expect(home.actionCursor).To(Equal(2))
+
+				By("verifying the session is visually selected")
 				view := home.View()
-				Expect(view).To(ContainSubstring("go test"))
+				Expect(view).To(ContainSubstring("Alpha"))
 			})
 
-			It("should show Node hint for Node projects", func() {
-				home.SetProjectInfo(ProjectInfo{Type: "Node"})
-				view := home.View()
-				Expect(view).To(ContainSubstring("npm test"))
+			It("should load session on Enter when cursor is on a session", func() {
+				By("navigating to the second session")
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				Expect(home.actionCursor).To(Equal(3))
+
+				By("pressing Enter to load")
+				home.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(delegate.loadSessionCalled).To(BeTrue())
+				Expect(delegate.loadSessionID).To(Equal("sess-beta"))
 			})
 
-			It("should show Python hint for Python projects", func() {
-				home.SetProjectInfo(ProjectInfo{Type: "Python"})
-				view := home.View()
-				Expect(view).To(ContainSubstring("pytest"))
-			})
-
-			It("should show Rust hint for Rust projects", func() {
-				home.SetProjectInfo(ProjectInfo{Type: "Rust"})
-				view := home.View()
-				Expect(view).To(ContainSubstring("cargo test"))
-			})
-
-			It("should show no hint for unknown project types", func() {
-				home.SetProjectInfo(ProjectInfo{Type: "Fortran"})
-				view := home.View()
-				Expect(view).ToNot(ContainSubstring("Tip:"))
+			It("should not load session when cursor is on an action", func() {
+				By("pressing Enter on the first action")
+				home.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(delegate.loadSessionCalled).To(BeFalse())
+				Expect(delegate.newChatCalled).To(BeTrue())
 			})
 		})
 	})
@@ -148,29 +164,19 @@ var _ = Describe("HomeModel", func() {
 				Expect(delegate.newChatCalled).To(BeTrue())
 			})
 
-			It("should dispatch run tests on 't' key", func() {
-				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("t")})
-				Expect(delegate.runTestsCalled).To(BeTrue())
-			})
-
 			It("should dispatch export session on 'e' key", func() {
 				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 				Expect(delegate.exportSessionCalled).To(BeTrue())
 			})
 
-			It("should dispatch switch persona on 'p' key", func() {
-				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("p")})
-				Expect(delegate.switchPersonaCalled).To(BeTrue())
-			})
-
 			It("should dispatch action on Enter when cursor is on it", func() {
-				By("moving to 'Run tests' action")
+				By("moving to 'Export session' action")
 				home.Update(tea.KeyMsg{Type: tea.KeyDown})
 				Expect(home.actionCursor).To(Equal(1))
 
 				By("pressing Enter")
 				home.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				Expect(delegate.runTestsCalled).To(BeTrue())
+				Expect(delegate.exportSessionCalled).To(BeTrue())
 			})
 		})
 	})
@@ -206,46 +212,6 @@ var _ = Describe("HomeModel", func() {
 		})
 	})
 
-	Describe("Status Footer", func() {
-		BeforeEach(func() {
-			m, _ := home.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-			home = *m.(*HomeModel)
-		})
-
-		Context("Given various status combinations", func() {
-			It("should render model name", func() {
-				home.SetStatus("gpt-4", "", "", 0)
-				view := home.View()
-				Expect(view).To(ContainSubstring("model:"))
-				Expect(view).To(ContainSubstring("gpt-4"))
-			})
-
-			It("should render persona", func() {
-				home.SetStatus("", "", "developer", 0)
-				view := home.View()
-				Expect(view).To(ContainSubstring("persona: developer"))
-			})
-
-			It("should render permission mode", func() {
-				home.SetStatus("", "workspace-write", "", 0)
-				view := home.View()
-				Expect(view).To(ContainSubstring("perms: workspace-write"))
-			})
-
-			It("should render estimated tokens", func() {
-				home.SetStatus("", "", "", 1500)
-				view := home.View()
-				Expect(view).To(ContainSubstring("tokens: ~1500"))
-			})
-
-			It("should render nothing when all status is empty", func() {
-				home.SetStatus("", "", "", 0)
-				view := home.View()
-				Expect(view).ToNot(ContainSubstring("model:"))
-			})
-		})
-	})
-
 	Describe("Interaction Edge Cases", func() {
 		Context("Given actions are not yet rebuilt", func() {
 			It("should not panic when pressing Enter", func() {
@@ -256,15 +222,19 @@ var _ = Describe("HomeModel", func() {
 			})
 		})
 
-		Context("Given rapid navigation", func() {
+		Context("Given rapid navigation with sessions present", func() {
 			BeforeEach(func() {
 				m, _ := home.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 				home = *m.(*HomeModel)
 				home.Init()
 				home.Focus()
+				home.SetSessions([]SessionInfo{
+					{ID: "1", Title: "One"},
+					{ID: "2", Title: "Two"},
+				})
 			})
 
-			It("should clamp the cursor to available actions", func() {
+			It("should clamp the cursor to total items", func() {
 				By("pressing up at the top")
 				home.Update(tea.KeyMsg{Type: tea.KeyUp})
 				Expect(home.actionCursor).To(Equal(0))
@@ -273,7 +243,7 @@ var _ = Describe("HomeModel", func() {
 				for i := 0; i < 20; i++ {
 					home.Update(tea.KeyMsg{Type: tea.KeyDown})
 				}
-				Expect(home.actionCursor).To(Equal(len(home.actions) - 1))
+				Expect(home.actionCursor).To(Equal(home.totalItems() - 1))
 			})
 		})
 	})
@@ -283,10 +253,13 @@ var _ = Describe("HomeModel", func() {
 			m, _ := home.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 			home = *m.(*HomeModel)
 			home.Init()
+			home.SetSessions([]SessionInfo{
+				{ID: "1", Title: "One"},
+			})
 		})
 
-		Context("Given action list exists", func() {
-			It("should scroll down", func() {
+		Context("Given action and session lists exist", func() {
+			It("should scroll down through actions and sessions", func() {
 				home.Scroll(1)
 				Expect(home.actionCursor).To(Equal(1))
 			})
@@ -303,14 +276,14 @@ var _ = Describe("HomeModel", func() {
 				Expect(home.actionCursor).To(Equal(0))
 			})
 
-			It("should goto bottom", func() {
+			It("should goto bottom across actions and sessions", func() {
 				home.GotoBottom()
-				Expect(home.actionCursor).To(Equal(len(home.actions) - 1))
+				Expect(home.actionCursor).To(Equal(home.totalItems() - 1))
 			})
 
 			It("should clamp scroll to bounds", func() {
 				home.Scroll(100)
-				Expect(home.actionCursor).To(Equal(len(home.actions) - 1))
+				Expect(home.actionCursor).To(Equal(home.totalItems() - 1))
 				home.Scroll(-100)
 				Expect(home.actionCursor).To(Equal(0))
 			})

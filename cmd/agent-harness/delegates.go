@@ -26,15 +26,6 @@ func (d *tuiHomeDelegate) OnNewChat() {
 	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: "Starting fresh conversation."})
 }
 
-func (d *tuiHomeDelegate) OnRunTests() {
-	result, err := d.app.runTests()
-	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Tests failed: %v", err))
-		return
-	}
-	d.tuiApp.AddMessage("system", result)
-}
-
 func (d *tuiHomeDelegate) OnExportSession() {
 	path := sprintf("session-%s.md", d.app.session.ID[:8])
 	md := d.app.session.ExportToMarkdown()
@@ -43,10 +34,6 @@ func (d *tuiHomeDelegate) OnExportSession() {
 		return
 	}
 	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
-}
-
-func (d *tuiHomeDelegate) OnSwitchPersona() {
-	d.tuiApp.AddMessage("system", "Use /persona <name> to switch. Available: developer, designer, pm, scientist, explorer")
 }
 
 func (d *tuiHomeDelegate) OnLoadSession(id string) {
