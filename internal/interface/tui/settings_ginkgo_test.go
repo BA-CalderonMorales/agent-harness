@@ -1,12 +1,10 @@
 package tui
 
 import (
-
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
-
 
 type testSettingsDelegate struct {
 	changedKey   string
