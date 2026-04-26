@@ -44,6 +44,7 @@ type StreamingToolExecutor struct {
 	mu              sync.Mutex
 	progressCond    *sync.Cond
 	events          chan types.StreamEvent
+	closed          bool
 }
 
 // NewStreamingToolExecutor creates a new executor.
@@ -68,7 +69,15 @@ func (e *StreamingToolExecutor) Events() <-chan types.StreamEvent {
 }
 
 // Close closes the events channel. Should be called when all tools are done.
+// Safe to call multiple times.
 func (e *StreamingToolExecutor) Close() {
+	e.mu.Lock()
+	if e.closed {
+		e.mu.Unlock()
+		return
+	}
+	e.closed = true
+	e.mu.Unlock()
 	close(e.events)
 }
 
@@ -240,12 +249,13 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 	result, err := runSingleTool(ctx, t.block, t.assistantMessage, e.toolDefinitions, e.canUseTool, onProgress)
 
 	e.mu.Lock()
-	defer e.mu.Unlock()
-	defer e.progressCond.Broadcast()
 
 	if e.discarded {
 		t.status = statusCompleted
 		t.results = []types.Message{e.makeErrorMessage(t.block.ID, t.assistantMessage, "Tool execution discarded due to streaming fallback")}
+		e.mu.Unlock()
+		e.progressCond.Broadcast()
+		go e.processQueue()
 		return
 	}
 
@@ -263,8 +273,14 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 	}
 	t.status = statusCompleted
 
+	e.mu.Unlock()
+	e.progressCond.Broadcast()
+
 	// Stream the final result event
 	e.events <- types.StreamMessage{Message: finalMsg}
+
+	// Re-process queue now that a slot may have opened
+	go e.processQueue()
 }
 
 func (e *StreamingToolExecutor) makeErrorMessage(toolUseID string, assistantMsg types.Message, text string) types.Message {

@@ -14,9 +14,7 @@ import (
 // ---------------------------------------------------------------------------
 type HomeDelegate interface {
 	OnNewChat()
-	OnRunTests()
 	OnExportSession()
-	OnSwitchPersona()
 	OnLoadSession(id string)
 }
 
@@ -47,12 +45,37 @@ type HomeModel struct {
 	persona         string
 	estimatedTokens int
 
-	// Quick action cursor
+	// Quick action cursor (spans both actions and sessions)
 	actionCursor int
 	actions      []homeAction
 
 	// Delegate
 	delegate HomeDelegate
+}
+
+func (m *HomeModel) totalItems() int {
+	return len(m.actions) + len(m.sessions)
+}
+
+func (m *HomeModel) cursorInActions() bool {
+	return m.actionCursor < len(m.actions)
+}
+
+func (m *HomeModel) cursorSessionIndex() int {
+	return m.actionCursor - len(m.actions)
+}
+
+func (m *HomeModel) clampCursor() {
+	max := m.totalItems() - 1
+	if max < 0 {
+		max = 0
+	}
+	if m.actionCursor > max {
+		m.actionCursor = max
+	}
+	if m.actionCursor < 0 {
+		m.actionCursor = 0
+	}
 }
 
 type homeAction struct {
@@ -83,6 +106,7 @@ func (m *HomeModel) SetProjectInfo(info ProjectInfo) {
 // SetSessions updates the recent sessions list.
 func (m *HomeModel) SetSessions(sessions []SessionInfo) {
 	m.sessions = sessions
+	m.clampCursor()
 }
 
 // SetStatus updates the runtime status display.
@@ -123,12 +147,19 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.actionCursor--
 			}
 		case "down", "j":
-			if m.actionCursor < len(m.actions)-1 {
+			if m.actionCursor < m.totalItems()-1 {
 				m.actionCursor++
 			}
 		case "enter", " ":
-			if m.actionCursor < len(m.actions) && m.actions[m.actionCursor].Handler != nil {
-				m.actions[m.actionCursor].Handler()
+			if m.cursorInActions() {
+				if m.actionCursor < len(m.actions) && m.actions[m.actionCursor].Handler != nil {
+					m.actions[m.actionCursor].Handler()
+				}
+			} else if m.delegate != nil {
+				idx := m.cursorSessionIndex()
+				if idx >= 0 && idx < len(m.sessions) {
+					m.delegate.OnLoadSession(m.sessions[idx].ID)
+				}
 			}
 		default:
 			// Handle individual action shortcuts
@@ -176,15 +207,6 @@ func (m *HomeModel) View() string {
 		sections = append(sections, m.renderRecentSessions())
 	}
 
-	// Status footer
-	sections = append(sections, m.renderStatusFooter())
-
-	// Contextual hint
-	hint := m.renderContextualHint()
-	if hint != "" {
-		sections = append(sections, hint)
-	}
-
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
 	// Constrain to available height
@@ -198,22 +220,13 @@ func (m *HomeModel) rebuildActions() {
 				m.delegate.OnNewChat()
 			}
 		}},
-		{Label: "Run tests", Key: "t", Description: "Execute project test suite", Handler: func() {
-			if m.delegate != nil {
-				m.delegate.OnRunTests()
-			}
-		}},
 		{Label: "Export session", Key: "e", Description: "Save conversation to file", Handler: func() {
 			if m.delegate != nil {
 				m.delegate.OnExportSession()
 			}
 		}},
-		{Label: "Switch persona", Key: "p", Description: "Change agent behavior mode", Handler: func() {
-			if m.delegate != nil {
-				m.delegate.OnSwitchPersona()
-			}
-		}},
 	}
+	m.clampCursor()
 }
 
 func (m *HomeModel) renderProjectCard() string {
@@ -304,43 +317,22 @@ func (m *HomeModel) renderRecentSessions() string {
 			label = fmt.Sprintf("Session %s", s.ID[:8])
 		}
 		marker := "  "
+		style := ListItemStyle
 		if s.IsActive {
 			marker = IndicatorSelected + " "
+			style = ListSelectedStyle
+		}
+		if m.cursorSessionIndex() == i {
+			marker = IndicatorSelected + " "
+			style = ListSelectedStyle
 		}
 		line := fmt.Sprintf("%s%s · %d msgs · %d turns", marker, label, s.MessageCount, s.Turns)
-		if s.IsActive {
-			b.WriteString(ListSelectedStyle.Render(line))
-		} else {
-			b.WriteString(ListItemStyle.Render(line))
-		}
+		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")
 	return b.String()
-}
-
-func (m *HomeModel) renderStatusFooter() string {
-	var parts []string
-
-	if m.model != "" {
-		parts = append(parts, fmt.Sprintf("model: %s", ShortenModelName(m.model)))
-	}
-	if m.persona != "" {
-		parts = append(parts, fmt.Sprintf("persona: %s", m.persona))
-	}
-	if m.permissionMode != "" {
-		parts = append(parts, fmt.Sprintf("perms: %s", m.permissionMode))
-	}
-	if m.estimatedTokens > 0 {
-		parts = append(parts, fmt.Sprintf("tokens: ~%d", m.estimatedTokens))
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-
-	return HelpDimStyle.Render("  "+strings.Join(parts, "  ")) + "\n"
 }
 
 func (m *HomeModel) renderSetupBanner() string {
@@ -352,29 +344,6 @@ func (m *HomeModel) renderSetupBanner() string {
 	b.WriteString(HelpDimStyle.Render("  Run /login to authenticate, or set AH_API_KEY environment variable."))
 	b.WriteString("\n\n")
 	return b.String()
-}
-
-func (m *HomeModel) renderContextualHint() string {
-	if m.project.Type == "" {
-		return ""
-	}
-
-	var hint string
-	switch m.project.Type {
-	case "Go":
-		hint = "Tip: Try `go test ./...` or `go build ./...`"
-	case "Node":
-		hint = "Tip: Try `npm test` or `npm run build`"
-	case "Python":
-		hint = "Tip: Try `pytest` or `python -m unittest`"
-	case "Rust":
-		hint = "Tip: Try `cargo test` or `cargo build`"
-	}
-
-	if hint != "" {
-		return "\n" + InfoStyle.Render("  "+hint) + "\n"
-	}
-	return ""
 }
 
 // Focus focuses the home view.
@@ -399,17 +368,8 @@ func (m HomeModel) ConsumesEsc() bool {
 
 // Scroll scrolls the actions list.
 func (m *HomeModel) Scroll(lines int) {
-	if lines > 0 {
-		m.actionCursor += lines
-		if m.actionCursor >= len(m.actions) {
-			m.actionCursor = len(m.actions) - 1
-		}
-	} else {
-		m.actionCursor += lines
-		if m.actionCursor < 0 {
-			m.actionCursor = 0
-		}
-	}
+	m.actionCursor += lines
+	m.clampCursor()
 }
 
 // GotoTop scrolls to top action.
@@ -419,8 +379,8 @@ func (m *HomeModel) GotoTop() {
 
 // GotoBottom scrolls to bottom action.
 func (m *HomeModel) GotoBottom() {
-	if len(m.actions) > 0 {
-		m.actionCursor = len(m.actions) - 1
+	if m.totalItems() > 0 {
+		m.actionCursor = m.totalItems() - 1
 	}
 }
 

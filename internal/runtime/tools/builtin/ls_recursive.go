@@ -45,7 +45,7 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 	Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		root := input["path"].(string)
 		maxDepth := 2
-		if d, ok := input["depth"].(float64); ok {
+		if d, ok := getNumber(input, "depth"); ok {
 			maxDepth = int(d)
 		}
 		exclude, _ := input["exclude"].(string)

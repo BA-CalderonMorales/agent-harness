@@ -65,8 +65,8 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		path := getString(input, "file_path")
 		path = resolveScreenshotPath(path)
 
-		offset := int(getFloat(input, "offset"))
-		limit := int(getFloat(input, "limit"))
+		offset := getInt(input, "offset")
+		limit := getInt(input, "limit")
 
 		// Get file info for cache key and stale tracking
 		info, err := os.Stat(path)
@@ -134,8 +134,8 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		// Show just the filename for brevity
 		parts := strings.Split(path, "/")
 		filename := parts[len(parts)-1]
-		offset := int(getFloat(input, "offset"))
-		limit := int(getFloat(input, "limit"))
+		offset := getInt(input, "offset")
+		limit := getInt(input, "limit")
 		if offset > 0 || limit > 0 {
 			return fmt.Sprintf("Reading %s (lines %d-%d)", filename, offset, offset+limit)
 		}
@@ -150,20 +150,6 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		return parts[len(parts)-1]
 	},
 })
-
-func getString(m map[string]any, key string) string {
-	if v, ok := m[key].(string); ok {
-		return v
-	}
-	return ""
-}
-
-func getFloat(m map[string]any, key string) float64 {
-	if v, ok := m[key].(float64); ok {
-		return v
-	}
-	return 0
-}
 
 func resolveScreenshotPath(path string) string {
 	if _, err := os.Stat(path); err == nil {

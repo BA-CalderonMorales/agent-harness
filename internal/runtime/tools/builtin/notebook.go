@@ -55,7 +55,7 @@ var NotebookEditTool = tools.NewTool(tools.Tool{
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		path := getString(input, "notebook_path")
-		cellIndex := int(getFloat(input, "cell_index"))
+		cellIndex := getInt(input, "cell_index")
 		newSource := getString(input, "new_source")
 
 		data, err := os.ReadFile(path)
