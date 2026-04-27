@@ -238,12 +238,12 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 
 	// Progress handler
 	onProgress := func(data any) {
-		e.events <- types.ProgressMessage{
+		e.sendEvent(types.ProgressMessage{
 			ToolUseID: t.block.ID,
 			Type:      "progress",
 			Data:      data,
 			Timestamp: time.Now(),
-		}
+		})
 	}
 
 	result, err := runSingleTool(ctx, t.block, t.assistantMessage, e.toolDefinitions, e.canUseTool, onProgress)
@@ -277,10 +277,18 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 	e.progressCond.Broadcast()
 
 	// Stream the final result event
-	e.events <- types.StreamMessage{Message: finalMsg}
+	e.sendEvent(types.StreamMessage{Message: finalMsg})
 
 	// Re-process queue now that a slot may have opened
 	go e.processQueue()
+}
+
+// sendEvent delivers an event to the events channel, swallowing the panic
+// that occurs if the channel has already been closed. This prevents races
+// between tool goroutines finishing and the consumer calling Close().
+func (e *StreamingToolExecutor) sendEvent(ev types.StreamEvent) {
+	defer func() { recover() }()
+	e.events <- ev
 }
 
 func (e *StreamingToolExecutor) makeErrorMessage(toolUseID string, assistantMsg types.Message, text string) types.Message {
