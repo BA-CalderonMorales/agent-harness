@@ -46,6 +46,32 @@ var _ = Describe("App", func() {
 		})
 	})
 
+	Describe("Home Quick Actions", func() {
+		var homeDelegate *testHomeDelegate
+
+		BeforeEach(func() {
+			homeDelegate = &testHomeDelegate{}
+			app.SetHomeDelegate(homeDelegate)
+		})
+
+		Context("Given the app is on the home view", func() {
+			It("should dispatch new chat on 'n' key", func() {
+				By("pressing 'n' while home is focused")
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+				updated := model.(App)
+
+				By("verifying the delegate was called")
+				Expect(homeDelegate.newChatCalled).To(BeTrue())
+				Expect(updated.homeModel.focused).To(BeTrue())
+			})
+
+			It("should dispatch export session on 'e' key", func() {
+				_, _ = app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
+				Expect(homeDelegate.exportSessionCalled).To(BeTrue())
+			})
+		})
+	})
+
 	Describe("Tab Switching", func() {
 		BeforeEach(func() {
 			app.width = 80
@@ -137,6 +163,44 @@ var _ = Describe("App", func() {
 				Expect(updated.chatModel.focused).To(BeTrue())
 			})
 		})
+
+		Context("Given tab cycling changes the view", func() {
+			It("should set insert mode when entering chat", func() {
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
+				updated := model.(App)
+				Expect(updated.activeView).To(Equal(viewChat))
+				Expect(updated.mode).To(Equal(ModeInsert))
+			})
+
+			It("should set normal mode when entering home from chat", func() {
+				app.activeView = viewChat
+				app.mode = ModeInsert
+				app.chatModel.Focus()
+
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+				updated := model.(App)
+				Expect(updated.activeView).To(Equal(viewHome))
+				Expect(updated.mode).To(Equal(ModeNormal))
+			})
+		})
+
+		Context("Given number shortcuts change the view", func() {
+			It("should set insert mode when switching to chat with '2'", func() {
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+				updated := model.(App)
+				Expect(updated.mode).To(Equal(ModeInsert))
+			})
+
+			It("should set normal mode when switching to home with '1'", func() {
+				app.activeView = viewChat
+				app.mode = ModeInsert
+				app.chatModel.Focus()
+
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
+				updated := model.(App)
+				Expect(updated.mode).To(Equal(ModeNormal))
+			})
+		})
 	})
 
 	Describe("Mode Switching", func() {
@@ -178,6 +242,41 @@ var _ = Describe("App", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
 				updated := model.(App)
 				Expect(updated.activeView).To(Equal(viewChat))
+			})
+		})
+	})
+
+	Describe("Chat Tab Insert Mode Default", func() {
+		BeforeEach(func() {
+			app.width = 80
+			app.height = 24
+		})
+
+		Context("Given the user switches to chat tab", func() {
+			It("should enter insert mode so typing works immediately", func() {
+				By("starting on home in normal mode")
+				Expect(app.mode).To(Equal(ModeNormal))
+
+				By("switching to chat")
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+				updated := model.(App)
+
+				By("verifying insert mode is active and chat is focused")
+				Expect(updated.mode).To(Equal(ModeInsert))
+				Expect(updated.chatModel.focused).To(BeTrue())
+			})
+
+			It("should allow immediate text input in chat", func() {
+				By("switching to chat")
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+				chatApp := model.(App)
+
+				By("typing a message in chat")
+				model, _ = chatApp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+				updated := model.(App)
+
+				By("verifying the character was inserted into textarea")
+				Expect(updated.chatModel.GetInput()).To(Equal("h"))
 			})
 		})
 	})
