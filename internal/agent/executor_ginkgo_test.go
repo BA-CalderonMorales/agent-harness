@@ -107,6 +107,23 @@ func makeFailingTool(name string, safe bool) tools.Tool {
 	})
 }
 
+func makeSlowTool(name string, delay time.Duration) tools.Tool {
+	return tools.NewTool(tools.Tool{
+		Name: name,
+		Capabilities: tools.CapabilityFlags{
+			IsConcurrencySafe: func(map[string]any) bool { return true },
+			InterruptBehavior: func() string { return "cancel" },
+		},
+		Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
+			time.Sleep(delay)
+			return tools.ToolResult{Data: name + "-result"}, nil
+		},
+		MapResult: func(result any, toolUseID string) types.ToolResultBlock {
+			return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
+		},
+	})
+}
+
 func makeValidationFailingTool(name string) tools.Tool {
 	return tools.NewTool(tools.Tool{
 		Name: name,
@@ -388,6 +405,28 @@ var _ = Describe("StreamingToolExecutor", func() {
 				tr2 := firstToolResult(results[1])
 				Expect(tr1.Content).To(Equal("write-result"))
 				Expect(tr2.Content).To(Equal("read-result"))
+			})
+		})
+	})
+
+	Describe("Close Race Safety", func() {
+		Context("Given a slow tool and Close races with completion", func() {
+			It("should not panic when the channel is closed before the final event is sent", func() {
+				defs := []tools.Tool{makeSlowTool("slow", 100*time.Millisecond)}
+				executor = NewStreamingToolExecutor(defs, nil, toolCtx)
+
+				executor.AddTool(types.ToolUseBlock{ID: "t1", Name: "slow", Input: map[string]any{}}, types.Message{})
+
+				By("closing the executor while the tool is still running")
+				go func() {
+					time.Sleep(50 * time.Millisecond)
+					executor.Close()
+				}()
+
+				By("waiting for results without panicking")
+				Expect(func() {
+					_, _ = executor.GetRemainingResults(context.Background())
+				}).ToNot(Panic())
 			})
 		})
 	})
