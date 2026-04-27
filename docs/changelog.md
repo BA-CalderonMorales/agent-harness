@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.3.1] - 2026-04-27
+
+### Fixed
+- Home tab now focused on startup so 'n' (new chat) and 'e' (export) shortcuts work immediately
+- Chat tab defaults to insert mode when switching views — users can type without pressing 'i' first
+
 ## [0.3.0] - 2026-04-26
 
 ### Changed
