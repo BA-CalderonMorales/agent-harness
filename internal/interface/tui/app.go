@@ -85,7 +85,7 @@ type App struct {
 // NewApp creates a new TUI application.
 func NewApp() *App {
 	home := NewHomeModel()
-	return &App{
+	app := &App{
 		activeView:     viewHome,
 		mode:           ModeNormal,
 		homeModel:      &home,
@@ -98,6 +98,9 @@ func NewApp() *App {
 		modelPicker:    NewModelPicker(),
 		msgChan:        make(chan tea.Msg, 64),
 	}
+	app.focusActive()
+	app.homeModel.Init()
+	return app
 }
 
 // SetAgentCancelFunc sets the cancellation function for the current agent execution
@@ -243,18 +246,12 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case tea.KeyTab:
 			if !a.activeViewConsumesTab() {
-				a.blurActive()
-				a.activeView = (a.activeView + 1) % viewCount
-				a.focusActive()
-				return a, a.initActiveView()
+				return a, a.switchView((a.activeView + 1) % viewCount)
 			}
 
 		case tea.KeyShiftTab:
 			if !a.activeViewConsumesTab() {
-				a.blurActive()
-				a.activeView = (a.activeView - 1 + viewCount) % viewCount
-				a.focusActive()
-				return a, a.initActiveView()
+				return a, a.switchView((a.activeView - 1 + viewCount) % viewCount)
 			}
 
 		case tea.KeyEsc:
@@ -679,8 +676,17 @@ func (a App) renderStatusBar() string {
 func (a *App) switchView(v viewID) tea.Cmd {
 	a.blurActive()
 	a.activeView = v
+	a.setViewMode(v)
 	a.focusActive()
 	return a.initActiveView()
+}
+
+func (a *App) setViewMode(v viewID) {
+	if v == viewChat {
+		a.mode = ModeInsert
+	} else {
+		a.mode = ModeNormal
+	}
 }
 
 func (a *App) focusActive() {
