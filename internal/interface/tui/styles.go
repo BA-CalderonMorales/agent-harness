@@ -410,11 +410,11 @@ func ToolSpinnerRender(frame int) string {
 // JSON / code display
 // ---------------------------------------------------------------------------
 var (
-	CodeBlockStyle = lipgloss.NewStyle().
-			BorderStyle(lipgloss.RoundedBorder()).
-			BorderForeground(ColorBorder).
-			Foreground(ColorText).
-			Padding(0, 1)
+	JSONCodeBlockStyle = lipgloss.NewStyle().
+				BorderStyle(lipgloss.RoundedBorder()).
+				BorderForeground(ColorBorder).
+				Foreground(ColorText).
+				Padding(0, 1)
 
 	CodeKeyStyle = lipgloss.NewStyle().
 			Foreground(ColorSecondary)
