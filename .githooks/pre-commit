@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # pre-commit hook - Block session artifacts from being committed
 # Install: git config core.hooksPath .githooks
 
