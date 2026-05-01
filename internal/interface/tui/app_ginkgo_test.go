@@ -246,6 +246,27 @@ var _ = Describe("App", func() {
 		})
 	})
 
+	Describe("Global Ctrl+C", func() {
+		Context("Given chat input contains draft text", func() {
+			It("should clear the draft before quitting", func() {
+				By("switching to chat and typing a draft")
+				app.activeView = viewChat
+				app.mode = ModeInsert
+				app.chatModel.Focus()
+				app.SetInput("unfinished")
+
+				By("pressing Ctrl+C")
+				model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+				updated := model.(App)
+
+				By("verifying the app stayed open and showed feedback")
+				Expect(cmd).To(BeNil())
+				Expect(updated.GetInput()).To(Equal(""))
+				Expect(updated.renderStatusBar()).To(ContainSubstring("Input cleared"))
+			})
+		})
+	})
+
 	Describe("Chat Tab Insert Mode Default", func() {
 		BeforeEach(func() {
 			app.width = 80

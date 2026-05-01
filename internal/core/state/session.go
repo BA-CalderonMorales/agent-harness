@@ -351,6 +351,12 @@ func (sm *SessionManager) LoadSession(id string) (*Session, error) {
 	return session, nil
 }
 
+// ReadSession loads a session by ID without changing the active session.
+func (sm *SessionManager) ReadSession(id string) (*Session, error) {
+	path := filepath.Join(sm.sessionsDir, id+".json")
+	return LoadSession(path)
+}
+
 // ListSessions lists all available sessions
 func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 	entries, err := os.ReadDir(sm.sessionsDir)

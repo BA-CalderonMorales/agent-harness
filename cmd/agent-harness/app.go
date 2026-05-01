@@ -105,6 +105,7 @@ func (app *App) run() error {
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
 
 	// Initial data
+	tuiApp.SetChatMessages(app.session.Messages)
 	welcome := app.buildWelcomeMessage()
 	tuiApp.AddMessage("system", welcome)
 	tuiApp.RefreshSessions(app.getSessionInfos())
