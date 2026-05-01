@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -242,6 +243,11 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.Type {
 		case tea.KeyCtrlC:
+			if a.activeView == viewChat && a.chatModel.GetInput() != "" {
+				a.chatModel.ClearInput()
+				a.ShowStatus("Input cleared. Press Ctrl+C again to quit.", "info")
+				return a, nil
+			}
 			return a, tea.Quit
 
 		case tea.KeyTab:
@@ -621,6 +627,21 @@ func (a App) renderStatusBar() string {
 
 	// Left: Status indicator based on state
 	status := StatusOnline.Render("[ready]")
+	if a.statusMessage != "" {
+		var style lipgloss.Style
+		switch a.statusType {
+		case "success":
+			style = SuccessStyle
+		case "error":
+			style = ErrorStyle
+		case "warning":
+			style = WarningStyle
+		default:
+			style = InfoStyle
+		}
+		content := " " + style.Render(a.statusMessage)
+		return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+	}
 
 	// Get current model name for display
 	modelName := a.chatModel.GetModel()
@@ -819,6 +840,11 @@ func (a *App) GetInput() string {
 // ClearInput clears the chat input.
 func (a *App) ClearInput() {
 	a.chatModel.ClearInput()
+}
+
+// SetChatMessages replaces the visible chat transcript with session messages.
+func (a *App) SetChatMessages(messages []types.Message) {
+	a.chatModel.SetMessages(messages)
 }
 
 // RemoveLastUserMessage removes the most recent user message from chat display.

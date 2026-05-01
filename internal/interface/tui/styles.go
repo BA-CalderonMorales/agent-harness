@@ -106,6 +106,21 @@ var (
 	MessageStyle = lipgloss.NewStyle().
 			Foreground(ColorText)
 
+	MarkdownBoldStyle = lipgloss.NewStyle().
+				Foreground(ColorText).
+				Bold(true)
+
+	MarkdownItalicStyle = lipgloss.NewStyle().
+				Foreground(ColorTextDim).
+				Italic(true)
+
+	CodeInlineStyle = lipgloss.NewStyle().
+			Foreground(ColorAccent)
+
+	CodeBlockStyle = lipgloss.NewStyle().
+			Foreground(ColorText).
+			Background(ColorHighlight)
+
 	MessageBubbleUser = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder(), false, false, false, true).
 				BorderForeground(ColorSecondary).

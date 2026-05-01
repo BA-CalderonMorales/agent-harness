@@ -22,8 +22,21 @@ type tuiHomeDelegate struct {
 }
 
 func (d *tuiHomeDelegate) OnNewChat() {
-	d.app.session = d.app.session.Clear()
-	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: "Starting fresh conversation."})
+	if d.app.session == nil {
+		d.app.session = d.app.sessionManager.CreateSession("")
+	}
+	if d.app.session != nil && len(d.app.session.Messages) > 0 {
+		_, _ = d.app.sessionManager.SaveCurrent()
+	}
+	model := d.app.session.Model
+	personaName := d.app.session.Persona
+	d.app.session = d.app.sessionManager.CreateSession(model)
+	d.app.session.Persona = personaName
+	d.app.sessionManager.SetCurrent(d.app.session)
+	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: sprintf("Starting new chat %s.", d.app.session.ID[:8])})
+	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), d.app.session.Persona, d.app.session.EstimateTokens())
+	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.tuiApp.ShowStatus(sprintf("Started new chat %s", d.app.session.ID[:8]), "success")
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
@@ -43,8 +56,11 @@ func (d *tuiHomeDelegate) OnLoadSession(id string) {
 		return
 	}
 	d.app.session = session
+	d.app.sessionManager.SetCurrent(session)
+	d.tuiApp.SetChatMessages(session.Messages)
 	d.tuiApp.SetChatPersona(session.Persona)
 	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
+	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
 	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
 }
 
@@ -62,8 +78,11 @@ func (d *tuiSessionsDelegate) OnSessionSelect(id string) {
 		return
 	}
 	d.app.session = session
+	d.app.sessionManager.SetCurrent(session)
+	d.tuiApp.SetChatMessages(session.Messages)
 	d.tuiApp.SetChatPersona(session.Persona)
 	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
+	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
 	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
 }
 
@@ -79,8 +98,13 @@ func (d *tuiSessionsDelegate) OnSessionDelete(id string) {
 
 // OnSessionExport handles session export.
 func (d *tuiSessionsDelegate) OnSessionExport(id string) {
+	session, err := d.app.sessionManager.ReadSession(id)
+	if err != nil {
+		d.tuiApp.AddMessage("system", sprintf("Failed to load session for export: %v", err))
+		return
+	}
 	path := sprintf("session-%s.json", id[:8])
-	if err := d.app.session.SaveToFile(path); err != nil {
+	if err := session.SaveToFile(path); err != nil {
 		d.tuiApp.AddMessage("system", sprintf("Failed to export: %v", err))
 		return
 	}
@@ -89,7 +113,7 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 
 // OnSessionCopy copies session content to clipboard.
 func (d *tuiSessionsDelegate) OnSessionCopy(id string) {
-	session, err := d.app.sessionManager.LoadSession(id)
+	session, err := d.app.sessionManager.ReadSession(id)
 	if err != nil {
 		d.tuiApp.AddMessage("system", sprintf("Failed to load session for copy: %v", err))
 		return

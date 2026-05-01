@@ -43,6 +43,8 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 		Timestamp: time.Now(),
 	}
 	app.session.AddMessage(userMsg)
+	app.sessionManager.SetCurrent(app.session)
+	_, _ = app.sessionManager.SaveCurrent()
 
 	app.handleAgentLoopAsync(normalizedInput, tuiApp)
 }
@@ -247,6 +249,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 				}
 			}
 			app.session.AddMessage(e.Message)
+			app.sessionManager.SetCurrent(app.session)
+			_, _ = app.sessionManager.SaveCurrent()
 		case types.StreamError:
 			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 		}

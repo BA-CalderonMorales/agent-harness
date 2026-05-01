@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	Version   = "0.3.2"
+	Version   = "0.3.3"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -84,15 +84,19 @@ func run() error {
 	go func() {
 		<-sigCh
 		fmt.Println("\nSaving session before exit...")
-		if app.session != nil {
-			_ = app.session.SaveToFile(app.getSessionsDir() + "/" + app.session.ID + ".json")
+		if app.sessionManager != nil {
+			_, _ = app.sessionManager.SaveCurrent()
 		}
 		cancel()
 		os.Exit(0)
 	}()
 
 	_ = ctx
-	return app.run()
+	err = app.run()
+	if app.sessionManager != nil {
+		_, _ = app.sessionManager.SaveCurrent()
+	}
+	return err
 }
 
 func printVersion() {

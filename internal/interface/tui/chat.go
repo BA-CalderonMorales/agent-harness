@@ -5,11 +5,13 @@ package tui
 import (
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -74,6 +76,8 @@ const (
 const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
+	MinInputRows           = 1
+	MaxInputRows           = 4
 )
 
 // SubmitDebounceDuration is the window after Enter during which another
@@ -201,9 +205,10 @@ func renderMarkdown(content string, width int) (result string) {
 		return content
 	}
 
-	// Skip expensive markdown rendering in Termux for better performance
+	// Skip expensive glamour rendering in Termux for better performance, but
+	// keep core markdown affordances visible in plain terminal styling.
 	if isTermux {
-		return content
+		return renderTermuxMarkdown(content)
 	}
 
 	renderer, err := getMarkdownRenderer()
@@ -224,11 +229,52 @@ func renderMarkdown(content string, width int) (result string) {
 	return rendered
 }
 
+var (
+	fencedCodeRE = regexp.MustCompile("(?s)```(?:[a-zA-Z0-9_+-]+)?\n(.*?)```")
+	inlineCodeRE = regexp.MustCompile("`([^`\n]+)`")
+	boldRE       = regexp.MustCompile(`\*\*([^*\n]+)\*\*|__([^_\n]+)__`)
+	italicRE     = regexp.MustCompile(`\*([^*\n]+)\*|_([^_\n]+)_`)
+)
+
+func renderTermuxMarkdown(content string) string {
+	content = fencedCodeRE.ReplaceAllStringFunc(content, func(match string) string {
+		parts := fencedCodeRE.FindStringSubmatch(match)
+		if len(parts) < 2 {
+			return match
+		}
+		lines := strings.Split(strings.Trim(parts[1], "\n"), "\n")
+		for i, line := range lines {
+			lines[i] = CodeBlockStyle.Render("  " + line)
+		}
+		return strings.Join(lines, "\n")
+	})
+	content = inlineCodeRE.ReplaceAllString(content, CodeInlineStyle.Render("$1"))
+	content = boldRE.ReplaceAllStringFunc(content, func(match string) string {
+		parts := boldRE.FindStringSubmatch(match)
+		for _, part := range parts[1:] {
+			if part != "" {
+				return MarkdownBoldStyle.Render(part)
+			}
+		}
+		return match
+	})
+	content = italicRE.ReplaceAllStringFunc(content, func(match string) string {
+		parts := italicRE.FindStringSubmatch(match)
+		for _, part := range parts[1:] {
+			if part != "" {
+				return MarkdownItalicStyle.Render(part)
+			}
+		}
+		return match
+	})
+	return content
+}
+
 // NewChatModel creates a new chat model.
 // UI FIX: Styled textarea with consistent background for better visual appeal
 func NewChatModel() ChatModel {
 	ta := textarea.New()
-	ta.SetHeight(3)
+	ta.SetHeight(MinInputRows)
 	ta.SetWidth(80)
 	ta.ShowLineNumbers = false
 	ta.Prompt = ""
@@ -297,12 +343,44 @@ func (m ChatModel) GetModel() string {
 	return m.model
 }
 
+func (m *ChatModel) syncTextareaHeight() {
+	rows := m.inputRows()
+	if rows < MinInputRows {
+		rows = MinInputRows
+	}
+	if rows > MaxInputRows {
+		rows = MaxInputRows
+	}
+	m.textarea.SetHeight(rows)
+}
+
+func (m ChatModel) inputRows() int {
+	value := m.textarea.Value()
+	if value == "" {
+		return MinInputRows
+	}
+	rows := strings.Count(value, "\n") + 1
+	if rows > MaxInputRows {
+		return MaxInputRows
+	}
+	return rows
+}
+
+func (m ChatModel) inputAreaHeight() int {
+	height := m.inputRows() + 2 // status line + top border
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		visible := len(m.suggestions)
+		if visible > 6 {
+			visible = 7 // six commands plus overflow hint
+		}
+		height += visible
+	}
+	return height
+}
+
 // Init initializes the chat model.
 func (m ChatModel) Init() tea.Cmd {
-	return tea.Batch(
-		textarea.Blink,
-		m.startTimer(), // Start the timer ticker
-	)
+	return textarea.Blink
 }
 
 // Update handles messages.
@@ -313,10 +391,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.syncTextareaHeight()
 
-		// Reserve space for input area (4 lines)
-		inputHeight := 4
-		vpHeight := msg.Height - inputHeight
+		headerHeight := 2
+		separatorHeight := 1
+		inputHeight := m.inputAreaHeight()
+		vpHeight := msg.Height - inputHeight - headerHeight - separatorHeight
 		if vpHeight < 5 {
 			vpHeight = 5
 		}
@@ -355,12 +435,14 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "enter":
 				if len(m.suggestions) > 0 && m.suggestionCursor < len(m.suggestions) {
 					m.textarea.SetValue(m.suggestions[m.suggestionCursor] + " ")
+					m.syncTextareaHeight()
 					m.showSuggestions = false
 					return m, nil
 				}
 			case "tab":
 				if len(m.suggestions) > 0 {
 					m.textarea.SetValue(m.suggestions[0] + " ")
+					m.syncTextareaHeight()
 					m.showSuggestions = false
 					return m, nil
 				}
@@ -379,6 +461,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.suggestions = m.filterSuggestions("/")
 			m.suggestionCursor = 0
 			m.textarea.InsertString("/")
+			m.syncTextareaHeight()
 			return m, nil
 		}
 
@@ -387,6 +470,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Alt {
 				// Multi-line input
 				m.textarea.InsertString("\n")
+				m.syncTextareaHeight()
 				return m, nil
 			}
 
@@ -401,6 +485,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.pendingSubmit {
 				m.pasteDetected = true
 				m.textarea.InsertString("\n")
+				m.syncTextareaHeight()
 				return m, m.startSubmitTimer()
 			}
 
@@ -413,8 +498,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.startSubmitTimer()
 
 		case tea.KeyCtrlC:
-			// Allow Ctrl+C to propagate for quit
-			m.pasteDetected = false
+			if m.textarea.Value() != "" {
+				m.textarea.SetValue("")
+				m.pasteDetected = false
+				m.pendingSubmit = false
+				m.pendingSubmitGen++
+				m.syncTextareaHeight()
+			}
 			return m, nil
 
 		case tea.KeyCtrlJ:
@@ -426,6 +516,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingSubmitGen++
 			}
 			m.textarea.InsertString("\n")
+			m.syncTextareaHeight()
 			return m, nil
 		}
 
@@ -440,6 +531,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
 				m.textarea.InsertString("\n")
 				m.pasteDetected = true
+				m.syncTextareaHeight()
 			}
 		}
 
@@ -456,6 +548,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newTA, cmd = m.textarea.Update(msg)
 		}()
 		m.textarea = newTA
+		m.syncTextareaHeight()
 
 		// Heuristic paste detection for terminals without bracketed paste
 		if !msg.Paste && len(m.textarea.Value())-lastLen > PasteHeuristicThreshold {
@@ -485,9 +578,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case timerTickMsg:
 		if m.timerRunning {
 			m.elapsed = time.Since(m.startTime)
+			return m, m.startTimer()
 		}
-		// Always continue ticking - timer controls whether to update elapsed
-		return m, m.startTimer()
+		return m, nil
 
 	// -------------------------------------------------------------------------
 	// Submit debounce timer
@@ -698,11 +791,8 @@ func (m ChatModel) View() string {
 		return "  Initializing chat..."
 	}
 
-	// Calculate heights with minimums
-	inputHeight := 3
-	if m.thinking {
-		inputHeight = 4
-	}
+	m.syncTextareaHeight()
+	inputHeight := m.inputAreaHeight()
 
 	headerHeight := 2 // Header takes 2 lines
 	separatorHeight := 1
@@ -848,7 +938,76 @@ func (m *ChatModel) AddMessage(role, content string) {
 		Timestamp: time.Now(),
 	}
 	m.messages = append(m.messages, msg)
-	m.refreshViewport()
+	m.refreshViewportFollow()
+}
+
+// SetMessages replaces the visible chat transcript from persisted session
+// messages, preserving only user, assistant, system, and tool-result text.
+func (m *ChatModel) SetMessages(messages []types.Message) {
+	m.messages = make([]ChatMessage, 0, len(messages))
+	for _, msg := range messages {
+		chatMsg, ok := chatMessageFromSessionMessage(msg)
+		if ok {
+			m.messages = append(m.messages, chatMsg)
+		}
+	}
+	m.refreshViewportFollow()
+}
+
+func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
+	var content strings.Builder
+	isTool := false
+	toolName := ""
+	status := ToolStatusComplete
+
+	for _, block := range msg.Content {
+		switch b := block.(type) {
+		case types.TextBlock:
+			if b.Text != "" {
+				content.WriteString(b.Text)
+			}
+		case types.ToolUseBlock:
+			isTool = true
+			toolName = b.Name
+			input := fmt.Sprintf("%v", b.Input)
+			if input != "" && input != "map[]" {
+				if content.Len() > 0 {
+					content.WriteString("\n")
+				}
+				content.WriteString(fmt.Sprintf("→ %s %s", b.Name, input))
+			} else {
+				content.WriteString(fmt.Sprintf("→ %s", b.Name))
+			}
+		case types.ToolResultBlock:
+			isTool = true
+			if b.IsError {
+				status = ToolStatusError
+			}
+			if content.Len() > 0 {
+				content.WriteString("\n")
+			}
+			content.WriteString(fmt.Sprintf("%v", b.Content))
+		}
+	}
+
+	text := strings.TrimSpace(content.String())
+	if text == "" {
+		return ChatMessage{}, false
+	}
+
+	role := string(msg.Role)
+	if isTool {
+		role = "tool"
+	}
+	return ChatMessage{
+		ID:         msg.UUID,
+		Role:       role,
+		Content:    text,
+		Timestamp:  msg.Timestamp,
+		IsTool:     isTool,
+		ToolName:   toolName,
+		ToolStatus: status,
+	}, true
 }
 
 // AddToolMessage adds a tool message to the chat.
@@ -868,7 +1027,7 @@ func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
 		ToolStatus:      ToolStatusComplete,
 	}
 	m.messages = append(m.messages, msg)
-	m.refreshViewport()
+	m.refreshViewportFollow()
 }
 
 // AddOrUpdateToolMessage adds a tool message or updates existing one by ID.
@@ -888,7 +1047,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 			m.messages[i].Content = content
 			m.messages[i].ToolStatus = status
 			m.messages[i].Timestamp = time.Now()
-			m.refreshViewport()
+			m.refreshViewportFollow()
 			return
 		}
 	}
@@ -905,7 +1064,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 		ToolStatus:      status,
 	}
 	m.messages = append(m.messages, msg)
-	m.refreshViewport()
+	m.refreshViewportFollow()
 }
 
 // formatToolContent formats tool message content based on status.
@@ -1007,6 +1166,7 @@ func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string 
 // SetInput sets the input text.
 func (m *ChatModel) SetInput(text string) {
 	m.textarea.SetValue(text)
+	m.syncTextareaHeight()
 }
 
 // GetInput returns the input text.
@@ -1017,6 +1177,7 @@ func (m ChatModel) GetInput() string {
 // ClearInput clears the input.
 func (m *ChatModel) ClearInput() {
 	m.textarea.SetValue("")
+	m.syncTextareaHeight()
 }
 
 // RemoveLastUserMessage removes the most recent user message from display.
@@ -1024,7 +1185,7 @@ func (m *ChatModel) RemoveLastUserMessage() {
 	for i := len(m.messages) - 1; i >= 0; i-- {
 		if m.messages[i].Role == "user" {
 			m.messages = append(m.messages[:i], m.messages[i+1:]...)
-			m.refreshViewport()
+			m.refreshViewportFollow()
 			return
 		}
 	}
@@ -1056,6 +1217,7 @@ func (m *ChatModel) SetThinking(thinking bool, text string) {
 		m.timerRunning = true
 		m.elapsed = 0
 		m.chunkCount = 0
+		m.syncTextareaHeight()
 	} else {
 		m.timerRunning = false
 	}
@@ -1116,8 +1278,9 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		if m.delegate != nil {
 			cmd = m.delegate.OnSubmit(input)
 			m.textarea.SetValue("")
+			m.syncTextareaHeight()
 			m.pasteDetected = false
-			m.refreshViewport()
+			m.refreshViewportFollow()
 			model = m
 			return
 		}
@@ -1125,7 +1288,8 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 
 	m.pasteDetected = false
 	m.textarea.SetValue("")
-	m.refreshViewport()
+	m.syncTextareaHeight()
+	m.refreshViewportFollow()
 	model = m
 	return
 }
@@ -1279,6 +1443,16 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 
 // refreshViewport refreshes the viewport content.
 func (m *ChatModel) refreshViewport() {
+	m.refreshViewportWithFollow(false)
+}
+
+func (m *ChatModel) refreshViewportFollow() {
+	m.refreshViewportWithFollow(true)
+}
+
+func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
+	wasAtBottom := m.viewport.AtBottom()
+	previousOffset := m.viewport.YOffset
 	var content strings.Builder
 
 	for _, msg := range m.messages {
@@ -1304,7 +1478,11 @@ func (m *ChatModel) refreshViewport() {
 	}
 
 	m.viewport.SetContent(content.String())
-	m.viewport.GotoBottom()
+	if forceBottom || wasAtBottom {
+		m.viewport.GotoBottom()
+		return
+	}
+	m.viewport.SetYOffset(previousOffset)
 }
 
 func (m ChatModel) renderMessage(msg ChatMessage) string {

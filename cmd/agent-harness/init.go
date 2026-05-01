@@ -691,6 +691,7 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 		commands.ClearHandler(
 			func() error {
 				app.session = app.session.Clear()
+				app.sessionManager.SetCurrent(app.session)
 				return nil
 			},
 			func(msg string) {

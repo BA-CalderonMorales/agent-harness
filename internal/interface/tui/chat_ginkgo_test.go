@@ -46,6 +46,89 @@ var _ = Describe("ChatModel", func() {
 		SubmitDebounceDuration = 0 // immediate submit for legacy specs
 	})
 
+	Describe("Input Area Ergonomics", func() {
+		Context("Given an empty chat input", func() {
+			It("should start as a single-row composer", func() {
+				Expect(chat.textarea.Height()).To(Equal(MinInputRows))
+				Expect(chat.inputRows()).To(Equal(MinInputRows))
+			})
+		})
+
+		Context("Given more than four rows of text", func() {
+			It("should cap the composer at four rows", func() {
+				By("setting five lines of input")
+				chat.SetInput("one\ntwo\nthree\nfour\nfive")
+
+				By("verifying the textarea height is capped")
+				Expect(chat.inputRows()).To(Equal(MaxInputRows))
+				Expect(chat.textarea.Height()).To(Equal(MaxInputRows))
+			})
+		})
+
+		Context("Given Ctrl+C is pressed with non-empty input", func() {
+			It("should clear the input instead of submitting or quitting", func() {
+				By("typing draft text")
+				chat.SetInput("draft")
+
+				By("pressing Ctrl+C")
+				model, cmd := chat.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+				chat = model.(ChatModel)
+
+				By("verifying the draft was cleared")
+				Expect(cmd).To(BeNil())
+				Expect(chat.GetInput()).To(Equal(""))
+				Expect(delegate.submittedText).To(Equal(""))
+			})
+		})
+	})
+
+	Describe("Viewport Follow Mode", func() {
+		Context("Given the user has scrolled up in a long conversation", func() {
+			It("should preserve scroll position when new streaming chunks arrive", func() {
+				By("creating enough messages to make the viewport scrollable")
+				model, _ := chat.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+				chat = model.(ChatModel)
+				for i := 0; i < 20; i++ {
+					chat.AddMessage("assistant", strings.Repeat("line\n", 2))
+				}
+				chat.Scroll(-6)
+				before := chat.viewport.YOffset
+				Expect(before).To(BeNumerically("<", chat.viewport.TotalLineCount()))
+
+				By("receiving a streaming update")
+				model, _ = chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentChunkMsg{Text: "new chunk"})
+				chat = model.(ChatModel)
+
+				By("verifying the scroll position was not snapped to bottom")
+				Expect(chat.viewport.YOffset).To(Equal(before))
+			})
+		})
+	})
+
+	Describe("Idle Timer", func() {
+		Context("Given the chat is idle", func() {
+			It("should not schedule another timer tick", func() {
+				model, cmd := chat.Update(timerTickMsg{time: time.Now()})
+				chat = model.(ChatModel)
+				Expect(cmd).To(BeNil())
+			})
+		})
+	})
+
+	Describe("Termux Markdown Fallback", func() {
+		Context("Given Termux skips glamour rendering", func() {
+			It("should still style core markdown markers", func() {
+				rendered := renderTermuxMarkdown("**bold** _em_ `code`\n```go\nfmt.Println(1)\n```")
+				Expect(rendered).ToNot(ContainSubstring("**bold**"))
+				Expect(rendered).ToNot(ContainSubstring("_em_"))
+				Expect(rendered).ToNot(ContainSubstring("`code`"))
+				Expect(rendered).To(ContainSubstring("fmt.Println(1)"))
+			})
+		})
+	})
+
 	// ========================================================================
 	// Tool Display — Single-line replacement and status line
 	// ========================================================================
