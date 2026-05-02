@@ -287,43 +287,7 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(args string) (string, error) {
-			path := args
-			format := "json"
-			if strings.HasPrefix(args, "--format ") {
-				rest := strings.TrimPrefix(args, "--format ")
-				parts := strings.SplitN(rest, " ", 2)
-				format = strings.TrimSpace(parts[0])
-				if len(parts) > 1 {
-					path = strings.TrimSpace(parts[1])
-				} else {
-					path = ""
-				}
-			}
-			// Validate format to prevent silent surprises
-			switch format {
-			case "json", "markdown", "md":
-				// supported
-			default:
-				return "", fmt.Errorf("unsupported format: %q (supported: json, markdown, md)", format)
-			}
-			if path == "" {
-				ext := "json"
-				if format == "markdown" || format == "md" {
-					ext = "md"
-				}
-				path = sprintf("session-%s.%s", app.session.ID[:8], ext)
-			}
-			if strings.HasSuffix(path, ".md") || format == "markdown" || format == "md" {
-				md := app.session.ExportToMarkdown()
-				if err := os.WriteFile(path, []byte(md), 0644); err != nil {
-					return "", err
-				}
-				return path, nil
-			}
-			if err := app.session.SaveToFile(path); err != nil {
-				return "", err
-			}
-			return path, nil
+			return exportSession(app.session, args)
 		}))
 
 	app.cmdRegistry.Register("session", "Manage sessions",

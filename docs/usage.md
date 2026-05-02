@@ -319,9 +319,13 @@ Save a session to a file:
 
 Export
   Result           wrote transcript
-  File             session-abc123.json
-  Messages         42
+  File             session-abc123.txt
 ```
+
+Exports are redacted support logs by default. API keys, tokens, secrets, and
+local absolute paths are obfuscated before writing the file. Use
+`/export --format markdown report.md` or `/export --format json report.json`
+when maintainers need another format.
 
 ---
 

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"os"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -40,9 +39,8 @@ func (d *tuiHomeDelegate) OnNewChat() {
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
-	path := sprintf("session-%s.md", d.app.session.ID[:8])
-	md := d.app.session.ExportToMarkdown()
-	if err := os.WriteFile(path, []byte(md), 0644); err != nil {
+	path, err := exportSession(d.app.session, "")
+	if err != nil {
 		d.tuiApp.AddMessage("system", sprintf("Export failed: %v", err))
 		return
 	}
@@ -103,8 +101,8 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 		d.tuiApp.AddMessage("system", sprintf("Failed to load session for export: %v", err))
 		return
 	}
-	path := sprintf("session-%s.json", id[:8])
-	if err := session.SaveToFile(path); err != nil {
+	path, err := exportSession(session, "")
+	if err != nil {
 		d.tuiApp.AddMessage("system", sprintf("Failed to export: %v", err))
 		return
 	}
