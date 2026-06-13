@@ -1,38 +1,110 @@
-.PHONY: build test mutation-test run clean install check-remote release
+.PHONY: help build test mutation-test run clean install fmt lint check-remote release
 
-BINARY_NAME=agent-harness
-BUILD_DIR=./build
+BINARY_NAME := agent-harness
+BUILD_DIR := ./build
+MAIN_PKG := ./cmd/agent-harness
 
-# Build with version info from git
-# Note: Uses LOCAL git tags. Run 'check-remote' first to ensure you're building from released version.
+VERSION := $(shell git describe --tags --always --dirty)
+GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo none)
+BUILD_TIME := $(shell date -u +%Y-%m-%d_%H:%M:%S)
+GIT_SHA := $(shell git rev-parse --short HEAD)
+LDFLAGS := -X main.Version=$(VERSION) -X main.GitTag=$(GIT_TAG) -X main.BuildTime=$(BUILD_TIME) -X main.GitSHA=$(GIT_SHA)
+
+help:
+	@printf 'Agent Harness make targets\n\n'
+	@printf '  make run            Start the local CLI/TUI with go run\n'
+	@printf '  make build          Build %s with git version metadata\n' "$(BINARY_NAME)"
+	@printf '  make test           Run the full Go test suite\n'
+	@printf '  make mutation-test  Run mutation tests for behavior-critical packages\n'
+	@printf '  make lint           Run golangci-lint across the repo\n'
+	@printf '  make fmt            Format all Go packages\n'
+	@printf '  make install        Install %s into GOPATH/GOBIN\n' "$(BINARY_NAME)"
+	@printf '  make clean          Remove build artifacts\n'
+	@printf '  make release        Check remote release state, then build\n'
+
 build:
-	go build -ldflags "-X main.Version=$$(git describe --tags --always --dirty) -X main.GitTag=$$(git describe --tags --exact-match 2>/dev/null || echo 'none') -X main.BuildTime=$$(date -u +%Y-%m-%d_%H:%M:%S) -X main.GitSHA=$$(git rev-parse --short HEAD)" -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/agent-harness
+	@printf '==> Building %s\n' "$(BINARY_NAME)"
+	@printf '    Version:    %s\n' "$(VERSION)"
+	@printf '    Git tag:    %s\n' "$(GIT_TAG)"
+	@printf '    Git SHA:    %s\n' "$(GIT_SHA)"
+	@printf '    Build time: %s UTC\n' "$(BUILD_TIME)"
+	@mkdir -p "$(BUILD_DIR)"
+	@go build -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(BINARY_NAME)" "$(MAIN_PKG)" || { \
+		status=$$?; \
+		printf '\n[fail] Build failed with exit status %s.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Binary ready: %s\n' "$(BUILD_DIR)/$(BINARY_NAME)"
 
-# Check remote version before building (prevents version mismatch issues)
 check-remote:
-	@bash scripts/release/check-remote.sh
+	@printf '==> Checking remote release state\n'
+	@bash scripts/release/check-remote.sh || { \
+		status=$$?; \
+		printf '\n[fail] Remote release check failed with exit status %s.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Remote release state checked\n'
 
-# Release build - always checks remote first
 release: check-remote build
-	@echo "Build complete with verified remote version"
+	@printf '[ok] Release build completed after remote verification\n'
 
 test:
-	go test -v ./...
+	@printf '==> Running Go tests\n'
+	@go test -v ./... || { \
+		status=$$?; \
+		printf '\n[fail] Go tests failed with exit status %s. Review the failing package output above.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Go tests passed\n'
 
 mutation-test:
-	./scripts/verify/mutation-test.sh
+	@printf '==> Running mutation tests\n'
+	@printf '    Targets: defaults from scripts/verify/mutation-test.sh\n'
+	@./scripts/verify/mutation-test.sh || { \
+		status=$$?; \
+		printf '\n[fail] Mutation tests failed with exit status %s. Review surviving mutants or setup errors above.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Mutation tests passed\n'
 
 run:
-	go run ./cmd/agent-harness
+	@printf '==> Starting Agent Harness\n'
+	@printf '    Command: go run %s\n\n' "$(MAIN_PKG)"
+	@go run "$(MAIN_PKG)" || { \
+		status=$$?; \
+		printf '\n[fail] Agent Harness exited with status %s.\n' "$$status"; \
+		printf '       If the app panicked, inspect the panic/output above first.\n'; \
+		exit $$status; \
+	}
 
 clean:
-	rm -rf $(BUILD_DIR)
+	@printf '==> Cleaning build artifacts\n'
+	@rm -rf "$(BUILD_DIR)"
+	@printf '[ok] Removed %s\n' "$(BUILD_DIR)"
 
 install:
-	go install ./cmd/agent-harness
+	@printf '==> Installing %s\n' "$(BINARY_NAME)"
+	@go install "$(MAIN_PKG)" || { \
+		status=$$?; \
+		printf '\n[fail] Install failed with exit status %s.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Installed %s\n' "$(BINARY_NAME)"
 
 fmt:
-	go fmt ./...
+	@printf '==> Formatting Go packages\n'
+	@go fmt ./... || { \
+		status=$$?; \
+		printf '\n[fail] go fmt failed with exit status %s.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Go packages formatted\n'
 
 lint:
-	golangci-lint run ./...
+	@printf '==> Running golangci-lint\n'
+	@golangci-lint run ./... || { \
+		status=$$?; \
+		printf '\n[fail] Lint failed with exit status %s. Review diagnostics above.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] Lint passed\n'
