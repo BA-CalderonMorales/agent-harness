@@ -28,4 +28,4 @@ Thumbs.db
 
 # Temporary files folder - never commit
 tmp/
-session-*.json
+/session-*
