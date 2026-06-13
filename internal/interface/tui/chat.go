@@ -76,8 +76,8 @@ const (
 const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
-	MinInputRows           = 1
-	MaxInputRows           = 4
+	MinInputRows            = 1
+	MaxInputRows            = 4
 )
 
 // SubmitDebounceDuration is the window after Enter during which another
@@ -101,9 +101,10 @@ type ChatModel struct {
 	model        string
 
 	// Streaming state
-	streaming    bool
-	streamBuffer string
-	currentTool  *ToolUseBlock
+	streaming       bool
+	streamBuffer    string
+	currentTool     *ToolUseBlock
+	turnInterrupted bool
 
 	// Index of the assistant message currently being streamed. Tracked so that
 	// mid-stream system/user messages do not break the update target, while
@@ -602,6 +603,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinking = true
 		m.thinkingText = "Thinking..."
 		m.streaming = true
+		m.turnInterrupted = false
 		m.streamBuffer = ""
 		m.currentStreamingAssistantIdx = -1
 		m.startTime = time.Now()
@@ -618,7 +620,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentChunkMsg:
-		if m.streaming {
+		if m.streaming && !m.turnInterrupted {
 			m.streamBuffer += msg.Text
 			m.chunkCount++
 			// Update or create the streaming assistant message
@@ -627,6 +629,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentToolStartMsg:
+		if m.turnInterrupted {
+			return m, nil
+		}
+
 		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
 		displayName := msg.DisplayName
 		if displayName == "" {
@@ -650,8 +656,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// MULTI-TOOL DISPLAY: Do NOT clear previous completed tools when a new tool
 		// starts within the same turn. Users want to see the full chain of tool calls.
 
-		// Update current tool message for in-place display (replaces previous running tool)
-		m.currentToolMsg = &ChatMessage{
+		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
 			Content:         m.formatToolContent(displayName, command, ToolStatusRunning),
@@ -661,12 +666,18 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ToolDisplayName: displayName,
 			ToolStatus:      ToolStatusRunning,
 		}
+		m.messages = append(m.messages, toolMsg)
+		m.currentToolMsg = &m.messages[len(m.messages)-1]
 		m.refreshViewport()
 		return m, nil
 
 	case AgentToolDoneMsg:
-		// Finalize current tool message and append to the completed list for this turn.
-		// All completed tools remain visible so users can see the full execution chain.
+		if m.turnInterrupted {
+			return m, nil
+		}
+
+		// Finalize the running tool message in place. Tool activity is part of the
+		// transcript while work is happening, so the final assistant message stays last.
 		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
 			status := ToolStatusSuccess
 			if !msg.Success {
@@ -679,7 +690,6 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, status)
 			m.currentToolMsg.ToolStatus = status
 			m.currentToolMsg.Timestamp = time.Now()
-
 			m.completedToolMsgs = append(m.completedToolMsgs, *m.currentToolMsg)
 			m.currentToolMsg = nil
 		}
@@ -689,6 +699,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentDoneMsg:
+		if m.turnInterrupted {
+			return m, nil
+		}
+
 		m.thinking = false
 		m.streaming = false
 		// Finalize the streaming message
@@ -702,11 +716,6 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.streamBuffer = ""
 
-		// Commit all completed tools from this turn into message history so the full
-		// execution chain is preserved in the conversation log.
-		for _, toolMsg := range m.completedToolMsgs {
-			m.messages = append(m.messages, toolMsg)
-		}
 		m.completedToolMsgs = nil
 		m.refreshViewport()
 
@@ -719,6 +728,30 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.delegate.OnSubmit(steer)
 			}
 		}
+		return m, nil
+
+	case AgentCancelMsg:
+		if m.currentToolMsg != nil {
+			command := m.extractCommandFromToolInput(m.currentToolMsg.ToolName, nil)
+			if command == "" && m.toolAnimation != nil {
+				command = m.toolAnimation.Command
+			}
+			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError)
+			m.currentToolMsg.ToolStatus = ToolStatusError
+			m.currentToolMsg.Timestamp = time.Now()
+		}
+		m.thinking = false
+		m.streaming = false
+		m.timerRunning = false
+		m.turnInterrupted = true
+		m.streamBuffer = ""
+		m.currentStreamingAssistantIdx = -1
+		m.currentTool = nil
+		m.currentToolMsg = nil
+		m.toolAnimation = nil
+		m.completedToolMsgs = nil
+		m.AddMessage("system", "Agent execution cancelled by user (ESC)")
+		m.refreshViewport()
 		return m, nil
 
 	case AgentErrorMsg:

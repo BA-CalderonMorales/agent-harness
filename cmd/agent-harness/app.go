@@ -113,6 +113,7 @@ func (app *App) run() error {
 	tuiApp.SetModels(app.getModelItems())
 	tuiApp.SetChatModel(app.session.Model)
 	tuiApp.SetChatPersona(app.session.Persona)
+	tuiApp.SetRuntimeContext(app.config.Provider, "medium", app.cwd)
 	tuiApp.SetProjectInfo(app.getProjectInfo())
 	tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())

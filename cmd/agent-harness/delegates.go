@@ -189,6 +189,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.app.client = llm.NewHTTPClient(d.app.config.Provider, d.app.config.APIKey)
 		// Refresh model list for new provider
 		d.tuiApp.SetModels(d.app.getModelItems())
+		d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
 		d.tuiApp.AddMessage("system", sprintf("Provider updated to: %s", value))
 	case "permissions":
 		d.handlePermissionModeChange(value)

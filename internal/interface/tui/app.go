@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -71,6 +72,10 @@ type App struct {
 	// Status
 	statusMessage string
 	statusType    string // "info", "success", "error", "warning"
+	provider      string
+	effortProfile string
+	workspacePath string
+	workspaceName string
 
 	// External message channel for async updates
 	msgChan chan tea.Msg
@@ -486,7 +491,14 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Agent cancellation - handle cancel signal
 	// -------------------------------------------------------------------------
 	case AgentCancelMsg:
-		a.chatModel.AddMessage("system", "Agent execution cancelled by user (ESC)")
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		return a, nil
 	}
 
@@ -623,9 +635,6 @@ func (a App) renderActiveView() string {
 // renderStatusBar renders the status bar at the bottom.
 // Shows meaningful model info and actionable hints - never just "default".
 func (a App) renderStatusBar() string {
-	var parts []string
-
-	// Left: Status indicator based on state
 	status := StatusOnline.Render("[ready]")
 	if a.statusMessage != "" {
 		var style lipgloss.Style
@@ -643,51 +652,95 @@ func (a App) renderStatusBar() string {
 		return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
 	}
 
-	// Get current model name for display
 	modelName := a.chatModel.GetModel()
-
-	// If no model configured, show warning indicator
 	if modelName == "" {
 		status = StatusConnecting.Render("[! no model]")
 	}
-	parts = append(parts, " "+status+" Agent Harness")
 
-	// Middle: Model info - never shows "default"
 	model := ShortenModelName(modelName)
-	modelDisplay := StatusLabel.Render("model:" + model)
-	// Highlight if no model set
-	if modelName == "" {
-		modelDisplay = WarningStyle.Render("model:" + model)
+	if model == "" {
+		model = "no model"
 	}
-	parts = append(parts, modelDisplay)
 
-	// Right: Help hints and mode
+	effort := a.effortProfile
+	if effort == "" {
+		effort = "medium"
+	}
+
+	workspacePath := a.workspacePath
+	workspacePath = displayWorkspacePath(workspacePath)
+	workspace := a.workspaceName
+	if workspace == "" && workspacePath != "" {
+		workspace = filepath.Base(workspacePath)
+	}
+	if workspace == "" {
+		if cwd, err := os.Getwd(); err == nil {
+			workspace = filepath.Base(cwd)
+		}
+	}
+	if workspace == "" || workspace == "." {
+		workspace = "workspace"
+	}
+
+	activeModel := model
+	if a.provider != "" && modelName != "" {
+		activeModel = a.provider + "/" + model
+	}
+
+	contextParts := []string{model + " " + effort}
+	if workspacePath != "" {
+		contextParts = append(contextParts, workspacePath)
+	}
+	contextParts = append(contextParts, activeModel, workspace)
+	contextLine := StatusLabel.Render(strings.Join(contextParts, " · "))
+
 	modeStr := "[typing]"
 	if a.mode == ModeNormal {
 		modeStr = "[navigate]"
 	}
+	help := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  " + modeStr)
 	if a.mode == ModeNormal {
-		right := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
-		parts = append(parts, right)
-	} else {
-		right := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + StatusHintStyle.Render(modeStr)
-		parts = append(parts, right)
+		help = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
 	}
 
-	// Join with flexible spacing
-	content := strings.Join(parts, "  ")
-
-	// If too wide for terminal, use minimal version but keep model info meaningful
+	content := " " + status + " Agent Harness  " + contextLine + "  " + help
 	if lipgloss.Width(content) > a.width-4 {
-		shortModel := ShortenModelName(modelName)
-		if modelName == "" {
-			content = " " + status + "  " + shortModel
-		} else {
-			content = " " + status + "  " + shortModel + "  Ctrl+C: quit"
-		}
+		content = " " + status + " " + contextLine
+	}
+	if lipgloss.Width(content) > a.width-4 {
+		content = " " + status + " " + StatusLabel.Render(model+" "+effort)
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+}
+
+func displayWorkspacePath(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	clean := filepath.Clean(path)
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		if rel, err := filepath.Rel(home, clean); err == nil {
+			if rel == "." {
+				return "~"
+			}
+			if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+				return filepath.Join("~", rel)
+			}
+		}
+	}
+
+	slashPath := filepath.ToSlash(clean)
+	parts := strings.Split(slashPath, "/")
+	if len(parts) >= 5 && parts[1] == "mnt" && strings.EqualFold(parts[3], "Users") {
+		if len(parts) == 5 {
+			return "~"
+		}
+		return "~/" + strings.Join(parts[5:], "/")
+	}
+
+	return clean
 }
 
 // ---------------------------------------------------------------------------
@@ -887,6 +940,16 @@ func (a *App) SetModels(models []ModelItem) {
 // SetChatModel sets the current model name for display in the status bar.
 func (a *App) SetChatModel(model string) {
 	a.chatModel.SetModel(model)
+}
+
+// SetRuntimeContext sets compact runtime metadata for the bottom status line.
+func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
+	a.provider = provider
+	a.effortProfile = effortProfile
+	a.workspacePath = workspacePath
+	if workspacePath != "" {
+		a.workspaceName = filepath.Base(workspacePath)
+	}
 }
 
 // SetChatPersona sets the current persona for contextual UI behavior.
