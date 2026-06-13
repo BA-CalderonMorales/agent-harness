@@ -14,6 +14,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/planning"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -344,6 +345,24 @@ func (app *App) initCommands() {
 				return "Plan mode OFF. The agent will execute tools directly."
 			},
 		))
+
+	app.cmdRegistry.Register("improve", "Run self-improvement workflow",
+		func(args string) (string, error) {
+			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
+			defer cancel()
+
+			result, err := planning.Workflow{Root: app.cwd}.Run(ctx)
+			if err != nil {
+				return "", err
+			}
+			if !result.Verification.Passed {
+				if result.Verification.Output == "" {
+					return result.Summary(), result.Verification.Error
+				}
+				return result.Summary() + "\n\n" + result.Verification.Output, result.Verification.Error
+			}
+			return result.Summary(), nil
+		})
 
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {

@@ -6,34 +6,38 @@
 
 ## Outcome
 
-Turn the first Codex-parity slice into a repeatable daily workflow: a dated goal, a matching plan, deterministic local verification, and an explicit API-backed e2e gate.
+Turn the first Codex-parity slice into a repeatable daily workflow: a dated goal, a matching plan, deterministic local verification, and explicit API-backed e2e gate.
 
 ## Today
 
-- [x] Create the dated domain at `plans/agent-harness/2026-06-13/`.
-- [x] Add `GOAL.md` with the daily outcome and done criteria.
+- [x] Create dated domain at `plans/agent-harness/2026-06-13/`.
+- [x] Add `GOAL.md` with daily outcome and done criteria.
 - [x] Align this `PLAN.md` to the same daily sections as `GOAL.md`.
-- [x] Keep the existing UX slice documented from the daily domain.
-- [x] Keep the top-level `PLAN.md` as the current-domain index.
+- [x] Keep existing UX slice documented from the daily domain.
+- [x] Keep top-level `PLAN.md` as the current-domain index.
+- [x] Add a deterministic self-improvement workflow package.
+- [x] Register `/improve` so the TUI can run the workflow.
+- [x] Cover `/improve` with a local temp-module command test.
 
 ## Done Means
 
-- [x] `GOAL.md` and `PLAN.md` use matching headings.
-- [x] The first bounded test slice remains documented:
+- `GOAL.md` and `PLAN.md` use matching headings.
+- The bounded UX/reliability slice remains documented:
   - composer visibility
   - compact multi-line input
   - deterministic session resume
   - readable tool ordering
   - `AH_E2E_OPENROUTER=1` live e2e gate
-- [x] Normal tests stay deterministic and secret-free.
-- [x] Targeted documentation verification has been run.
-- [x] The update has been committed and pushed to `develop`.
+- Normal tests stay deterministic and secret-free.
+- `/improve` reads `plans/agent-harness/PLAN.md`, loads the active dated files, picks the next actionable item, runs `go test ./...` with live provider env disabled, and creates the next dated pair if missing.
+- Targeted and full deterministic verification run.
+- Update committed and pushed to `develop`.
 
 ## Carry Forward
 
-Use this file as the template for the next generated domain:
+Use this domain shape:
 
-- Copy the headings from `GOAL.md`.
+- Copy headings from `GOAL.md`.
 - Convert each `Today` goal into checkable plan items.
-- Keep verification commands in the dated domain or linked subplan.
-- Leave the top-level plan as a pointer to the current date.
+- Keep verification commands in the dated subplan.
+- Leave the top-level plan as a pointer to the current date until the active date changes.
