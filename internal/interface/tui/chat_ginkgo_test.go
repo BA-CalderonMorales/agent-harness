@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -133,6 +134,27 @@ var _ = Describe("ChatModel", func() {
 				By("verifying the textarea height is capped")
 				Expect(chat.inputRows()).To(Equal(MaxInputRows))
 				Expect(chat.textarea.Height()).To(Equal(MaxInputRows))
+			})
+		})
+
+		Context("Given the draft grows from one line to many lines", func() {
+			It("should reserve a stable input area height so the transcript does not jump", func() {
+				chat.SetInput("one")
+				oneLineHeight := chat.inputAreaHeight()
+
+				chat.SetInput("one\ntwo\nthree\nfour")
+				manyLineHeight := chat.inputAreaHeight()
+
+				Expect(oneLineHeight).To(Equal(manyLineHeight))
+				Expect(oneLineHeight).To(Equal(MaxInputRows + 5))
+			})
+		})
+
+		Context("Given input area styles", func() {
+			It("should keep the dark background on the editor but not the metadata line", func() {
+				Expect(InputContainerStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
+				Expect(InputEditorStyle.GetBackground()).To(Equal(ColorSurface))
+				Expect(InputMetaStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
 			})
 		})
 

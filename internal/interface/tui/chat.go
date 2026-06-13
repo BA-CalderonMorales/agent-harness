@@ -368,7 +368,7 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	height := m.inputRows() + 2 // status line + top border
+	height := MaxInputRows + 5 // editor padding + metadata line + input border/padding
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
@@ -404,7 +404,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight
-		m.textarea.SetWidth(msg.Width - 4)
+		textareaWidth := msg.Width - 8
+		if textareaWidth < 20 {
+			textareaWidth = 20
+		}
+		m.textarea.SetWidth(textareaWidth)
 
 		m.refreshViewport()
 
@@ -865,24 +869,32 @@ func (m ChatModel) View() string {
 		Render(vpContent)
 	sections = append(sections, vpRendered)
 
-	// Input area with styled container (golazo-inspired design)
-	// CRITICAL FIX: Consistent styling for input bar
+	// Input area with a stable editor panel plus separate metadata.
 	inputContainer := InputContainerStyle.Width(m.width)
 
-	var inputContent string
 	prompt := PromptStyle.Render("◆ ")
+	editorWidth := m.width - 4
+	if editorWidth < 20 {
+		editorWidth = m.width
+	}
+	editorContent := prompt + m.textarea.View()
+
+	var metaLine string
 	if m.thinking {
-		statusLine := m.renderStatusLine()
-		inputContent = prompt + m.textarea.View() + "\n" + statusLine
+		metaLine = m.renderStatusLine()
 	} else {
-		// Show model in status when not thinking
 		modelDisplay := m.model
 		if modelDisplay == "" {
 			modelDisplay = "default"
 		}
-		statusLine := HelpDimStyle.Render(fmt.Sprintf("model: %s", modelDisplay))
-		inputContent = prompt + m.textarea.View() + "\n" + statusLine
+		metaLine = InputMetaStyle.Render(fmt.Sprintf("model: %s", modelDisplay))
 	}
+
+	editorPanel := InputEditorStyle.
+		Width(editorWidth).
+		Height(MaxInputRows + 2).
+		Render(editorContent)
+	inputContent := lipgloss.JoinVertical(lipgloss.Left, editorPanel, metaLine)
 
 	// Inline suggestions dropdown
 	if m.showSuggestions && len(m.suggestions) > 0 {
