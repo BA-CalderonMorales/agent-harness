@@ -4,6 +4,7 @@
 package state
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -177,11 +178,14 @@ func (s *Session) SaveExportToFile(path, format string) error {
 // ExportToRedactedJSON exports the session as JSON with secrets and local paths
 // removed for safe maintainer sharing.
 func (s *Session) ExportToRedactedJSON() ([]byte, error) {
-	data, err := json.MarshalIndent(s.redactedExportSession(), "", "  ")
-	if err != nil {
+	var buf bytes.Buffer
+	encoder := json.NewEncoder(&buf)
+	encoder.SetEscapeHTML(false)
+	encoder.SetIndent("", "  ")
+	if err := encoder.Encode(s.redactedExportSession()); err != nil {
 		return nil, fmt.Errorf("failed to marshal export: %w", err)
 	}
-	return append(data, '\n'), nil
+	return buf.Bytes(), nil
 }
 
 // ExportToMarkdown exports the session as a human-readable Markdown transcript.
@@ -270,8 +274,9 @@ func (s *Session) redactedExportSession() *Session {
 		msg.APIError = redactExportString(msg.APIError)
 		msg.StopReason = redactExportString(msg.StopReason)
 		msg.Model = redactExportString(msg.Model)
-		msg.Content = make([]types.ContentBlock, 0, len(msg.Content))
-		for _, block := range msg.Content {
+		originalContent := msg.Content
+		msg.Content = make([]types.ContentBlock, 0, len(originalContent))
+		for _, block := range originalContent {
 			switch v := block.(type) {
 			case types.TextBlock:
 				msg.Content = append(msg.Content, types.TextBlock{Text: redactExportString(v.Text)})
