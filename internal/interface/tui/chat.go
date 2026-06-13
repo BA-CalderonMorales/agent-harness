@@ -368,7 +368,7 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	height := MaxInputRows + 5 // editor padding + metadata line + input border/padding
+	height := m.inputRows() + 4 // editor padding + metadata line + input border
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
@@ -892,7 +892,7 @@ func (m ChatModel) View() string {
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
-		Height(MaxInputRows + 2).
+		Height(m.inputRows() + 2).
 		Render(editorContent)
 	inputContent := lipgloss.JoinVertical(lipgloss.Left, editorPanel, metaLine)
 

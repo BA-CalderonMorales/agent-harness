@@ -138,15 +138,15 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given the draft grows from one line to many lines", func() {
-			It("should reserve a stable input area height so the transcript does not jump", func() {
+			It("should grow the input area predictably without reserving max height", func() {
 				chat.SetInput("one")
 				oneLineHeight := chat.inputAreaHeight()
 
 				chat.SetInput("one\ntwo\nthree\nfour")
 				manyLineHeight := chat.inputAreaHeight()
 
-				Expect(oneLineHeight).To(Equal(manyLineHeight))
-				Expect(oneLineHeight).To(Equal(MaxInputRows + 5))
+				Expect(oneLineHeight).To(Equal(MinInputRows + 4))
+				Expect(manyLineHeight).To(Equal(MaxInputRows + 4))
 			})
 		})
 
