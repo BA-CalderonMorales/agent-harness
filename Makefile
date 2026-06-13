@@ -1,4 +1,4 @@
-.PHONY: build test run clean install check-remote release
+.PHONY: build test mutation-test run clean install check-remote release
 
 BINARY_NAME=agent-harness
 BUILD_DIR=./build
@@ -18,6 +18,9 @@ release: check-remote build
 
 test:
 	go test -v ./...
+
+mutation-test:
+	./scripts/verify/mutation-test.sh
 
 run:
 	go run ./cmd/agent-harness
