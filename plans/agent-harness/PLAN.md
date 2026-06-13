@@ -1,30 +1,35 @@
-# Agent Harness Codex-Parity Plan
+# Agent Harness Plan Index
 
-## Goal
+## Current Domain
 
-Advance the local harness toward Codex-parity UX while keeping ordinary tests deterministic, stable, and secret-free.
+- Date: `2026-06-13`
+- Goal: [2026-06-13/GOAL.md](2026-06-13/GOAL.md)
+- Plan: [2026-06-13/PLAN.md](2026-06-13/PLAN.md)
+- Quality slice: [ux-quality/composer-and-e2e.md](ux-quality/composer-and-e2e.md)
 
-## First Bounded Test Slice
+## Pattern
 
-- [x] Composer remains visible near the bottom of the chat view after long history.
-- [x] Multi-line input uses compact dynamic height from one to four rows.
-- [x] Session resume behavior is deterministic in an isolated local session directory.
-- [x] Tool activity remains ordered before following assistant output.
-- [x] OpenRouter-backed e2e is skipped by default and only runs with `AH_E2E_OPENROUTER=1`.
+Each daily domain under `plans/agent-harness/{date}/` should include:
 
-## Verification Plan
+- `GOAL.md`: intent, outcome, done criteria, and carry-forward shape.
+- `PLAN.md`: the same sections, with `Today` and `Done Means` converted into checkable work.
 
-- Targeted deterministic tests:
-  - `go test ./internal/interface/tui -run 'TestComposer|TestInputArea|TestCompletedTool'`
-  - `go test ./internal/core/state -run 'TestResumeLatestSession'`
-- Optional live provider smoke:
-  - `AH_E2E_OPENROUTER=1 go test ./e2e/behaviors -run TestOpenRouterLiveStreamSmoke`
-- Broader local verification:
-  - `go test ./internal/interface/tui ./internal/core/state ./e2e/behaviors`
-  - `go test ./...`
+## Active Focus
 
-## Guardrails
+Make `agent-harness` good enough to improve itself from inside the TUI:
 
-- Prefer deterministic TUI and state tests for layout and resume invariants.
-- Keep API-backed tests explicit, env-gated, and free from committed secrets.
-- Split tests by behavior so no single test file becomes a catch-all.
+- resume the latest useful session
+- read the active dated goal
+- execute the next plan item
+- verify deterministic tests locally
+- optionally run live provider e2e with `AH_E2E_OPENROUTER=1`
+- write the next dated domain before ending the day
+
+## Verification Commands
+
+- `go test ./internal/interface/tui -run TestComposer`
+- `go test ./internal/interface/tui -run TestInputAreaHeightTracksVisibleRows`
+- `go test ./internal/interface/tui -run TestCompletedToolActivityStaysBeforeFollowingOutput`
+- `go test ./internal/core/state -run TestResumeLatestSession`
+- `go test ./e2e/behaviors -run TestOpenRouterLiveStreamSmoke`
+- `go test ./...`

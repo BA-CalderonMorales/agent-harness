@@ -1,6 +1,18 @@
 # Agent Harness Plan
 
-This plan tracks Codex-parity UX and reliable local integration behavior for `agent-harness`.
+This directory tracks Codex-parity UX and reliable local integration behavior for `agent-harness`.
+
+## Current
+
+- Daily domain: [2026-06-13](2026-06-13/)
+- Goal: [2026-06-13/GOAL.md](2026-06-13/GOAL.md)
+- Plan: [2026-06-13/PLAN.md](2026-06-13/PLAN.md)
+- Index: [PLAN.md](PLAN.md)
+
+## Daily Domain Pattern
+
+Each `{date}/` directory should pair a `GOAL.md` with a `PLAN.md`.
+The plan should reuse the goal's headings so the next day can be generated naturally from the previous day.
 
 ## Current Slice
 
@@ -10,4 +22,4 @@ This plan tracks Codex-parity UX and reliable local integration behavior for `ag
 - Preserve readable Codex-like ordering: user message, tool activity, assistant output.
 - Gate live OpenRouter e2e behind `AH_E2E_OPENROUTER=1`.
 
-See [PLAN.md](PLAN.md) for execution status and [ux-quality/composer-and-e2e.md](ux-quality/composer-and-e2e.md) for test details.
+See [ux-quality/composer-and-e2e.md](ux-quality/composer-and-e2e.md) for test details.
