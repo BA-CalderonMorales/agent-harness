@@ -189,6 +189,54 @@ func TestHandleUserCommandUnknownCommandAddsSystemFeedback(t *testing.T) {
 	}
 }
 
+func TestHandleUserCommandRoutesRegisteredSlashCommand(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
+	tuiApp := tui.NewApp()
+	var gotArgs string
+	app.cmdRegistry.Register("echo", "Echo args", func(args string) (string, error) {
+		gotArgs = args
+		return "echo: " + args, nil
+	})
+
+	app.handleUserCommand("/echo hello harness", tuiApp)
+
+	if gotArgs != "hello harness" {
+		t.Fatalf("handler args = %q, want hello harness", gotArgs)
+	}
+	if len(app.session.Messages) != 0 {
+		t.Fatalf("session message count = %d, want 0", len(app.session.Messages))
+	}
+	messages := chatMessages(t, tuiApp)
+	if len(messages) != 1 {
+		t.Fatalf("chat message count = %d, want 1", len(messages))
+	}
+	if messages[0].role != "system" {
+		t.Fatalf("message role = %q, want system", messages[0].role)
+	}
+	if messages[0].content != "echo: hello harness" {
+		t.Fatalf("message content = %q, want command result", messages[0].content)
+	}
+}
+
+func TestHandleUserSubmitInvalidInputDoesNotAppendOrRunAgent(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
+	tuiApp := tui.NewApp()
+
+	app.handleUserSubmit("   ", tuiApp)
+
+	if len(app.session.Messages) != 0 {
+		t.Fatalf("session message count = %d, want 0", len(app.session.Messages))
+	}
+	msg := receiveTUIMessage(t, tuiApp)
+	errMsg, ok := msg.(tui.AgentErrorMsg)
+	if !ok {
+		t.Fatalf("message type = %T, want tui.AgentErrorMsg", msg)
+	}
+	if errMsg.Error == nil || errMsg.Error.Error() != "invalid input" {
+		t.Fatalf("AgentErrorMsg error = %v, want invalid input", errMsg.Error)
+	}
+}
+
 func TestHandleUserSubmitLoginStepDoesNotAppendUserMessage(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{}, "test-model")
 	app.loginState = loginProvider
