@@ -1,6 +1,9 @@
 package tui
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestCompletedToolActivityStaysBeforeFollowingOutput(t *testing.T) {
 	chat := NewChatModel()
@@ -18,5 +21,28 @@ func TestCompletedToolActivityStaysBeforeFollowingOutput(t *testing.T) {
 	}
 	if got := chat.messages[2]; got.Role != "assistant" || got.Content != "Working tree is clean." {
 		t.Fatalf("last message = %#v, want assistant output after tool", got)
+	}
+}
+
+func TestRepeatedToolActivityRendersAsCompactScanRows(t *testing.T) {
+	chat := NewChatModel()
+	chat.width = 72
+	chat.height = 20
+
+	chat.AddOrUpdateToolMessage("tool-1", "bash", "Ran", "rtk git status --short --branch", ToolStatusSuccess)
+	chat.AddOrUpdateToolMessage("tool-2", "bash", "Ran", "rtk go test ./internal/interface/tui", ToolStatusRunning)
+	chat.AddOrUpdateToolMessage("tool-3", "read", "Read", "/mnt/c/Users/bacm6/Projects/agent-harness/README.md", ToolStatusError)
+
+	view := chat.viewport.View()
+	for _, want := range []string{"Ran", "Read", "rtk git status", "rtk go test", "README.md"} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("tool transcript missing %q\n%s", want, view)
+		}
+	}
+	if strings.Count(view, "\n\n\n") > 0 {
+		t.Fatalf("tool rows should not render with large vertical gaps\n%s", view)
+	}
+	if strings.Contains(view, "/mnt/c/Users/bacm6/Projects/agent-harness/README.md") {
+		t.Fatalf("long paths should be truncated in compact tool rows\n%s", view)
 	}
 }

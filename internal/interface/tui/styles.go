@@ -194,11 +194,10 @@ var (
 
 	InputEditorStyle = lipgloss.NewStyle().
 				Background(ColorSurface).
-				Padding(1, 1)
+				Padding(0, 1)
 
 	InputMetaStyle = lipgloss.NewStyle().
-			Foreground(ColorMuted).
-			PaddingTop(1)
+			Foreground(ColorMuted)
 
 	PromptStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).

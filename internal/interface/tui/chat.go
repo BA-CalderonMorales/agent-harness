@@ -368,7 +368,7 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	height := m.inputRows() + 4 // editor padding + metadata line + input border
+	height := m.inputRows() + 2 // editor line(s), metadata line, top border
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
@@ -887,12 +887,12 @@ func (m ChatModel) View() string {
 		if modelDisplay == "" {
 			modelDisplay = "default"
 		}
-		metaLine = InputMetaStyle.Render(fmt.Sprintf("model: %s", modelDisplay))
+		metaLine = InputMetaStyle.Render(m.compactMetaLine(modelDisplay))
 	}
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
-		Height(m.inputRows() + 2).
+		Height(m.inputRows()).
 		Render(editorContent)
 	inputContent := lipgloss.JoinVertical(lipgloss.Left, editorPanel, metaLine)
 
@@ -904,6 +904,33 @@ func (m ChatModel) View() string {
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m ChatModel) compactMetaLine(modelDisplay string) string {
+	model := compactModelName(modelDisplay)
+	line := "model: " + model
+	maxWidth := m.width - 4
+	if maxWidth < 12 {
+		maxWidth = 12
+	}
+	if len(line) <= maxWidth {
+		return line
+	}
+	if len(model) > maxWidth-3 {
+		model = model[len(model)-(maxWidth-3):]
+	}
+	return "..." + model
+}
+
+func compactModelName(model string) string {
+	parts := strings.Split(model, "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		if part != "" {
+			return part
+		}
+	}
+	return model
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
@@ -1202,10 +1229,54 @@ func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string 
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}
+	if len(cmd) > 40 && strings.Contains(cmd, "/") {
+		compact := compactCommandForWidth(cmd, maxCmdLen)
+		if len(compact) < len(cmd) {
+			return compact
+		}
+	}
 	if len(cmd) <= maxCmdLen {
 		return cmd
 	}
-	return cmd[:maxCmdLen-3] + "..."
+	return compactCommandForWidth(cmd, maxCmdLen)
+}
+
+func compactCommandForWidth(cmd string, maxLen int) string {
+	if maxLen <= 3 {
+		return cmd[:maxLen]
+	}
+	fields := strings.Fields(cmd)
+	if len(fields) > 0 {
+		last := fields[len(fields)-1]
+		if strings.Contains(last, "/") {
+			name := pathBase(last)
+			prefix := strings.Join(fields[:len(fields)-1], " ")
+			candidate := ".../" + name
+			if prefix != "" {
+				candidate = prefix + " " + candidate
+			}
+			if len(candidate) <= maxLen {
+				return candidate
+			}
+			if len(name)+4 <= maxLen {
+				return ".../" + name
+			}
+			return "..." + name[len(name)-(maxLen-3):]
+		}
+	}
+	return cmd[:maxLen-3] + "..."
+}
+
+func pathBase(path string) string {
+	path = strings.TrimRight(path, "/")
+	if path == "" {
+		return path
+	}
+	idx := strings.LastIndex(path, "/")
+	if idx < 0 {
+		return path
+	}
+	return path[idx+1:]
 }
 
 // SetInput sets the input text.

@@ -145,8 +145,8 @@ var _ = Describe("ChatModel", func() {
 				chat.SetInput("one\ntwo\nthree\nfour")
 				manyLineHeight := chat.inputAreaHeight()
 
-				Expect(oneLineHeight).To(Equal(MinInputRows + 4))
-				Expect(manyLineHeight).To(Equal(MaxInputRows + 4))
+				Expect(oneLineHeight).To(Equal(MinInputRows + 2))
+				Expect(manyLineHeight).To(Equal(MaxInputRows + 2))
 			})
 		})
 
