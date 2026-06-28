@@ -190,8 +190,14 @@ var (
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderTop(true).
 				BorderForeground(ColorBorder).
+				Padding(0, 1)
+
+	InputEditorStyle = lipgloss.NewStyle().
 				Background(ColorSurface).
 				Padding(0, 1)
+
+	InputMetaStyle = lipgloss.NewStyle().
+			Foreground(ColorMuted)
 
 	PromptStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).

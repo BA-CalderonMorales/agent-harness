@@ -1,6 +1,7 @@
 # Build artifacts
 /build/
 /agent-harness
+/models/
 
 # Go
 *.exe
@@ -25,6 +26,9 @@ Thumbs.db
 # Local config
 .env
 *.local
+
+# Workspace planning lives in /mnt/c/Users/bacm6/Projects/plans, not this repo
+/plans/
 
 # Temporary files folder - never commit
 tmp/

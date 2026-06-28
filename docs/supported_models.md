@@ -4,9 +4,35 @@
 
 ---
 
+## Local GGUF
+
+The default checked-in configuration uses a local OpenAI-compatible endpoint,
+with DeepReinforce Ornith-1.0 GGUF as the intended local model.
+
+### Recommended Local Model
+
+| Model | Runtime | Quantization | Notes |
+|-------|---------|--------------|-------|
+| `deepreinforce-ai/Ornith-1.0-9B-GGUF` | `llama.cpp` | `Q4_K_M` | Default local-first path in `agent-harness.yml` |
+
+### Configuration
+
+```bash
+agent-harness --diagnose
+llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080
+agent-harness
+```
+
+See [Local Model Setup](local-models.md) for model download, root YAML, and
+environment override details.
+
+---
+
 ## OpenRouter
 
-OpenRouter provides access to multiple model providers through a single API. We default to OpenRouter for its flexibility and free tier options.
+OpenRouter provides access to multiple hosted model providers through a single
+API. It is supported as a hosted alternative when a local model is not
+available.
 
 ### Recommended Models
 
@@ -85,12 +111,18 @@ export AGENT_HARNESS_MODEL="gpt-4o"
 
 ### For Development/Testing
 ```bash
-# Free tier on OpenRouter
-nvidia/nemotron-3-super-120b-a12b:free
+# Local GGUF default
+deepreinforce-ai/Ornith-1.0-9B-GGUF
+
+# Lightweight Ollama fallback
+gemma4:2b
 ```
 
 ### For Serious Work
 ```bash
+# Local-first
+deepreinforce-ai/Ornith-1.0-9B-GGUF
+
 # Best overall performance (OpenRouter)
 anthropic/claude-3.5-sonnet
 
@@ -111,10 +143,22 @@ gpt-4o-mini
 
 ## Changing Models
 
+### Via Root YAML
+
+Edit `agent-harness.yml`:
+
+```yaml
+provider: local
+runtime: llama.cpp
+model: deepreinforce-ai/Ornith-1.0-9B-GGUF
+model_path: ./models/ornith-1.0-9b-Q4_K_M.gguf
+endpoint_url: http://127.0.0.1:8080/v1
+```
+
 ### Via Environment Variable
 
 ```bash
-export AGENT_HARNESS_MODEL="nvidia/nemotron-3-super-120b-a12b:free"
+export AH_MODEL="deepreinforce-ai/Ornith-1.0-9B-GGUF"
 agent-harness
 ```
 
@@ -156,6 +200,6 @@ Switch to a recommended model like `nvidia/nemotron-3-super-120b-a12b:free` or `
 
 If you test a model not listed here, please open an issue with:
 - Model name
-- Provider (OpenRouter/Anthropic/OpenAI)
+- Provider/runtime (local/llama.cpp, Ollama, OpenRouter, Anthropic, OpenAI)
 - Status (working/not working)
 - Any notes about performance or issues

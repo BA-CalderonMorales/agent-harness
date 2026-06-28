@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/json"
 	"time"
 )
 
@@ -80,4 +81,64 @@ type TokenUsage struct {
 	OutputTokens             int
 	CacheReadInputTokens     int
 	CacheCreationInputTokens int
+}
+
+// UnmarshalJSON restores concrete content block types from the persisted
+// message format. ContentBlock is an interface, so encoding/json cannot decode
+// it without this type dispatch.
+func (m *Message) UnmarshalJSON(data []byte) error {
+	type messageAlias Message
+	var raw struct {
+		messageAlias
+		Content []json.RawMessage `json:"content"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	*m = Message(raw.messageAlias)
+	m.Content = make([]ContentBlock, 0, len(raw.Content))
+	for _, blockData := range raw.Content {
+		block, err := unmarshalContentBlock(blockData)
+		if err != nil {
+			return err
+		}
+		m.Content = append(m.Content, block)
+	}
+
+	return nil
+}
+
+func unmarshalContentBlock(data []byte) (ContentBlock, error) {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return nil, err
+	}
+
+	switch {
+	case fields["thinking"] != nil:
+		var block ThinkingBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return block, nil
+	case fields["tool_use_id"] != nil:
+		var block ToolResultBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return block, nil
+	case fields["id"] != nil || fields["name"] != nil || fields["input"] != nil:
+		var block ToolUseBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return block, nil
+	default:
+		var block TextBlock
+		if err := json.Unmarshal(data, &block); err != nil {
+			return nil, err
+		}
+		return block, nil
+	}
 }

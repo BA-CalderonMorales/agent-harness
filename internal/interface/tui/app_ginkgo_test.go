@@ -624,6 +624,20 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("Agent Harness"))
 			})
 
+			It("should render compact runtime context in the status bar", func() {
+				app.width = 180
+				app.SetChatModel("gpt-5.5")
+				app.SetRuntimeContext("openrouter", "medium", "/mnt/c/Users/bacm6/Projects")
+
+				view := app.View()
+
+				Expect(view).To(ContainSubstring("gpt-5.5 medium"))
+				Expect(view).To(ContainSubstring("~/Projects"))
+				Expect(view).ToNot(ContainSubstring("/mnt/c/Users/bacm6"))
+				Expect(view).To(ContainSubstring("openrouter/gpt-5.5"))
+				Expect(view).To(ContainSubstring("Projects"))
+			})
+
 			It("should show help overlay when active", func() {
 				app.showHelp = true
 				app.helpModel.Open(80, 24, "")

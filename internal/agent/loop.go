@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -45,6 +46,10 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 
 // queryLoop is the while-true agent loop.
 func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopState, out chan<- types.StreamEvent) Terminal {
+	if params.MaxOutputTokens > 0 && state.maxOutputTokensOverride == 0 {
+		state.maxOutputTokensOverride = params.MaxOutputTokens
+	}
+
 	maxTurns := params.MaxTurns
 	if maxTurns == 0 {
 		maxTurns = l.Config.DefaultMaxTurns
@@ -93,7 +98,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		// Determine model
 		model := params.ToolUseContext.Options.MainLoopModel
 		if model == "" {
-			model = "nvidia/nemotron-3-super-120b-a12b:free" // OpenRouter default
+			model = config.DefaultModel
 		}
 
 		req := llm.Request{
@@ -102,6 +107,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			Tools:        params.ToolUseContext.Options.Tools,
 			Model:        model,
 			MaxTokens:    8192,
+			Temperature:  params.Temperature,
 		}
 
 		if state.maxOutputTokensOverride > 0 {
@@ -470,7 +476,7 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (str
 			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: b.String()}}, Timestamp: time.Now()},
 		},
 		SystemPrompt: "You are a context summarizer. Summarize conversation history in 2-3 sentences. Be concise but preserve all key facts, decisions, and context.",
-		Model:        "nvidia/nemotron-3-super-120b-a12b:free",
+		Model:        config.DefaultModel,
 		MaxTokens:    512,
 	}
 
@@ -561,7 +567,7 @@ func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopSt
 
 	model := params.ToolUseContext.Options.MainLoopModel
 	if model == "" {
-		model = "nvidia/nemotron-3-super-120b-a12b:free"
+		model = config.DefaultModel
 	}
 
 	req := llm.Request{
@@ -570,6 +576,7 @@ func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopSt
 		Tools:        params.ToolUseContext.Options.Tools,
 		Model:        model,
 		MaxTokens:    8192,
+		Temperature:  params.Temperature,
 	}
 
 	if state.maxOutputTokensOverride > 0 {

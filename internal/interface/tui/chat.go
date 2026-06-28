@@ -76,8 +76,8 @@ const (
 const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
-	MinInputRows           = 1
-	MaxInputRows           = 4
+	MinInputRows            = 1
+	MaxInputRows            = 4
 )
 
 // SubmitDebounceDuration is the window after Enter during which another
@@ -101,9 +101,10 @@ type ChatModel struct {
 	model        string
 
 	// Streaming state
-	streaming    bool
-	streamBuffer string
-	currentTool  *ToolUseBlock
+	streaming       bool
+	streamBuffer    string
+	currentTool     *ToolUseBlock
+	turnInterrupted bool
 
 	// Index of the assistant message currently being streamed. Tracked so that
 	// mid-stream system/user messages do not break the update target, while
@@ -367,7 +368,7 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	height := m.inputRows() + 2 // status line + top border
+	height := m.inputRows() + 2 // editor line(s), metadata line, top border
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
@@ -403,7 +404,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight
-		m.textarea.SetWidth(msg.Width - 4)
+		textareaWidth := msg.Width - 8
+		if textareaWidth < 20 {
+			textareaWidth = 20
+		}
+		m.textarea.SetWidth(textareaWidth)
 
 		m.refreshViewport()
 
@@ -602,6 +607,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinking = true
 		m.thinkingText = "Thinking..."
 		m.streaming = true
+		m.turnInterrupted = false
 		m.streamBuffer = ""
 		m.currentStreamingAssistantIdx = -1
 		m.startTime = time.Now()
@@ -618,7 +624,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentChunkMsg:
-		if m.streaming {
+		if m.streaming && !m.turnInterrupted {
 			m.streamBuffer += msg.Text
 			m.chunkCount++
 			// Update or create the streaming assistant message
@@ -627,6 +633,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentToolStartMsg:
+		if m.turnInterrupted {
+			return m, nil
+		}
+
 		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
 		displayName := msg.DisplayName
 		if displayName == "" {
@@ -650,8 +660,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// MULTI-TOOL DISPLAY: Do NOT clear previous completed tools when a new tool
 		// starts within the same turn. Users want to see the full chain of tool calls.
 
-		// Update current tool message for in-place display (replaces previous running tool)
-		m.currentToolMsg = &ChatMessage{
+		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
 			Content:         m.formatToolContent(displayName, command, ToolStatusRunning),
@@ -661,12 +670,18 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ToolDisplayName: displayName,
 			ToolStatus:      ToolStatusRunning,
 		}
+		m.messages = append(m.messages, toolMsg)
+		m.currentToolMsg = &m.messages[len(m.messages)-1]
 		m.refreshViewport()
 		return m, nil
 
 	case AgentToolDoneMsg:
-		// Finalize current tool message and append to the completed list for this turn.
-		// All completed tools remain visible so users can see the full execution chain.
+		if m.turnInterrupted {
+			return m, nil
+		}
+
+		// Finalize the running tool message in place. Tool activity is part of the
+		// transcript while work is happening, so the final assistant message stays last.
 		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
 			status := ToolStatusSuccess
 			if !msg.Success {
@@ -679,7 +694,6 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, status)
 			m.currentToolMsg.ToolStatus = status
 			m.currentToolMsg.Timestamp = time.Now()
-
 			m.completedToolMsgs = append(m.completedToolMsgs, *m.currentToolMsg)
 			m.currentToolMsg = nil
 		}
@@ -689,6 +703,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case AgentDoneMsg:
+		if m.turnInterrupted {
+			return m, nil
+		}
+
 		m.thinking = false
 		m.streaming = false
 		// Finalize the streaming message
@@ -702,11 +720,6 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.streamBuffer = ""
 
-		// Commit all completed tools from this turn into message history so the full
-		// execution chain is preserved in the conversation log.
-		for _, toolMsg := range m.completedToolMsgs {
-			m.messages = append(m.messages, toolMsg)
-		}
 		m.completedToolMsgs = nil
 		m.refreshViewport()
 
@@ -719,6 +732,30 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, m.delegate.OnSubmit(steer)
 			}
 		}
+		return m, nil
+
+	case AgentCancelMsg:
+		if m.currentToolMsg != nil {
+			command := m.extractCommandFromToolInput(m.currentToolMsg.ToolName, nil)
+			if command == "" && m.toolAnimation != nil {
+				command = m.toolAnimation.Command
+			}
+			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError)
+			m.currentToolMsg.ToolStatus = ToolStatusError
+			m.currentToolMsg.Timestamp = time.Now()
+		}
+		m.thinking = false
+		m.streaming = false
+		m.timerRunning = false
+		m.turnInterrupted = true
+		m.streamBuffer = ""
+		m.currentStreamingAssistantIdx = -1
+		m.currentTool = nil
+		m.currentToolMsg = nil
+		m.toolAnimation = nil
+		m.completedToolMsgs = nil
+		m.AddMessage("system", "Agent execution cancelled by user (ESC)")
+		m.refreshViewport()
 		return m, nil
 
 	case AgentErrorMsg:
@@ -832,24 +869,32 @@ func (m ChatModel) View() string {
 		Render(vpContent)
 	sections = append(sections, vpRendered)
 
-	// Input area with styled container (golazo-inspired design)
-	// CRITICAL FIX: Consistent styling for input bar
+	// Input area with a stable editor panel plus separate metadata.
 	inputContainer := InputContainerStyle.Width(m.width)
 
-	var inputContent string
 	prompt := PromptStyle.Render("◆ ")
+	editorWidth := m.width - 4
+	if editorWidth < 20 {
+		editorWidth = m.width
+	}
+	editorContent := prompt + m.textarea.View()
+
+	var metaLine string
 	if m.thinking {
-		statusLine := m.renderStatusLine()
-		inputContent = prompt + m.textarea.View() + "\n" + statusLine
+		metaLine = m.renderStatusLine()
 	} else {
-		// Show model in status when not thinking
 		modelDisplay := m.model
 		if modelDisplay == "" {
 			modelDisplay = "default"
 		}
-		statusLine := HelpDimStyle.Render(fmt.Sprintf("model: %s", modelDisplay))
-		inputContent = prompt + m.textarea.View() + "\n" + statusLine
+		metaLine = InputMetaStyle.Render(m.compactMetaLine(modelDisplay))
 	}
+
+	editorPanel := InputEditorStyle.
+		Width(editorWidth).
+		Height(m.inputRows()).
+		Render(editorContent)
+	inputContent := lipgloss.JoinVertical(lipgloss.Left, editorPanel, metaLine)
 
 	// Inline suggestions dropdown
 	if m.showSuggestions && len(m.suggestions) > 0 {
@@ -859,6 +904,33 @@ func (m ChatModel) View() string {
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m ChatModel) compactMetaLine(modelDisplay string) string {
+	model := compactModelName(modelDisplay)
+	line := "model: " + model
+	maxWidth := m.width - 4
+	if maxWidth < 12 {
+		maxWidth = 12
+	}
+	if len(line) <= maxWidth {
+		return line
+	}
+	if len(model) > maxWidth-3 {
+		model = model[len(model)-(maxWidth-3):]
+	}
+	return "..." + model
+}
+
+func compactModelName(model string) string {
+	parts := strings.Split(model, "/")
+	for i := len(parts) - 1; i >= 0; i-- {
+		part := strings.TrimSpace(parts[i])
+		if part != "" {
+			return part
+		}
+	}
+	return model
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
@@ -1157,10 +1229,54 @@ func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string 
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}
+	if len(cmd) > 40 && strings.Contains(cmd, "/") {
+		compact := compactCommandForWidth(cmd, maxCmdLen)
+		if len(compact) < len(cmd) {
+			return compact
+		}
+	}
 	if len(cmd) <= maxCmdLen {
 		return cmd
 	}
-	return cmd[:maxCmdLen-3] + "..."
+	return compactCommandForWidth(cmd, maxCmdLen)
+}
+
+func compactCommandForWidth(cmd string, maxLen int) string {
+	if maxLen <= 3 {
+		return cmd[:maxLen]
+	}
+	fields := strings.Fields(cmd)
+	if len(fields) > 0 {
+		last := fields[len(fields)-1]
+		if strings.Contains(last, "/") {
+			name := pathBase(last)
+			prefix := strings.Join(fields[:len(fields)-1], " ")
+			candidate := ".../" + name
+			if prefix != "" {
+				candidate = prefix + " " + candidate
+			}
+			if len(candidate) <= maxLen {
+				return candidate
+			}
+			if len(name)+4 <= maxLen {
+				return ".../" + name
+			}
+			return "..." + name[len(name)-(maxLen-3):]
+		}
+	}
+	return cmd[:maxLen-3] + "..."
+}
+
+func pathBase(path string) string {
+	path = strings.TrimRight(path, "/")
+	if path == "" {
+		return path
+	}
+	idx := strings.LastIndex(path, "/")
+	if idx < 0 {
+		return path
+	}
+	return path[idx+1:]
 }
 
 // SetInput sets the input text.

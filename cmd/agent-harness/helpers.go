@@ -72,6 +72,11 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "persona", Label: "Persona", Value: app.session.Persona, Description: "Agent behavior mode", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
 		{Key: "model", Label: "Model", Value: app.session.Model, Description: "The AI model to use", Type: "string"},
 		{Key: "provider", Label: "Provider", Value: app.config.Provider, Description: "API provider", Type: "string"},
+		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Description: "Local runtime such as llama.cpp or ollama", Type: "string"},
+		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Description: "OpenAI-compatible API base URL", Type: "string"},
+		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Description: "Model context window", Type: "string"},
+		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Description: "Maximum response tokens", Type: "string"},
+		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Description: "Sampling temperature", Type: "string"},
 		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Description: "Tool permission level", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
 		{Key: "execution_mode", Label: "Execution Mode", Value: app.executionMode.String(), Description: "Command approval mode", Type: "choice", Options: []string{"interactive", "yolo"}},
 		{Key: "perm_read", Label: "Allow Read", Value: "", Description: "Allow read/search tools", Type: "bool", BoolValue: app.config.PermRead},
@@ -85,7 +90,7 @@ func (app *App) getSettings() []tui.Setting {
 func (app *App) getModelItems() []tui.ModelItem {
 	provider := app.config.Provider
 	if provider == "" {
-		provider = "openrouter"
+		provider = config.DefaultProvider
 	}
 
 	return getModelsForProvider(provider, app.session.Model)
@@ -109,6 +114,11 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 		return []tui.ModelItem{
 			{ID: "gemma4:2b", Name: "Gemma 4 E2B (Fast)", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "gemma4:2b"},
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "llama3.2:3b"},
+		}
+	case "local":
+		return []tui.ModelItem{
+			{ID: config.DefaultModel, Name: "Ornith 1.0 9B GGUF", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultModel},
+			{ID: "local-model", Name: "OpenAI-compatible local model", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == "local-model"},
 		}
 	default:
 		return []tui.ModelItem{
@@ -685,9 +695,9 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 	provider := promptProvider()
 	app.config.Provider = provider
 
-	if provider == "ollama" {
-		app.config.APIKey = "ollama"
-		fmt.Println("  Ollama uses local models - no API key required")
+	if config.IsLocalProvider(provider) {
+		app.config.APIKey = provider
+		fmt.Printf("  %s uses a local OpenAI-compatible endpoint - no API key required\n", provider)
 	} else {
 		apiKey := promptAPIKey(provider)
 		if apiKey == "" {
@@ -699,6 +709,10 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 
 	model := promptModel(provider)
 	app.config.Model = model
+
+	if config.IsLocalProvider(provider) {
+		return nil
+	}
 
 	fmt.Println()
 	fmt.Println("  Credentials will be encrypted.")
@@ -724,11 +738,12 @@ func (app *App) interactiveSetup(credManager *config.CredentialManager) error {
 // promptProvider prompts user for API provider.
 func promptProvider() string {
 	fmt.Println("  Choose an API provider:")
-	fmt.Println("    1) OpenRouter")
+	fmt.Println("    1) Local OpenAI-compatible (llama.cpp)")
 	fmt.Println("    2) OpenAI")
 	fmt.Println("    3) Anthropic")
-	fmt.Println("    4) Ollama (Local)")
-	fmt.Print("  Enter choice (1-4) [1]: ")
+	fmt.Println("    4) OpenRouter")
+	fmt.Println("    5) Ollama")
+	fmt.Print("  Enter choice (1-5) [1]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
@@ -740,9 +755,11 @@ func promptProvider() string {
 	case "3":
 		return "anthropic"
 	case "4":
+		return "openrouter"
+	case "5":
 		return "ollama"
 	default:
-		return "openrouter"
+		return "local"
 	}
 }
 
@@ -775,16 +792,7 @@ func promptModel(provider string) string {
 
 // getDefaultModel returns default model for provider.
 func getDefaultModel(provider string) string {
-	switch provider {
-	case "openai":
-		return "gpt-4o"
-	case "anthropic":
-		return "claude-3-5-sonnet-20241022"
-	case "ollama":
-		return "gemma4:2b"
-	default:
-		return "nvidia/nemotron-3-super-120b-a12b:free"
-	}
+	return config.DefaultModelForProvider(provider)
 }
 
 // resolveModelInput resolves numeric or empty model input.
@@ -795,6 +803,10 @@ func resolveModelInput(input, provider string) string {
 			return "gpt-4o"
 		} else if provider == "anthropic" {
 			return "claude-3-5-sonnet-20241022"
+		} else if provider == "ollama" {
+			return "gemma4:2b"
+		} else if provider == "local" {
+			return config.DefaultModel
 		}
 		return "nvidia/nemotron-3-super-120b-a12b:free"
 	case "2":
@@ -802,6 +814,10 @@ func resolveModelInput(input, provider string) string {
 			return "gpt-4o-mini"
 		} else if provider == "anthropic" {
 			return "claude-3-opus-20240229"
+		} else if provider == "ollama" {
+			return "llama3.2:3b"
+		} else if provider == "local" {
+			return "local-model"
 		}
 		return "anthropic/claude-3.5-sonnet"
 	case "3":

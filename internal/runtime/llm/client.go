@@ -25,21 +25,36 @@ type HTTPClient struct {
 
 // NewHTTPClient creates an LLM client from environment/config.
 func NewHTTPClient(provider, apiKey string) *HTTPClient {
-	baseURL := "https://openrouter.ai/api/v1"
-	switch provider {
-	case "openai":
-		baseURL = "https://api.openai.com/v1"
-	case "anthropic":
-		baseURL = "https://api.anthropic.com/v1"
-	case "ollama", "local":
-		baseURL = "http://localhost:11434/v1"
+	return NewHTTPClientWithBaseURL(provider, apiKey, "")
+}
+
+// NewHTTPClientWithBaseURL creates an LLM client with an optional endpoint override.
+func NewHTTPClientWithBaseURL(provider, apiKey, baseURL string) *HTTPClient {
+	if baseURL == "" {
+		baseURL = defaultBaseURL(provider)
 	}
+	baseURL = strings.TrimRight(baseURL, "/")
 	return &HTTPClient{
 		BaseURL:    baseURL,
 		APIKey:     apiKey,
 		HTTPClient: &http.Client{Timeout: 120 * time.Second},
 		Provider:   provider,
 	}
+}
+
+func defaultBaseURL(provider string) string {
+	baseURL := "https://openrouter.ai/api/v1"
+	switch provider {
+	case "openai":
+		baseURL = "https://api.openai.com/v1"
+	case "anthropic":
+		baseURL = "https://api.anthropic.com/v1"
+	case "ollama":
+		baseURL = "http://localhost:11434/v1"
+	case "local":
+		baseURL = "http://127.0.0.1:8080/v1"
+	}
+	return baseURL
 }
 
 // Stream implements Client.

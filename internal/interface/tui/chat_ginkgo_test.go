@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -46,6 +47,77 @@ var _ = Describe("ChatModel", func() {
 		SubmitDebounceDuration = 0 // immediate submit for legacy specs
 	})
 
+	Describe("Agent Event Ordering", func() {
+		It("should keep completed tool activity before the final assistant response", func() {
+			By("starting an agent turn and emitting a tool call")
+			model, _ := chat.Update(AgentStartMsg{})
+			chat = model.(ChatModel)
+			model, _ = chat.Update(AgentToolStartMsg{
+				ToolID:       "tool-1",
+				ToolName:     "bash",
+				DisplayName:  "Shell",
+				ActivityDesc: "go test ./...",
+			})
+			chat = model.(ChatModel)
+
+			By("verifying the running tool is already in the transcript")
+			Expect(chat.messages).To(HaveLen(1))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusRunning))
+
+			By("finishing the tool before the agent response")
+			model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
+			chat = model.(ChatModel)
+			Expect(chat.messages).To(HaveLen(1))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusSuccess))
+
+			By("finalizing the assistant response after tool activity")
+			model, _ = chat.Update(AgentDoneMsg{FullResponse: "tests passed"})
+			chat = model.(ChatModel)
+			Expect(chat.messages).To(HaveLen(2))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[1].Role).To(Equal("assistant"))
+			Expect(chat.messages[1].Content).To(Equal("tests passed"))
+		})
+
+		It("should ignore stale chunks, tool completions, and final responses after cancellation", func() {
+			By("starting an agent turn with a running tool")
+			model, _ := chat.Update(AgentStartMsg{})
+			chat = model.(ChatModel)
+			model, _ = chat.Update(AgentToolStartMsg{
+				ToolID:       "tool-1",
+				ToolName:     "bash",
+				DisplayName:  "Shell",
+				ActivityDesc: "sleep 10",
+			})
+			chat = model.(ChatModel)
+
+			By("cancelling the turn")
+			model, _ = chat.Update(AgentCancelMsg{})
+			chat = model.(ChatModel)
+			Expect(chat.messages).To(HaveLen(2))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusError))
+			Expect(chat.messages[1].Role).To(Equal("system"))
+			Expect(chat.messages[1].Content).To(ContainSubstring("cancelled"))
+
+			By("delivering stale events from the cancelled turn")
+			model, _ = chat.Update(AgentChunkMsg{Text: "late chunk"})
+			chat = model.(ChatModel)
+			model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
+			chat = model.(ChatModel)
+			model, _ = chat.Update(AgentDoneMsg{FullResponse: "late final"})
+			chat = model.(ChatModel)
+
+			By("verifying no stale assistant or tool output was appended")
+			Expect(chat.messages).To(HaveLen(2))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusError))
+			Expect(chat.messages[1].Role).To(Equal("system"))
+		})
+	})
+
 	Describe("Input Area Ergonomics", func() {
 		Context("Given an empty chat input", func() {
 			It("should start as a single-row composer", func() {
@@ -62,6 +134,27 @@ var _ = Describe("ChatModel", func() {
 				By("verifying the textarea height is capped")
 				Expect(chat.inputRows()).To(Equal(MaxInputRows))
 				Expect(chat.textarea.Height()).To(Equal(MaxInputRows))
+			})
+		})
+
+		Context("Given the draft grows from one line to many lines", func() {
+			It("should grow the input area predictably without reserving max height", func() {
+				chat.SetInput("one")
+				oneLineHeight := chat.inputAreaHeight()
+
+				chat.SetInput("one\ntwo\nthree\nfour")
+				manyLineHeight := chat.inputAreaHeight()
+
+				Expect(oneLineHeight).To(Equal(MinInputRows + 2))
+				Expect(manyLineHeight).To(Equal(MaxInputRows + 2))
+			})
+		})
+
+		Context("Given input area styles", func() {
+			It("should keep the dark background on the editor but not the metadata line", func() {
+				Expect(InputContainerStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
+				Expect(InputEditorStyle.GetBackground()).To(Equal(ColorSurface))
+				Expect(InputMetaStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
 			})
 		})
 

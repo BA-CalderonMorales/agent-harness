@@ -1,0 +1,65 @@
+# agent-harness runtime configuration.
+#
+# Environment variables override these values. Each supported override is listed
+# beside the setting it controls.
+
+# AH_PROVIDER or AGENT_HARNESS_PROVIDER.
+# Use "local" for an OpenAI-compatible local server such as llama.cpp.
+provider: local
+
+# AH_RUNTIME or AGENT_HARNESS_RUNTIME.
+runtime: llama.cpp
+
+# AH_MODEL or AGENT_HARNESS_MODEL.
+# Intended default local model: DeepReinforce Ornith-1.0 GGUF.
+model: deepreinforce-ai/Ornith-1.0-9B-GGUF
+
+# AH_MODEL_PATH or AGENT_HARNESS_MODEL_PATH.
+# Download the Q4_K_M GGUF into ./models or update this path.
+model_path: ./models/ornith-1.0-9b-Q4_K_M.gguf
+
+# AH_ENDPOINT_URL or AGENT_HARNESS_ENDPOINT_URL.
+# The endpoint must expose /chat/completions below this /v1 base path.
+endpoint_url: http://127.0.0.1:8080/v1
+
+# AH_CONTEXT_LENGTH or AGENT_HARNESS_CONTEXT_LENGTH.
+context_length: 8192
+
+# AH_TEMPERATURE or AGENT_HARNESS_TEMPERATURE.
+temperature: 0.2
+
+# AH_MAX_TOKENS or AGENT_HARNESS_MAX_TOKENS.
+max_tokens: 4096
+
+# AH_WORKSPACE_PATH or AGENT_HARNESS_WORKSPACE_PATH.
+workspace_path: .
+
+# AH_LOCAL_SERVER_COMMAND or AGENT_HARNESS_LOCAL_SERVER_COMMAND.
+local_server_command: llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080
+
+# AH_PERMISSION_MODE or AGENT_HARNESS_PERMISSION_MODE.
+permission_mode: workspace-write
+
+# AH_PERM_READ, AH_PERM_WRITE, AH_PERM_DELETE, AH_PERM_EXECUTE
+# or the matching AGENT_HARNESS_* names.
+permissions:
+  read: true
+  write: true
+  delete: false
+  execute: true
+
+# AH_EXECUTION_MODE or AGENT_HARNESS_EXECUTION_MODE.
+execution_mode: interactive
+
+# AH_PERSONA or AGENT_HARNESS_PERSONA.
+persona: developer
+
+always_allow:
+  - read
+  - glob
+  - grep
+  - search
+  - web_fetch
+  - web_search
+
+always_deny: []

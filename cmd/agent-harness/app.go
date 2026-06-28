@@ -78,8 +78,11 @@ func newApp() (*App, error) {
 	app.initTools()
 	app.initCommands()
 
-	app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
+	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	app.loop = agent.NewLoop(app.client)
+	if app.config.ContextLength > 0 {
+		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
+	}
 
 	return app, nil
 }
@@ -113,6 +116,7 @@ func (app *App) run() error {
 	tuiApp.SetModels(app.getModelItems())
 	tuiApp.SetChatModel(app.session.Model)
 	tuiApp.SetChatPersona(app.session.Persona)
+	tuiApp.SetRuntimeContext(app.config.Provider, "medium", app.cwd)
 	tuiApp.SetProjectInfo(app.getProjectInfo())
 	tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())

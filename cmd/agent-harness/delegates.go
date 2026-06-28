@@ -1,6 +1,7 @@
 package main
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -186,10 +187,36 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "provider":
 		d.app.config.Provider = value
 		// Recreate LLM client with new provider base URL
-		d.app.client = llm.NewHTTPClient(d.app.config.Provider, d.app.config.APIKey)
+		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
 		// Refresh model list for new provider
 		d.tuiApp.SetModels(d.app.getModelItems())
+		d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
 		d.tuiApp.AddMessage("system", sprintf("Provider updated to: %s", value))
+	case "runtime":
+		d.app.config.Runtime = value
+		d.tuiApp.AddMessage("system", sprintf("Runtime updated to: %s", value))
+	case "endpoint_url":
+		d.app.config.EndpointURL = value
+		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
+		d.tuiApp.AddMessage("system", sprintf("Endpoint updated to: %s", value))
+	case "context_length":
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			d.app.config.ContextLength = n
+			if d.app.loop != nil {
+				d.app.loop.Config.BlockingTokenLimit = n
+			}
+			d.tuiApp.AddMessage("system", sprintf("Context length updated to: %d", n))
+		}
+	case "max_tokens":
+		if n, err := strconv.Atoi(value); err == nil && n > 0 {
+			d.app.config.MaxTokens = n
+			d.tuiApp.AddMessage("system", sprintf("Max tokens updated to: %d", n))
+		}
+	case "temperature":
+		if n, err := strconv.ParseFloat(value, 64); err == nil {
+			d.app.config.Temperature = n
+			d.tuiApp.AddMessage("system", sprintf("Temperature updated to: %.2f", n))
+		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
 	case "execution_mode":

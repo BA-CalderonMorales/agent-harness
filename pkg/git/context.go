@@ -25,10 +25,15 @@ type Context struct {
 
 // GetContext retrieves git context for the current directory
 func GetContext() (*Context, error) {
+	return GetContextForDir("")
+}
+
+// GetContextForDir retrieves git context for a specific directory.
+func GetContextForDir(dir string) (*Context, error) {
 	ctx := &Context{}
 
 	// Check if we're in a git repo
-	root, err := getGitRoot()
+	root, err := getGitRoot(dir)
 	if err != nil {
 		ctx.IsRepo = false
 		return ctx, nil
@@ -38,35 +43,35 @@ func GetContext() (*Context, error) {
 	ctx.Root = root
 
 	// Get branch
-	if branch, err := getGitBranch(); err == nil {
+	if branch, err := getGitBranch(dir); err == nil {
 		ctx.Branch = branch
 	}
 
 	// Get commit hash
-	if commit, err := getGitCommit(); err == nil {
+	if commit, err := getGitCommit(dir); err == nil {
 		ctx.Commit = commit
 	}
 
 	// Check for uncommitted changes
-	ctx.HasChanges = hasUncommittedChanges()
+	ctx.HasChanges = hasUncommittedChanges(dir)
 
 	// Get remote URL
-	if remote, err := getRemoteURL(); err == nil {
+	if remote, err := getRemoteURL(dir); err == nil {
 		ctx.RemoteURL = remote
 	}
 
 	// Rich context: recent commits
-	if commits, err := getRecentCommits(3); err == nil {
+	if commits, err := getRecentCommits(dir, 3); err == nil {
 		ctx.RecentCommits = commits
 	}
 
 	// Rich context: status files (capped)
-	if status, err := getStatusShort(20); err == nil {
+	if status, err := getStatusShort(dir, 20); err == nil {
 		ctx.StatusFiles = status
 	}
 
 	// Rich context: top-level files (capped)
-	if files, err := getTopLevelFiles(15); err == nil {
+	if files, err := getTopLevelFiles(dir, 15); err == nil {
 		ctx.TopLevelFiles = files
 	}
 
@@ -74,8 +79,8 @@ func GetContext() (*Context, error) {
 }
 
 // getGitRoot returns the git repository root
-func getGitRoot() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--show-toplevel")
+func getGitRoot(dir string) (string, error) {
+	cmd := gitCommand(dir, "rev-parse", "--show-toplevel")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -84,8 +89,8 @@ func getGitRoot() (string, error) {
 }
 
 // getGitBranch returns the current git branch
-func getGitBranch() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--abbrev-ref", "HEAD")
+func getGitBranch(dir string) (string, error) {
+	cmd := gitCommand(dir, "rev-parse", "--abbrev-ref", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -94,8 +99,8 @@ func getGitBranch() (string, error) {
 }
 
 // getGitCommit returns the current commit hash (short)
-func getGitCommit() (string, error) {
-	cmd := exec.Command("git", "rev-parse", "--short", "HEAD")
+func getGitCommit(dir string) (string, error) {
+	cmd := gitCommand(dir, "rev-parse", "--short", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -104,8 +109,8 @@ func getGitCommit() (string, error) {
 }
 
 // hasUncommittedChanges checks if there are uncommitted changes
-func hasUncommittedChanges() bool {
-	cmd := exec.Command("git", "status", "--porcelain")
+func hasUncommittedChanges(dir string) bool {
+	cmd := gitCommand(dir, "status", "--porcelain")
 	out, err := cmd.Output()
 	if err != nil {
 		return false
@@ -114,8 +119,8 @@ func hasUncommittedChanges() bool {
 }
 
 // getRemoteURL returns the origin remote URL
-func getRemoteURL() (string, error) {
-	cmd := exec.Command("git", "remote", "get-url", "origin")
+func getRemoteURL(dir string) (string, error) {
+	cmd := gitCommand(dir, "remote", "get-url", "origin")
 	out, err := cmd.Output()
 	if err != nil {
 		return "", err
@@ -124,8 +129,8 @@ func getRemoteURL() (string, error) {
 }
 
 // getRecentCommits returns the last n commit messages (one-line)
-func getRecentCommits(n int) ([]string, error) {
-	cmd := exec.Command("git", "log", "--oneline", "-n", fmt.Sprintf("%d", n))
+func getRecentCommits(dir string, n int) ([]string, error) {
+	cmd := gitCommand(dir, "log", "--oneline", "-n", fmt.Sprintf("%d", n))
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -138,8 +143,8 @@ func getRecentCommits(n int) ([]string, error) {
 }
 
 // getStatusShort returns git status --short lines capped at max
-func getStatusShort(max int) ([]string, error) {
-	cmd := exec.Command("git", "status", "--short")
+func getStatusShort(dir string, max int) ([]string, error) {
+	cmd := gitCommand(dir, "status", "--short")
 	out, err := cmd.Output()
 	if err != nil {
 		return nil, err
@@ -156,8 +161,8 @@ func getStatusShort(max int) ([]string, error) {
 }
 
 // getTopLevelFiles returns top-level non-hidden files/dirs capped at max
-func getTopLevelFiles(max int) ([]string, error) {
-	cmd := exec.Command("git", "ls-tree", "--name-only", "HEAD")
+func getTopLevelFiles(dir string, max int) ([]string, error) {
+	cmd := gitCommand(dir, "ls-tree", "--name-only", "HEAD")
 	out, err := cmd.Output()
 	if err != nil {
 		// Fallback to ls if not a git repo or no HEAD
@@ -172,6 +177,14 @@ func getTopLevelFiles(max int) ([]string, error) {
 		all = append(all, "...")
 	}
 	return all, nil
+}
+
+func gitCommand(dir string, args ...string) *exec.Cmd {
+	cmd := exec.Command("git", args...)
+	if dir != "" {
+		cmd.Dir = dir
+	}
+	return cmd
 }
 
 // GetDiff returns the current git diff
@@ -220,7 +233,7 @@ func FormatDiff() string {
 
 // GetRelativePath returns the path relative to git root
 func GetRelativePath(absPath string) (string, error) {
-	root, err := getGitRoot()
+	root, err := getGitRoot("")
 	if err != nil {
 		return absPath, err
 	}

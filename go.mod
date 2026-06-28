@@ -13,6 +13,7 @@ require (
 	github.com/onsi/gomega v1.39.1
 	golang.org/x/crypto v0.50.0
 	golang.org/x/term v0.42.0
+	go.yaml.in/yaml/v3 v3.0.4
 )
 
 require (
@@ -47,7 +48,6 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.8.2 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
-	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/mod v0.34.0 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
