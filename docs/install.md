@@ -298,19 +298,35 @@ agent-harness --version
 
 ### First Run Setup
 
-On first run, you'll be prompted to:
+agent-harness is local-first. A cloned repo includes `agent-harness.yml`,
+which points to a local OpenAI-compatible `llama.cpp` server and the intended
+default DeepReinforce Ornith-1.0 GGUF model.
 
-1. **Choose API Provider**: OpenRouter (recommended), OpenAI, or Anthropic
-2. **Enter API Key**: Your API key (input will be masked)
-3. **Select Model**: Choose from available models for your provider
-4. **Set Master Password**: Create a password to encrypt your credentials
+Before chatting, start the configured local model server:
 
-Your credentials are encrypted with AES-256-GCM and stored at `~/.agent-harness/credentials.enc` with 0600 permissions.
+```bash
+llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080
+```
+
+Then run:
+
+```bash
+agent-harness --diagnose
+agent-harness
+```
+
+Hosted providers remain available. Use `/login` in the TUI, or set
+`AH_PROVIDER`, `AH_MODEL`, and `AH_API_KEY`. Remote credentials are encrypted
+with AES-256-GCM and stored at `~/.agent-harness/credentials.enc` with 0600
+permissions.
+
+See [Local Model Setup](local-models.md) for model download and YAML details.
 
 ### Configuration Directory
 
 agent-harness uses the following directories:
 
+- **Root config**: `./agent-harness.yml`
 - **Config**: `~/.agent-harness/settings.json`
 - **Sessions**: `~/.agent-harness/sessions/`
 - **Skills**: `./.agent-harness/skills/`
@@ -365,9 +381,17 @@ agent-harness
 2. Check that you have credits/quota with your provider
 3. Try setting the environment variable directly:
    ```bash
-   export OPENROUTER_API_KEY="sk-or-v1-..."
+   export AH_PROVIDER="openrouter"
+   export AH_API_KEY="sk-or-v1-..."
    agent-harness
    ```
+
+### Local Model Not Responding
+
+1. Run `agent-harness --diagnose` and confirm `Provider: local`
+2. Confirm `endpoint_url` matches your local server
+3. Check that the server exposes `/v1/chat/completions`
+4. Confirm `model_path` points to an existing GGUF file
 
 ### Getting Help
 

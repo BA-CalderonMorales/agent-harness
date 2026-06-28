@@ -162,6 +162,7 @@ func TestGetDefaultModel(t *testing.T) {
 		{"openai", "gpt-4o"},
 		{"anthropic", "claude-3-5-sonnet-20241022"},
 		{"ollama", "gemma4:2b"},
+		{"local", "deepreinforce-ai/Ornith-1.0-9B-GGUF"},
 		{"openrouter", "nvidia/nemotron-3-super-120b-a12b:free"},
 		{"", "nvidia/nemotron-3-super-120b-a12b:free"},
 		{"unknown", "nvidia/nemotron-3-super-120b-a12b:free"},
@@ -192,6 +193,10 @@ func TestResolveModelInput(t *testing.T) {
 		{"1", "openrouter", "nvidia/nemotron-3-super-120b-a12b:free"},
 		{"2", "openrouter", "anthropic/claude-3.5-sonnet"},
 		{"3", "openrouter", "openai/gpt-4o"},
+		{"1", "local", "deepreinforce-ai/Ornith-1.0-9B-GGUF"},
+		{"2", "local", "local-model"},
+		{"1", "ollama", "gemma4:2b"},
+		{"2", "ollama", "llama3.2:3b"},
 		{"custom-model", "openrouter", "custom-model"},
 	}
 

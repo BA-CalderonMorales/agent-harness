@@ -38,6 +38,11 @@ func (app *App) initConfig() error {
 		return errf("failed to load configuration: %w", err)
 	}
 	app.config = layeredConfig
+	workspacePath, err := resolveWorkspacePath(app.cwd, app.config.WorkspacePath)
+	if err != nil {
+		return errf("invalid workspace_path: %w", err)
+	}
+	app.cwd = workspacePath
 	app.syncGranularPermissions()
 
 	credManager := config.NewCredentialManager()
@@ -50,6 +55,17 @@ func (app *App) initConfig() error {
 
 // loadCredentials handles secure credential loading and migration.
 func (app *App) loadCredentials(credManager *config.CredentialManager) error {
+	if config.IsLocalProvider(app.config.Provider) {
+		if app.config.APIKey == "" {
+			app.config.APIKey = app.config.Provider
+		}
+		return nil
+	}
+
+	if app.config.APIKey != "" {
+		return nil
+	}
+
 	if credManager.HasSecureCredentials() {
 		secureCfg, err := credManager.LoadSecure()
 		if err != nil {
@@ -62,16 +78,10 @@ func (app *App) loadCredentials(credManager *config.CredentialManager) error {
 		app.migrateLegacyCredentials(credManager)
 	}
 
-	// Skip API key check for local providers
-	if app.config.APIKey == "" && app.config.Provider != "ollama" && app.config.Provider != "local" {
+	if app.config.APIKey == "" {
 		if err := app.interactiveSetup(credManager); err != nil {
 			return errf("setup failed: %w", err)
 		}
-	}
-
-	// Set default for local providers
-	if app.config.APIKey == "" && (app.config.Provider == "ollama" || app.config.Provider == "local") {
-		app.config.APIKey = "ollama"
 	}
 
 	return nil
@@ -714,7 +724,7 @@ func (app *App) startLogin() error {
 		return errf("login wizard only available in TUI mode")
 	}
 	app.loginState = loginProvider
-	app.tuiApp.AddMessage("system", "Login wizard started.\nChoose provider:\n  1) OpenRouter\n  2) OpenAI\n  3) Anthropic\n  4) Ollama (local)\nEnter choice (1-4) [1]:")
+	app.tuiApp.AddMessage("system", "Login wizard started.\nChoose provider:\n  1) Local OpenAI-compatible (llama.cpp)\n  2) OpenAI\n  3) Anthropic\n  4) OpenRouter\n  5) Ollama\nEnter choice (1-5) [1]:")
 	return nil
 }
 

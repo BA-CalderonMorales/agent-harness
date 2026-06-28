@@ -87,6 +87,30 @@ func TestLoopRetriesMaxOutputTokenErrorWithHigherLimit(t *testing.T) {
 	}
 }
 
+func TestLoopPassesConfiguredGenerationOptions(t *testing.T) {
+	client := &scriptedLoopClient{
+		streams: [][]types.LLMEvent{textEvents("ok")},
+	}
+	loop := NewLoop(client)
+	loop.Config.AutoCompactEnabled = false
+
+	params := edgeParams(nil)
+	params.MaxOutputTokens = 1234
+	params.Temperature = 0.25
+	terminal, _ := runLoopForEdgeTest(t, loop, params, 64)
+
+	if terminal.Reason != TerminalReasonComplete {
+		t.Fatalf("expected terminal reason %q, got %q", TerminalReasonComplete, terminal.Reason)
+	}
+	req := client.requestAt(0)
+	if req.MaxTokens != 1234 {
+		t.Fatalf("MaxTokens = %d, want 1234", req.MaxTokens)
+	}
+	if req.Temperature != 0.25 {
+		t.Fatalf("Temperature = %v, want 0.25", req.Temperature)
+	}
+}
+
 func TestLoopStopsAfterRecoveryAttemptsExhausted(t *testing.T) {
 	client := &scriptedLoopClient{
 		streams: [][]types.LLMEvent{

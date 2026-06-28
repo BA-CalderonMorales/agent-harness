@@ -56,10 +56,10 @@ func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
 		provider := resolveProviderInput(text)
 		app.loginProviderTmp = provider
 		app.config.Provider = provider
-		if provider == "ollama" {
-			app.config.APIKey = "ollama"
+		if config.IsLocalProvider(provider) {
+			app.config.APIKey = provider
 			app.loginState = loginModel
-			tuiApp.AddMessage("system", "Provider: ollama (local)\nEnter model [gemma4:2b]:")
+			tuiApp.AddMessage("system", sprintf("Provider: %s (local)\nEnter model [%s]:", provider, getDefaultModel(provider)))
 		} else {
 			app.loginState = loginAPIKey
 			tuiApp.AddMessage("system", sprintf("Provider: %s\nEnter API key (input visible - type carefully):", provider))
@@ -86,21 +86,24 @@ func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
 		app.session.Model = model
 		app.costTracker.SetModel(model)
 
-		// Save credentials
-		credManager := config.NewCredentialManager()
-		secureCfg := &config.SecureConfig{
-			Provider: app.loginProviderTmp,
-			APIKey:   app.config.APIKey,
-			Model:    model,
-		}
-		if err := credManager.SaveSecure(secureCfg); err != nil {
-			tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
+		if config.IsLocalProvider(app.loginProviderTmp) {
+			tuiApp.AddMessage("system", "Local provider configured.")
 		} else {
-			tuiApp.AddMessage("system", "Credentials saved.")
+			credManager := config.NewCredentialManager()
+			secureCfg := &config.SecureConfig{
+				Provider: app.loginProviderTmp,
+				APIKey:   app.config.APIKey,
+				Model:    model,
+			}
+			if err := credManager.SaveSecure(secureCfg); err != nil {
+				tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
+			} else {
+				tuiApp.AddMessage("system", "Credentials saved.")
+			}
 		}
 
 		// Recreate LLM client
-		app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
+		app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 		app.loop = agent.NewLoop(app.client)
 
 		// Update TUI
@@ -120,10 +123,14 @@ func resolveProviderInput(input string) string {
 		return "openai"
 	case "3", "anthropic":
 		return "anthropic"
-	case "4", "ollama":
+	case "4", "openrouter":
+		return "openrouter"
+	case "1", "local", "llama.cpp", "llama":
+		return "local"
+	case "5", "ollama":
 		return "ollama"
 	default:
-		return "openrouter"
+		return "local"
 	}
 }
 
@@ -187,7 +194,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 				},
 				SystemPrompt: app.buildSystemPrompt(),
 				Model:        app.session.Model,
-				MaxTokens:    4096,
+				MaxTokens:    app.config.MaxTokens,
+				Temperature:  app.config.Temperature,
 			}
 			stream, err := app.client.Stream(subCtx, req)
 			if err != nil {
@@ -211,10 +219,12 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 	canUseTool := app.createToolPermissionFunc(tuiApp)
 
 	params := agent.QueryParams{
-		Messages:       app.session.Messages,
-		SystemPrompt:   sysPrompt,
-		CanUseTool:     canUseTool,
-		ToolUseContext: toolCtx,
+		Messages:        app.session.Messages,
+		SystemPrompt:    sysPrompt,
+		CanUseTool:      canUseTool,
+		ToolUseContext:  toolCtx,
+		MaxOutputTokens: app.config.MaxTokens,
+		Temperature:     app.config.Temperature,
 	}
 
 	stream, err := app.loop.Query(ctx, params)
@@ -453,7 +463,7 @@ func (app *App) handleToolUseStart(b types.ToolUseBlock, tuiApp *tui.App) {
 // validateConfig checks pre-flight configuration before calling LLM.
 func (app *App) validateConfig() error {
 	// Check API key for non-local providers
-	if app.config.Provider != "ollama" && app.config.Provider != "local" {
+	if !config.IsLocalProvider(app.config.Provider) {
 		if app.config.APIKey == "" {
 			return fmt.Errorf("no API key configured. Run setup or set AGENT_HARNESS_API_KEY / OPENROUTER_API_KEY")
 		}

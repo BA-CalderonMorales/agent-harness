@@ -152,6 +152,14 @@ func TestValidateConfigRejectsMissingModel(t *testing.T) {
 	}
 }
 
+func TestValidateConfigAllowsLocalProviderWithoutAPIKey(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
+
+	if err := app.validateConfig(); err != nil {
+		t.Fatalf("validateConfig() error = %v, want nil", err)
+	}
+}
+
 func TestHandleAgentLoopAsyncInvalidConfigStopsBeforeAgentExecution(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "openrouter"}, "test-model")
 	tuiApp := tui.NewApp()
@@ -255,5 +263,27 @@ func TestHandleUserSubmitLoginStepDoesNotAppendUserMessage(t *testing.T) {
 	}
 	if app.loginState != loginModel {
 		t.Fatalf("loginState = %v, want loginModel", app.loginState)
+	}
+}
+
+func TestResolveProviderInputDefaultsToLocal(t *testing.T) {
+	tests := map[string]string{
+		"":           "local",
+		"1":          "local",
+		"local":      "local",
+		"llama.cpp":  "local",
+		"2":          "openai",
+		"3":          "anthropic",
+		"4":          "openrouter",
+		"5":          "ollama",
+		"openrouter": "openrouter",
+	}
+
+	for input, want := range tests {
+		t.Run(input, func(t *testing.T) {
+			if got := resolveProviderInput(input); got != want {
+				t.Fatalf("resolveProviderInput(%q) = %q, want %q", input, got, want)
+			}
+		})
 	}
 }

@@ -22,34 +22,30 @@ Complete guide to using agent-harness effectively.
 
 ### First Run
 
-When you start agent-harness for the first time:
+For a cloned repo, start from the checked-in local config:
+
+```bash
+agent-harness --diagnose
+```
+
+The default `agent-harness.yml` expects a local OpenAI-compatible `llama.cpp`
+server running at `http://127.0.0.1:8080/v1`, with an Ornith-1.0 GGUF file at
+`./models/ornith-1.0-9b-Q4_K_M.gguf`.
+
+Start the local server:
+
+```bash
+llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080
+```
+
+Then run the TUI:
 
 ```bash
 agent-harness
 ```
 
-You'll see:
-
-```
-╔════════════════════════════════════════════════════════════╗
-║     Agent Harness - Secure Initial Setup                   ║
-╚════════════════════════════════════════════════════════════╝
-
-No API credentials found. Let's set them up securely.
-
-Choose an API provider:
-  1) OpenRouter (recommended - access to multiple models)
-  2) OpenAI
-  3) Anthropic
-
-Enter choice (1-3) [1]: 
-```
-
-Follow the prompts to:
-1. Select your API provider
-2. Enter your API key (input is masked for security)
-3. Choose a model
-4. Set a master password for credential encryption
+Hosted providers remain available through `/login` or environment variables
+such as `AH_PROVIDER`, `AH_MODEL`, and `AH_API_KEY`.
 
 ### Starting agent-harness
 
@@ -58,10 +54,10 @@ Follow the prompts to:
 agent-harness
 
 # Start with specific model
-agent-harness --model claude-3-5-sonnet-20241022
+AH_PROVIDER=openrouter AH_MODEL=anthropic/claude-3.5-sonnet AH_API_KEY=sk-or-v1-... agent-harness
 
 # Start with read-only permissions
-agent-harness --permission-mode read-only
+AH_PERMISSION_MODE=read-only agent-harness
 ```
 
 ---
@@ -220,37 +216,42 @@ In danger-full-access mode:
 
 ### Layered Configuration
 
-agent-harness uses three configuration layers:
+agent-harness loads configuration in this order, with later entries overriding
+earlier entries:
 
 1. **User config** (`~/.agent-harness/settings.json`)
    - Applies to all projects
    - Set your default model here
 
-2. **Project config** (`./.agent-harness/settings.json`)
+2. **Root project YAML** (`./agent-harness.yml` or `./.agent-harness.yml`)
+   - Obvious project setup source of truth
+   - Best place for local model/runtime settings
+
+3. **Project config** (`./.agent-harness/settings.json`)
    - Committed to version control
    - Project-specific settings
 
-3. **Local config** (`./.agent-harness/settings.local.json`)
+4. **Local config** (`./.agent-harness/settings.local.json`)
    - Gitignored
    - Personal overrides for the project
 
 ### Example Configuration
 
-```json
-{
-  "provider": "openrouter",
-  "model": "anthropic/claude-3.5-sonnet",
-  "permission_mode": "workspace-write",
-  "always_allow": ["read", "glob", "grep"],
-  "always_deny": ["bash"],
-  "mcpServers": {
-    "filesystem": {
-      "transport": "stdio",
-      "command": "npx",
-      "args": ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed"]
-    }
-  }
-}
+```yaml
+provider: local
+runtime: llama.cpp
+model: deepreinforce-ai/Ornith-1.0-9B-GGUF
+model_path: ./models/ornith-1.0-9b-Q4_K_M.gguf
+endpoint_url: http://127.0.0.1:8080/v1
+context_length: 8192
+temperature: 0.2
+max_tokens: 4096
+permission_mode: workspace-write
+permissions:
+  read: true
+  write: true
+  delete: false
+  execute: true
 ```
 
 ### Environment Variables
@@ -258,11 +259,15 @@ agent-harness uses three configuration layers:
 You can also use environment variables:
 
 ```bash
-export OPENROUTER_API_KEY="sk-or-v1-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export OPENAI_API_KEY="sk-..."
-export AGENT_HARNESS_MODEL="claude-3-5-sonnet-20241022"
-export AGENT_HARNESS_PERMISSION_MODE="read-only"
+export AH_PROVIDER="local"
+export AH_RUNTIME="llama.cpp"
+export AH_MODEL="deepreinforce-ai/Ornith-1.0-9B-GGUF"
+export AH_MODEL_PATH="./models/ornith-1.0-9b-Q4_K_M.gguf"
+export AH_ENDPOINT_URL="http://127.0.0.1:8080/v1"
+export AH_CONTEXT_LENGTH="8192"
+export AH_TEMPERATURE="0.2"
+export AH_MAX_TOKENS="4096"
+export AH_PERMISSION_MODE="read-only"
 ```
 
 ---
@@ -502,10 +507,10 @@ Add to your `.bashrc` or `.zshrc`:
 alias ah='agent-harness'
 
 # Start with read-only mode
-alias ahr='agent-harness --permission-mode read-only'
+alias ahr='AH_PERMISSION_MODE=read-only agent-harness'
 
 # Start with specific model
-alias ah4='agent-harness --model gpt-4o'
+alias ah4='AH_PROVIDER=openrouter AH_MODEL=openai/gpt-4o agent-harness'
 ```
 
 ---

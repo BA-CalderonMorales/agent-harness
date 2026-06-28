@@ -151,7 +151,7 @@
 **Location:** `internal/config/secure.go`
 
 **Key Design Decisions:**
-- Master password required on startup
+- Master password required only when loading or saving remote provider credentials
 - Argon2id for secure key derivation (resistant to GPU attacks)
 - AES-256-GCM for authenticated encryption
 - File permissions 0600 (user read/write only)
@@ -162,18 +162,20 @@
 
 ## 11. Layered Configuration
 
-**Pattern:** Configuration layers with precedence: user → project → local.
+**Pattern:** Configuration layers with precedence: user → root project YAML → project → local.
 
 **Location:** `internal/config/layered.go`
 
 **Layers:**
 1. **User**: `~/.agent-harness/settings.json`
-2. **Project**: `./.agent-harness/settings.json`
-3. **Local**: `./.agent-harness/settings.local.json` (gitignored)
+2. **Root Project YAML**: `./agent-harness.yml` or `./.agent-harness.yml`
+3. **Project**: `./.agent-harness/settings.json`
+4. **Local**: `./.agent-harness/settings.local.json` (gitignored)
 
 **Features:**
-- JSON-based with deep merge semantics
+- YAML/JSON-based with deep merge semantics
 - Environment variable overrides
+- Local OpenAI-compatible endpoint configuration
 - MCP server configuration
 - Permission mode defaults
 - Always allow/deny lists
@@ -187,7 +189,7 @@
 **Location:** `internal/llm/client.go`
 
 **Key Design Decisions:**
-- Supports OpenRouter, OpenAI, and Anthropic endpoints
+- Supports local OpenAI-compatible, Ollama, OpenRouter, OpenAI, and Anthropic endpoints
 - SSE parsing for streaming responses
 - Tool calls mapped to OpenAI function-call format
 - Cost tracking per model with usage estimation

@@ -20,6 +20,7 @@ type QueryParams struct {
 	FallbackModel   string
 	QuerySource     types.QuerySource
 	MaxOutputTokens int
+	Temperature     float64
 	MaxTurns        int
 	SkipCacheWrite  bool
 }

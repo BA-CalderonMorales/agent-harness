@@ -1,6 +1,7 @@
 # Build artifacts
 /build/
 /agent-harness
+/models/
 
 # Go
 *.exe

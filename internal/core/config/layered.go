@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
+	"go.yaml.in/yaml/v3"
 )
 
 // ConfigSource represents the source of a configuration entry
@@ -48,6 +49,14 @@ type LayeredConfig struct {
 	Provider       string
 	APIKey         string
 	Model          string
+	Runtime        string
+	ModelPath      string
+	EndpointURL    string
+	ContextLength  int
+	Temperature    float64
+	MaxTokens      int
+	WorkspacePath  string
+	ServerCommand  string
 	PermissionMode PermissionMode
 	ExecutionMode  string // "interactive" or "yolo"
 	AlwaysAllow    []string
@@ -56,10 +65,11 @@ type LayeredConfig struct {
 	CustomEnv      map[string]string
 
 	// Granular permissions (override PermissionMode when set)
-	PermRead    bool // Allow read/search tools
-	PermWrite   bool // Allow write/edit tools
-	PermDelete  bool // Allow delete/remove tools
-	PermExecute bool // Allow execute/bash tools
+	PermRead     bool // Allow read/search tools
+	PermWrite    bool // Allow write/edit tools
+	PermDelete   bool // Allow delete/remove tools
+	PermExecute  bool // Allow execute/bash tools
+	PermExplicit bool
 
 	// Persona determines the agent's behavioral mode
 	Persona string
@@ -147,6 +157,8 @@ func (ll *LayeredLoader) Discover() []ConfigEntry {
 		{Source: SourceUser, Path: filepath.Join(ll.configHome, "settings.json")},
 		{Source: SourceUser, Path: filepath.Join(ll.configHome, ".mcp.json")},
 		// Project-level configs
+		{Source: SourceProject, Path: filepath.Join(ll.cwd, "agent-harness.yml")},
+		{Source: SourceProject, Path: filepath.Join(ll.cwd, ".agent-harness.yml")},
 		{Source: SourceProject, Path: filepath.Join(ll.cwd, ".agent-harness", "settings.json")},
 		{Source: SourceProject, Path: filepath.Join(ll.cwd, ".mcp.json")},
 		// Local configs (gitignored)
@@ -160,6 +172,12 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 	config := &LayeredConfig{
 		merged:        make(map[string]interface{}),
 		loadedEntries: make([]ConfigEntry, 0),
+		Provider:      DefaultProvider,
+		Runtime:       DefaultRuntime,
+		ContextLength: DefaultContextLength,
+		Temperature:   DefaultTemperature,
+		MaxTokens:     DefaultMaxTokens,
+		ServerCommand: DefaultLocalServerCommand,
 		McpServers:    make(map[string]mcp.McpServerConfig),
 		CustomEnv:     make(map[string]string),
 	}
@@ -198,7 +216,7 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 	return config, nil
 }
 
-// loadFile loads a single JSON config file
+// loadFile loads a single JSON or YAML config file.
 func (ll *LayeredLoader) loadFile(path string) (map[string]interface{}, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -206,8 +224,15 @@ func (ll *LayeredLoader) loadFile(path string) (map[string]interface{}, error) {
 	}
 
 	var result map[string]interface{}
-	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, fmt.Errorf("invalid JSON: %w", err)
+	switch filepath.Ext(path) {
+	case ".yml", ".yaml":
+		if err := yaml.Unmarshal(data, &result); err != nil {
+			return nil, fmt.Errorf("invalid YAML: %w", err)
+		}
+	default:
+		if err := json.Unmarshal(data, &result); err != nil {
+			return nil, fmt.Errorf("invalid JSON: %w", err)
+		}
 	}
 
 	return result, nil
@@ -230,50 +255,62 @@ func (ll *LayeredLoader) deepMerge(target, source map[string]interface{}) {
 	}
 }
 
-// extractValues extracts typed values from the merged config
-// Environment variables take precedence: AH_PROVIDER, AH_MODEL, AH_API_KEY
+// extractValues extracts typed values from the merged config.
+// Environment variables take precedence over file values.
 func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
-	if v, ok := config.merged["provider"].(string); ok {
+	if v, ok := stringValue(config.merged, "provider"); ok {
 		config.Provider = v
 	}
-	if v, ok := config.merged["api_key"].(string); ok {
+	if v, ok := stringValue(config.merged, "api_key"); ok {
 		config.APIKey = v
 	}
-	if v, ok := config.merged["model"].(string); ok {
+	if v, ok := stringValue(config.merged, "model"); ok {
 		config.Model = v
 	}
-	if v, ok := config.merged["persona"].(string); ok {
+	if v, ok := stringValue(config.merged, "runtime"); ok {
+		config.Runtime = v
+	}
+	if v, ok := stringValue(config.merged, "model_path"); ok {
+		config.ModelPath = v
+	}
+	if v, ok := stringValue(config.merged, "endpoint_url"); ok {
+		config.EndpointURL = v
+	}
+	if v, ok := intValue(config.merged, "context_length"); ok {
+		config.ContextLength = v
+	}
+	if v, ok := floatValue(config.merged, "temperature"); ok {
+		config.Temperature = v
+	}
+	if v, ok := intValue(config.merged, "max_tokens"); ok {
+		config.MaxTokens = v
+	}
+	if v, ok := stringValue(config.merged, "workspace_path"); ok {
+		config.WorkspacePath = v
+	}
+	if v, ok := stringValue(config.merged, "local_server_command"); ok {
+		config.ServerCommand = v
+	}
+	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v
 	}
 
-	// Environment variables override config file values
-	// Short form (AH_*) and long form (AGENT_HARNESS_*)
-	if envProvider := os.Getenv("AH_PROVIDER"); envProvider != "" {
-		config.Provider = envProvider
-	} else if envProvider := os.Getenv("AGENT_HARNESS_PROVIDER"); envProvider != "" {
-		config.Provider = envProvider
-	}
-	if envModel := os.Getenv("AH_MODEL"); envModel != "" {
-		config.Model = envModel
-	} else if envModel := os.Getenv("AGENT_HARNESS_MODEL"); envModel != "" {
-		config.Model = envModel
-	}
-	if envAPIKey := os.Getenv("AH_API_KEY"); envAPIKey != "" {
-		config.APIKey = envAPIKey
-	} else if envAPIKey := os.Getenv("AGENT_HARNESS_API_KEY"); envAPIKey != "" {
-		config.APIKey = envAPIKey
-	}
-	if envPersona := os.Getenv("AH_PERSONA"); envPersona != "" {
-		config.Persona = envPersona
-	} else if envPersona := os.Getenv("AGENT_HARNESS_PERSONA"); envPersona != "" {
-		config.Persona = envPersona
-	}
-	if v, ok := config.merged["permission_mode"].(string); ok {
+	if v, ok := stringValue(config.merged, "permission_mode"); ok {
 		if mode, err := ParsePermissionMode(v); err == nil {
 			config.PermissionMode = mode
 		}
 	}
-	if v, ok := config.merged["execution_mode"].(string); ok {
+	if permissions, ok := mapValue(config.merged, "permissions"); ok {
+		if v, ok := stringValue(permissions, "mode"); ok {
+			if mode, err := ParsePermissionMode(v); err == nil {
+				config.PermissionMode = mode
+			}
+		}
+		ll.extractPermissionToggles(config, permissions)
+	}
+	ll.extractPermissionToggles(config, config.merged)
+
+	if v, ok := stringValue(config.merged, "execution_mode"); ok {
 		config.ExecutionMode = v
 	}
 	if v, ok := config.merged["always_allow"].([]interface{}); ok {
@@ -293,6 +330,8 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 		}
 	}
 
+	ll.applyEnvOverrides(config)
+
 	// Extract MCP servers
 	if mcpServers, ok := config.merged["mcpServers"].(map[string]interface{}); ok {
 		for name, serverData := range mcpServers {
@@ -310,6 +349,13 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 				config.CustomEnv[k] = s
 			}
 		}
+	}
+
+	if config.Model == "" {
+		config.Model = DefaultModelForProvider(config.Provider)
+	}
+	if config.EndpointURL == "" {
+		config.EndpointURL = DefaultEndpointForProvider(config.Provider)
 	}
 }
 
@@ -364,9 +410,23 @@ func (ll *LayeredLoader) Save(source ConfigSource, config *LayeredConfig) error 
 	// Build config data
 	data := map[string]interface{}{
 		"provider":        config.Provider,
+		"runtime":         config.Runtime,
 		"model":           config.Model,
+		"model_path":      config.ModelPath,
+		"endpoint_url":    config.EndpointURL,
+		"context_length":  config.ContextLength,
+		"temperature":     config.Temperature,
+		"max_tokens":      config.MaxTokens,
+		"workspace_path":  config.WorkspacePath,
 		"permission_mode": config.PermissionMode.String(),
+		"perm_read":       config.PermRead,
+		"perm_write":      config.PermWrite,
+		"perm_delete":     config.PermDelete,
+		"perm_execute":    config.PermExecute,
 		"persona":         config.Persona,
+	}
+	if config.ServerCommand != "" {
+		data["local_server_command"] = config.ServerCommand
 	}
 
 	if len(config.AlwaysAllow) > 0 {
@@ -402,7 +462,12 @@ func (lc *LayeredConfig) GetConfigReport() string {
 
 	result += "Configuration\n"
 	result += fmt.Sprintf("  Provider         %s\n", lc.Provider)
+	result += fmt.Sprintf("  Runtime          %s\n", lc.Runtime)
 	result += fmt.Sprintf("  Model            %s\n", lc.Model)
+	result += fmt.Sprintf("  Endpoint         %s\n", lc.EndpointURL)
+	result += fmt.Sprintf("  Context length   %d\n", lc.ContextLength)
+	result += fmt.Sprintf("  Max tokens       %d\n", lc.MaxTokens)
+	result += fmt.Sprintf("  Temperature      %.2f\n", lc.Temperature)
 	result += fmt.Sprintf("  Permission mode  %s\n", lc.PermissionMode.String())
 	result += fmt.Sprintf("  Persona          %s\n", lc.Persona)
 	result += "\n"

@@ -78,8 +78,11 @@ func newApp() (*App, error) {
 	app.initTools()
 	app.initCommands()
 
-	app.client = llm.NewHTTPClient(app.config.Provider, app.config.APIKey)
+	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	app.loop = agent.NewLoop(app.client)
+	if app.config.ContextLength > 0 {
+		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
+	}
 
 	return app, nil
 }
