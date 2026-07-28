@@ -43,6 +43,15 @@ type StreamError struct {
 
 func (StreamError) isStreamEvent() {}
 
+// StreamTerminal is the final event emitted by a public agent query.
+type StreamTerminal struct {
+	Reason  string
+	Message *Message
+	Error   error
+}
+
+func (StreamTerminal) isStreamEvent() {}
+
 // LLMEvent is a single event from the LLM stream.
 type LLMEvent interface {
 	isLLMEvent()

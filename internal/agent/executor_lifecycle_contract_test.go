@@ -175,14 +175,15 @@ func TestStreamingToolExecutorReturnsResultsInSubmissionOrder(t *testing.T) {
 	close(releaseSecond)
 	<-secondMapped
 	close(releaseFirst)
-	eventIDs := make(map[string]bool, 2)
+	var eventIDs []string
 	for range 2 {
 		event := waitLifecycleFinalEvent(t, executor.Events())
-		eventIDs[lifecycleToolResult(t, event.Message).ToolUseID] = true
+		eventIDs = append(eventIDs, lifecycleToolResult(t, event.Message).ToolUseID)
 	}
-	for _, wantID := range []string{"tool-first", "tool-second"} {
-		if !eventIDs[wantID] {
-			t.Errorf("missing final event for %q; got IDs %v", wantID, eventIDs)
+	wantIDs := []string{"tool-first", "tool-second"}
+	for i := range wantIDs {
+		if eventIDs[i] != wantIDs[i] {
+			t.Fatalf("final event order = %v, want %v", eventIDs, wantIDs)
 		}
 	}
 
@@ -199,7 +200,6 @@ func TestStreamingToolExecutorReturnsResultsInSubmissionOrder(t *testing.T) {
 		lifecycleToolResult(t, results[0]).ToolUseID,
 		lifecycleToolResult(t, results[1]).ToolUseID,
 	}
-	wantIDs := []string{"tool-first", "tool-second"}
 	for i := range wantIDs {
 		if gotIDs[i] != wantIDs[i] {
 			t.Fatalf("result order = %v, want %v", gotIDs, wantIDs)

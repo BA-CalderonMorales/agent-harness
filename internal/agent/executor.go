@@ -42,9 +42,17 @@ type StreamingToolExecutor struct {
 	siblingCancel   context.CancelFunc
 	discarded       bool
 	mu              sync.Mutex
-	progressCond    *sync.Cond
-	events          chan types.StreamEvent
+	stateChanged    chan struct{}
+	pendingTools    sync.WaitGroup
+	closeOnce       sync.Once
 	closed          bool
+	nextResultEvent int
+
+	eventMu          sync.Mutex
+	eventCond        *sync.Cond
+	eventQueue       []types.StreamEvent
+	eventQueueClosed bool
+	events           chan types.StreamEvent
 }
 
 // NewStreamingToolExecutor creates a new executor.
@@ -57,9 +65,11 @@ func NewStreamingToolExecutor(toolDefs []tools.Tool, canUseTool tools.CanUseTool
 		toolUseContext:  ctx,
 		siblingCtx:      siblingCtx,
 		siblingCancel:   cancel,
+		stateChanged:    make(chan struct{}),
 		events:          make(chan types.StreamEvent, 16),
 	}
-	e.progressCond = sync.NewCond(&e.mu)
+	e.eventCond = sync.NewCond(&e.eventMu)
+	go e.dispatchEvents()
 	return e
 }
 
@@ -68,17 +78,45 @@ func (e *StreamingToolExecutor) Events() <-chan types.StreamEvent {
 	return e.events
 }
 
-// Close closes the events channel. Should be called when all tools are done.
-// Safe to call multiple times.
+// Close seals admissions, waits for every accepted tool to publish its final
+// event, and then tells the sole event dispatcher to close the public stream.
 func (e *StreamingToolExecutor) Close() {
-	e.mu.Lock()
-	if e.closed {
+	e.closeOnce.Do(func() {
+		e.mu.Lock()
+		e.closed = true
 		e.mu.Unlock()
-		return
+
+		e.pendingTools.Wait()
+		e.siblingCancel()
+
+		e.eventMu.Lock()
+		e.eventQueueClosed = true
+		e.eventCond.Broadcast()
+		e.eventMu.Unlock()
+	})
+}
+
+func (e *StreamingToolExecutor) dispatchEvents() {
+	defer close(e.events)
+
+	for {
+		e.eventMu.Lock()
+		for len(e.eventQueue) == 0 && !e.eventQueueClosed {
+			e.eventCond.Wait()
+		}
+		if len(e.eventQueue) == 0 && e.eventQueueClosed {
+			e.eventMu.Unlock()
+			return
+		}
+		event := e.eventQueue[0]
+		e.eventQueue[0] = nil
+		e.eventQueue = e.eventQueue[1:]
+		if len(e.eventQueue) == 0 {
+			e.eventQueue = nil
+		}
+		e.eventMu.Unlock()
+		e.events <- event
 	}
-	e.closed = true
-	e.mu.Unlock()
-	close(e.events)
 }
 
 // Discard abandons all pending and in-progress tools.
@@ -123,7 +161,10 @@ func (e *StreamingToolExecutor) DiscardRespectingInterrupt(toolDefs []tools.Tool
 // AddTool enqueues a tool for execution.
 func (e *StreamingToolExecutor) AddTool(block types.ToolUseBlock, assistantMessage types.Message) {
 	e.mu.Lock()
-	defer e.mu.Unlock()
+	if e.closed {
+		e.mu.Unlock()
+		return
+	}
 
 	toolDef, ok := findTool(e.toolDefinitions, block.Name)
 	safe := false
@@ -139,39 +180,54 @@ func (e *StreamingToolExecutor) AddTool(block types.ToolUseBlock, assistantMessa
 		isConcurrencySafe: safe,
 		promise:           make(chan struct{}),
 	}
+	e.pendingTools.Add(1)
 	e.tools = append(e.tools, tt)
+	e.signalStateLocked()
+	e.mu.Unlock()
+
 	go e.processQueue()
 }
 
 // GetRemainingResults blocks until all tools complete and returns results in order.
 func (e *StreamingToolExecutor) GetRemainingResults(ctx context.Context) ([]types.Message, error) {
-	e.mu.Lock()
 	for {
-		done := true
-		for i := range e.tools {
-			if e.tools[i].status != statusCompleted && e.tools[i].status != statusYielded {
-				done = false
-				break
+		e.mu.Lock()
+		if e.allToolsFinishedLocked() {
+			var out []types.Message
+			for i := range e.tools {
+				out = append(out, e.tools[i].results...)
 			}
+			e.mu.Unlock()
+			return out, nil
 		}
-		if done {
-			break
-		}
-		e.progressCond.Wait()
-	}
-	e.mu.Unlock()
+		changed := e.stateChanged
+		e.mu.Unlock()
 
-	var out []types.Message
-	for i := range e.tools {
-		out = append(out, e.tools[i].results...)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case <-changed:
+		}
 	}
-	return out, nil
+}
+
+func (e *StreamingToolExecutor) allToolsFinishedLocked() bool {
+	for i := range e.tools {
+		if e.tools[i].status != statusCompleted && e.tools[i].status != statusYielded {
+			return false
+		}
+	}
+	return true
+}
+
+func (e *StreamingToolExecutor) signalStateLocked() {
+	close(e.stateChanged)
+	e.stateChanged = make(chan struct{})
 }
 
 func (e *StreamingToolExecutor) processQueue() {
 	e.mu.Lock()
-	defer e.mu.Unlock()
-
+	var ready []int
 	for i := range e.tools {
 		t := &e.tools[i]
 		if t.status != statusQueued {
@@ -179,11 +235,19 @@ func (e *StreamingToolExecutor) processQueue() {
 		}
 		if e.canExecute(t.isConcurrencySafe) {
 			t.status = statusExecuting
-			go e.executeTool(t)
+			ready = append(ready, i)
 		} else if !t.isConcurrencySafe {
 			// Non-concurrent tool blocked; stop here to preserve order
 			break
 		}
+	}
+	if len(ready) > 0 {
+		e.signalStateLocked()
+	}
+	e.mu.Unlock()
+
+	for _, index := range ready {
+		go e.executeTool(index)
 	}
 }
 
@@ -209,7 +273,13 @@ func (e *StreamingToolExecutor) canExecute(isSafe bool) bool {
 	return true
 }
 
-func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
+func (e *StreamingToolExecutor) executeTool(index int) {
+	defer e.pendingTools.Done()
+
+	e.mu.Lock()
+	t := e.tools[index]
+	e.mu.Unlock()
+
 	ctx := e.toolUseContext
 	// Apply context modifiers from previous non-concurrent tools
 	for _, mod := range t.contextModifiers {
@@ -236,46 +306,61 @@ func (e *StreamingToolExecutor) executeTool(t *trackedTool) {
 	result, err := runSingleTool(ctx, t.block, t.assistantMessage, e.toolDefinitions, e.canUseTool, onProgress)
 
 	e.mu.Lock()
-
-	if e.discarded {
-		t.status = statusCompleted
-		t.results = []types.Message{e.makeErrorMessage(t.block.ID, t.assistantMessage, "Tool execution discarded due to streaming fallback")}
-		e.mu.Unlock()
-		e.progressCond.Broadcast()
-		go e.processQueue()
-		return
-	}
-
+	tracked := &e.tools[index]
 	var finalMsg types.Message
-	if err != nil {
+	if e.discarded {
+		finalMsg = e.makeErrorMessage(t.block.ID, t.assistantMessage, "Tool execution discarded due to streaming fallback")
+	} else if err != nil {
 		finalMsg = e.makeErrorMessage(t.block.ID, t.assistantMessage, err.Error())
-		t.results = []types.Message{finalMsg}
 		if isBashTool(t.block.Name) {
 			e.hasErrored = true
 			e.siblingCancel()
 		}
 	} else {
 		finalMsg = result
-		t.results = []types.Message{finalMsg}
 	}
-	t.status = statusCompleted
-
+	tracked.results = []types.Message{finalMsg}
+	tracked.status = statusCompleted
+	finalEvents := e.collectReadyResultEventsLocked()
+	e.signalStateLocked()
+	e.enqueueEvents(finalEvents)
 	e.mu.Unlock()
-	e.progressCond.Broadcast()
-
-	// Stream the final result event
-	e.sendEvent(types.StreamMessage{Message: finalMsg})
 
 	// Re-process queue now that a slot may have opened
 	go e.processQueue()
 }
 
-// sendEvent delivers an event to the events channel, swallowing the panic
-// that occurs if the channel has already been closed. This prevents races
-// between tool goroutines finishing and the consumer calling Close().
+func (e *StreamingToolExecutor) collectReadyResultEventsLocked() []types.StreamEvent {
+	var events []types.StreamEvent
+	for e.nextResultEvent < len(e.tools) {
+		tracked := &e.tools[e.nextResultEvent]
+		if tracked.status != statusCompleted && tracked.status != statusYielded {
+			break
+		}
+		for _, result := range tracked.results {
+			events = append(events, types.StreamMessage{Message: result})
+		}
+		e.nextResultEvent++
+	}
+	return events
+}
+
+// sendEvent appends to the dispatcher-owned event queue. Workers never send
+// to or close the public channel directly.
 func (e *StreamingToolExecutor) sendEvent(ev types.StreamEvent) {
-	defer func() { recover() }()
-	e.events <- ev
+	e.enqueueEvents([]types.StreamEvent{ev})
+}
+
+func (e *StreamingToolExecutor) enqueueEvents(events []types.StreamEvent) {
+	if len(events) == 0 {
+		return
+	}
+	e.eventMu.Lock()
+	if !e.eventQueueClosed {
+		e.eventQueue = append(e.eventQueue, events...)
+		e.eventCond.Signal()
+	}
+	e.eventMu.Unlock()
 }
 
 func (e *StreamingToolExecutor) makeErrorMessage(toolUseID string, assistantMsg types.Message, text string) types.Message {

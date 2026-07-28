@@ -38,7 +38,11 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 		}
 
 		terminal := l.queryLoop(ctx, params, &state, out)
-		_ = terminal // caller can inspect final messages
+		out <- types.StreamTerminal{
+			Reason:  string(terminal.Reason),
+			Message: terminal.Message,
+			Error:   terminal.Error,
+		}
 	}()
 
 	return out, nil

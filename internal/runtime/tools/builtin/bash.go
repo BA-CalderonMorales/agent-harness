@@ -23,9 +23,9 @@ var BashTool = tools.NewTool(tools.Tool{
 	},
 	Capabilities: tools.CapabilityFlags{
 		IsEnabled:         func() bool { return true },
-		IsConcurrencySafe: func(input map[string]any) bool { return true },
+		IsConcurrencySafe: func(input map[string]any) bool { return false },
 		IsReadOnly:        func(map[string]any) bool { return false },
-		IsDestructive:     detectDestructive,
+		IsDestructive:     func(map[string]any) bool { return true },
 		InterruptBehavior: func() string { return "cancel" },
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
