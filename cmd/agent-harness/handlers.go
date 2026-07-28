@@ -15,7 +15,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/permissions"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -183,7 +182,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			Tools:         app.toolRegistry.FilterEnabled(),
 			Debug:         false,
 		},
-		AbortController: ctx,
+		AbortController:   ctx,
+		RequireCanUseTool: true,
 		SubAgentQuery: func(prompt string) (string, error) {
 			// Sub-agent runs a single-turn query with fresh context
 			subCtx, subCancel := context.WithTimeout(ctx, 60*time.Second)
@@ -286,86 +286,116 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 // createToolPermissionFunc creates the permission checking function for tools.
 func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 	return func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
-		t, ok := app.toolRegistry.FindToolByName(toolName)
-		if !ok {
-			app.logAudit(toolName, toolInput, false, "deny")
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "unknown tool"}, nil
+		auditEvent := func(event tools.ToolAuditEvent) error {
+			return app.logAudit(event)
 		}
-
-		// Check permission mode first: non-interactive denials before approval UI
-		permDecision := app.checkPermissionMode(toolName)
-		if permDecision.Behavior == tools.Deny {
-			app.logAudit(toolName, toolInput, false, "deny")
-			return permDecision, nil
-		}
-
-		var decisionStr string
-
-		needsApproval := approval.RequiresApproval(toolName) || permDecision.Behavior == tools.Ask
-		if needsApproval {
+		checkpoint := func() (tools.PermissionDecision, error) {
 			cmd := app.extractCommandForDisplay(toolName, toolInput)
-
-			tuiApp.Send(tui.ToolExecutingMsg{
-				ToolName: toolName,
-				Command:  cmd,
-			})
+			if tuiApp != nil {
+				tuiApp.Send(tui.ToolExecutingMsg{
+					ToolName: toolName,
+					Command:  cmd,
+				})
+			}
 
 			if app.executionMode == approval.ModeInteractive {
 				decision, err := app.requestCommandApproval(toolName, cmd, toolInput)
 				if err != nil {
-					app.logAudit(toolName, toolInput, false, "deny")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  sprintf("Approval failed: %v", err),
 					}, nil
 				}
 				if !decision.IsApproved() {
-					app.logAudit(toolName, toolInput, false, "reject")
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  "Command rejected by user",
 					}, nil
 				}
-				decisionStr = "approve"
-			} else {
-				decisionStr = "auto"
 			}
+			return tools.PermissionDecision{
+				Behavior:     tools.Allow,
+				UpdatedInput: toolInput,
+			}, nil
+		}
+
+		makeDecision := func(behavior tools.DecisionBehavior, message string) tools.PermissionDecision {
+			return tools.PermissionDecision{
+				Behavior:     behavior,
+				UpdatedInput: toolInput,
+				Message:      message,
+				Checkpoint:   checkpoint,
+				Audit:        auditEvent,
+			}
+		}
+
+		// Explicit deny rules are the first global-policy layer.
+		for _, denied := range app.config.AlwaysDeny {
+			if denied == toolName {
+				return makeDecision(tools.Deny, "denied by always_deny"), nil
+			}
+		}
+
+		toolDef, ok := app.toolRegistry.FindToolByName(toolName)
+		if !ok {
+			return makeDecision(tools.Deny, "unknown tool"), nil
 		}
 
 		for _, allowed := range app.config.AlwaysAllow {
 			if allowed == toolName {
-				app.logAudit(toolName, toolInput, true, "auto")
-				return tools.PermissionDecision{Behavior: tools.Allow}, nil
+				return makeDecision(tools.Allow, ""), nil
 			}
 		}
 
-		permCtx := permissions.EmptyContext()
-		result := permissions.Evaluate(t, toolInput, permCtx)
-		if result.Behavior == tools.Allow {
-			if decisionStr == "" {
-				decisionStr = "auto"
-			}
-			app.logAudit(toolName, toolInput, true, decisionStr)
-		} else {
-			app.logAudit(toolName, toolInput, false, "deny")
+		permDecision := app.checkPermissionMode(toolName)
+		if permDecision.Behavior == tools.Deny {
+			return makeDecision(tools.Deny, permDecision.Message), nil
 		}
-		return result, nil
+
+		needsApproval := permDecision.Behavior == tools.Ask ||
+			approval.RequiresApproval(toolName) ||
+			strings.HasPrefix(toolName, "mcp_") ||
+			(toolDef.Capabilities.IsDestructive != nil && toolDef.Capabilities.IsDestructive(toolInput))
+		if needsApproval {
+			return makeDecision(tools.Ask, permDecision.Message), nil
+		}
+		return makeDecision(tools.Allow, ""), nil
 	}
 }
 
 // logAudit records a tool execution to the audit log.
-func (app *App) logAudit(toolName string, toolInput map[string]any, approved bool, decision string) {
+func (app *App) logAudit(event tools.ToolAuditEvent) error {
 	if app.auditLogger == nil {
-		return
+		return fmt.Errorf("audit logger unavailable")
 	}
-	_ = app.auditLogger.Log(audit.Entry{
-		SessionID:      app.session.ID,
-		ToolName:       toolName,
-		InputHash:      audit.HashInput(toolInput),
-		Approved:       approved,
-		Decision:       decision,
-		Persona:        app.session.Persona,
-		PermissionMode: app.config.PermissionMode.String(),
+
+	sessionID := ""
+	personaName := ""
+	if app.session != nil {
+		sessionID = app.session.ID
+		personaName = app.session.Persona
+	}
+	permissionMode := ""
+	if app.config != nil {
+		permissionMode = app.config.PermissionMode.String()
+	}
+	errorText := ""
+	if event.Err != nil {
+		errorText = event.Err.Error()
+	}
+
+	return app.auditLogger.Log(audit.Entry{
+		SessionID:      sessionID,
+		Event:          event.Event,
+		ToolCallID:     event.ToolCallID,
+		ToolName:       event.ToolName,
+		InputHash:      audit.HashInput(event.Input),
+		Approved:       event.Behavior == tools.Allow,
+		Decision:       string(event.Behavior),
+		DurationMillis: event.DurationMillis,
+		Error:          errorText,
+		Persona:        personaName,
+		PermissionMode: permissionMode,
 	})
 }
 

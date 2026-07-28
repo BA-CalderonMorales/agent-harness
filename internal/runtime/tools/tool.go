@@ -38,6 +38,27 @@ type PermissionDecision struct {
 	UpdatedInput   map[string]any
 	Message        string
 	DecisionReason string
+	// Checkpoint performs a deferred approval after global and tool-local
+	// policy have both been evaluated. It is intentionally optional so
+	// non-interactive callers can fail closed when an Ask cannot be resolved.
+	Checkpoint func() (PermissionDecision, error)
+	// Audit records the shared tool lifecycle. The executor invokes it before
+	// approval or execution so durable intent exists before any side effect.
+	Audit func(ToolAuditEvent) error
+}
+
+// ToolAuditEvent is the executor-owned audit record passed to the application.
+// Keeping this transport type in tools avoids coupling the agent loop to a
+// concrete audit backend.
+type ToolAuditEvent struct {
+	Event          string
+	ToolCallID     string
+	ToolName       string
+	Input          map[string]any
+	Behavior       DecisionBehavior
+	Message        string
+	DurationMillis int64
+	Err            error
 }
 
 // DecisionBehavior enumerates permission outcomes.

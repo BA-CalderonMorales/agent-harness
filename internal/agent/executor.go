@@ -126,21 +126,8 @@ func (e *StreamingToolExecutor) AddTool(block types.ToolUseBlock, assistantMessa
 	defer e.mu.Unlock()
 
 	toolDef, ok := findTool(e.toolDefinitions, block.Name)
-	if !ok {
-		e.tools = append(e.tools, trackedTool{
-			id:                block.ID,
-			block:             block,
-			assistantMessage:  assistantMessage,
-			status:            statusCompleted,
-			isConcurrencySafe: true,
-			results:           []types.Message{e.makeErrorMessage(block.ID, assistantMessage, fmt.Sprintf("Error: No such tool available: %s", block.Name))},
-		})
-		e.progressCond.Broadcast()
-		return
-	}
-
 	safe := false
-	if toolDef.Capabilities.IsConcurrencySafe != nil {
+	if ok && toolDef.Capabilities.IsConcurrencySafe != nil {
 		safe = toolDef.Capabilities.IsConcurrencySafe(block.Input)
 	}
 
@@ -320,54 +307,147 @@ func isBashTool(name string) bool {
 
 // runSingleTool executes one tool call.
 func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg types.Message, defs []tools.Tool, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (types.Message, error) {
-	toolDef, ok := findTool(defs, block.Name)
-	if !ok {
-		return types.Message{}, fmt.Errorf("no such tool: %s", block.Name)
+	toolDef, toolFound := findTool(defs, block.Name)
+
+	// Work on a private input map so canonicalization hooks cannot mutate the
+	// assistant message or another policy layer's view of the proposal.
+	input := make(map[string]any, len(block.Input))
+	for key, value := range block.Input {
+		input[key] = value
 	}
 
-	// Validate input
-	if toolDef.ValidateInput != nil {
+	var validationErr error
+	if toolFound && toolDef.ValidateInput != nil {
 		vr := toolDef.ValidateInput(block.Input, ctx)
 		if !vr.Valid {
-			return types.Message{}, fmt.Errorf("validation failed: %s", vr.Message)
+			validationErr = fmt.Errorf("validation failed: %s", vr.Message)
 		}
 	}
 
-	// Permissions
-	decision := toolDef.CheckPermissions(block.Input, ctx)
-	if decision.Behavior == tools.Deny {
-		return types.Message{}, fmt.Errorf("permission denied: %s", decision.Message)
+	// Canonicalize before either policy layer sees the proposal.
+	if toolFound && toolDef.BackfillObservableInput != nil {
+		toolDef.BackfillObservableInput(input)
 	}
-	if decision.Behavior == tools.Ask && canUseTool != nil {
+
+	globalDecision := tools.PermissionDecision{
+		Behavior:     tools.Allow,
+		UpdatedInput: input,
+	}
+	if canUseTool != nil {
 		var err error
-		decision, err = canUseTool(block.Name, block.Input, ctx)
+		globalDecision, err = canUseTool(block.Name, input, ctx)
 		if err != nil {
 			return types.Message{}, fmt.Errorf("permission check error: %w", err)
 		}
-		if decision.Behavior == tools.Deny {
-			return types.Message{}, fmt.Errorf("permission denied: %s", decision.Message)
-		}
+	} else if ctx.RequireCanUseTool {
+		return types.Message{}, fmt.Errorf("permission denied: global policy is unavailable")
 	}
 
-	input := block.Input
+	if globalDecision.UpdatedInput != nil {
+		input = globalDecision.UpdatedInput
+	}
+
+	auditEvent := func(event string, behavior tools.DecisionBehavior, message string, durationMillis int64, eventErr error) error {
+		if globalDecision.Audit == nil {
+			return nil
+		}
+		return globalDecision.Audit(tools.ToolAuditEvent{
+			Event:          event,
+			ToolCallID:     block.ID,
+			ToolName:       block.Name,
+			Input:          input,
+			Behavior:       behavior,
+			Message:        message,
+			DurationMillis: durationMillis,
+			Err:            eventErr,
+		})
+	}
+
+	if err := auditEvent("proposal", globalDecision.Behavior, globalDecision.Message, 0, nil); err != nil {
+		return types.Message{}, fmt.Errorf("permission denied: durable proposal audit failed: %w", err)
+	}
+
+	if !toolFound {
+		decisionErr := fmt.Errorf("Error: No such tool available: %s", block.Name)
+		if err := auditEvent("decision", tools.Deny, decisionErr.Error(), 0, decisionErr); err != nil {
+			return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", decisionErr, err)
+		}
+		return types.Message{}, decisionErr
+	}
+
+	if validationErr != nil {
+		if err := auditEvent("decision", tools.Deny, validationErr.Error(), 0, validationErr); err != nil {
+			return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", validationErr, err)
+		}
+		return types.Message{}, validationErr
+	}
+
+	localDecision := tools.PermissionDecision{
+		Behavior:     tools.Allow,
+		UpdatedInput: input,
+	}
+	if toolDef.CheckPermissions != nil {
+		localDecision = toolDef.CheckPermissions(input, ctx)
+	}
+	decision := mergePermissionDecisions(globalDecision, localDecision)
 	if decision.UpdatedInput != nil {
 		input = decision.UpdatedInput
 	}
 
-	// Backfill observable input
-	if toolDef.BackfillObservableInput != nil {
-		// Shallow clone
-		cloned := make(map[string]any, len(input))
-		for k, v := range input {
-			cloned[k] = v
+	if decision.Behavior == tools.Deny {
+		decisionErr := fmt.Errorf("permission denied: %s", decision.Message)
+		if err := auditEvent("decision", tools.Deny, decision.Message, 0, decisionErr); err != nil {
+			return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", decisionErr, err)
 		}
-		toolDef.BackfillObservableInput(cloned)
-		input = cloned
+		return types.Message{}, decisionErr
 	}
 
-	// Call
+	if decision.Behavior == tools.Ask {
+		if globalDecision.Checkpoint == nil {
+			decisionErr := fmt.Errorf("permission denied: approval checkpoint is unavailable")
+			if err := auditEvent("decision", tools.Deny, decisionErr.Error(), 0, decisionErr); err != nil {
+				return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", decisionErr, err)
+			}
+			return types.Message{}, decisionErr
+		}
+
+		checkpointDecision, err := globalDecision.Checkpoint()
+		if err != nil {
+			decisionErr := fmt.Errorf("approval checkpoint failed: %w", err)
+			if auditErr := auditEvent("decision", tools.Deny, decisionErr.Error(), 0, decisionErr); auditErr != nil {
+				return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", decisionErr, auditErr)
+			}
+			return types.Message{}, decisionErr
+		}
+		if checkpointDecision.UpdatedInput != nil {
+			input = checkpointDecision.UpdatedInput
+		}
+		if checkpointDecision.Behavior != tools.Allow {
+			decisionErr := fmt.Errorf("permission denied: %s", checkpointDecision.Message)
+			if auditErr := auditEvent("decision", tools.Deny, checkpointDecision.Message, 0, decisionErr); auditErr != nil {
+				return types.Message{}, fmt.Errorf("%v (decision audit failed: %w)", decisionErr, auditErr)
+			}
+			return types.Message{}, decisionErr
+		}
+		decision.Behavior = tools.Allow
+		decision.Message = checkpointDecision.Message
+	}
+
+	if err := auditEvent("decision", tools.Allow, decision.Message, 0, nil); err != nil {
+		return types.Message{}, fmt.Errorf("permission denied: durable decision audit failed: %w", err)
+	}
+
+	started := time.Now()
+	if err := auditEvent("start", tools.Allow, "", 0, nil); err != nil {
+		return types.Message{}, fmt.Errorf("tool execution blocked: durable start audit failed: %w", err)
+	}
+
 	result, err := toolDef.Call(input, ctx, canUseTool, onProgress)
 	if err != nil {
+		durationMillis := time.Since(started).Milliseconds()
+		if auditErr := auditEvent("failure", tools.Allow, err.Error(), durationMillis, err); auditErr != nil {
+			return types.Message{}, fmt.Errorf("tool failed: %v (outcome audit failed: %w)", err, auditErr)
+		}
 		return types.Message{}, err
 	}
 
@@ -386,10 +466,50 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 	}
 
 	mapped := toolDef.MapResult(result.Data, block.ID)
+	if err := auditEvent("success", tools.Allow, "", time.Since(started).Milliseconds(), nil); err != nil {
+		return types.Message{}, fmt.Errorf("tool succeeded but outcome audit failed: %w", err)
+	}
 	return types.Message{
 		Role:    types.RoleUser,
 		Content: []types.ContentBlock{mapped},
 	}, nil
+}
+
+func mergePermissionDecisions(global, local tools.PermissionDecision) tools.PermissionDecision {
+	merged := global
+	if local.UpdatedInput != nil {
+		merged.UpdatedInput = local.UpdatedInput
+	}
+
+	if global.Behavior == tools.Deny {
+		return merged
+	}
+	if global.Behavior != tools.Allow && global.Behavior != tools.Ask {
+		merged.Behavior = tools.Deny
+		merged.Message = "unsupported global permission decision"
+		return merged
+	}
+
+	switch local.Behavior {
+	case tools.Deny:
+		merged.Behavior = tools.Deny
+		merged.Message = local.Message
+	case tools.Ask:
+		merged.Behavior = tools.Ask
+		if local.Message != "" {
+			merged.Message = local.Message
+		}
+	case tools.Allow:
+		if global.Behavior == tools.Ask {
+			merged.Behavior = tools.Ask
+		} else {
+			merged.Behavior = tools.Allow
+		}
+	default:
+		merged.Behavior = tools.Deny
+		merged.Message = "unsupported tool-specific permission decision"
+	}
+	return merged
 }
 
 // runToolsBatch executes a batch of tools with partitioning.
