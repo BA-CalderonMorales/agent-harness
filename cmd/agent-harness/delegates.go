@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -26,41 +27,73 @@ func (d *tuiHomeDelegate) OnNewChat() {
 		d.app.session = d.app.sessionManager.CreateSession("")
 	}
 	if d.app.session != nil && len(d.app.session.Messages) > 0 {
-		_, _ = d.app.sessionManager.SaveCurrent()
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
 	}
 	model := d.app.session.Model
 	personaName := d.app.session.Persona
 	d.app.session = d.app.sessionManager.CreateSession(model)
 	d.app.session.Persona = personaName
 	d.app.sessionManager.SetCurrent(d.app.session)
-	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: sprintf("Starting new chat %s.", d.app.session.ID[:8])})
-	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), d.app.session.Persona, d.app.session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
-	d.tuiApp.ShowStatus(sprintf("Started new chat %s", d.app.session.ID[:8]), "success")
+	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to persist new session: %v", err), Type: "error"})
+		return
+	}
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Transcript:     nil,
+		Model:          d.app.session.Model,
+		Persona:        d.app.session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Started new chat %s", d.app.session.ID[:8]),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
 	path, err := exportSession(d.app.session, "")
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Export failed: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Export failed: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
+	absPath, absErr := filepath.Abs(path)
+	if absErr != nil {
+		absPath = path
+	}
+	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
 }
 
 func (d *tuiHomeDelegate) OnLoadSession(id string) {
+	if d.app.session != nil && d.app.session.ID != id {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
 	session, err := d.app.sessionManager.LoadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session: %v", err), Type: "error"})
 		return
 	}
 	d.app.session = session
-	d.app.sessionManager.SetCurrent(session)
-	d.tuiApp.SetChatMessages(session.Messages)
-	d.tuiApp.SetChatPersona(session.Persona)
-	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
-	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.app.costTracker.SetModel(session.Model)
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      session.ID,
+		Transcript:     session.Messages,
+		Model:          session.Model,
+		Persona:        session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Loaded session %s", shortID(id)),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      session.EstimateTokens(),
+	})
 }
 
 // tuiSessionsDelegate connects TUI sessions to the app.
@@ -69,67 +102,150 @@ type tuiSessionsDelegate struct {
 	tuiApp *tui.App
 }
 
-// OnSessionSelect handles session selection.
 func (d *tuiSessionsDelegate) OnSessionSelect(id string) {
+	if d.app.session != nil && d.app.session.ID != id {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
 	session, err := d.app.sessionManager.LoadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session: %v", err), Type: "error"})
 		return
 	}
 	d.app.session = session
-	d.app.sessionManager.SetCurrent(session)
-	d.tuiApp.SetChatMessages(session.Messages)
-	d.tuiApp.SetChatPersona(session.Persona)
-	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
-	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.app.costTracker.SetModel(session.Model)
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      session.ID,
+		Transcript:     session.Messages,
+		Model:          session.Model,
+		Persona:        session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Loaded session %s", shortID(id)),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      session.EstimateTokens(),
+	})
 }
 
-// OnSessionDelete handles session deletion.
 func (d *tuiSessionsDelegate) OnSessionDelete(id string) {
+	isActive := d.app.session != nil && d.app.session.ID == id
+	if isActive {
+		model := d.app.session.Model
+		personaName := d.app.session.Persona
+		replacement := d.app.sessionManager.CreateSession(model)
+		replacement.Persona = personaName
+		d.app.sessionManager.SetCurrent(replacement)
+		d.app.session = replacement
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to create replacement session: %v", err), Type: "error"})
+			replacement.ID = ""
+			d.app.session = nil
+			return
+		}
+	}
 	if err := d.app.sessionManager.DeleteSession(id); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to delete session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to delete session: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Deleted session %s", id[:8]))
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	if isActive {
+		d.tuiApp.Send(tui.SessionActivatedMsg{
+			SessionID:      d.app.session.ID,
+			Transcript:     nil,
+			Model:          d.app.session.Model,
+			Persona:        d.app.session.Persona,
+			Sessions:       d.app.getSessionInfos(),
+			Notice:         sprintf("Deleted session %s; replacement active", shortID(id)),
+			NoticeType:     "success",
+			SwitchToChat:   true,
+			PermissionMode: d.app.config.PermissionMode.String(),
+			EstTokens:      d.app.session.EstimateTokens(),
+		})
+	} else {
+		d.tuiApp.Send(tui.SessionsRefreshedMsg{
+			Sessions:   d.app.getSessionInfos(),
+			Notice:     sprintf("Deleted session %s", shortID(id)),
+			NoticeType: "success",
+		})
+	}
 }
 
-// OnSessionExport handles session export.
 func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 	session, err := d.app.sessionManager.ReadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session for export: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session for export: %v", err), Type: "error"})
 		return
 	}
 	path, err := exportSession(session, "")
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to export: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to export: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
+	absPath, absErr := filepath.Abs(path)
+	if absErr != nil {
+		absPath = path
+	}
+	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
 }
 
-// OnSessionCopy copies session content to clipboard.
 func (d *tuiSessionsDelegate) OnSessionCopy(id string) {
 	session, err := d.app.sessionManager.ReadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session for copy: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session for copy: %v", err), Type: "error"})
 		return
 	}
 
 	content := formatSessionForClipboard(session)
 	if err := clipboard.WriteAll(content); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to copy to clipboard: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to copy to clipboard: %v", err), Type: "error"})
 		return
 	}
 
-	d.tuiApp.AddMessage("system", sprintf("Copied conversation from session %s to clipboard (%d messages)", id[:8], len(session.Messages)))
+	d.tuiApp.Send(tui.StatusMsg{
+		Text: sprintf("Copied %d messages from session %s", len(session.Messages), shortID(id)),
+		Type: "success",
+	})
 }
 
-// OnSessionLoad triggers session list refresh.
 func (d *tuiSessionsDelegate) OnSessionLoad() {
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions: d.app.getSessionInfos(),
+	})
+}
+
+func (d *tuiSessionsDelegate) OnSessionNew() {
+	if d.app.session == nil {
+		d.app.session = d.app.sessionManager.CreateSession("")
+	}
+	if d.app.session != nil && len(d.app.session.Messages) > 0 {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
+	model := d.app.session.Model
+	personaName := d.app.session.Persona
+	d.app.session = d.app.sessionManager.CreateSession(model)
+	d.app.session.Persona = personaName
+	d.app.sessionManager.SetCurrent(d.app.session)
+	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to persist new session: %v", err), Type: "error"})
+		return
+	}
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Transcript:     nil,
+		Model:          d.app.session.Model,
+		Persona:        d.app.session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Started new chat %s", d.app.session.ID[:8]),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 // formatSessionForClipboard formats a session for clipboard copy.
@@ -319,4 +435,11 @@ func boolToEnabled(b bool) string {
 		return "enabled"
 	}
 	return "disabled"
+}
+
+func shortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }

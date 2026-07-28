@@ -322,9 +322,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				a.gotoActiveViewBottom()
 				return a, nil
 			case "h":
-				return a, a.switchView(viewHome)
+				if a.activeView != viewSessions {
+					return a, a.switchView(viewHome)
+				}
 			case "c":
-				return a, a.switchView(viewChat)
+				if a.activeView != viewSessions {
+					return a, a.switchView(viewChat)
+				}
 			}
 		}
 
@@ -500,6 +504,34 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, nil
+
+	case SessionActivatedMsg:
+		a.chatModel.SetMessages(msg.Transcript)
+		a.chatModel.SetModel(msg.Model)
+		a.chatModel.SetPersona(msg.Persona)
+		a.settingsModel.UpdateSettingValue("model", msg.Model)
+		a.homeModel.SetStatus(msg.Model, msg.PermissionMode, msg.Persona, msg.EstTokens)
+		a.homeModel.SetSessions(msg.Sessions)
+		a.sessionsModel.SetSessions(msg.Sessions)
+		if msg.Notice != "" {
+			a.statusMessage = msg.Notice
+			a.statusType = msg.NoticeType
+		}
+		if msg.SwitchToChat {
+			cmds = append(cmds, a.switchView(viewChat))
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	case SessionsRefreshedMsg:
+		a.homeModel.SetSessions(msg.Sessions)
+		a.sessionsModel.SetSessions(msg.Sessions)
+		if msg.Notice != "" {
+			a.statusMessage = msg.Notice
+			a.statusType = msg.NoticeType
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
 	}
 
 	// -------------------------------------------------------------------------
@@ -925,6 +957,7 @@ func (a *App) ShowStatus(text string, statusType string) {
 // RefreshSessions refreshes the sessions list.
 func (a *App) RefreshSessions(sessions []SessionInfo) {
 	a.sessionsModel.SetSessions(sessions)
+	a.homeModel.SetSessions(sessions)
 }
 
 // SetSettings sets the settings list.

@@ -75,3 +75,22 @@ type ApprovalRequestMsg struct {
 
 // AgentCancelMsg is sent when the user cancels agent execution (ESC key)
 type AgentCancelMsg struct{}
+
+type SessionActivatedMsg struct {
+	SessionID     string
+	Transcript    []types.Message
+	Model         string
+	Persona       string
+	Sessions      []SessionInfo
+	Notice        string
+	NoticeType    string
+	SwitchToChat  bool
+	PermissionMode string
+	EstTokens     int
+}
+
+type SessionsRefreshedMsg struct {
+	Sessions   []SessionInfo
+	Notice     string
+	NoticeType string
+}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,13 +45,12 @@ func ensureCurrentSession(sessions []state.SessionMetadata, currentID string) []
 			return sessions
 		}
 	}
-	// Current session not in list - find it and prepend
 	return sessions
 }
 
 // convertToSessionInfos converts SessionMetadata to SessionInfo.
 func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Session) []tui.SessionInfo {
-	var infos []tui.SessionInfo
+	infos := make([]tui.SessionInfo, 0, len(sessions))
 	for _, s := range sessions {
 		infos = append(infos, tui.SessionInfo{
 			ID:           s.ID,
@@ -63,6 +63,9 @@ func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Sess
 			IsActive:     current != nil && s.ID == current.ID,
 		})
 	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].UpdatedAt.After(infos[j].UpdatedAt)
+	})
 	return infos
 }
 

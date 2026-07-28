@@ -61,8 +61,8 @@ func TestHomeNewChatCreatesDistinctSession(t *testing.T) {
 		t.Fatalf("old session message count = %d, want 1", len(oldSession.Messages))
 	}
 
-	if _, err := os.Stat(filepath.Join(sessionDir, app.session.ID+".json")); !os.IsNotExist(err) {
-		t.Fatalf("new empty session should not eagerly overwrite/create a file, stat err = %v", err)
+	if _, err := os.Stat(filepath.Join(sessionDir, app.session.ID+".json")); err != nil {
+		t.Fatalf("new empty session should be persisted immediately, stat err = %v", err)
 	}
 }
 

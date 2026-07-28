@@ -19,8 +19,9 @@ type SessionsDelegate interface {
 	OnSessionSelect(id string)
 	OnSessionDelete(id string)
 	OnSessionExport(id string)
-	OnSessionCopy(id string) // Copy conversation to clipboard
+	OnSessionCopy(id string)
 	OnSessionLoad()
+	OnSessionNew()
 }
 
 // ---------------------------------------------------------------------------
@@ -49,7 +50,9 @@ type SessionsModel struct {
 	loading  bool
 	viewport viewport.Model
 
-	// Delegate
+	confirmingDelete bool
+	deleteTargetIdx  int
+
 	delegate SessionsDelegate
 }
 
@@ -109,10 +112,23 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if !m.focused {
-			// Still update viewport for background scrolling
 			newVP, cmd := m.viewport.Update(msg)
 			m.viewport = newVP
 			return m, cmd
+		}
+
+		if m.confirmingDelete {
+			switch msg.String() {
+			case "y", "enter":
+				m.confirmingDelete = false
+				if m.deleteTargetIdx >= 0 && m.deleteTargetIdx < len(m.sessions) && m.delegate != nil {
+					m.delegate.OnSessionDelete(m.sessions[m.deleteTargetIdx].ID)
+				}
+			case "n", "esc":
+				m.confirmingDelete = false
+				m.deleteTargetIdx = -1
+			}
+			return m, nil
 		}
 
 		switch msg.String() {
@@ -133,9 +149,15 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.delegate.OnSessionSelect(m.sessions[m.cursor].ID)
 			}
 
+		case "n":
+			if m.delegate != nil {
+				m.delegate.OnSessionNew()
+			}
+
 		case "d":
-			if m.cursor < len(m.sessions) && m.delegate != nil {
-				m.delegate.OnSessionDelete(m.sessions[m.cursor].ID)
+			if m.cursor < len(m.sessions) {
+				m.confirmingDelete = true
+				m.deleteTargetIdx = m.cursor
 			}
 
 		case "e":
@@ -228,14 +250,29 @@ func (m SessionsModel) View() string {
 	}
 
 	// List footer
-	listB.WriteString(RenderCompactFooter([]ActionHint{
+	footerHints := []ActionHint{
 		{Key: "↑/↓", Desc: "Navigate"},
 		{Key: "Enter", Desc: "Select"},
+		{Key: "n", Desc: "New"},
 		{Key: "d", Desc: "Delete"},
 		{Key: "e", Desc: "Export"},
 		{Key: "c", Desc: "Copy"},
 		{Key: "r", Desc: "Refresh"},
-	}))
+	}
+	if m.confirmingDelete {
+		title := "(untitled)"
+		if m.deleteTargetIdx >= 0 && m.deleteTargetIdx < len(m.sessions) {
+			t := m.sessions[m.deleteTargetIdx].Title
+			if t != "" {
+				title = t
+			}
+		}
+		footerHints = []ActionHint{
+			{Key: "y", Desc: fmt.Sprintf("Delete %q?", title)},
+			{Key: "n/Esc", Desc: "Cancel"},
+		}
+	}
+	listB.WriteString(RenderCompactFooter(footerHints))
 
 	listContent := lipgloss.NewStyle().Width(listW).Height(contentHeight - 2).Render(listB.String())
 
@@ -341,12 +378,12 @@ func (m *SessionsModel) Blur() {
 
 // ConsumesTab returns whether this view consumes Tab key.
 func (m SessionsModel) ConsumesTab() bool {
-	return false
+	return m.confirmingDelete
 }
 
 // ConsumesEsc returns whether this view consumes Esc key.
 func (m SessionsModel) ConsumesEsc() bool {
-	return false
+	return m.confirmingDelete
 }
 
 // Scroll scrolls the list and viewport.

@@ -13,6 +13,7 @@ type testSessionsDelegate struct {
 	deletedSession  string
 	exportedSession string
 	copiedSession   string
+	newSession      bool
 	loaded          bool
 }
 
@@ -21,6 +22,7 @@ func (d *testSessionsDelegate) OnSessionDelete(id string) { d.deletedSession = i
 func (d *testSessionsDelegate) OnSessionExport(id string) { d.exportedSession = id }
 func (d *testSessionsDelegate) OnSessionCopy(id string)   { d.copiedSession = id }
 func (d *testSessionsDelegate) OnSessionLoad()            { d.loaded = true }
+func (d *testSessionsDelegate) OnSessionNew()             { d.newSession = true }
 
 var _ = Describe("SessionsModel", func() {
 	var sessions SessionsModel
@@ -49,6 +51,7 @@ var _ = Describe("SessionsModel", func() {
 					sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
 					sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
 					sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+					sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
 				}).NotTo(Panic())
 			})
 		})
@@ -82,17 +85,40 @@ var _ = Describe("SessionsModel", func() {
 				sessions.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				Expect(delegate.selectedSession).To(Equal("2"))
 
-				By("pressing d to delete")
-				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				By("pressing d to begin delete confirmation")
+				m, _ = sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				sessions = m.(SessionsModel)
+				Expect(sessions.confirmingDelete).To(BeTrue())
+				Expect(delegate.deletedSession).To(Equal(""))
+
+				By("pressing y to confirm delete")
+				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+				Expect(delegate.deletedSession).To(Equal("2"))
+
+				By("pressing d then n to cancel delete")
+				sessions.SetSessions([]SessionInfo{
+					{ID: "10", Title: "S10"},
+				})
+				sessions.cursor = 0
+				m, _ = sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				sessions = m.(SessionsModel)
+				Expect(sessions.confirmingDelete).To(BeTrue())
+				m, _ = sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+				sessions = m.(SessionsModel)
+				Expect(sessions.confirmingDelete).To(BeFalse())
 				Expect(delegate.deletedSession).To(Equal("2"))
 
 				By("pressing e to export")
 				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("e")})
-				Expect(delegate.exportedSession).To(Equal("2"))
+				Expect(delegate.exportedSession).To(Equal("10"))
 
 				By("pressing c to copy")
 				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-				Expect(delegate.copiedSession).To(Equal("2"))
+				Expect(delegate.copiedSession).To(Equal("10"))
+
+				By("pressing n to create new session")
+				sessions.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+				Expect(delegate.newSession).To(BeTrue())
 			})
 
 			It("should not navigate past bounds", func() {

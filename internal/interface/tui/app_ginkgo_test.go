@@ -3,8 +3,10 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
@@ -766,6 +768,7 @@ var _ = Describe("App", func() {
 			It("should refresh sessions", func() {
 				app.RefreshSessions([]SessionInfo{{ID: "1", Title: "S1"}})
 				Expect(app.sessionsModel.sessions).To(HaveLen(1))
+				Expect(app.homeModel.sessions).To(HaveLen(1))
 			})
 
 			It("should set settings", func() {
@@ -816,6 +819,123 @@ var _ = Describe("App", func() {
 				app.ShowStatus("Ready", "info")
 				Expect(app.statusMessage).To(Equal("Ready"))
 				Expect(app.statusType).To(Equal("info"))
+			})
+		})
+	})
+
+	Describe("Session Activation Messages", func() {
+		Context("Given a SessionActivatedMsg", func() {
+			It("should update chat transcript, model, persona, and switch to Chat", func() {
+				transcript := []types.Message{
+					{UUID: "m1", Role: types.RoleUser, Timestamp: time.Now(), Content: []types.ContentBlock{types.TextBlock{Text: "hello"}}},
+				}
+				sessions := []SessionInfo{{ID: "sess-aaa11111", Title: "S1"}}
+				model, _ := app.Update(SessionActivatedMsg{
+					SessionID:      "sess-aaa11111",
+					Transcript:     transcript,
+					Model:          "gpt-4o",
+					Persona:        "developer",
+					Sessions:       sessions,
+					Notice:         "Loaded session sess-aaa",
+					NoticeType:     "success",
+					SwitchToChat:   true,
+					PermissionMode: "workspace-write",
+					EstTokens:      100,
+				})
+				updated := model.(App)
+				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
+				Expect(updated.chatModel.persona).To(Equal("developer"))
+				Expect(updated.chatModel.messages).To(HaveLen(1))
+				Expect(updated.activeView).To(Equal(viewChat))
+				Expect(updated.statusMessage).To(Equal("Loaded session sess-aaa"))
+				Expect(updated.statusType).To(Equal("success"))
+				Expect(updated.sessionsModel.sessions).To(HaveLen(1))
+				Expect(updated.homeModel.sessions).To(HaveLen(1))
+				Expect(updated.homeModel.model).To(Equal("gpt-4o"))
+				Expect(updated.homeModel.permissionMode).To(Equal("workspace-write"))
+			})
+
+			It("should not switch view when SwitchToChat is false", func() {
+				app.activeView = viewHome
+				model, _ := app.Update(SessionActivatedMsg{
+					SessionID:    "sess-bbb22222",
+					SwitchToChat: false,
+				})
+				updated := model.(App)
+				Expect(updated.activeView).To(Equal(viewHome))
+			})
+		})
+
+		Context("Given a SessionsRefreshedMsg", func() {
+			It("should update both home and sessions models", func() {
+				sessions := []SessionInfo{
+					{ID: "sess-ccc33333", Title: "Recent"},
+					{ID: "sess-ddd44444", Title: "Older"},
+				}
+				model, _ := app.Update(SessionsRefreshedMsg{
+					Sessions:   sessions,
+					Notice:     "Refreshed",
+					NoticeType: "info",
+				})
+				updated := model.(App)
+				Expect(updated.sessionsModel.sessions).To(HaveLen(2))
+				Expect(updated.homeModel.sessions).To(HaveLen(2))
+				Expect(updated.statusMessage).To(Equal("Refreshed"))
+			})
+		})
+	})
+
+	Describe("Sessions Key Routing", func() {
+		Context("Given the sessions view is active in normal mode", func() {
+			BeforeEach(func() {
+				app.activeView = viewSessions
+				app.mode = ModeNormal
+				app.sessionsModel.Focus()
+				app.sessionsModel.SetSessions([]SessionInfo{
+					{ID: "sess-eee55555", Title: "Target"},
+				})
+			})
+
+			It("should not intercept 'c' globally when sessions view is active", func() {
+				delegate := &testSessionsDelegate{}
+				app.sessionsModel.SetDelegate(delegate)
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
+				updated := model.(App)
+				Expect(updated.activeView).To(Equal(viewSessions))
+				Expect(delegate.copiedSession).To(Equal("sess-eee55555"))
+			})
+
+			It("should not intercept 'h' globally when sessions view is active", func() {
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+				updated := model.(App)
+				Expect(updated.activeView).To(Equal(viewSessions))
+			})
+
+			It("should require delete confirmation before dispatching", func() {
+				delegate := &testSessionsDelegate{}
+				app.sessionsModel.SetDelegate(delegate)
+				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				updated := m.(App)
+				Expect(delegate.deletedSession).To(Equal(""))
+				Expect(updated.sessionsModel.confirmingDelete).To(BeTrue())
+
+				m2, _ := updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
+				final := m2.(App)
+				Expect(delegate.deletedSession).To(Equal("sess-eee55555"))
+				Expect(final.sessionsModel.confirmingDelete).To(BeFalse())
+			})
+
+			It("should cancel delete on Esc while confirming", func() {
+				delegate := &testSessionsDelegate{}
+				app.sessionsModel.SetDelegate(delegate)
+				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				updated := m.(App)
+				Expect(updated.sessionsModel.confirmingDelete).To(BeTrue())
+
+				m2, _ := updated.Update(tea.KeyMsg{Type: tea.KeyEsc})
+				final := m2.(App)
+				Expect(final.sessionsModel.confirmingDelete).To(BeFalse())
+				Expect(delegate.deletedSession).To(Equal(""))
 			})
 		})
 	})
