@@ -76,6 +76,30 @@ func TestSessionTokenEstimateCountsEveryContentBlock(t *testing.T) {
 	}
 }
 
+func TestSessionCompactionWithoutSummaryPreservesHistory(t *testing.T) {
+	session := NewSession("test-model")
+	session.Messages = []types.Message{
+		{UUID: "goal", Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "ORIGINAL-GOAL must not be discarded"}}},
+		{UUID: "pending", Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "PENDING-WORK remains"}}},
+	}
+
+	result := session.Compact(CompactionConfig{
+		MaxMessages:        1,
+		MaxEstimatedTokens: 1,
+		PreserveRecent:     1,
+	})
+
+	if !result.Skipped {
+		t.Fatal("Compact() discarded history without a durable summary")
+	}
+	if result.CompactedSession != session {
+		t.Fatal("Compact() replaced the session even though no summarizer was available")
+	}
+	if len(session.Messages) != 2 || !sessionMessagesContain(session.Messages, "ORIGINAL-GOAL") {
+		t.Fatalf("session history changed without a summary: %#v", session.Messages)
+	}
+}
+
 func sessionMessagesContain(messages []types.Message, want string) bool {
 	for _, message := range messages {
 		for _, block := range message.Content {

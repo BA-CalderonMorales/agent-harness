@@ -2,12 +2,14 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -111,6 +113,9 @@ func TestAutoCompactionSummarizesRemovedPrefixAndAffectsCurrentRequest(t *testin
 	if len(requests) != 2 {
 		t.Fatalf("request count = %d, want one summary request and one main request", len(requests))
 	}
+	if requests[0].Model != "test-model" {
+		t.Fatalf("summary model = %q, want configured main-loop model %q", requests[0].Model, "test-model")
+	}
 
 	summaryPrompt := firstText(requests[0].Messages)
 	if !strings.Contains(summaryPrompt, "ORIGINAL-GOAL") {
@@ -184,6 +189,52 @@ func TestPromptTooLongRecoveryActuallyCompactsBeforeRetry(t *testing.T) {
 	}
 	if !messagesContainText(mainRequests[1].Messages, "ORIGINAL-GOAL") {
 		t.Fatal("retry request lost the original goal")
+	}
+}
+
+type blockingCompactionClient struct {
+	started chan struct{}
+	once    sync.Once
+}
+
+func (c *blockingCompactionClient) Stream(context.Context, llm.Request) (<-chan types.LLMEvent, error) {
+	c.once.Do(func() {
+		close(c.started)
+	})
+	return make(chan types.LLMEvent), nil
+}
+
+func TestCompactionSummaryHonorsCancellation(t *testing.T) {
+	client := &blockingCompactionClient{started: make(chan struct{})}
+	loop := NewLoop(client)
+	loop.Config.BlockingTokenLimit = 100
+	original := compactionMessages(25)
+	state := edgeLoopState(original)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
+	go func() {
+		_, err := loop.compactMessages(ctx, state, false)
+		done <- err
+	}()
+
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for the compaction summary request")
+	}
+	cancel()
+
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("compactMessages() error = %v, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("compactMessages() did not stop after cancellation")
+	}
+	if len(state.messages) != len(original) {
+		t.Fatalf("canceled compaction changed message count to %d, want %d", len(state.messages), len(original))
 	}
 }
 

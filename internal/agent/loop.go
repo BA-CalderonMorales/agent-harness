@@ -10,6 +10,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/messages"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -76,27 +77,26 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 		}
 
-		// Build request
+		// Token blocking check with auto-compaction
+		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(state.messages) {
+			compaction, err := l.compactMessages(ctx, state, false)
+			if err != nil {
+				compactionErr := fmt.Errorf("automatic context compaction failed: %w", err)
+				out <- types.StreamError{Error: compactionErr}
+				return Terminal{Reason: TerminalReasonError, Error: compactionErr}
+			}
+			if err := emitCompaction(ctx, out, compaction); err != nil {
+				out <- types.StreamError{Error: err}
+				return Terminal{Reason: TerminalReasonUserInterrupt, Error: err}
+			}
+		}
+
+		// Build the request only after compaction so this call uses the same
+		// bounded context that callers persist from StreamContextCompacted.
 		messagesForQuery := state.messages
 		sysPrompt := params.SystemPrompt
 		for k, v := range params.SystemContext {
 			sysPrompt += fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k)
-		}
-
-		// Token blocking check with auto-compaction
-		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(messagesForQuery) {
-			compactMsg := l.autoCompactMessages(state)
-			if compactMsg != "" {
-				select {
-				case out <- types.StreamMessage{Message: types.Message{
-					Role:    types.RoleSystem,
-					Content: []types.ContentBlock{types.TextBlock{Text: compactMsg}},
-				}}:
-				case <-ctx.Done():
-					out <- types.StreamError{Error: ctx.Err()}
-					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
-				}
-			}
 		}
 
 		// Determine model
@@ -386,90 +386,174 @@ func (l *Loop) isAtBlockingLimit(msgs []types.Message) bool {
 
 // estimateTokens provides a rough character-based token estimate.
 func estimateTokens(msgs []types.Message) int {
-	total := 0
-	for _, msg := range msgs {
-		for _, block := range msg.Content {
-			switch b := block.(type) {
-			case types.TextBlock:
-				total += len(b.Text) / 4
-			case types.ToolUseBlock:
-				total += len(b.Name) / 4
-				if inputJSON, err := json.Marshal(b.Input); err == nil {
-					total += len(inputJSON) / 4
-				}
-			case types.ToolResultBlock:
-				total += len(fmt.Sprintf("%v", b.Content)) / 4
-			}
-		}
-	}
-	return total
+	return messages.EstimateTokens(msgs)
+}
+
+type compactionOutcome struct {
+	Messages     []types.Message
+	RemovedCount int
+	BeforeTokens int
+	AfterTokens  int
+	Notice       string
+}
+
+func (o compactionOutcome) changed() bool {
+	return o.RemovedCount > 0
 }
 
 // autoCompactMessages trims old messages when approaching the token limit.
 // Returns a description of what was compacted, or empty string if no compaction needed.
 func (l *Loop) autoCompactMessages(state *loopState) string {
+	outcome, err := l.compactMessages(context.Background(), state, false)
+	if err != nil {
+		return ""
+	}
+	return outcome.Notice
+}
+
+// compactMessages summarizes the exact removed prefix, then atomically swaps
+// the loop state to a bounded summary plus a token-budgeted recent suffix.
+func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool) (compactionOutcome, error) {
 	limit := l.Config.BlockingTokenLimit
 	if limit <= 0 {
 		limit = 180000
 	}
-	// Target: 80% of limit to leave headroom
 	target := limit * 8 / 10
+	if target < 1 {
+		target = 1
+	}
 	current := estimateTokens(state.messages)
-	if current <= target {
-		return ""
+	if !force && current <= target {
+		return compactionOutcome{}, nil
+	}
+	if len(state.messages) < 2 {
+		return compactionOutcome{}, fmt.Errorf("cannot compact a history with fewer than two messages")
 	}
 
-	// Preserve recent messages (last 20) and compact older ones
-	preserve := 20
-	if len(state.messages) <= preserve {
-		// Not enough history to trim meaningfully
-		return ""
+	// Reserve half of the target for the durable summary and fill the rest
+	// from newest to oldest. At least one recent message is retained.
+	recentBudget := target / 2
+	if recentBudget < 1 {
+		recentBudget = 1
 	}
-
-	removed := len(state.messages) - preserve
-	state.messages = state.messages[removed:]
-
-	// Summarize removed messages if LLM client is available
-	summaryText := fmt.Sprintf("[Context compacted: removed %d older messages]", removed)
-	if l.Client != nil {
-		if summarized, err := l.summarizeMessages(context.Background(), state.messages[:removed]); err == nil && summarized != "" {
-			summaryText = fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
+	keepStart := len(state.messages) - 1
+	recentTokens := estimateTokens(state.messages[keepStart:])
+	for keepStart > 0 {
+		nextTokens := estimateTokens(state.messages[keepStart-1 : keepStart])
+		if recentTokens+nextTokens > recentBudget {
+			break
 		}
+		keepStart--
+		recentTokens += nextTokens
+	}
+	if keepStart == 0 {
+		if !force {
+			return compactionOutcome{}, nil
+		}
+		keepStart = len(state.messages) / 2
+		if keepStart < 1 {
+			keepStart = 1
+		}
+		recentTokens = estimateTokens(state.messages[keepStart:])
 	}
 
-	// Insert compaction summary
+	removedPrefix := append([]types.Message(nil), state.messages[:keepStart]...)
+	recentSuffix := append([]types.Message(nil), state.messages[keepStart:]...)
+	model := state.toolUseContext.Options.MainLoopModel
+	if model == "" {
+		model = config.DefaultModel
+	}
+	summarized, err := l.summarizeMessages(ctx, removedPrefix, model)
+	if err != nil {
+		return compactionOutcome{}, err
+	}
+	summarized = strings.TrimSpace(summarized)
+	if summarized == "" {
+		return compactionOutcome{}, fmt.Errorf("context summarizer returned an empty summary")
+	}
+
 	summary := types.Message{
 		UUID:      uuid.New().String(),
 		Role:      types.RoleSystem,
 		Timestamp: time.Now(),
 		Content: []types.ContentBlock{
-			types.TextBlock{Text: summaryText},
+			types.TextBlock{Text: "[Earlier conversation summarized]: " + summarized},
 		},
 	}
-	state.messages = append([]types.Message{summary}, state.messages...)
+	compacted := make([]types.Message, 0, 1+len(recentSuffix))
+	compacted = append(compacted, summary)
+	compacted = append(compacted, recentSuffix...)
+	after := estimateTokens(compacted)
+	if after >= current {
+		return compactionOutcome{}, fmt.Errorf(
+			"context summarization did not reduce the history (%d estimated tokens before, %d after)",
+			current,
+			after,
+		)
+	}
+	if after > target {
+		return compactionOutcome{}, fmt.Errorf(
+			"context summary exceeds the bounded target (%d estimated tokens, target %d)",
+			after,
+			target,
+		)
+	}
 
-	return fmt.Sprintf("[Auto-compacted: removed %d older messages, %d estimated tokens → %d]",
-		removed, current, estimateTokens(state.messages))
+	state.messages = compacted
+	notice := fmt.Sprintf(
+		"[Context compacted: summarized %d older messages, %d estimated tokens → %d]",
+		len(removedPrefix),
+		current,
+		after,
+	)
+	return compactionOutcome{
+		Messages:     append([]types.Message(nil), compacted...),
+		RemovedCount: len(removedPrefix),
+		BeforeTokens: current,
+		AfterTokens:  after,
+		Notice:       notice,
+	}, nil
+}
+
+func emitCompaction(ctx context.Context, out chan<- types.StreamEvent, outcome compactionOutcome) error {
+	if !outcome.changed() {
+		return nil
+	}
+	select {
+	case out <- types.StreamContextCompacted{
+		Messages:     append([]types.Message(nil), outcome.Messages...),
+		RemovedCount: outcome.RemovedCount,
+		Notice:       outcome.Notice,
+	}:
+		return nil
+	case <-ctx.Done():
+		return ctx.Err()
+	}
 }
 
 // summarizeMessages sends old messages to the LLM for summarization.
-func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (string, error) {
+func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, model string) (string, error) {
 	if l.Client == nil {
 		return "", fmt.Errorf("no LLM client available")
 	}
 
 	var b strings.Builder
-	b.WriteString("Summarize the following conversation concisely. Preserve key decisions, facts, and context:\n\n")
+	b.WriteString("Create a durable handoff from the conversation prefix below.\n")
+	b.WriteString("Preserve the original user goal, constraints, decisions and approvals, pending work, plans, files changed, tool findings or receipts, errors, and verification status.\n")
+	b.WriteString("State uncertainty explicitly. Put the original goal and unresolved work first.\n\n")
 	for _, msg := range msgs {
 		b.WriteString(fmt.Sprintf("%s: ", msg.Role))
 		for _, block := range msg.Content {
 			switch blk := block.(type) {
 			case types.TextBlock:
 				b.WriteString(blk.Text)
+			case types.ThinkingBlock:
+				b.WriteString("[reasoning omitted from durable summary input]")
 			case types.ToolUseBlock:
-				b.WriteString(fmt.Sprintf("[tool: %s]", blk.Name))
+				input, _ := json.Marshal(blk.Input)
+				b.WriteString(fmt.Sprintf("[tool id=%s name=%s input=%s]", blk.ID, blk.Name, input))
 			case types.ToolResultBlock:
-				b.WriteString(fmt.Sprintf("[result: %v]", blk.Content))
+				b.WriteString(fmt.Sprintf("[tool result id=%s error=%t: %s]", blk.ToolUseID, blk.IsError, blk.Content))
 			}
 		}
 		b.WriteString("\n")
@@ -479,8 +563,8 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (str
 		Messages: []types.Message{
 			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: b.String()}}, Timestamp: time.Now()},
 		},
-		SystemPrompt: "You are a context summarizer. Summarize conversation history in 2-3 sentences. Be concise but preserve all key facts, decisions, and context.",
-		Model:        config.DefaultModel,
+		SystemPrompt: "You are a context summarizer producing a durable continuation record. Be concise, structured, and loss-averse. Preserve the original goal, constraints, decisions, approvals, pending tasks, plans, changed files, tool outcomes or receipts, errors, and verification state.",
+		Model:        model,
 		MaxTokens:    512,
 	}
 
@@ -490,15 +574,22 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message) (str
 	}
 
 	var result strings.Builder
-	for event := range stream {
-		switch e := event.(type) {
-		case types.LLMTextDelta:
-			result.WriteString(e.Delta)
-		case types.LLMError:
-			return result.String(), e.Error
+	for {
+		select {
+		case event, ok := <-stream:
+			if !ok {
+				return strings.TrimSpace(result.String()), nil
+			}
+			switch e := event.(type) {
+			case types.LLMTextDelta:
+				result.WriteString(e.Delta)
+			case types.LLMError:
+				return result.String(), e.Error
+			}
+		case <-ctx.Done():
+			return result.String(), ctx.Err()
 		}
 	}
-	return strings.TrimSpace(result.String()), nil
 }
 
 // attemptRecovery tries to recover from recoverable errors.
@@ -537,23 +628,24 @@ func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *l
 		return l.retryQuery(ctx, params, state, out)
 
 	case "prompt_too_long":
-		// Try compacting context and retry
 		if state.hasAttemptedReactiveCompact {
 			return false, nil, nil, fmt.Errorf("already attempted compaction")
 		}
 		state.hasAttemptedReactiveCompact = true
 
-		// In a full implementation, trigger context compaction here
-		select {
-		case out <- types.StreamMessage{Message: types.Message{
-			Role:    types.RoleSystem,
-			Content: []types.ContentBlock{types.TextBlock{Text: "[Recovering: compacting context]"}},
-		}}:
-		case <-ctx.Done():
-			return false, nil, nil, ctx.Err()
+		compaction, err := l.compactMessages(ctx, state, true)
+		if err != nil {
+			return false, nil, nil, fmt.Errorf("reactive context compaction failed: %w", err)
+		}
+		if !compaction.changed() {
+			return false, nil, nil, fmt.Errorf("reactive context compaction did not reduce the prompt")
+		}
+		if err := emitCompaction(ctx, out, compaction); err != nil {
+			return false, nil, nil, err
 		}
 
-		// Retry with (potentially) compacted messages
+		// Retry only after the state has been replaced and the exact snapshot has
+		// been emitted for durable persistence.
 		return l.retryQuery(ctx, params, state, out)
 
 	default:

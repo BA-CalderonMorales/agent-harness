@@ -19,6 +19,16 @@ type StreamMessage struct {
 
 func (StreamMessage) isStreamEvent() {}
 
+// StreamContextCompacted replaces the caller's persisted conversation with the
+// exact bounded context that subsequent model requests will use.
+type StreamContextCompacted struct {
+	Messages     []Message
+	RemovedCount int
+	Notice       string
+}
+
+func (StreamContextCompacted) isStreamEvent() {}
+
 // TombstoneMessage removes an earlier message from the transcript.
 type TombstoneMessage struct {
 	TargetUUID string

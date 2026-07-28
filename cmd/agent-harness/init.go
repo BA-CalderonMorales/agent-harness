@@ -257,6 +257,10 @@ func (app *App) initCommands() {
 			}
 			result := app.session.Compact(cfg)
 			app.session = result.CompactedSession
+			app.sessionManager.SetCurrent(app.session)
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				return "", fmt.Errorf("save compacted session: %w", err)
+			}
 			return sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
 

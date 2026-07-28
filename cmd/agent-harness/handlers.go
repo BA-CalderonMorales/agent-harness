@@ -235,9 +235,33 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 
 	var responseText strings.Builder
 	toolCallCount := 0
+	var persistenceErr error
 
 	for event := range stream {
+		// Keep draining after a persistence failure so the producer can close
+		// cleanly, but do not apply or report later events as a successful turn.
+		if persistenceErr != nil {
+			continue
+		}
+
 		switch e := event.(type) {
+		case types.StreamContextCompacted:
+			// Persist the exact message snapshot used by subsequent model
+			// requests without replacing persona, plan mode, or session identity.
+			app.session.Messages = append([]types.Message(nil), e.Messages...)
+			app.session.UpdatedAt = time.Now()
+			app.session.Version++
+			app.sessionManager.SetCurrent(app.session)
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				persistenceErr = fmt.Errorf("persist compacted session: %w", err)
+				cancel()
+				tuiApp.Send(tui.AgentErrorMsg{
+					Error:     persistenceErr,
+					Timestamp: time.Now(),
+				})
+			} else if e.Notice != "" {
+				tuiApp.Send(tui.StatusMsg{Text: e.Notice, Type: "info"})
+			}
 		case types.StreamMessage:
 			for _, block := range e.Message.Content {
 				switch b := block.(type) {
@@ -264,6 +288,10 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		case types.StreamError:
 			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 		}
+	}
+
+	if persistenceErr != nil {
+		return
 	}
 
 	app.costTracker.CompleteTurn()
