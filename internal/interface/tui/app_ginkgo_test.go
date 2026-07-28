@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	tea "github.com/charmbracelet/bubbletea"
@@ -626,16 +627,19 @@ var _ = Describe("App", func() {
 
 			It("should render compact runtime context in the status bar", func() {
 				app.width = 180
+				testHome := GinkgoT().TempDir()
+				GinkgoT().Setenv("HOME", testHome)
+				workspace := filepath.Join(testHome, "sample-project")
 				app.SetChatModel("gpt-5.5")
-				app.SetRuntimeContext("openrouter", "medium", "/mnt/c/Users/bacm6/Projects")
+				app.SetRuntimeContext("openrouter", "medium", workspace)
 
 				view := app.View()
 
 				Expect(view).To(ContainSubstring("gpt-5.5 medium"))
-				Expect(view).To(ContainSubstring("~/Projects"))
-				Expect(view).ToNot(ContainSubstring("/mnt/c/Users/bacm6"))
+				Expect(view).To(ContainSubstring(filepath.Join("~", "sample-project")))
+				Expect(view).ToNot(ContainSubstring(testHome))
 				Expect(view).To(ContainSubstring("openrouter/gpt-5.5"))
-				Expect(view).To(ContainSubstring("Projects"))
+				Expect(view).To(ContainSubstring("sample-project"))
 			})
 
 			It("should show help overlay when active", func() {
