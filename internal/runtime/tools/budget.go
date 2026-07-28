@@ -91,6 +91,36 @@ func (b *ContentBudget) CurrentUsage() (used, max int) {
 	return b.usedChars, b.maxCharsPerTurn
 }
 
+// TryRecordResult atomically admits a result under both its tool-specific
+// limit and the remaining turn budget. If admission fails, maxChars is the
+// largest replacement that could currently be admitted.
+func (b *ContentBudget) TryRecordResult(toolName string, resultSize int, toolMaxResultSize int64) (maxChars int, admitted bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if b.exemptTools[toolName] || toolMaxResultSize == 0 || toolMaxResultSize > 1000000 {
+		return resultSize, true
+	}
+
+	remaining := b.maxCharsPerTurn - b.usedChars
+	if remaining < 0 {
+		remaining = 0
+	}
+	maxChars = remaining
+	if toolMaxResultSize < int64(maxChars) {
+		maxChars = int(toolMaxResultSize)
+	}
+	if maxChars < 0 {
+		maxChars = 0
+	}
+	if resultSize > maxChars {
+		return maxChars, false
+	}
+
+	b.usedChars += resultSize
+	return maxChars, true
+}
+
 // Reset clears the budget for a new turn.
 func (b *ContentBudget) Reset() {
 	b.mu.Lock()

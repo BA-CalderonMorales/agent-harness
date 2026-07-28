@@ -536,18 +536,39 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 		return types.Message{}, err
 	}
 
-	// Apply content replacement budget
+	// Admit the full result when it fits. Otherwise preserve the exact output
+	// out of band and admit only a bounded, retrievable receipt.
 	budget := tools.GetCurrentBudget()
 	resultStr := fmt.Sprintf("%v", result.Data)
+	receiptLimit, admitted := budget.TryRecordResult(block.Name, len(resultStr), toolDef.MaxResultSizeChars)
+	for !admitted {
+		receipt, receiptErr := persistToolResultReceipt(resultStr, receiptLimit)
+		if receiptErr != nil {
+			resultErr := fmt.Errorf("preserve oversized tool result: %w", receiptErr)
+			durationMillis := time.Since(started).Milliseconds()
+			if auditErr := auditEvent("failure", tools.Allow, resultErr.Error(), durationMillis, resultErr); auditErr != nil {
+				return types.Message{}, fmt.Errorf("tool result handling failed: %v (outcome audit failed: %w)", resultErr, auditErr)
+			}
+			return types.Message{}, resultErr
+		}
 
-	if !budget.CanUseResult(block.Name, len(resultStr), int64(toolDef.MaxResultSizeChars)) {
-		// Truncate to fit budget
-		truncated, note := budget.GetTruncatedResult(block.Name, resultStr, int64(toolDef.MaxResultSizeChars))
-		result.Data = truncated
-		_ = note // note is included in truncated result
-	} else {
-		// Record usage
-		_ = budget.RecordUsage(block.Name, len(resultStr), int64(toolDef.MaxResultSizeChars))
+		nextLimit, receiptAdmitted := budget.TryRecordResult(block.Name, len(receipt), toolDef.MaxResultSizeChars)
+		if receiptAdmitted {
+			result.Data = receipt
+			admitted = true
+			break
+		}
+		if nextLimit >= receiptLimit {
+			resultErr := fmt.Errorf(
+				"preserve oversized tool result: available budget did not shrink after receipt admission failed",
+			)
+			durationMillis := time.Since(started).Milliseconds()
+			if auditErr := auditEvent("failure", tools.Allow, resultErr.Error(), durationMillis, resultErr); auditErr != nil {
+				return types.Message{}, fmt.Errorf("tool result handling failed: %v (outcome audit failed: %w)", resultErr, auditErr)
+			}
+			return types.Message{}, resultErr
+		}
+		receiptLimit = nextLimit
 	}
 
 	mapped := toolDef.MapResult(result.Data, block.ID)
