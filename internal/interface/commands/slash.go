@@ -20,15 +20,17 @@ type SlashHandler func(args string) (string, error)
 
 // SlashRegistry holds all slash commands
 type SlashRegistry struct {
-	commands map[string]SlashHandler
-	help     map[string]string
+	commands     map[string]SlashHandler
+	help         map[string]string
+	featureFlags map[string]string
 }
 
 // NewSlashRegistry creates a new slash command registry
 func NewSlashRegistry() *SlashRegistry {
 	return &SlashRegistry{
-		commands: make(map[string]SlashHandler),
-		help:     make(map[string]string),
+		commands:     make(map[string]SlashHandler),
+		help:         make(map[string]string),
+		featureFlags: make(map[string]string),
 	}
 }
 
@@ -38,18 +40,47 @@ func (sr *SlashRegistry) Register(name, description string, handler SlashHandler
 	sr.help[name] = description
 }
 
+// FeatureFlag marks a command as not yet available.
+// The command will appear in /help under "Coming Soon" and will return an
+// informational message when invoked.
+func (sr *SlashRegistry) FeatureFlag(name, description string) {
+	sr.featureFlags[name] = description
+}
+
+// IsFeatureFlagged returns true if the named command is feature-flagged.
+func (sr *SlashRegistry) IsFeatureFlagged(name string) bool {
+	_, ok := sr.featureFlags[name]
+	return ok
+}
+
+// FeatureFlagMessage returns the "coming soon" message for a flagged command.
+func (sr *SlashRegistry) FeatureFlagMessage(name string) string {
+	desc := sr.featureFlags[name]
+	var b strings.Builder
+	b.WriteString(fmt.Sprintf("/%s — coming soon\n", name))
+	b.WriteString(fmt.Sprintf("  %s\n\n", desc))
+	b.WriteString("  This command is planned for an upcoming release.\n")
+	b.WriteString("  We are working to stabilize it with full test coverage.\n\n")
+	b.WriteString("  In the meantime, OpenCode (https://opencode.ai) offers\n")
+	b.WriteString("  similar functionality for coding agent workflows.\n\n")
+	b.WriteString("  Type /help to see all available commands.")
+	return b.String()
+}
+
 // Handle handles a slash command
 func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 	if !strings.HasPrefix(input, "/") {
 		return "", false, nil
 	}
 
-	// Parse the command
 	cmd := ParseSlashCommand(input)
+
+	if sr.IsFeatureFlagged(cmd.Name) {
+		return sr.FeatureFlagMessage(cmd.Name), true, nil
+	}
 
 	handler, exists := sr.commands[cmd.Name]
 	if !exists {
-		// Try to find similar commands
 		suggestions := sr.findSimilar(cmd.Name)
 		if len(suggestions) > 0 {
 			return fmt.Sprintf("Unknown command: /%s\nDid you mean: %s?", cmd.Name, strings.Join(suggestions, ", ")), true, nil
@@ -89,11 +120,16 @@ func ParseSlashCommand(input string) SlashCommand {
 func (sr *SlashRegistry) findSimilar(name string) []string {
 	var suggestions []string
 	for cmdName := range sr.commands {
-		// Simple similarity: starts with same prefix or contains substring
 		if strings.HasPrefix(cmdName, name) || strings.HasPrefix(name, cmdName) {
 			suggestions = append(suggestions, "/"+cmdName)
 		}
 	}
+	for cmdName := range sr.featureFlags {
+		if strings.HasPrefix(cmdName, name) || strings.HasPrefix(name, cmdName) {
+			suggestions = append(suggestions, "/"+cmdName+" (coming soon)")
+		}
+	}
+	sort.Strings(suggestions)
 	return suggestions
 }
 
@@ -103,36 +139,45 @@ func (sr *SlashRegistry) GetHelp() string {
 	lines = append(lines, "Available commands:")
 	lines = append(lines, "")
 
-	// Group commands by category (slice for deterministic order)
 	categories := []struct {
 		name string
 		cmds []string
 	}{
-		{"Session", []string{"help", "status", "clear", "compact", "session", "reset", "quit", "workspace"}},
-		{"Model", []string{"model", "current-model"}},
-		{"Settings", []string{"permissions", "config"}},
-		{"Output", []string{"cost", "diff", "export", "version"}},
-		{"Tools", []string{"agents", "skills"}},
+		{"Core", []string{"help", "clear", "compact", "version", "quit", "workspace", "init", "current-model"}},
+		{"Session", []string{"status", "session", "steer"}},
+		{"Model", []string{"model"}},
+		{"Settings", []string{"permissions", "config", "login", "logout"}},
+		{"Git", []string{"branch", "pr"}},
+		{"Output", []string{"cost", "export"}},
+		{"Tools", []string{"agents", "skills", "audit", "plan", "improve", "memory"}},
 	}
 
-	// Track which commands have been categorized
 	categorized := make(map[string]bool)
 	for _, cat := range categories {
-		lines = append(lines, cat.name+":")
+		var catLines []string
 		for _, cmd := range cat.cmds {
 			categorized[cmd] = true
 			if desc, exists := sr.help[cmd]; exists {
-				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
+				catLines = append(catLines, fmt.Sprintf("  /%-15s %s", cmd, desc))
+			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
+				catLines = append(catLines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
-		lines = append(lines, "")
+		if len(catLines) > 0 {
+			lines = append(lines, cat.name+":")
+			lines = append(lines, catLines...)
+			lines = append(lines, "")
+		}
 	}
 
-	// Catch any registered commands not in the hardcoded categories
-	// (skip hidden aliases like "exit")
 	var other []string
 	for cmd := range sr.commands {
 		if !categorized[cmd] && cmd != "exit" {
+			other = append(other, cmd)
+		}
+	}
+	for cmd := range sr.featureFlags {
+		if !categorized[cmd] {
 			other = append(other, cmd)
 		}
 	}
@@ -142,9 +187,16 @@ func (sr *SlashRegistry) GetHelp() string {
 		for _, cmd := range other {
 			if desc, exists := sr.help[cmd]; exists {
 				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
+			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
+				lines = append(lines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
 		lines = append(lines, "")
+	}
+
+	if len(sr.featureFlags) > 0 {
+		lines = append(lines, "Commands marked [coming soon] are planned for upcoming releases.")
+		lines = append(lines, "Try OpenCode (https://opencode.ai) for similar features today.")
 	}
 
 	return strings.Join(lines, "\n")
@@ -152,15 +204,33 @@ func (sr *SlashRegistry) GetHelp() string {
 
 // GetCompletions returns all command names for tab completion
 func (sr *SlashRegistry) GetCompletions() []string {
-	completions := make([]string, 0, len(sr.commands))
+	completions := make([]string, 0, len(sr.commands)+len(sr.featureFlags))
 	for name := range sr.commands {
 		if name == "exit" {
-			continue // hide alias from completions
+			continue
 		}
+		completions = append(completions, "/"+name)
+	}
+	for name := range sr.featureFlags {
 		completions = append(completions, "/"+name)
 	}
 	sort.Strings(completions)
 	return completions
+}
+
+// GetCompletionDescriptions returns descriptions for visible command completions.
+func (sr *SlashRegistry) GetCompletionDescriptions() map[string]string {
+	descriptions := make(map[string]string, len(sr.help)+len(sr.featureFlags))
+	for name, description := range sr.help {
+		if name == "exit" {
+			continue
+		}
+		descriptions["/"+name] = description
+	}
+	for name, description := range sr.featureFlags {
+		descriptions["/"+name] = description + " [coming soon]"
+	}
+	return descriptions
 }
 
 // Built-in command handlers
@@ -169,9 +239,11 @@ func (sr *SlashRegistry) GetCompletions() []string {
 func HelpHandler(registry *SlashRegistry) SlashHandler {
 	return func(args string) (string, error) {
 		if args != "" {
-			// Specific command help
 			if desc, exists := registry.help[args]; exists {
 				return fmt.Sprintf("/%s - %s", args, desc), nil
+			}
+			if registry.IsFeatureFlagged(args) {
+				return registry.FeatureFlagMessage(args), nil
 			}
 			return fmt.Sprintf("Unknown command: /%s", args), nil
 		}
