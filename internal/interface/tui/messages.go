@@ -76,6 +76,14 @@ type ApprovalRequestMsg struct {
 // AgentCancelMsg is sent when the user cancels agent execution (ESC key)
 type AgentCancelMsg struct{}
 
+// ProviderReadinessMsg reports the provider's readiness state.
+type ProviderReadinessMsg struct {
+	Readiness int // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
+	Message   string
+	Model     string
+	Endpoint  string
+}
+
 type SessionActivatedMsg struct {
 	SessionID     string
 	Transcript    []types.Message

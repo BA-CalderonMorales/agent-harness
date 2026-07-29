@@ -358,6 +358,10 @@ func (d *tuiSettingsDelegate) rebuildLLMClient() {
 	}
 	d.tuiApp.SetModels(d.app.getModelItems())
 	d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
+	
+	// Start a new probe to verify the new configuration
+	prober := llm.NewHTTPProber(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
+	d.tuiApp.StartProviderProbe(prober)
 }
 
 // refreshPersonaUI updates persona-dependent UI state after a persona change.

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -76,6 +77,11 @@ type App struct {
 	effortProfile string
 	workspacePath string
 	workspaceName string
+
+	// Provider readiness
+	providerReadiness     int    // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
+	providerReadinessMsg  string
+	providerReadinessGen  int // generation counter to discard stale results
 
 	// External message channel for async updates
 	msgChan chan tea.Msg
@@ -160,6 +166,27 @@ func (a *App) Send(msg tea.Msg) {
 	default:
 		// Channel full, drop message (shouldn't happen with buffer)
 	}
+}
+
+// StartProviderProbe starts an async provider readiness probe.
+// It returns a generation counter that can be used to discard stale results.
+func (a *App) StartProviderProbe(prober llm.ProviderProber) int {
+	a.providerReadinessGen++
+	gen := a.providerReadinessGen
+	a.providerReadiness = 0 // ProviderChecking
+	a.providerReadinessMsg = "checking provider..."
+
+	go func() {
+		ctx := context.Background()
+		readiness, msg := prober.Probe(ctx)
+		a.Send(ProviderReadinessMsg{
+			Readiness: int(readiness),
+			Message:   msg,
+			Endpoint:  "", // Will be set by caller if needed
+		})
+	}()
+
+	return gen
 }
 
 // Init initializes the TUI.
@@ -531,6 +558,27 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Notice != "" {
 			a.statusMessage = msg.Notice
 			a.statusType = msg.NoticeType
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	case ProviderReadinessMsg:
+		a.providerReadiness = msg.Readiness
+		a.providerReadinessMsg = msg.Message
+		// Update status bar with readiness information
+		switch msg.Readiness {
+		case 1: // ProviderReady
+			a.statusMessage = fmt.Sprintf("Provider ready: %s", msg.Message)
+			a.statusType = "success"
+		case 2: // ProviderWarning
+			a.statusMessage = fmt.Sprintf("Provider warning: %s", msg.Message)
+			a.statusType = "warning"
+		case 3: // ProviderUnavailable
+			a.statusMessage = fmt.Sprintf("Provider unavailable: %s", msg.Message)
+			a.statusType = "error"
+		case 4: // ProviderMisconfigured
+			a.statusMessage = fmt.Sprintf("Provider misconfigured: %s", msg.Message)
+			a.statusType = "error"
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
