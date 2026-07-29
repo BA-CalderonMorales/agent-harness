@@ -716,33 +716,32 @@ func (a App) renderStatusBar() string {
 		workspace = "workspace"
 	}
 
-	activeModel := model
-	if a.provider != "" && modelName != "" {
-		activeModel = a.provider + "/" + model
-	}
-
-	contextParts := []string{model + " " + effort}
-	if workspacePath != "" {
-		contextParts = append(contextParts, workspacePath)
-	}
-	contextParts = append(contextParts, activeModel, workspace)
-	contextLine := StatusLabel.Render(strings.Join(contextParts, " · "))
-
 	modeStr := "[typing]"
 	if a.mode == ModeNormal {
 		modeStr = "[navigate]"
 	}
-	help := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  " + modeStr)
-	if a.mode == ModeNormal {
-		help = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
-	}
 
-	content := " " + status + " Agent Harness  " + contextLine + "  " + help
+	// Build compact status line with width priorities
+	// Priority: health+mode > model > workspace > provider > help
+	parts := []string{status, modeStr}
+	if modelName != "" {
+		parts = append(parts, model)
+	}
+	if workspace != "" && workspace != "workspace" {
+		parts = append(parts, workspace)
+	}
+	if a.provider != "" {
+		parts = append(parts, a.provider)
+	}
+	
+	content := " " + strings.Join(parts, " · ")
 	if lipgloss.Width(content) > a.width-4 {
-		content = " " + status + " " + contextLine
+		// Drop help/extra info
+		content = " " + status + " · " + model + " · " + workspace
 	}
 	if lipgloss.Width(content) > a.width-4 {
-		content = " " + status + " " + StatusLabel.Render(model+" "+effort)
+		// Minimal: just health + model
+		content = " " + status + " · " + model
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)

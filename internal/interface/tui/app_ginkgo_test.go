@@ -632,8 +632,9 @@ var _ = Describe("App", func() {
 
 			It("should render status bar", func() {
 				app.width = 120
+				app.SetChatModel("gpt-4")
 				view := app.View()
-				Expect(view).To(ContainSubstring("Agent Harness"))
+				Expect(view).To(ContainSubstring("[ready]"))
 			})
 
 			It("should render compact runtime context in the status bar", func() {
@@ -646,11 +647,11 @@ var _ = Describe("App", func() {
 
 				view := app.View()
 
-				Expect(view).To(ContainSubstring("gpt-5.5 medium"))
-				Expect(view).To(ContainSubstring(filepath.Join("~", "sample-project")))
-				Expect(view).ToNot(ContainSubstring(testHome))
-				Expect(view).To(ContainSubstring("openrouter/gpt-5.5"))
+				Expect(view).To(ContainSubstring("[ready]"))
+				Expect(view).To(ContainSubstring("gpt-5.5"))
 				Expect(view).To(ContainSubstring("sample-project"))
+				Expect(view).To(ContainSubstring("openrouter"))
+				Expect(view).ToNot(ContainSubstring(testHome))
 			})
 
 			It("should show help overlay when active", func() {
