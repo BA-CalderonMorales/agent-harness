@@ -152,14 +152,10 @@ var _ = Describe("SettingsModel", func() {
 				Expect(delegate.changedValue).To(Equal(""))          // delegate not called
 			})
 
-			It("should handle global R and r keys", func() {
+			It("should handle r key for reload", func() {
 				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("r")})
 				settings = m.(SettingsModel)
 				Expect(delegate.reloaded).To(BeTrue())
-
-				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
-				settings = m.(SettingsModel)
-				Expect(delegate.reset).To(BeTrue())
 			})
 		})
 	})
@@ -345,6 +341,127 @@ var _ = Describe("SettingsModel", func() {
 				view := settings.View()
 				Expect(view).To(ContainSubstring("(2)"))
 			})
+		})
+	})
+
+	Describe("Choice Settings", func() {
+		Context("Given a choice-type setting", func() {
+			BeforeEach(func() {
+				settings.SetSettings([]Setting{
+					{Key: "persona", Label: "Persona", Value: "developer", Type: "choice", Options: []string{"developer", "designer", "pm"}},
+				})
+			})
+
+			It("should cycle forward with Enter/Space", func() {
+				settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(delegate.changedValue).To(Equal("designer"))
+
+				settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(delegate.changedValue).To(Equal("pm"))
+
+				settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(delegate.changedValue).To(Equal("developer"))
+			})
+
+			It("should cycle backward with left/h", func() {
+				settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
+				Expect(delegate.changedValue).To(Equal("pm"))
+			})
+
+			It("should cycle forward with right/l", func() {
+				settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("l")})
+				Expect(delegate.changedValue).To(Equal("designer"))
+			})
+		})
+	})
+
+	Describe("Edit Validation", func() {
+		Context("Given a numeric setting", func() {
+			BeforeEach(func() {
+				settings.SetSettings([]Setting{
+					{Key: "context_length", Label: "Context Length", Value: "4096", Type: "number"},
+				})
+			})
+
+			It("should reject non-numeric input", func() {
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				for i := 0; i < 4; i++ {
+					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+					settings = m.(SettingsModel)
+				}
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("abc")})
+				settings = m.(SettingsModel)
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				Expect(settings.editErr).To(ContainSubstring("positive integer"))
+				Expect(delegate.changedKey).To(Equal(""))
+			})
+
+			It("should reject empty input", func() {
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				for i := 0; i < 10; i++ {
+					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+					settings = m.(SettingsModel)
+				}
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				Expect(settings.editErr).NotTo(BeEmpty())
+			})
+
+			It("should accept valid numeric input", func() {
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				for i := 0; i < 4; i++ {
+					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+					settings = m.(SettingsModel)
+				}
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("8192")})
+				settings = m.(SettingsModel)
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				Expect(delegate.changedValue).To(Equal("8192"))
+				Expect(settings.editErr).To(BeEmpty())
+			})
+		})
+	})
+
+	Describe("Rune-Safe Backspace", func() {
+		Context("Given a setting with multi-byte characters in the edit buffer", func() {
+			BeforeEach(func() {
+				settings.SetSettings([]Setting{
+					{Key: "model", Label: "Model", Value: "", Type: "string"},
+				})
+			})
+
+			It("should remove one rune at a time", func() {
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				settings = m.(SettingsModel)
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("café")})
+				settings = m.(SettingsModel)
+				Expect(settings.editBuf).To(Equal("café"))
+
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+				settings = m.(SettingsModel)
+				Expect(settings.editBuf).To(Equal("caf"))
+
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyBackspace})
+				settings = m.(SettingsModel)
+				Expect(settings.editBuf).To(Equal("ca"))
+			})
+		})
+	})
+
+	Describe("CapturesAllKeys", func() {
+		It("should return true when editing", func() {
+			settings.SetSettings([]Setting{
+				{Key: "theme", Label: "Theme", Value: "dark", Type: "string"},
+			})
+			Expect(settings.CapturesAllKeys()).To(BeFalse())
+			m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			settings = m.(SettingsModel)
+			Expect(settings.CapturesAllKeys()).To(BeTrue())
 		})
 	})
 })

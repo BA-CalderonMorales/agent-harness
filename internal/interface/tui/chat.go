@@ -1499,6 +1499,12 @@ func (m ChatModel) ConsumesEsc() bool {
 	return m.showSuggestions
 }
 
+// CapturesAllKeys returns whether this view should receive all keys
+// before global shortcuts are applied.
+func (m ChatModel) CapturesAllKeys() bool {
+	return m.focused
+}
+
 // Scroll scrolls the viewport.
 func (m *ChatModel) Scroll(lines int) {
 	if lines > 0 {

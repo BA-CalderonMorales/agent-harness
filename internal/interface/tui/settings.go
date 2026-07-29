@@ -43,9 +43,9 @@ type SettingsModel struct {
 	focused  bool
 	editing  bool
 	editBuf  string
+	editErr  string
 	viewport viewport.Model
 
-	// Delegate
 	delegate SettingsDelegate
 }
 
@@ -119,29 +119,75 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "enter", " ":
 			if m.cursor < len(m.settings) {
-				// For boolean settings, toggle immediately without entering edit mode
-				if m.settings[m.cursor].Type == "bool" {
-					m.settings[m.cursor].BoolValue = !m.settings[m.cursor].BoolValue
+				s := &m.settings[m.cursor]
+				if s.Type == "bool" {
+					s.BoolValue = !s.BoolValue
 					if m.delegate != nil {
 						value := "false"
-						if m.settings[m.cursor].BoolValue {
+						if s.BoolValue {
 							value = "true"
 						}
-						m.delegate.OnSettingChange(m.settings[m.cursor].Key, value)
+						m.delegate.OnSettingChange(s.Key, value)
+					}
+				} else if s.Type == "choice" && len(s.Options) > 0 {
+					idx := -1
+					for i, o := range s.Options {
+						if o == s.Value {
+							idx = i
+							break
+						}
+					}
+					idx = (idx + 1) % len(s.Options)
+					s.Value = s.Options[idx]
+					if m.delegate != nil {
+						m.delegate.OnSettingChange(s.Key, s.Value)
 					}
 				} else {
 					m.startEditing()
 				}
 			}
 
+		case "left", "h":
+			if m.cursor < len(m.settings) {
+				s := &m.settings[m.cursor]
+				if s.Type == "choice" && len(s.Options) > 0 {
+					idx := 0
+					for i, o := range s.Options {
+						if o == s.Value {
+							idx = i
+							break
+						}
+					}
+					idx = (idx - 1 + len(s.Options)) % len(s.Options)
+					s.Value = s.Options[idx]
+					if m.delegate != nil {
+						m.delegate.OnSettingChange(s.Key, s.Value)
+					}
+				}
+			}
+
+		case "right", "l":
+			if m.cursor < len(m.settings) {
+				s := &m.settings[m.cursor]
+				if s.Type == "choice" && len(s.Options) > 0 {
+					idx := 0
+					for i, o := range s.Options {
+						if o == s.Value {
+							idx = i
+							break
+						}
+					}
+					idx = (idx + 1) % len(s.Options)
+					s.Value = s.Options[idx]
+					if m.delegate != nil {
+						m.delegate.OnSettingChange(s.Key, s.Value)
+					}
+				}
+			}
+
 		case "r":
 			if m.delegate != nil {
 				m.delegate.OnSettingReload()
-			}
-
-		case "R":
-			if m.delegate != nil {
-				m.delegate.OnSettingReset()
 			}
 		}
 	}
@@ -150,24 +196,30 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m *SettingsModel) handleEditMode(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
+	m.editErr = ""
 	switch msg.Type {
 	case tea.KeyEnter:
-		// Save value
 		if m.cursor < len(m.settings) && m.delegate != nil {
-			m.delegate.OnSettingChange(m.settings[m.cursor].Key, m.editBuf)
-			m.settings[m.cursor].Value = m.editBuf
+			s := &m.settings[m.cursor]
+			if errMsg := m.validateSetting(s, m.editBuf); errMsg != "" {
+				m.editErr = errMsg
+				return *m, nil
+			}
+			m.delegate.OnSettingChange(s.Key, m.editBuf)
+			s.Value = m.editBuf
 		}
 		m.editing = false
 		m.editBuf = ""
 
 	case tea.KeyEsc:
-		// Cancel editing
 		m.editing = false
 		m.editBuf = ""
+		m.editErr = ""
 
 	case tea.KeyBackspace:
 		if len(m.editBuf) > 0 {
-			m.editBuf = m.editBuf[:len(m.editBuf)-1]
+			runes := []rune(m.editBuf)
+			m.editBuf = string(runes[:len(runes)-1])
 		}
 
 	case tea.KeyRunes:
@@ -175,6 +227,54 @@ func (m *SettingsModel) handleEditMode(msg tea.KeyMsg) (SettingsModel, tea.Cmd) 
 	}
 
 	return *m, nil
+}
+
+func (m *SettingsModel) validateSetting(s *Setting, value string) string {
+	switch s.Key {
+	case "context_length", "max_tokens":
+		if value == "" {
+			return "value required"
+		}
+		n := 0
+		for _, c := range value {
+			if c < '0' || c > '9' {
+				return "must be a positive integer"
+			}
+			n = n*10 + int(c-'0')
+		}
+		if n <= 0 {
+			return "must be a positive integer"
+		}
+	case "temperature":
+		if value == "" {
+			return "value required"
+		}
+	case "persona":
+		valid := []string{"developer", "designer", "pm", "scientist", "explorer"}
+		found := false
+		for _, v := range valid {
+			if v == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "must be one of: developer, designer, pm, scientist, explorer"
+		}
+	case "permissions":
+		valid := []string{"read-only", "workspace-write", "danger-full-access"}
+		found := false
+		for _, v := range valid {
+			if v == value {
+				found = true
+				break
+			}
+		}
+		if !found {
+			return "must be one of: read-only, workspace-write, danger-full-access"
+		}
+	}
+	return ""
 }
 
 func (m *SettingsModel) startEditing() {
@@ -225,14 +325,17 @@ func (m SettingsModel) View() string {
 	// Footer (always visible, not in viewport)
 	footerActions := []ActionHint{
 		{Key: "↑/↓", Desc: "Navigate"},
-		{Key: "Enter", Desc: "Edit"},
+		{Key: "Enter/Space", Desc: "Edit / toggle"},
+		{Key: "←/→", Desc: "Cycle choice"},
 		{Key: "r", Desc: "Reload"},
-		{Key: "R", Desc: "Reset all"},
 	}
 	if m.editing {
 		footerActions = []ActionHint{
 			{Key: "Enter", Desc: "Save"},
 			{Key: "Esc", Desc: "Cancel"},
+		}
+		if m.editErr != "" {
+			footerActions = append(footerActions, ActionHint{Key: "!", Desc: m.editErr})
 		}
 	}
 	b.WriteString(RenderFooter(footerActions))
@@ -292,6 +395,9 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		}
 		b.WriteString(" ")
 		b.WriteString(valueStyle.Render(value))
+		if setting.Type == "choice" && len(setting.Options) > 0 {
+			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(setting.Options, "/"))))
+		}
 	}
 
 	// Description
@@ -322,6 +428,12 @@ func (m SettingsModel) ConsumesTab() bool {
 
 // ConsumesEsc returns whether this view consumes Esc key.
 func (m SettingsModel) ConsumesEsc() bool {
+	return m.editing
+}
+
+// CapturesAllKeys returns whether this view should receive all keys
+// before global shortcuts are applied.
+func (m SettingsModel) CapturesAllKeys() bool {
 	return m.editing
 }
 

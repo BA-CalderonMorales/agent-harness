@@ -302,36 +302,32 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleModelChange(value)
 	case "provider":
 		d.app.config.Provider = value
-		// Recreate LLM client with new provider base URL
-		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-		// Refresh model list for new provider
-		d.tuiApp.SetModels(d.app.getModelItems())
-		d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
-		d.tuiApp.AddMessage("system", sprintf("Provider updated to: %s", value))
+		d.rebuildLLMClient()
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Provider updated to: %s", value), Type: "success"})
 	case "runtime":
 		d.app.config.Runtime = value
-		d.tuiApp.AddMessage("system", sprintf("Runtime updated to: %s", value))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Runtime updated to: %s", value), Type: "success"})
 	case "endpoint_url":
 		d.app.config.EndpointURL = value
-		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-		d.tuiApp.AddMessage("system", sprintf("Endpoint updated to: %s", value))
+		d.rebuildLLMClient()
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Endpoint updated to: %s", value), Type: "success"})
 	case "context_length":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.ContextLength = n
 			if d.app.loop != nil {
 				d.app.loop.Config.BlockingTokenLimit = n
 			}
-			d.tuiApp.AddMessage("system", sprintf("Context length updated to: %d", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Context length updated to: %d", n), Type: "success"})
 		}
 	case "max_tokens":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.MaxTokens = n
-			d.tuiApp.AddMessage("system", sprintf("Max tokens updated to: %d", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Max tokens updated to: %d", n), Type: "success"})
 		}
 	case "temperature":
 		if n, err := strconv.ParseFloat(value, 64); err == nil {
 			d.app.config.Temperature = n
-			d.tuiApp.AddMessage("system", sprintf("Temperature updated to: %.2f", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
 		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
@@ -339,25 +335,41 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleExecutionModeChange(value)
 	case "perm_read":
 		d.app.config.PermRead = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Read permission: %s", boolToEnabled(d.app.config.PermRead)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Read permission: %s", boolToEnabled(d.app.config.PermRead)), Type: "info"})
 	case "perm_write":
 		d.app.config.PermWrite = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Write permission: %s", boolToEnabled(d.app.config.PermWrite)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Write permission: %s", boolToEnabled(d.app.config.PermWrite)), Type: "info"})
 	case "perm_delete":
 		d.app.config.PermDelete = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Delete permission: %s", boolToEnabled(d.app.config.PermDelete)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Delete permission: %s", boolToEnabled(d.app.config.PermDelete)), Type: "info"})
 	case "perm_execute":
 		d.app.config.PermExecute = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)), Type: "info"})
 	}
-	d.tuiApp.SetSettings(d.app.getSettings())
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions: d.app.getSessionInfos(),
+	})
+}
+
+func (d *tuiSettingsDelegate) rebuildLLMClient() {
+	d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
+	if d.app.loop != nil {
+		d.app.loop.Client = d.app.client
+	}
+	d.tuiApp.SetModels(d.app.getModelItems())
+	d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
 }
 
 // refreshPersonaUI updates persona-dependent UI state after a persona change.
 func (d *tuiSettingsDelegate) refreshPersonaUI(persona string) {
-	d.tuiApp.SetChatPersona(persona)
-	d.tuiApp.SetSettings(d.app.getSettings())
-	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), persona, d.app.session.EstimateTokens())
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Model:          d.app.session.Model,
+		Persona:        persona,
+		Sessions:       d.app.getSessionInfos(),
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 // handlePersonaChange updates the persona and refreshes the UI.
@@ -365,9 +377,9 @@ func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 	if p, err := persona.Parse(value); err == nil {
 		d.app.session.Persona = p.String()
 		d.refreshPersonaUI(p.String())
-		d.tuiApp.AddMessage("system", sprintf("Persona switched to: %s — %s", p.DisplayName(), p.Description()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Persona: %s — %s", p.DisplayName(), p.Description()), Type: "success"})
 	} else {
-		d.tuiApp.AddMessage("system", sprintf("Invalid persona: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid persona: %v", err), Type: "error"})
 	}
 }
 
@@ -379,9 +391,9 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 
 	credManager := config.NewCredentialManager()
 	if err := credManager.UpdateDefaultModel(value); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Warning: failed to save default model: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
 	} else {
-		d.tuiApp.AddMessage("system", sprintf("Default model updated to: %s", value))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Default model: %s", value), Type: "success"})
 	}
 }
 
@@ -389,7 +401,6 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 	if mode, err := config.ParsePermissionMode(value); err == nil {
 		d.app.config.PermissionMode = mode
-		// Sync granular toggles to match the preset
 		switch mode {
 		case config.PermissionReadOnly:
 			d.app.config.PermRead = true
@@ -407,7 +418,9 @@ func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 			d.app.config.PermDelete = true
 			d.app.config.PermExecute = true
 		}
-		d.tuiApp.AddMessage("system", sprintf("Permission mode: %s", mode.String()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Permission mode: %s", mode.String()), Type: "success"})
+	} else {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid permission mode: %v", err), Type: "error"})
 	}
 }
 
@@ -415,13 +428,15 @@ func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 func (d *tuiSettingsDelegate) handleExecutionModeChange(value string) {
 	if mode, err := approval.ParseExecutionMode(value); err == nil {
 		d.app.executionMode = mode
-		d.tuiApp.AddMessage("system", sprintf("Execution mode set to: %s", mode.String()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execution mode: %s", mode.String()), Type: "success"})
+	} else {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid execution mode: %v", err), Type: "error"})
 	}
 }
 
 // OnSettingReset handles reset request.
 func (d *tuiSettingsDelegate) OnSettingReset() {
-	d.tuiApp.AddMessage("system", "Reset to defaults not implemented")
+	d.tuiApp.Send(tui.StatusMsg{Text: "Reset to defaults not implemented", Type: "warning"})
 }
 
 // OnSettingReload handles reload request.

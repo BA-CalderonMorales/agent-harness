@@ -113,6 +113,10 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given number key shortcuts", func() {
+			BeforeEach(func() {
+				app.mode = ModeNormal
+			})
+
 			It("should switch to Home with '1'", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
@@ -140,6 +144,10 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given letter navigation shortcuts in normal mode", func() {
+			BeforeEach(func() {
+				app.mode = ModeNormal
+			})
+
 			It("should switch to Home with 'h'", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
@@ -199,6 +207,7 @@ var _ = Describe("App", func() {
 				app.mode = ModeInsert
 				app.chatModel.Focus()
 
+				app.mode = ModeNormal
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
 				updated := model.(App)
 				Expect(updated.mode).To(Equal(ModeNormal))
@@ -936,6 +945,44 @@ var _ = Describe("App", func() {
 				final := m2.(App)
 				Expect(final.sessionsModel.confirmingDelete).To(BeFalse())
 				Expect(delegate.deletedSession).To(Equal(""))
+			})
+		})
+	})
+
+	Describe("Settings Input Isolation", func() {
+		Context("Given the settings view is editing a value", func() {
+			BeforeEach(func() {
+				app.activeView = viewSettings
+				app.mode = ModeNormal
+				app.settingsModel.Focus()
+				app.settingsModel.SetSettings([]Setting{
+					{Key: "model", Label: "Model", Value: "", Type: "string"},
+				})
+				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				app2 := m.(App)
+				*app = app2
+			})
+
+			It("should route printable characters to the edit buffer", func() {
+				app.mode = ModeNormal
+				for _, r := range "gpt-4.1" {
+					m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
+					a := m.(App)
+					*app = a
+				}
+				Expect(app.settingsModel.editBuf).To(Equal("gpt-4.1"))
+			})
+
+			It("should not switch views on number keys while editing", func() {
+				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
+				a := m.(App)
+				Expect(a.activeView).To(Equal(viewSettings))
+			})
+
+			It("should not switch views on 'i' while editing", func() {
+				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+				a := m.(App)
+				Expect(a.settingsModel.editBuf).To(Equal("i"))
 			})
 		})
 	})

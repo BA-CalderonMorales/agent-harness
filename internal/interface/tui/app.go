@@ -280,54 +280,56 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Mode switching
-		switch msg.String() {
-		case "ctrl+n":
-			a.mode = ModeNormal
-			a.blurActive()
-			return a, nil
-		case "i":
-			if a.mode == ModeNormal {
-				a.mode = ModeInsert
-				a.focusActive()
-				return a, nil
-			}
-		}
-
-		// View switching shortcuts
-		switch msg.String() {
-		case "ctrl+1", "1":
-			return a, a.switchView(viewHome)
-		case "ctrl+2", "2":
-			return a, a.switchView(viewChat)
-		case "ctrl+3", "3":
-			return a, a.switchView(viewSessions)
-		case "ctrl+4", "4":
-			return a, a.switchView(viewSettings)
-		}
-
-		// Navigation in normal mode
-		if a.mode == ModeNormal {
+		if !a.activeViewCapturesAllKeys() {
+			// Mode switching
 			switch msg.String() {
-			case "j", "down":
-				a.scrollActiveView(1)
+			case "ctrl+n":
+				a.mode = ModeNormal
+				a.blurActive()
 				return a, nil
-			case "k", "up":
-				a.scrollActiveView(-1)
-				return a, nil
-			case "g", "home":
-				a.gotoActiveViewTop()
-				return a, nil
-			case "G", "end":
-				a.gotoActiveViewBottom()
-				return a, nil
-			case "h":
-				if a.activeView != viewSessions {
-					return a, a.switchView(viewHome)
+			case "i":
+				if a.mode == ModeNormal {
+					a.mode = ModeInsert
+					a.focusActive()
+					return a, nil
 				}
-			case "c":
-				if a.activeView != viewSessions {
-					return a, a.switchView(viewChat)
+			}
+
+			// View switching shortcuts
+			switch msg.String() {
+			case "ctrl+1", "1":
+				return a, a.switchView(viewHome)
+			case "ctrl+2", "2":
+				return a, a.switchView(viewChat)
+			case "ctrl+3", "3":
+				return a, a.switchView(viewSessions)
+			case "ctrl+4", "4":
+				return a, a.switchView(viewSettings)
+			}
+
+			// Navigation in normal mode
+			if a.mode == ModeNormal {
+				switch msg.String() {
+				case "j", "down":
+					a.scrollActiveView(1)
+					return a, nil
+				case "k", "up":
+					a.scrollActiveView(-1)
+					return a, nil
+				case "g", "home":
+					a.gotoActiveViewTop()
+					return a, nil
+				case "G", "end":
+					a.gotoActiveViewBottom()
+					return a, nil
+				case "h":
+					if a.activeView != viewSessions {
+						return a, a.switchView(viewHome)
+					}
+				case "c":
+					if a.activeView != viewSessions {
+						return a, a.switchView(viewChat)
+					}
 				}
 			}
 		}
@@ -860,6 +862,25 @@ func (a *App) activeViewConsumesEsc() bool {
 		return a.sessionsModel.ConsumesEsc()
 	case viewSettings:
 		return a.settingsModel.ConsumesEsc()
+	}
+	return false
+}
+
+func (a *App) activeViewCapturesAllKeys() bool {
+	// In normal mode, only Settings editing captures all keys
+	// In insert mode, both Chat and Settings editing capture all keys
+	if a.mode == ModeNormal {
+		if a.activeView == viewSettings {
+			return a.settingsModel.CapturesAllKeys()
+		}
+		return false
+	}
+	// Insert mode
+	switch a.activeView {
+	case viewChat:
+		return a.chatModel.CapturesAllKeys()
+	case viewSettings:
+		return a.settingsModel.CapturesAllKeys()
 	}
 	return false
 }

@@ -386,6 +386,12 @@ func (m SessionsModel) ConsumesEsc() bool {
 	return m.confirmingDelete
 }
 
+// CapturesAllKeys returns whether this view should receive all keys
+// before global shortcuts are applied.
+func (m SessionsModel) CapturesAllKeys() bool {
+	return m.confirmingDelete
+}
+
 // Scroll scrolls the list and viewport.
 // CRITICAL FIX: Ensures selected item is visible
 func (m *SessionsModel) Scroll(lines int) {
