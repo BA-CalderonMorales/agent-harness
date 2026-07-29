@@ -629,3 +629,69 @@ func TestModelChangedMsgEmptyModel(t *testing.T) {
 		t.Errorf("expected empty model, got %q", updatedApp.chatModel.GetModel())
 	}
 }
+
+func TestFuzzySearchPrefixRankedFirst(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/clear", "/compact", "/current-model", "/config"})
+	chat.SetCommandDescriptions(map[string]string{
+		"/clear":         "Clear session",
+		"/compact":       "Compact session",
+		"/current-model": "Show current model",
+		"/config":        "Show configuration",
+	})
+
+	results := chat.filterSuggestions("/cur")
+	if len(results) == 0 {
+		t.Fatal("expected at least one result for /cur")
+	}
+	if results[0] != "/current-model" {
+		t.Errorf("expected /current-model first, got %s", results[0])
+	}
+}
+
+func TestFuzzySearchSubstringMatch(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/current-model", "/clear", "/model"})
+
+	results := chat.filterSuggestions("/model")
+	if len(results) == 0 {
+		t.Fatal("expected results for /model")
+	}
+	found := false
+	for _, r := range results {
+		if r == "/current-model" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected /current-model in substring results for /model")
+	}
+}
+
+func TestFuzzySearchSubsequenceMatch(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/compact", "/clear", "/config"})
+
+	results := chat.filterSuggestions("/cmp")
+	found := false
+	for _, r := range results {
+		if r == "/compact" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected /compact as fuzzy match for /cmp")
+	}
+}
+
+func TestFuzzySearchReturnsAllOnSlash(t *testing.T) {
+	chat := NewChatModel()
+	chat.SetCommandCompletions([]string{"/help", "/clear", "/compact"})
+
+	results := chat.filterSuggestions("/")
+	if len(results) != 3 {
+		t.Errorf("expected 3 results for '/', got %d", len(results))
+	}
+}

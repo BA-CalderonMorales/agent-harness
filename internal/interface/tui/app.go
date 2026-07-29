@@ -1073,6 +1073,11 @@ func (a *App) SetCommandCompletions(commands []string) {
 	a.chatModel.SetCommandCompletions(commands)
 }
 
+// SetCommandDescriptions adds explanatory text to inline slash suggestions.
+func (a *App) SetCommandDescriptions(descriptions map[string]string) {
+	a.chatModel.SetCommandDescriptions(descriptions)
+}
+
 // handlePaletteSelection handles a command selected from the palette.
 // Commands with no arguments are executed immediately.
 // /model with no args opens the model picker.

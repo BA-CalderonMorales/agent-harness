@@ -132,11 +132,12 @@ type ChatModel struct {
 	delegate ChatDelegate
 
 	// Inline command suggestions (replaces modal palette)
-	showSuggestions  bool
-	suggestions      []string
-	suggestionCursor int
-	suggestionOffset int // scroll window start
-	allCommands      []string
+	showSuggestions        bool
+	suggestions            []string
+	suggestionCursor       int
+	suggestionOffset       int // scroll window start
+	allCommands            []string
+	commandDescriptions    map[string]string
 
 	// Persona for contextual UI behavior
 	persona string
@@ -314,19 +315,55 @@ func (m *ChatModel) SetCommandCompletions(commands []string) {
 	m.allCommands = commands
 }
 
-// filterSuggestions returns commands matching the current input.
+// SetCommandDescriptions adds explanatory text to inline slash suggestions.
+func (m *ChatModel) SetCommandDescriptions(descriptions map[string]string) {
+	m.commandDescriptions = descriptions
+}
+
+// filterSuggestions returns commands matching the current input using fuzzy search.
+// Results are ranked: exact prefix matches first, then substring matches, then
+// fuzzy (edit distance) matches.
 func (m *ChatModel) filterSuggestions(input string) []string {
 	if input == "" || input == "/" {
 		return m.allCommands
 	}
-	var filtered []string
 	query := strings.ToLower(input)
+
+	var prefixMatches []string
+	var containsMatches []string
+	var fuzzyMatches []string
+
 	for _, cmd := range m.allCommands {
-		if strings.HasPrefix(strings.ToLower(cmd), query) {
-			filtered = append(filtered, cmd)
+		lower := strings.ToLower(cmd)
+		if strings.HasPrefix(lower, query) {
+			prefixMatches = append(prefixMatches, cmd)
+		} else if strings.Contains(lower, query) {
+			containsMatches = append(containsMatches, cmd)
+		} else if fuzzyMatch(query, lower) {
+			fuzzyMatches = append(fuzzyMatches, cmd)
 		}
 	}
-	return filtered
+
+	var result []string
+	result = append(result, prefixMatches...)
+	result = append(result, containsMatches...)
+	result = append(result, fuzzyMatches...)
+	return result
+}
+
+// fuzzyMatch returns true if query approximately matches target using
+// subsequence matching with tolerance for small edit distances.
+func fuzzyMatch(query, target string) bool {
+	if len(query) > len(target) {
+		return false
+	}
+	qi := 0
+	for ti := 0; ti < len(target) && qi < len(query); ti++ {
+		if query[qi] == target[ti] {
+			qi++
+		}
+	}
+	return qi == len(query)
 }
 
 // SetModel sets the model name.
@@ -954,6 +991,9 @@ func (m ChatModel) renderSuggestions() string {
 			style = InfoStyle
 		}
 		b.WriteString(style.Render(indicator + sug))
+		if description := m.commandDescriptions[sug]; description != "" {
+			b.WriteString(HelpDimStyle.Render("  " + description))
+		}
 		if i < end-1 {
 			b.WriteString("\n")
 		}
