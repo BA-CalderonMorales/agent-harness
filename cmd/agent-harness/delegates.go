@@ -345,6 +345,9 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "perm_execute":
 		d.app.config.PermExecute = value == "true"
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)), Type: "info"})
+	case "session_dir":
+		d.app.config.SessionDir = value
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Session directory: %s (applied on next restart)", value), Type: "success"})
 	}
 	d.tuiApp.Send(tui.SessionsRefreshedMsg{
 		Sessions: d.app.getSessionInfos(),

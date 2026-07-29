@@ -29,6 +29,7 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_WORKSPACE_PATH", "AGENT_HARNESS_WORKSPACE_PATH"), &config.WorkspacePath)
 	applyEnvString(firstEnv("AH_LOCAL_SERVER_COMMAND", "AGENT_HARNESS_LOCAL_SERVER_COMMAND"), &config.ServerCommand)
 	applyEnvString(firstEnv("AH_PERSONA", "AGENT_HARNESS_PERSONA"), &config.Persona)
+	applyEnvString(firstEnv("AH_SESSION_DIR", "AGENT_HARNESS_SESSION_DIR"), &config.SessionDir)
 	applyEnvPermissionMode(firstEnv("AH_PERMISSION_MODE", "AGENT_HARNESS_PERMISSION_MODE"), &config.PermissionMode)
 	applyEnvString(firstEnv("AH_EXECUTION_MODE", "AGENT_HARNESS_EXECUTION_MODE"), &config.ExecutionMode)
 	applyEnvBool(firstEnv("AH_PERM_READ", "AGENT_HARNESS_PERM_READ"), &config.PermRead, &config.PermExplicit)

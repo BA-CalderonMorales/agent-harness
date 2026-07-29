@@ -476,8 +476,17 @@ type SessionManager struct {
 
 // NewSessionManager creates a new session manager
 func NewSessionManager() (*SessionManager, error) {
-	// Check for env var override first
-	sessionsDir := os.Getenv("AGENT_HARNESS_SESSION_DIR")
+	return NewSessionManagerWithDir("")
+}
+
+// NewSessionManagerWithDir creates a session manager with a custom directory.
+// If dir is empty, falls back to AGENT_HARNESS_SESSION_DIR env var, then to
+// ~/.agent-harness/sessions.
+func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
+	sessionsDir := dir
+	if sessionsDir == "" {
+		sessionsDir = os.Getenv("AGENT_HARNESS_SESSION_DIR")
+	}
 	if sessionsDir == "" {
 		home, err := os.UserHomeDir()
 		if err != nil {

@@ -86,6 +86,7 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "perm_write", Label: "Allow Write", Value: "", Description: "Allow write/edit tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermWrite},
 		{Key: "perm_delete", Label: "Allow Delete", Value: "", Description: "Allow delete/remove tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermDelete},
 		{Key: "perm_execute", Label: "Allow Execute", Value: "", Description: "Allow bash/execute tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermExecute},
+		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Description: "Directory for session log storage. Leave empty for default (~/.agent-harness/sessions). Set via AH_SESSION_DIR env var or config file.", Type: "string"},
 	}
 }
 

@@ -137,7 +137,7 @@ func (app *App) migrateLegacyCredentials(credManager *config.CredentialManager) 
 
 // initSession initializes the session manager and creates or resumes a session.
 func (app *App) initSession() error {
-	sessionManager, err := state.NewSessionManager()
+	sessionManager, err := state.NewSessionManagerWithDir(app.config.SessionDir)
 	if err != nil {
 		return errf("failed to initialize session manager: %w", err)
 	}

@@ -73,6 +73,9 @@ type LayeredConfig struct {
 
 	// Persona determines the agent's behavioral mode
 	Persona string
+
+	// SessionDir overrides the default session storage directory
+	SessionDir string
 }
 
 // PermissionMode controls what tools can do
@@ -293,6 +296,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v
+	}
+	if v, ok := stringValue(config.merged, "session_dir"); ok {
+		config.SessionDir = v
 	}
 
 	if v, ok := stringValue(config.merged, "permission_mode"); ok {
