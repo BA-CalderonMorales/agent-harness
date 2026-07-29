@@ -324,30 +324,6 @@ func (app *App) initCommands() {
 			},
 		))
 
-	app.cmdRegistry.Register("diff", "Show git diff",
-		commands.DiffHandler(func() string {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "Not in a git repository."
-			}
-			return git.FormatDiff()
-		}))
-
-	app.cmdRegistry.Register("commit", "Stage all changes and commit",
-		commands.CommitHandler(func(message string) (string, error) {
-			if err := app.requireGitRepo(); err != nil {
-				return "", err
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			if err := repo.Add("-A"); err != nil {
-				return "", fmt.Errorf("failed to stage changes: %w", err)
-			}
-			if err := repo.Commit(message); err != nil {
-				return "", fmt.Errorf("failed to commit: %w", err)
-			}
-			branch, _ := repo.CurrentBranch()
-			return fmt.Sprintf("Committed to %s: %s", branch, message), nil
-		}))
-
 	app.cmdRegistry.Register("plan", "Toggle plan mode",
 		commands.PlanHandler(
 			func() bool { return app.session.PlanMode },
@@ -521,45 +497,6 @@ func (app *App) initCommands() {
 			},
 		))
 
-	app.cmdRegistry.Register("test", "Run project tests",
-		commands.TestHandler(func() (string, error) {
-			return app.runTests()
-		}))
-
-	app.cmdRegistry.Register("worktree", "Manage git worktrees",
-		commands.WorktreeHandler(
-			func() (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				return repo.ListWorktrees()
-			},
-			func(path, branch string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if branch == "" {
-					branch = filepath.Base(path)
-				}
-				if err := repo.AddWorktree(path, branch); err != nil {
-					return "", err
-				}
-				return sprintf("Created worktree at %s for branch %s", path, branch), nil
-			},
-			func(path string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if err := repo.RemoveWorktree(path); err != nil {
-					return "", err
-				}
-				return sprintf("Removed worktree at %s", path), nil
-			},
-		))
-
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			agentTypes := []struct {
@@ -620,11 +557,6 @@ func (app *App) initCommands() {
 			return app.getWorkspaceInfo()
 		}))
 
-	app.cmdRegistry.Register("reset", "Reset agent harness",
-		commands.ResetHandler(func() error {
-			return app.reset()
-		}))
-
 	app.cmdRegistry.Register("logout", "Log out and clear credentials",
 		commands.LogoutHandler(func() error {
 			return app.logout()
@@ -641,37 +573,6 @@ func (app *App) initCommands() {
 			}
 			return audit.FormatEntries(entries)
 		}))
-
-	app.cmdRegistry.Register("persona", "Show or change persona",
-		commands.PersonaHandler(
-			func() string { return app.session.Persona },
-			func(p string) error {
-				parsed, err := persona.Parse(p)
-				if err != nil {
-					return err
-				}
-				app.session.Persona = parsed.String()
-				if app.tuiApp != nil {
-					app.tuiApp.SetSettings(app.getSettings())
-					app.tuiApp.SetChatPersona(app.session.Persona)
-					app.tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
-				}
-				return nil
-			},
-			func() string {
-				var lines []string
-				lines = append(lines, "Available personas:")
-				lines = append(lines, "")
-				for _, p := range persona.All() {
-					marker := "  "
-					if p.String() == app.session.Persona {
-						marker = "● "
-					}
-					lines = append(lines, fmt.Sprintf("%s%-12s %s", marker, p.String(), p.Description()))
-				}
-				return strings.Join(lines, "\n")
-			},
-		))
 
 	app.cmdRegistry.Register("login", "Log in with new credentials",
 		commands.LoginHandler(func() error {

@@ -31,12 +31,11 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 			registry.Register("clear", "Clear session", ClearHandler(func() error { return nil }, nil))
 			registry.Register("compact", "Compact session", CompactHandler(func() (string, error) { return "compacted", nil }))
 			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "s1" }, func(string) error { return nil }))
-			registry.Register("reset", "Reset", ResetHandler(func() error { return nil }))
 			registry.Register("quit", "Quit", QuitHandler())
 			registry.Register("workspace", "Workspace", WorkspaceHandler(func() string { return "/home" }))
 
 			By("dispatching each command")
-			commands := []string{"/help", "/status", "/clear", "/compact", "/session", "/reset", "/quit", "/workspace"}
+			commands := []string{"/help", "/status", "/clear", "/compact", "/session", "/quit", "/workspace"}
 			for _, cmd := range commands {
 				result, handled, err := registry.Handle(cmd)
 				Expect(err).ToNot(HaveOccurred(), "command %s errored", cmd)
@@ -86,12 +85,11 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 		It("should register and dispatch all output commands", func() {
 			By("registering output commands")
 			registry.Register("cost", "Show cost", CostHandler(func() string { return "$0" }))
-			registry.Register("diff", "Show diff", DiffHandler(func() string { return "" }))
 			registry.Register("export", "Export", ExportHandler(func(string) (string, error) { return "file", nil }))
 			registry.Register("version", "Show version", VersionHandler("0.1.0", ""))
 
 			By("dispatching output commands")
-			for _, cmd := range []string{"/cost", "/diff", "/export", "/version"} {
+			for _, cmd := range []string{"/cost", "/export", "/version"} {
 				_, handled, err := registry.Handle(cmd)
 				Expect(err).ToNot(HaveOccurred(), "command %s errored", cmd)
 				Expect(handled).To(BeTrue(), "command %s not handled", cmd)
@@ -100,7 +98,6 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 
 		It("should register and dispatch all git commands", func() {
 			By("registering git commands")
-			registry.Register("commit", "Commit", CommitHandler(func(string) (string, error) { return "committed", nil }))
 			registry.Register("branch", "Branch", BranchHandler(
 				func() (string, error) { return "main", nil },
 				func(string) (string, error) { return "created", nil },
@@ -111,14 +108,9 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 				func(string, string) (string, error) { return "pr", nil },
 				func() (string, error) { return "list", nil },
 			))
-			registry.Register("worktree", "Worktree", WorktreeHandler(
-				func() (string, error) { return "wt", nil },
-				func(string, string) (string, error) { return "added", nil },
-				func(string) (string, error) { return "removed", nil },
-			))
 
 			By("dispatching git commands")
-			for _, cmd := range []string{"/commit msg", "/branch", "/pr", "/worktree"} {
+			for _, cmd := range []string{"/branch", "/pr"} {
 				_, handled, err := registry.Handle(cmd)
 				Expect(err).ToNot(HaveOccurred(), "command %s errored", cmd)
 				Expect(handled).To(BeTrue(), "command %s not handled", cmd)
@@ -129,13 +121,12 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 			By("registering tool commands")
 			registry.Register("agents", "Show agents", AgentsHandler(func(string) string { return "agents" }))
 			registry.Register("skills", "Show skills", SkillsHandler(func(string) string { return "skills" }))
-			registry.Register("test", "Run tests", TestHandler(func() (string, error) { return "pass", nil }))
 			registry.Register("memory", "Show memory", MemoryHandler(func() string { return "mem" }))
 			registry.Register("plan", "Toggle plan", PlanHandler(func() bool { return false }, func(bool) string { return "ok" }))
 			registry.Register("init", "Init project", InitHandler(func(string) (string, error) { return "inited", nil }))
 
 			By("dispatching tool commands")
-			for _, cmd := range []string{"/agents", "/skills", "/test", "/memory", "/plan", "/init"} {
+			for _, cmd := range []string{"/agents", "/skills", "/memory", "/plan", "/init"} {
 				_, handled, err := registry.Handle(cmd)
 				Expect(err).ToNot(HaveOccurred(), "command %s errored", cmd)
 				Expect(handled).To(BeTrue(), "command %s not handled", cmd)
@@ -367,24 +358,4 @@ var _ = Describe("End-to-End Command Chains", func() {
 		Expect(result).To(ContainSubstring("Session loaded: session-2"))
 	})
 
-	It("should handle a full reset workflow", func() {
-		By("setting up a registry with reset command")
-		registry := NewSlashRegistry()
-		resetCalled := false
-		registry.Register("reset", "Reset", ResetHandler(func() error { resetCalled = true; return nil }))
-
-		By("requesting reset without confirmation")
-		result, handled, err := registry.Handle("/reset")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(handled).To(BeTrue())
-		Expect(result).To(ContainSubstring("WARNING"))
-		Expect(resetCalled).To(BeFalse())
-
-		By("confirming reset")
-		result, handled, err = registry.Handle("/reset --confirm")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(handled).To(BeTrue())
-		Expect(IsReset(result)).To(BeTrue())
-		Expect(resetCalled).To(BeTrue())
-	})
 })

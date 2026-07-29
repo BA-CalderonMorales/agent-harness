@@ -481,28 +481,6 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
-	Describe("DiffHandler", func() {
-		It("should return diff when changes exist", func() {
-			By("given a diff function with changes")
-			handler := DiffHandler(func() string { return "+added line" })
-
-			By("when invoking /diff")
-			result, err := handler("")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("+added line"))
-		})
-
-		It("should indicate no changes when diff is empty", func() {
-			By("given a diff function with no changes")
-			handler := DiffHandler(func() string { return "" })
-
-			By("when invoking /diff")
-			result, err := handler("")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("No changes detected in workspace."))
-		})
-	})
-
 	Describe("VersionHandler", func() {
 		It("should include build info when provided", func() {
 			By("given a version handler with build info")
@@ -528,42 +506,6 @@ var _ = Describe("Slash Commands", func() {
 	// ========================================================================
 	// Git Commands
 	// ========================================================================
-	Describe("CommitHandler", func() {
-		It("should commit with a message", func() {
-			By("given a commit handler")
-			handler := CommitHandler(func(message string) (string, error) {
-				return "Committed to main: " + message, nil
-			})
-
-			By("when invoking /commit 'fix bug'")
-			result, err := handler("fix bug")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("Committed to main: fix bug"))
-		})
-
-		It("should show usage when no message provided", func() {
-			By("given a commit handler")
-			handler := CommitHandler(func(message string) (string, error) { return "", nil })
-
-			By("when invoking /commit with no args")
-			result, err := handler("")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(ContainSubstring("Usage: /commit <message>"))
-		})
-
-		It("should propagate commit errors", func() {
-			By("given a failing commit function")
-			handler := CommitHandler(func(message string) (string, error) {
-				return "", errors.New("nothing to commit")
-			})
-
-			By("when invoking /commit 'empty'")
-			_, err := handler("empty")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("nothing to commit"))
-		})
-	})
-
 	Describe("BranchHandler", func() {
 		var (
 			branches []string
@@ -831,131 +773,6 @@ var _ = Describe("Slash Commands", func() {
 				Expect(err).ToNot(HaveOccurred())
 				Expect(createCalled).To(BeFalse())
 				Expect(result).To(ContainSubstring("Usage: /pr create"))
-			})
-		})
-	})
-
-	Describe("WorktreeHandler", func() {
-		var (
-			added   []string
-			removed string
-			handler SlashHandler
-		)
-
-		BeforeEach(func() {
-			added = nil
-			removed = ""
-			handler = WorktreeHandler(
-				func() (string, error) { return "wt1\nwt2", nil },
-				func(path, branch string) (string, error) {
-					added = append(added, path+":"+branch)
-					return "added", nil
-				},
-				func(path string) (string, error) { removed = path; return "removed", nil },
-			)
-		})
-
-		Context("Given no arguments", func() {
-			It("should list worktrees", func() {
-				By("when invoking /worktree")
-				result, err := handler("")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(Equal("wt1\nwt2"))
-			})
-		})
-
-		Context("Given add subcommand", func() {
-			It("should add worktree with path and branch", func() {
-				By("when invoking /worktree add /tmp/wt feat-branch")
-				result, err := handler("add /tmp/wt feat-branch")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(added).To(ContainElement("/tmp/wt:feat-branch"))
-				Expect(result).To(Equal("added"))
-			})
-
-			It("should add worktree with path only", func() {
-				By("when invoking /worktree add /tmp/wt")
-				result, err := handler("add /tmp/wt")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(added).To(ContainElement("/tmp/wt:"))
-				Expect(result).To(Equal("added"))
-			})
-
-			It("should show usage when path missing", func() {
-				By("when invoking /worktree add")
-				result, err := handler("add")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("Usage: /worktree add"))
-			})
-		})
-
-		Context("Given remove subcommand", func() {
-			It("should remove worktree", func() {
-				By("when invoking /worktree remove /tmp/wt")
-				result, err := handler("remove /tmp/wt")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(removed).To(Equal("/tmp/wt"))
-				Expect(result).To(Equal("removed"))
-			})
-
-			It("should show usage when path missing", func() {
-				By("when invoking /worktree remove")
-				result, err := handler("remove")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("Usage: /worktree remove"))
-			})
-		})
-
-		Context("Given unknown subcommand", func() {
-			It("should return usage instructions", func() {
-				By("when invoking /worktree foo")
-				result, err := handler("foo")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("Usage: /worktree"))
-			})
-		})
-
-		Context("Given failing callback functions", func() {
-			It("should propagate listFn errors", func() {
-				By("given a handler with failing list")
-				failHandler := WorktreeHandler(
-					func() (string, error) { return "", errors.New("list failed") },
-					func(string, string) (string, error) { return "", nil },
-					func(string) (string, error) { return "", nil },
-				)
-
-				By("when invoking /worktree")
-				_, err := failHandler("")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("list failed"))
-			})
-
-			It("should propagate addFn errors", func() {
-				By("given a handler with failing add")
-				failHandler := WorktreeHandler(
-					func() (string, error) { return "", nil },
-					func(string, string) (string, error) { return "", errors.New("add failed") },
-					func(string) (string, error) { return "", nil },
-				)
-
-				By("when invoking /worktree add /tmp/wt")
-				_, err := failHandler("add /tmp/wt")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("add failed"))
-			})
-
-			It("should propagate removeFn errors", func() {
-				By("given a handler with failing remove")
-				failHandler := WorktreeHandler(
-					func() (string, error) { return "", nil },
-					func(string, string) (string, error) { return "", nil },
-					func(string) (string, error) { return "", errors.New("remove failed") },
-				)
-
-				By("when invoking /worktree remove /tmp/wt")
-				_, err := failHandler("remove /tmp/wt")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("remove failed"))
 			})
 		})
 	})
@@ -1241,28 +1058,6 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
-	Describe("TestHandler", func() {
-		It("should run tests and return results", func() {
-			By("given a test handler")
-			handler := TestHandler(func() (string, error) { return "PASS: 42 tests", nil })
-
-			By("when invoking /test")
-			result, err := handler("")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(Equal("PASS: 42 tests"))
-		})
-
-		It("should propagate test failures", func() {
-			By("given a failing test handler")
-			handler := TestHandler(func() (string, error) { return "", errors.New("test failed") })
-
-			By("when invoking /test")
-			_, err := handler("")
-			Expect(err).To(HaveOccurred())
-			Expect(err.Error()).To(Equal("test failed"))
-		})
-	})
-
 	Describe("MemoryHandler", func() {
 		It("should return memory state", func() {
 			By("given a memory handler")
@@ -1341,61 +1136,6 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
-	// ========================================================================
-	// System Commands
-	// ========================================================================
-	Describe("ResetHandler", func() {
-		var resetCalled bool
-		var handler SlashHandler
-
-		BeforeEach(func() {
-			resetCalled = false
-			handler = ResetHandler(func() error { resetCalled = true; return nil })
-		})
-
-		Context("Given no confirmation flag", func() {
-			It("should warn and not reset", func() {
-				By("when invoking /reset")
-				result, err := handler("")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("WARNING"))
-				Expect(resetCalled).To(BeFalse())
-			})
-		})
-
-		Context("Given --confirm flag", func() {
-			It("should reset and return reset signal", func() {
-				By("when invoking /reset --confirm")
-				result, err := handler("--confirm")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(Equal("__RESET__"))
-				Expect(resetCalled).To(BeTrue())
-			})
-		})
-
-		Context("Given -y flag", func() {
-			It("should reset and return reset signal", func() {
-				By("when invoking /reset -y")
-				result, err := handler("-y")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(Equal("__RESET__"))
-				Expect(resetCalled).To(BeTrue())
-			})
-		})
-
-		Context("Given a failing reset function", func() {
-			It("should propagate the error", func() {
-				By("given a handler with failing reset")
-				failHandler := ResetHandler(func() error { return errors.New("reset failed") })
-
-				By("when invoking /reset --confirm")
-				_, err := failHandler("--confirm")
-				Expect(err).To(HaveOccurred())
-				Expect(err.Error()).To(Equal("reset failed"))
-			})
-		})
-	})
-
 	Describe("QuitHandler", func() {
 		It("should return quit signal", func() {
 			By("given a quit handler")
@@ -1435,53 +1175,6 @@ var _ = Describe("Slash Commands", func() {
 			result, err := handler("")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(result).To(ContainSubstring("Usage: /steer"))
-		})
-	})
-
-	Describe("PersonaHandler", func() {
-		It("should list personas on empty or 'list' arg", func() {
-			handler := PersonaHandler(nil, nil, func() string { return "Available: developer, designer" })
-
-			res1, err1 := handler("")
-			Expect(err1).ToNot(HaveOccurred())
-			Expect(res1).To(Equal("Available: developer, designer"))
-
-			res2, err2 := handler("list")
-			Expect(err2).ToNot(HaveOccurred())
-			Expect(res2).To(Equal("Available: developer, designer"))
-		})
-
-		It("should change persona and return success message", func() {
-			current := "developer"
-			handler := PersonaHandler(
-				func() string { return current },
-				func(p string) error { current = p; return nil },
-				nil,
-			)
-
-			res, err := handler("designer")
-			Expect(err).ToNot(HaveOccurred())
-			Expect(res).To(ContainSubstring("Persona updated"))
-			Expect(res).To(ContainSubstring("Previous         developer"))
-			Expect(res).To(ContainSubstring("Current          designer"))
-		})
-
-		It("should handle nil dependencies", func() {
-			handlerListOnly := PersonaHandler(nil, nil, nil)
-			_, err := handlerListOnly("")
-			Expect(err).To(MatchError("persona listing is not available"))
-
-			handlerSwitchOnly := PersonaHandler(nil, nil, func() string { return "" })
-			_, err = handlerSwitchOnly("designer")
-			Expect(err).To(MatchError("persona switching is not available"))
-		})
-	})
-
-	Describe("IsReset", func() {
-		It("should detect reset signal", func() {
-			By("checking __RESET__")
-			Expect(IsReset("__RESET__")).To(BeTrue())
-			Expect(IsReset("other")).To(BeFalse())
 		})
 	})
 

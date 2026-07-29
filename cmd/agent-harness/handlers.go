@@ -144,11 +144,6 @@ func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
 			tuiApp.Send(tui.QuitMsg{})
 			return
 		}
-		if commands.IsReset(result) {
-			tuiApp.AddMessage("system", "Agent Harness has been reset. Credentials and sessions deleted.")
-			tuiApp.Send(tui.QuitMsg{})
-			return
-		}
 		if result != "" {
 			tuiApp.AddMessage("system", result)
 		}
