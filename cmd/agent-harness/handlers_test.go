@@ -37,36 +37,19 @@ func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *A
 	}
 }
 
-func TestImproveCommandRunsDeterministicWorkflow(t *testing.T) {
-	root := t.TempDir()
-	writeHandlerTestFile(t, root, "go.mod", "module example.com/selfimprove\n\ngo 1.22\n")
-	writeHandlerTestFile(t, root, "selfimprove_test.go", "package selfimprove\n\nimport \"testing\"\n\nfunc TestSelfImprove(t *testing.T) {}\n")
-	writeHandlerTestFile(t, root, "plans/agent-harness/PLAN.md", "# Agent Harness Plan Index\n\n## Current Domain\n\n- Date: `2026-06-13`\n")
-	writeHandlerTestFile(t, root, "plans/agent-harness/2026-06-13/GOAL.md", "# 2026-06-13 Goal\n\n## Today\n\n- [ ] Resume useful context.\n")
-	writeHandlerTestFile(t, root, "plans/agent-harness/2026-06-13/PLAN.md", "# 2026-06-13 Plan\n\n## Today\n\n- [ ] Implement the next bounded slice.\n")
-
+func TestImproveCommandIsFeatureFlagged(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
-	app.cwd = root
 	app.initCommands()
 
 	result, handled, err := app.cmdRegistry.Handle("/improve")
 	if err != nil {
-		t.Fatalf("/improve error = %v\n%s", err, result)
+		t.Fatalf("/improve error = %v", err)
 	}
 	if !handled {
 		t.Fatal("/improve was not handled")
 	}
-	if !strings.Contains(result, "Self-improvement workflow: passed") {
-		t.Fatalf("result missing passed summary:\n%s", result)
-	}
-	if !strings.Contains(result, "Next action: Implement the next bounded slice.") {
-		t.Fatalf("result missing next action:\n%s", result)
-	}
-	if _, err := os.Stat(filepath.Join(root, "plans", "agent-harness", "2026-06-14", "GOAL.md")); err != nil {
-		t.Fatalf("next GOAL.md not created: %v", err)
-	}
-	if _, err := os.Stat(filepath.Join(root, "plans", "agent-harness", "2026-06-14", "PLAN.md")); err != nil {
-		t.Fatalf("next PLAN.md not created: %v", err)
+	if !strings.Contains(result, "coming soon") {
+		t.Fatalf("expected coming soon message, got:\n%s", result)
 	}
 }
 
