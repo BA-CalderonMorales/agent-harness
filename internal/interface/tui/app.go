@@ -532,7 +532,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
-		return a, nil
+		return a, tea.Batch(cmds...)
 
 	case SessionActivatedMsg:
 		a.chatModel.SetMessages(msg.Transcript)
