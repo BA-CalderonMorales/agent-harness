@@ -3,6 +3,7 @@ package main
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
@@ -268,5 +269,35 @@ func TestStringSliceContains(t *testing.T) {
 	}
 	if stringSliceContains([]string{}, "a") {
 		t.Error("expected empty slice to not contain anything")
+	}
+}
+
+func TestConvertToSessionInfosSortsNewestFirst(t *testing.T) {
+	now := time.Now()
+	sessions := []state.SessionMetadata{
+		{ID: "session-oldest", UpdatedAt: now.Add(-2 * time.Hour), CreatedAt: now.Add(-3 * time.Hour)},
+		{ID: "session-newest", UpdatedAt: now, CreatedAt: now.Add(-1 * time.Hour)},
+		{ID: "session-middle", UpdatedAt: now.Add(-1 * time.Hour), CreatedAt: now.Add(-2 * time.Hour)},
+	}
+	current := &state.Session{ID: "session-newest"}
+
+	infos := convertToSessionInfos(sessions, current)
+	if len(infos) != 3 {
+		t.Fatalf("expected 3 infos, got %d", len(infos))
+	}
+	if infos[0].ID != "session-newest" {
+		t.Errorf("first session = %s, want session-newest", infos[0].ID)
+	}
+	if infos[1].ID != "session-middle" {
+		t.Errorf("second session = %s, want session-middle", infos[1].ID)
+	}
+	if infos[2].ID != "session-oldest" {
+		t.Errorf("third session = %s, want session-oldest", infos[2].ID)
+	}
+	if !infos[0].IsActive {
+		t.Error("expected newest session to be marked active")
+	}
+	if infos[1].IsActive || infos[2].IsActive {
+		t.Error("expected non-current sessions to not be marked active")
 	}
 }

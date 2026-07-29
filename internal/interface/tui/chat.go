@@ -883,11 +883,7 @@ func (m ChatModel) View() string {
 	if m.thinking {
 		metaLine = m.renderStatusLine()
 	} else {
-		modelDisplay := m.model
-		if modelDisplay == "" {
-			modelDisplay = "default"
-		}
-		metaLine = InputMetaStyle.Render(m.compactMetaLine(modelDisplay))
+		metaLine = InputMetaStyle.Render(m.composerHintLine())
 	}
 
 	editorPanel := InputEditorStyle.
@@ -904,6 +900,21 @@ func (m ChatModel) View() string {
 	sections = append(sections, inputContainer.Render(inputContent))
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+func (m ChatModel) composerHintLine() string {
+	hint := "Enter send · Alt+Enter newline · / commands"
+	maxWidth := m.width - 4
+	if maxWidth < 12 {
+		maxWidth = 12
+	}
+	if len(hint) <= maxWidth {
+		return hint
+	}
+	if maxWidth < 20 {
+		return "Enter send · / cmds"
+	}
+	return hint[:maxWidth-3] + "..."
 }
 
 func (m ChatModel) compactMetaLine(modelDisplay string) string {
@@ -1497,6 +1508,12 @@ func (m ChatModel) ConsumesTab() bool {
 // When inline suggestions are showing, Esc dismisses them.
 func (m ChatModel) ConsumesEsc() bool {
 	return m.showSuggestions
+}
+
+// CapturesAllKeys returns whether this view should receive all keys
+// before global shortcuts are applied.
+func (m ChatModel) CapturesAllKeys() bool {
+	return m.focused
 }
 
 // Scroll scrolls the viewport.

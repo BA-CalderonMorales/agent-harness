@@ -61,6 +61,11 @@ var _ = Describe("HTTPClient Payload Format", func() {
 				var result map[string]any
 				Expect(json.Unmarshal(payload, &result)).To(Succeed())
 
+				By("requesting trailing usage metadata for the stream")
+				streamOptions, ok := result["stream_options"].(map[string]any)
+				Expect(ok).To(BeTrue(), "stream_options should be an object")
+				Expect(streamOptions["include_usage"]).To(BeTrue())
+
 				By("verifying messages are in OpenAI format")
 				messages, ok := result["messages"].([]any)
 				Expect(ok).To(BeTrue(), "messages should be an array")

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -76,6 +77,11 @@ type App struct {
 	effortProfile string
 	workspacePath string
 	workspaceName string
+
+	// Provider readiness
+	providerReadiness     int    // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
+	providerReadinessMsg  string
+	providerReadinessGen  int // generation counter to discard stale results
 
 	// External message channel for async updates
 	msgChan chan tea.Msg
@@ -160,6 +166,27 @@ func (a *App) Send(msg tea.Msg) {
 	default:
 		// Channel full, drop message (shouldn't happen with buffer)
 	}
+}
+
+// StartProviderProbe starts an async provider readiness probe.
+// It returns a generation counter that can be used to discard stale results.
+func (a *App) StartProviderProbe(prober llm.ProviderProber) int {
+	a.providerReadinessGen++
+	gen := a.providerReadinessGen
+	a.providerReadiness = 0 // ProviderChecking
+	a.providerReadinessMsg = "checking provider..."
+
+	go func() {
+		ctx := context.Background()
+		readiness, msg := prober.Probe(ctx)
+		a.Send(ProviderReadinessMsg{
+			Readiness: int(readiness),
+			Message:   msg,
+			Endpoint:  "", // Will be set by caller if needed
+		})
+	}()
+
+	return gen
 }
 
 // Init initializes the TUI.
@@ -280,51 +307,57 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Mode switching
-		switch msg.String() {
-		case "ctrl+n":
-			a.mode = ModeNormal
-			a.blurActive()
-			return a, nil
-		case "i":
-			if a.mode == ModeNormal {
-				a.mode = ModeInsert
-				a.focusActive()
-				return a, nil
-			}
-		}
-
-		// View switching shortcuts
-		switch msg.String() {
-		case "ctrl+1", "1":
-			return a, a.switchView(viewHome)
-		case "ctrl+2", "2":
-			return a, a.switchView(viewChat)
-		case "ctrl+3", "3":
-			return a, a.switchView(viewSessions)
-		case "ctrl+4", "4":
-			return a, a.switchView(viewSettings)
-		}
-
-		// Navigation in normal mode
-		if a.mode == ModeNormal {
+		if !a.activeViewCapturesAllKeys() {
+			// Mode switching
 			switch msg.String() {
-			case "j", "down":
-				a.scrollActiveView(1)
+			case "ctrl+n":
+				a.mode = ModeNormal
+				a.blurActive()
 				return a, nil
-			case "k", "up":
-				a.scrollActiveView(-1)
-				return a, nil
-			case "g", "home":
-				a.gotoActiveViewTop()
-				return a, nil
-			case "G", "end":
-				a.gotoActiveViewBottom()
-				return a, nil
-			case "h":
+			case "i":
+				if a.mode == ModeNormal {
+					a.mode = ModeInsert
+					a.focusActive()
+					return a, nil
+				}
+			}
+
+			// View switching shortcuts
+			switch msg.String() {
+			case "ctrl+1", "1":
 				return a, a.switchView(viewHome)
-			case "c":
+			case "ctrl+2", "2":
 				return a, a.switchView(viewChat)
+			case "ctrl+3", "3":
+				return a, a.switchView(viewSessions)
+			case "ctrl+4", "4":
+				return a, a.switchView(viewSettings)
+			}
+
+			// Navigation in normal mode
+			if a.mode == ModeNormal {
+				switch msg.String() {
+				case "j", "down":
+					a.scrollActiveView(1)
+					return a, nil
+				case "k", "up":
+					a.scrollActiveView(-1)
+					return a, nil
+				case "g", "home":
+					a.gotoActiveViewTop()
+					return a, nil
+				case "G", "end":
+					a.gotoActiveViewBottom()
+					return a, nil
+				case "h":
+					if a.activeView != viewSessions {
+						return a, a.switchView(viewHome)
+					}
+				case "c":
+					if a.activeView != viewSessions {
+						return a, a.switchView(viewChat)
+					}
+				}
 			}
 		}
 
@@ -500,6 +533,55 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return a, nil
+
+	case SessionActivatedMsg:
+		a.chatModel.SetMessages(msg.Transcript)
+		a.chatModel.SetModel(msg.Model)
+		a.chatModel.SetPersona(msg.Persona)
+		a.settingsModel.UpdateSettingValue("model", msg.Model)
+		a.homeModel.SetStatus(msg.Model, msg.PermissionMode, msg.Persona, msg.EstTokens)
+		a.homeModel.SetSessions(msg.Sessions)
+		a.sessionsModel.SetSessions(msg.Sessions)
+		if msg.Notice != "" {
+			a.statusMessage = msg.Notice
+			a.statusType = msg.NoticeType
+		}
+		if msg.SwitchToChat {
+			cmds = append(cmds, a.switchView(viewChat))
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	case SessionsRefreshedMsg:
+		a.homeModel.SetSessions(msg.Sessions)
+		a.sessionsModel.SetSessions(msg.Sessions)
+		if msg.Notice != "" {
+			a.statusMessage = msg.Notice
+			a.statusType = msg.NoticeType
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	case ProviderReadinessMsg:
+		a.providerReadiness = msg.Readiness
+		a.providerReadinessMsg = msg.Message
+		// Update status bar with readiness information
+		switch msg.Readiness {
+		case 1: // ProviderReady
+			a.statusMessage = fmt.Sprintf("Provider ready: %s", msg.Message)
+			a.statusType = "success"
+		case 2: // ProviderWarning
+			a.statusMessage = fmt.Sprintf("Provider warning: %s", msg.Message)
+			a.statusType = "warning"
+		case 3: // ProviderUnavailable
+			a.statusMessage = fmt.Sprintf("Provider unavailable: %s", msg.Message)
+			a.statusType = "error"
+		case 4: // ProviderMisconfigured
+			a.statusMessage = fmt.Sprintf("Provider misconfigured: %s", msg.Message)
+			a.statusType = "error"
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
 	}
 
 	// -------------------------------------------------------------------------
@@ -682,33 +764,32 @@ func (a App) renderStatusBar() string {
 		workspace = "workspace"
 	}
 
-	activeModel := model
-	if a.provider != "" && modelName != "" {
-		activeModel = a.provider + "/" + model
-	}
-
-	contextParts := []string{model + " " + effort}
-	if workspacePath != "" {
-		contextParts = append(contextParts, workspacePath)
-	}
-	contextParts = append(contextParts, activeModel, workspace)
-	contextLine := StatusLabel.Render(strings.Join(contextParts, " · "))
-
 	modeStr := "[typing]"
 	if a.mode == ModeNormal {
 		modeStr = "[navigate]"
 	}
-	help := StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  " + modeStr)
-	if a.mode == ModeNormal {
-		help = StatusHintStyle.Render("Tab: views  ?: help  Ctrl+C: quit  ") + WarningStyle.Render(modeStr)
-	}
 
-	content := " " + status + " Agent Harness  " + contextLine + "  " + help
+	// Build compact status line with width priorities
+	// Priority: health+mode > model > workspace > provider > help
+	parts := []string{status, modeStr}
+	if modelName != "" {
+		parts = append(parts, model)
+	}
+	if workspace != "" && workspace != "workspace" {
+		parts = append(parts, workspace)
+	}
+	if a.provider != "" {
+		parts = append(parts, a.provider)
+	}
+	
+	content := " " + strings.Join(parts, " · ")
 	if lipgloss.Width(content) > a.width-4 {
-		content = " " + status + " " + contextLine
+		// Drop help/extra info
+		content = " " + status + " · " + model + " · " + workspace
 	}
 	if lipgloss.Width(content) > a.width-4 {
-		content = " " + status + " " + StatusLabel.Render(model+" "+effort)
+		// Minimal: just health + model
+		content = " " + status + " · " + model
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
@@ -832,6 +913,25 @@ func (a *App) activeViewConsumesEsc() bool {
 	return false
 }
 
+func (a *App) activeViewCapturesAllKeys() bool {
+	// In normal mode, only Settings editing captures all keys
+	// In insert mode, both Chat and Settings editing capture all keys
+	if a.mode == ModeNormal {
+		if a.activeView == viewSettings {
+			return a.settingsModel.CapturesAllKeys()
+		}
+		return false
+	}
+	// Insert mode
+	switch a.activeView {
+	case viewChat:
+		return a.chatModel.CapturesAllKeys()
+	case viewSettings:
+		return a.settingsModel.CapturesAllKeys()
+	}
+	return false
+}
+
 func (a *App) scrollActiveView(lines int) {
 	switch a.activeView {
 	case viewHome:
@@ -925,6 +1025,7 @@ func (a *App) ShowStatus(text string, statusType string) {
 // RefreshSessions refreshes the sessions list.
 func (a *App) RefreshSessions(sessions []SessionInfo) {
 	a.sessionsModel.SetSessions(sessions)
+	a.homeModel.SetSessions(sessions)
 }
 
 // SetSettings sets the settings list.

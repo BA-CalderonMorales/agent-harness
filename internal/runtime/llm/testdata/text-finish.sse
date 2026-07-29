@@ -1,0 +1,5 @@
+data: {"id":"chatcmpl-text","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"role":"assistant","content":"done"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-text","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":3,"completion_tokens":1,"total_tokens":4}}
+
+data: [DONE]

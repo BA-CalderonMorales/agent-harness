@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -44,13 +45,12 @@ func ensureCurrentSession(sessions []state.SessionMetadata, currentID string) []
 			return sessions
 		}
 	}
-	// Current session not in list - find it and prepend
 	return sessions
 }
 
 // convertToSessionInfos converts SessionMetadata to SessionInfo.
 func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Session) []tui.SessionInfo {
-	var infos []tui.SessionInfo
+	infos := make([]tui.SessionInfo, 0, len(sessions))
 	for _, s := range sessions {
 		infos = append(infos, tui.SessionInfo{
 			ID:           s.ID,
@@ -63,26 +63,29 @@ func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Sess
 			IsActive:     current != nil && s.ID == current.ID,
 		})
 	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].UpdatedAt.After(infos[j].UpdatedAt)
+	})
 	return infos
 }
 
 // getSettings returns current settings for TUI.
 func (app *App) getSettings() []tui.Setting {
 	return []tui.Setting{
-		{Key: "persona", Label: "Persona", Value: app.session.Persona, Description: "Agent behavior mode", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
-		{Key: "model", Label: "Model", Value: app.session.Model, Description: "The AI model to use", Type: "string"},
-		{Key: "provider", Label: "Provider", Value: app.config.Provider, Description: "API provider", Type: "string"},
-		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Description: "Local runtime such as llama.cpp or ollama", Type: "string"},
-		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Description: "OpenAI-compatible API base URL", Type: "string"},
-		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Description: "Model context window", Type: "string"},
-		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Description: "Maximum response tokens", Type: "string"},
-		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Description: "Sampling temperature", Type: "string"},
-		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Description: "Tool permission level", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
-		{Key: "execution_mode", Label: "Execution Mode", Value: app.executionMode.String(), Description: "Command approval mode", Type: "choice", Options: []string{"interactive", "yolo"}},
-		{Key: "perm_read", Label: "Allow Read", Value: "", Description: "Allow read/search tools", Type: "bool", BoolValue: app.config.PermRead},
-		{Key: "perm_write", Label: "Allow Write", Value: "", Description: "Allow write/edit tools", Type: "bool", BoolValue: app.config.PermWrite},
-		{Key: "perm_delete", Label: "Allow Delete", Value: "", Description: "Allow delete/remove tools", Type: "bool", BoolValue: app.config.PermDelete},
-		{Key: "perm_execute", Label: "Allow Execute", Value: "", Description: "Allow bash/execute tools", Type: "bool", BoolValue: app.config.PermExecute},
+		{Key: "persona", Label: "Persona", Value: app.session.Persona, Description: "Agent behavior mode. Affects how the agent responds and what tools it prefers. Persisted per session.", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
+		{Key: "model", Label: "Model", Value: app.session.Model, Description: "The AI model to use for this session. Saved as your default after change.", Type: "string"},
+		{Key: "provider", Label: "Provider", Value: app.config.Provider, Description: "API provider (openai, anthropic, openrouter, ollama, local). This-run only.", Type: "string"},
+		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Description: "Local runtime such as llama.cpp or ollama. This-run only.", Type: "string"},
+		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Description: "OpenAI-compatible API base URL (e.g. http://localhost:8080/v1). This-run only.", Type: "string"},
+		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Description: "Model context window in tokens. Limits conversation length. This-run only.", Type: "number"},
+		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Description: "Maximum response tokens per turn. This-run only.", Type: "number"},
+		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Description: "Sampling temperature (0.0-2.0). Lower = more deterministic. This-run only.", Type: "number"},
+		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Description: "Tool permission level. Persisted.", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
+		{Key: "execution_mode", Label: "Execution Mode", Value: app.executionMode.String(), Description: "Command approval mode (interactive or yolo). This-run only.", Type: "choice", Options: []string{"interactive", "yolo"}},
+		{Key: "perm_read", Label: "Allow Read", Value: "", Description: "Allow read/search tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermRead},
+		{Key: "perm_write", Label: "Allow Write", Value: "", Description: "Allow write/edit tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermWrite},
+		{Key: "perm_delete", Label: "Allow Delete", Value: "", Description: "Allow delete/remove tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermDelete},
+		{Key: "perm_execute", Label: "Allow Execute", Value: "", Description: "Allow bash/execute tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermExecute},
 	}
 }
 

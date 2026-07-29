@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -28,10 +29,11 @@ func TestRepeatedToolActivityRendersAsCompactScanRows(t *testing.T) {
 	chat := NewChatModel()
 	chat.width = 72
 	chat.height = 20
+	longPath := filepath.Join(t.TempDir(), "nested", "sample-project", "README.md")
 
 	chat.AddOrUpdateToolMessage("tool-1", "bash", "Ran", "rtk git status --short --branch", ToolStatusSuccess)
 	chat.AddOrUpdateToolMessage("tool-2", "bash", "Ran", "rtk go test ./internal/interface/tui", ToolStatusRunning)
-	chat.AddOrUpdateToolMessage("tool-3", "read", "Read", "/mnt/c/Users/bacm6/Projects/agent-harness/README.md", ToolStatusError)
+	chat.AddOrUpdateToolMessage("tool-3", "read", "Read", longPath, ToolStatusError)
 
 	view := chat.viewport.View()
 	for _, want := range []string{"Ran", "Read", "rtk git status", "rtk go test", "README.md"} {
@@ -42,7 +44,7 @@ func TestRepeatedToolActivityRendersAsCompactScanRows(t *testing.T) {
 	if strings.Count(view, "\n\n\n") > 0 {
 		t.Fatalf("tool rows should not render with large vertical gaps\n%s", view)
 	}
-	if strings.Contains(view, "/mnt/c/Users/bacm6/Projects/agent-harness/README.md") {
+	if strings.Contains(view, longPath) {
 		t.Fatalf("long paths should be truncated in compact tool rows\n%s", view)
 	}
 }

@@ -20,13 +20,13 @@ func TestComposerStaysVisibleAtBottom(t *testing.T) {
 	if !strings.Contains(view, "ready") {
 		t.Fatalf("composer input is not visible in rendered view")
 	}
-	if !strings.Contains(view, "model: test-model") {
-		t.Fatalf("composer meta line is not visible in rendered view")
+	if !strings.Contains(view, "Enter send") {
+		t.Fatalf("composer hint line is not visible in rendered view")
 	}
 
 	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
 	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-8):], "\n")
-	if !strings.Contains(tail, "ready") || !strings.Contains(tail, "model: test-model") {
+	if !strings.Contains(tail, "ready") || !strings.Contains(tail, "Enter send") {
 		t.Fatalf("composer is not anchored near the bottom; tail=%q", tail)
 	}
 }
@@ -120,7 +120,7 @@ func TestStatusLineStaysQuietAtNarrowWidth(t *testing.T) {
 	if strings.Contains(view, "Auto-saved") {
 		t.Fatalf("status line should not show noisy persistence metadata\n%s", view)
 	}
-	if !strings.Contains(view, "nex-n2-pro") {
-		t.Fatalf("status line should preserve useful model metadata\n%s", view)
+	if !strings.Contains(view, "Enter send") {
+		t.Fatalf("status line should show composer hints\n%s", view)
 	}
 }

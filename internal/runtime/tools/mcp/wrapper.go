@@ -30,6 +30,13 @@ func Wrap(def svcmcp.WrappedToolDef, mgr *svcmcp.Manager) tools.Tool {
 			InterruptBehavior:       func() string { return "block" },
 			RequiresUserInteraction: func() bool { return false },
 		},
+		CheckPermissions: func(input map[string]any, ctx tools.Context) tools.PermissionDecision {
+			return tools.PermissionDecision{
+				Behavior:     tools.Ask,
+				UpdatedInput: input,
+				Message:      "MCP tools require an explicit approval checkpoint",
+			}
+		},
 		Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 			result, err := mgr.CallTool(ctx.AbortController, def.ServerName, def.Name, input)
 			if err != nil {

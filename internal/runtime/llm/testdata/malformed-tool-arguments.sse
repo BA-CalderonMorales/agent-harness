@@ -1,0 +1,7 @@
+data: {"id":"chatcmpl-malformed-tool","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_bad","type":"function","function":{"name":"write","arguments":"{\"path\":\"broken.txt\","}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-malformed-tool","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"content\":"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-malformed-tool","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: [DONE]

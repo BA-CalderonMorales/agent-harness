@@ -1,6 +1,7 @@
 package main
 
 import (
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -26,41 +27,73 @@ func (d *tuiHomeDelegate) OnNewChat() {
 		d.app.session = d.app.sessionManager.CreateSession("")
 	}
 	if d.app.session != nil && len(d.app.session.Messages) > 0 {
-		_, _ = d.app.sessionManager.SaveCurrent()
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
 	}
 	model := d.app.session.Model
 	personaName := d.app.session.Persona
 	d.app.session = d.app.sessionManager.CreateSession(model)
 	d.app.session.Persona = personaName
 	d.app.sessionManager.SetCurrent(d.app.session)
-	d.tuiApp.Send(tui.ClearChatMsg{FollowUpMsg: sprintf("Starting new chat %s.", d.app.session.ID[:8])})
-	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), d.app.session.Persona, d.app.session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
-	d.tuiApp.ShowStatus(sprintf("Started new chat %s", d.app.session.ID[:8]), "success")
+	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to persist new session: %v", err), Type: "error"})
+		return
+	}
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Transcript:     nil,
+		Model:          d.app.session.Model,
+		Persona:        d.app.session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Started new chat %s", d.app.session.ID[:8]),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
 	path, err := exportSession(d.app.session, "")
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Export failed: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Export failed: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
+	absPath, absErr := filepath.Abs(path)
+	if absErr != nil {
+		absPath = path
+	}
+	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
 }
 
 func (d *tuiHomeDelegate) OnLoadSession(id string) {
+	if d.app.session != nil && d.app.session.ID != id {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
 	session, err := d.app.sessionManager.LoadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session: %v", err), Type: "error"})
 		return
 	}
 	d.app.session = session
-	d.app.sessionManager.SetCurrent(session)
-	d.tuiApp.SetChatMessages(session.Messages)
-	d.tuiApp.SetChatPersona(session.Persona)
-	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
-	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.app.costTracker.SetModel(session.Model)
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      session.ID,
+		Transcript:     session.Messages,
+		Model:          session.Model,
+		Persona:        session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Loaded session %s", shortID(id)),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      session.EstimateTokens(),
+	})
 }
 
 // tuiSessionsDelegate connects TUI sessions to the app.
@@ -69,67 +102,150 @@ type tuiSessionsDelegate struct {
 	tuiApp *tui.App
 }
 
-// OnSessionSelect handles session selection.
 func (d *tuiSessionsDelegate) OnSessionSelect(id string) {
+	if d.app.session != nil && d.app.session.ID != id {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
 	session, err := d.app.sessionManager.LoadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session: %v", err), Type: "error"})
 		return
 	}
 	d.app.session = session
-	d.app.sessionManager.SetCurrent(session)
-	d.tuiApp.SetChatMessages(session.Messages)
-	d.tuiApp.SetChatPersona(session.Persona)
-	d.tuiApp.AddMessage("system", sprintf("Loaded session %s", id[:8]))
-	d.tuiApp.SetHomeStatus(session.Model, d.app.config.PermissionMode.String(), session.Persona, session.EstimateTokens())
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.app.costTracker.SetModel(session.Model)
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      session.ID,
+		Transcript:     session.Messages,
+		Model:          session.Model,
+		Persona:        session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Loaded session %s", shortID(id)),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      session.EstimateTokens(),
+	})
 }
 
-// OnSessionDelete handles session deletion.
 func (d *tuiSessionsDelegate) OnSessionDelete(id string) {
+	isActive := d.app.session != nil && d.app.session.ID == id
+	if isActive {
+		model := d.app.session.Model
+		personaName := d.app.session.Persona
+		replacement := d.app.sessionManager.CreateSession(model)
+		replacement.Persona = personaName
+		d.app.sessionManager.SetCurrent(replacement)
+		d.app.session = replacement
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to create replacement session: %v", err), Type: "error"})
+			replacement.ID = ""
+			d.app.session = nil
+			return
+		}
+	}
 	if err := d.app.sessionManager.DeleteSession(id); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to delete session: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to delete session: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Deleted session %s", id[:8]))
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	if isActive {
+		d.tuiApp.Send(tui.SessionActivatedMsg{
+			SessionID:      d.app.session.ID,
+			Transcript:     nil,
+			Model:          d.app.session.Model,
+			Persona:        d.app.session.Persona,
+			Sessions:       d.app.getSessionInfos(),
+			Notice:         sprintf("Deleted session %s; replacement active", shortID(id)),
+			NoticeType:     "success",
+			SwitchToChat:   true,
+			PermissionMode: d.app.config.PermissionMode.String(),
+			EstTokens:      d.app.session.EstimateTokens(),
+		})
+	} else {
+		d.tuiApp.Send(tui.SessionsRefreshedMsg{
+			Sessions:   d.app.getSessionInfos(),
+			Notice:     sprintf("Deleted session %s", shortID(id)),
+			NoticeType: "success",
+		})
+	}
 }
 
-// OnSessionExport handles session export.
 func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 	session, err := d.app.sessionManager.ReadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session for export: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session for export: %v", err), Type: "error"})
 		return
 	}
 	path, err := exportSession(session, "")
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to export: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to export: %v", err), Type: "error"})
 		return
 	}
-	d.tuiApp.AddMessage("system", sprintf("Exported to %s", path))
+	absPath, absErr := filepath.Abs(path)
+	if absErr != nil {
+		absPath = path
+	}
+	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
 }
 
-// OnSessionCopy copies session content to clipboard.
 func (d *tuiSessionsDelegate) OnSessionCopy(id string) {
 	session, err := d.app.sessionManager.ReadSession(id)
 	if err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to load session for copy: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session for copy: %v", err), Type: "error"})
 		return
 	}
 
 	content := formatSessionForClipboard(session)
 	if err := clipboard.WriteAll(content); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Failed to copy to clipboard: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to copy to clipboard: %v", err), Type: "error"})
 		return
 	}
 
-	d.tuiApp.AddMessage("system", sprintf("Copied conversation from session %s to clipboard (%d messages)", id[:8], len(session.Messages)))
+	d.tuiApp.Send(tui.StatusMsg{
+		Text: sprintf("Copied %d messages from session %s", len(session.Messages), shortID(id)),
+		Type: "success",
+	})
 }
 
-// OnSessionLoad triggers session list refresh.
 func (d *tuiSessionsDelegate) OnSessionLoad() {
-	d.tuiApp.RefreshSessions(d.app.getSessionInfos())
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions: d.app.getSessionInfos(),
+	})
+}
+
+func (d *tuiSessionsDelegate) OnSessionNew() {
+	if d.app.session == nil {
+		d.app.session = d.app.sessionManager.CreateSession("")
+	}
+	if d.app.session != nil && len(d.app.session.Messages) > 0 {
+		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
+			return
+		}
+	}
+	model := d.app.session.Model
+	personaName := d.app.session.Persona
+	d.app.session = d.app.sessionManager.CreateSession(model)
+	d.app.session.Persona = personaName
+	d.app.sessionManager.SetCurrent(d.app.session)
+	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to persist new session: %v", err), Type: "error"})
+		return
+	}
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Transcript:     nil,
+		Model:          d.app.session.Model,
+		Persona:        d.app.session.Persona,
+		Sessions:       d.app.getSessionInfos(),
+		Notice:         sprintf("Started new chat %s", d.app.session.ID[:8]),
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 // formatSessionForClipboard formats a session for clipboard copy.
@@ -186,36 +302,32 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleModelChange(value)
 	case "provider":
 		d.app.config.Provider = value
-		// Recreate LLM client with new provider base URL
-		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-		// Refresh model list for new provider
-		d.tuiApp.SetModels(d.app.getModelItems())
-		d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
-		d.tuiApp.AddMessage("system", sprintf("Provider updated to: %s", value))
+		d.rebuildLLMClient()
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Provider updated to: %s", value), Type: "success"})
 	case "runtime":
 		d.app.config.Runtime = value
-		d.tuiApp.AddMessage("system", sprintf("Runtime updated to: %s", value))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Runtime updated to: %s", value), Type: "success"})
 	case "endpoint_url":
 		d.app.config.EndpointURL = value
-		d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-		d.tuiApp.AddMessage("system", sprintf("Endpoint updated to: %s", value))
+		d.rebuildLLMClient()
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Endpoint updated to: %s", value), Type: "success"})
 	case "context_length":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.ContextLength = n
 			if d.app.loop != nil {
 				d.app.loop.Config.BlockingTokenLimit = n
 			}
-			d.tuiApp.AddMessage("system", sprintf("Context length updated to: %d", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Context length updated to: %d", n), Type: "success"})
 		}
 	case "max_tokens":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.MaxTokens = n
-			d.tuiApp.AddMessage("system", sprintf("Max tokens updated to: %d", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Max tokens updated to: %d", n), Type: "success"})
 		}
 	case "temperature":
 		if n, err := strconv.ParseFloat(value, 64); err == nil {
 			d.app.config.Temperature = n
-			d.tuiApp.AddMessage("system", sprintf("Temperature updated to: %.2f", n))
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
 		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
@@ -223,25 +335,45 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleExecutionModeChange(value)
 	case "perm_read":
 		d.app.config.PermRead = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Read permission: %s", boolToEnabled(d.app.config.PermRead)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Read permission: %s", boolToEnabled(d.app.config.PermRead)), Type: "info"})
 	case "perm_write":
 		d.app.config.PermWrite = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Write permission: %s", boolToEnabled(d.app.config.PermWrite)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Write permission: %s", boolToEnabled(d.app.config.PermWrite)), Type: "info"})
 	case "perm_delete":
 		d.app.config.PermDelete = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Delete permission: %s", boolToEnabled(d.app.config.PermDelete)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Delete permission: %s", boolToEnabled(d.app.config.PermDelete)), Type: "info"})
 	case "perm_execute":
 		d.app.config.PermExecute = value == "true"
-		d.tuiApp.AddMessage("system", sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)), Type: "info"})
 	}
-	d.tuiApp.SetSettings(d.app.getSettings())
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions: d.app.getSessionInfos(),
+	})
+}
+
+func (d *tuiSettingsDelegate) rebuildLLMClient() {
+	d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
+	if d.app.loop != nil {
+		d.app.loop.Client = d.app.client
+	}
+	d.tuiApp.SetModels(d.app.getModelItems())
+	d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
+	
+	// Start a new probe to verify the new configuration
+	prober := llm.NewHTTPProber(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
+	d.tuiApp.StartProviderProbe(prober)
 }
 
 // refreshPersonaUI updates persona-dependent UI state after a persona change.
 func (d *tuiSettingsDelegate) refreshPersonaUI(persona string) {
-	d.tuiApp.SetChatPersona(persona)
-	d.tuiApp.SetSettings(d.app.getSettings())
-	d.tuiApp.SetHomeStatus(d.app.session.Model, d.app.config.PermissionMode.String(), persona, d.app.session.EstimateTokens())
+	d.tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      d.app.session.ID,
+		Model:          d.app.session.Model,
+		Persona:        persona,
+		Sessions:       d.app.getSessionInfos(),
+		PermissionMode: d.app.config.PermissionMode.String(),
+		EstTokens:      d.app.session.EstimateTokens(),
+	})
 }
 
 // handlePersonaChange updates the persona and refreshes the UI.
@@ -249,9 +381,9 @@ func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 	if p, err := persona.Parse(value); err == nil {
 		d.app.session.Persona = p.String()
 		d.refreshPersonaUI(p.String())
-		d.tuiApp.AddMessage("system", sprintf("Persona switched to: %s — %s", p.DisplayName(), p.Description()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Persona: %s — %s", p.DisplayName(), p.Description()), Type: "success"})
 	} else {
-		d.tuiApp.AddMessage("system", sprintf("Invalid persona: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid persona: %v", err), Type: "error"})
 	}
 }
 
@@ -263,9 +395,9 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 
 	credManager := config.NewCredentialManager()
 	if err := credManager.UpdateDefaultModel(value); err != nil {
-		d.tuiApp.AddMessage("system", sprintf("Warning: failed to save default model: %v", err))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
 	} else {
-		d.tuiApp.AddMessage("system", sprintf("Default model updated to: %s", value))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Default model: %s", value), Type: "success"})
 	}
 }
 
@@ -273,7 +405,6 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 	if mode, err := config.ParsePermissionMode(value); err == nil {
 		d.app.config.PermissionMode = mode
-		// Sync granular toggles to match the preset
 		switch mode {
 		case config.PermissionReadOnly:
 			d.app.config.PermRead = true
@@ -291,7 +422,9 @@ func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 			d.app.config.PermDelete = true
 			d.app.config.PermExecute = true
 		}
-		d.tuiApp.AddMessage("system", sprintf("Permission mode: %s", mode.String()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Permission mode: %s", mode.String()), Type: "success"})
+	} else {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid permission mode: %v", err), Type: "error"})
 	}
 }
 
@@ -299,13 +432,15 @@ func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 func (d *tuiSettingsDelegate) handleExecutionModeChange(value string) {
 	if mode, err := approval.ParseExecutionMode(value); err == nil {
 		d.app.executionMode = mode
-		d.tuiApp.AddMessage("system", sprintf("Execution mode set to: %s", mode.String()))
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execution mode: %s", mode.String()), Type: "success"})
+	} else {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid execution mode: %v", err), Type: "error"})
 	}
 }
 
 // OnSettingReset handles reset request.
 func (d *tuiSettingsDelegate) OnSettingReset() {
-	d.tuiApp.AddMessage("system", "Reset to defaults not implemented")
+	d.tuiApp.Send(tui.StatusMsg{Text: "Reset to defaults not implemented", Type: "warning"})
 }
 
 // OnSettingReload handles reload request.
@@ -319,4 +454,11 @@ func boolToEnabled(b bool) string {
 		return "enabled"
 	}
 	return "disabled"
+}
+
+func shortID(id string) string {
+	if len(id) <= 8 {
+		return id
+	}
+	return id[:8]
 }

@@ -1,11 +1,44 @@
 package messages
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+// EstimateTokens provides one character-based estimate for persisted message
+// content. It intentionally includes every supported content-block field so
+// context limits do not ignore thinking or tool traffic.
+func EstimateTokens(msgs []types.Message) int {
+	characters := 0
+	for _, msg := range msgs {
+		for _, block := range msg.Content {
+			switch b := block.(type) {
+			case types.TextBlock:
+				characters += len(b.Text)
+			case types.ThinkingBlock:
+				characters += len(b.Thinking) + len(b.Signature)
+			case types.ToolUseBlock:
+				characters += len(b.ID) + len(b.Name)
+				if inputJSON, err := json.Marshal(b.Input); err == nil {
+					characters += len(inputJSON)
+				} else {
+					characters += len(fmt.Sprintf("%v", b.Input))
+				}
+			case types.ToolResultBlock:
+				characters += len(b.ToolUseID) + len(b.Content)
+				characters += len(strconv.FormatBool(b.IsError))
+			}
+		}
+	}
+
+	// Four characters per token is deliberately approximate. Round up so
+	// short but meaningful content is never estimated as zero tokens.
+	return (characters + 3) / 4
+}
 
 // CreateUserMessage builds a user role message.
 func CreateUserMessage(text string) types.Message {

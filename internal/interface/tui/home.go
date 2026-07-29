@@ -366,6 +366,12 @@ func (m HomeModel) ConsumesEsc() bool {
 	return false
 }
 
+// CapturesAllKeys returns whether this view should receive all keys
+// before global shortcuts are applied.
+func (m HomeModel) CapturesAllKeys() bool {
+	return false
+}
+
 // Scroll scrolls the actions list.
 func (m *HomeModel) Scroll(lines int) {
 	m.actionCursor += lines

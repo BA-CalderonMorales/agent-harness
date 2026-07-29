@@ -1,0 +1,12 @@
+: Captured OpenAI-compatible shape with transport, name, argument, and index fragmentation.
+data: {"id":"chatcmpl-contract","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"role":"assistant","content":"I will inspect ","tool_calls":[{"index":0,"id":"call_read","type":"function","function":{"name":"fi","arguments":"{\"pa"}},{"index":1,"id":"call_write","type":"function","function":{"name":"wr","arguments":"{\"pa"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-contract","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"content":"then update.","tool_calls":[{"index":0,"function":{"name":"le_read","arguments":"th\":\"alpha.txt\"}"}},{"index":1,"function":{"name":"ite","arguments":"th\":\"beta.txt\","}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-contract","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{"tool_calls":[{"index":1,"function":{"arguments":"\"content\":\"ok\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-contract","object":"chat.completion.chunk","model":"fixture-model","choices":[{"index":0,"delta":{},"finish_reason":"tool_calls"}]}
+
+data: {"id":"chatcmpl-contract","object":"chat.completion.chunk","model":"fixture-model","choices":[],"usage":{"prompt_tokens":41,"completion_tokens":13,"total_tokens":54}}
+
+data: [DONE]

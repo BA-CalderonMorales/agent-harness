@@ -18,10 +18,14 @@ import (
 type Entry struct {
 	Timestamp      time.Time `json:"timestamp"`
 	SessionID      string    `json:"session_id"`
+	Event          string    `json:"event"`
+	ToolCallID     string    `json:"tool_call_id"`
 	ToolName       string    `json:"tool_name"`
 	InputHash      string    `json:"input_hash"`
 	Approved       bool      `json:"approved"`
 	Decision       string    `json:"decision"` // "approve", "reject", "approve-all", "auto", "deny"
+	DurationMillis int64     `json:"duration_ms"`
+	Error          string    `json:"error,omitempty"`
 	Persona        string    `json:"persona"`
 	PermissionMode string    `json:"permission_mode"`
 }
@@ -65,6 +69,9 @@ func (l *Logger) Log(entry Entry) error {
 
 	if _, err := f.WriteString(string(data) + "\n"); err != nil {
 		return fmt.Errorf("failed to write audit entry: %w", err)
+	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("failed to sync audit entry: %w", err)
 	}
 	return nil
 }

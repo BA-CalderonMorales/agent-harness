@@ -19,6 +19,16 @@ type StreamMessage struct {
 
 func (StreamMessage) isStreamEvent() {}
 
+// StreamContextCompacted replaces the caller's persisted conversation with the
+// exact bounded context that subsequent model requests will use.
+type StreamContextCompacted struct {
+	Messages     []Message
+	RemovedCount int
+	Notice       string
+}
+
+func (StreamContextCompacted) isStreamEvent() {}
+
 // TombstoneMessage removes an earlier message from the transcript.
 type TombstoneMessage struct {
 	TargetUUID string
@@ -42,6 +52,15 @@ type StreamError struct {
 }
 
 func (StreamError) isStreamEvent() {}
+
+// StreamTerminal is the final event emitted by a public agent query.
+type StreamTerminal struct {
+	Reason  string
+	Message *Message
+	Error   error
+}
+
+func (StreamTerminal) isStreamEvent() {}
 
 // LLMEvent is a single event from the LLM stream.
 type LLMEvent interface {

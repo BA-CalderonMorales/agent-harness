@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/pkg/messages"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
 )
@@ -55,7 +56,7 @@ type CompactionConfig struct {
 	MaxEstimatedTokens int
 	PreserveRecent     int // Always preserve this many recent messages
 	// Summarizer optionally summarizes removed messages before dropping them.
-	// If nil, a generic compaction notice is inserted instead.
+	// Compaction is skipped when this is nil or cannot produce a summary.
 	Summarizer func(messages []types.Message) (string, error)
 }
 
@@ -107,17 +108,7 @@ func (s *Session) GetMetadata() SessionMetadata {
 
 // EstimateTokens provides a rough token estimate
 func (s *Session) EstimateTokens() int {
-	total := 0
-	for _, msg := range s.Messages {
-		for _, block := range msg.Content {
-			switch b := block.(type) {
-			case types.TextBlock:
-				// Rough estimate: 4 chars per token
-				total += len(b.Text) / 4
-			}
-		}
-	}
-	return total
+	return messages.EstimateTokens(s.Messages)
 }
 
 // SaveToFile saves the session to a file
@@ -392,6 +383,14 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 			CompactedSession: s,
 		}
 	}
+	if config.Summarizer == nil {
+		return &CompactionResult{
+			RemovedCount:     0,
+			KeptCount:        currentCount,
+			Skipped:          true,
+			CompactedSession: s,
+		}
+	}
 
 	// Calculate how many messages to keep
 	preserveCount := config.PreserveRecent
@@ -408,14 +407,16 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 	// Keep recent messages and compact older ones
 	keptMessages := make([]types.Message, 0, preserveCount+1)
 
-	// Add a compaction summary message
-	summaryText := fmt.Sprintf("[Earlier conversation history was compacted. %d messages removed, %d kept]",
-		currentCount-preserveCount, preserveCount)
-	if config.Summarizer != nil {
-		if summarized, err := config.Summarizer(s.Messages[:startIdx]); err == nil && summarized != "" {
-			summaryText = fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
+	summarized, err := config.Summarizer(s.Messages[:startIdx])
+	if err != nil || strings.TrimSpace(summarized) == "" {
+		return &CompactionResult{
+			RemovedCount:     0,
+			KeptCount:        currentCount,
+			Skipped:          true,
+			CompactedSession: s,
 		}
 	}
+	summaryText := fmt.Sprintf("[Earlier conversation summarized]: %s", summarized)
 	summaryMsg := types.Message{
 		UUID:      uuid.New().String(),
 		Role:      types.RoleSystem,
@@ -429,21 +430,16 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 	// Add the preserved recent messages
 	keptMessages = append(keptMessages, s.Messages[startIdx:]...)
 
-	newSession := &Session{
-		ID:        s.ID,
-		CreatedAt: s.CreatedAt,
-		UpdatedAt: time.Now(),
-		Messages:  keptMessages,
-		Model:     s.Model,
-		Turns:     s.Turns,
-		Version:   s.Version + 1,
-	}
+	newSession := *s
+	newSession.UpdatedAt = time.Now()
+	newSession.Messages = keptMessages
+	newSession.Version++
 
 	return &CompactionResult{
 		RemovedCount:     currentCount - preserveCount,
 		KeptCount:        len(keptMessages),
 		Skipped:          false,
-		CompactedSession: newSession,
+		CompactedSession: &newSession,
 	}
 }
 
