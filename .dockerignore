@@ -1,0 +1,16 @@
+.git
+.gitignore
+*.md
+scratch/
+build/
+bin/
+dist/
+.env
+.env.*
+docker-compose*.yml
+Dockerfile*
+.dockerignore
+.vscode
+.idea
+**/*_test.go
+.agent-harness/

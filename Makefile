@@ -8,7 +8,7 @@ VERSION := $(shell git describe --tags --always --dirty)
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo none)
 BUILD_TIME := $(shell date -u +%Y-%m-%d_%H:%M:%S)
 GIT_SHA := $(shell git rev-parse --short HEAD)
-LDFLAGS := -X main.Version=$(VERSION) -X main.GitTag=$(GIT_TAG) -X main.BuildTime=$(BUILD_TIME) -X main.GitSHA=$(GIT_SHA)
+LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.GitTag=$(GIT_TAG) -X main.BuildTime=$(BUILD_TIME) -X main.GitSHA=$(GIT_SHA)
 
 help:
 	@printf 'Agent Harness make targets\n\n'
@@ -29,7 +29,7 @@ build:
 	@printf '    Git SHA:    %s\n' "$(GIT_SHA)"
 	@printf '    Build time: %s UTC\n' "$(BUILD_TIME)"
 	@mkdir -p "$(BUILD_DIR)"
-	@go build -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(BINARY_NAME)" "$(MAIN_PKG)" || { \
+	@go build -trimpath -ldflags "$(LDFLAGS)" -o "$(BUILD_DIR)/$(BINARY_NAME)" "$(MAIN_PKG)" || { \
 		status=$$?; \
 		printf '\n[fail] Build failed with exit status %s.\n' "$$status"; \
 		exit $$status; \
