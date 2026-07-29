@@ -11,22 +11,18 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/planning"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
-	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -264,419 +260,53 @@ func (app *App) initCommands() {
 			return sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
 
-	app.cmdRegistry.Register("cost", "Show token usage and cost",
-		commands.CostHandler(func() string {
-			return app.costTracker.FormatReport()
-		}))
+	app.cmdRegistry.FeatureFlag("cost", "Show token usage and cost")
 
-	app.cmdRegistry.Register("model", "Show or change the current model",
-		commands.ModelHandler(
-			func() string { return app.session.Model },
-			func(m string) error {
-				app.session.Model = m
-				app.costTracker.SetModel(m)
-				if app.tuiApp != nil {
-					app.tuiApp.Send(tui.ModelChangedMsg{Model: m})
-					app.tuiApp.SetSettings(app.getSettings())
-				}
-				return nil
-			},
-			func() []string {
-				if hc, ok := app.client.(*llm.HTTPClient); ok && hc != nil {
-					models, err := hc.ListModels()
-					if err == nil && len(models) > 0 {
-						return models
-					}
-				}
-				return []string{
-					"nvidia/nemotron-3-super-120b-a12b:free",
-					"claude-3-5-sonnet-20241022",
-					"gpt-4o",
-					"gpt-4o-mini",
-				}
-			},
-		))
+	app.cmdRegistry.FeatureFlag("model", "Show or change the current model")
 
 	app.cmdRegistry.Register("current-model", "Show the current model",
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
 
-	app.cmdRegistry.Register("export", "Export conversation to file",
-		commands.ExportHandler(func(args string) (string, error) {
-			return exportSession(app.session, args)
-		}))
+	app.cmdRegistry.FeatureFlag("export", "Export conversation to file")
 
-	app.cmdRegistry.Register("session", "Manage sessions",
-		commands.SessionHandler(
-			func() string {
-				sessions, err := app.sessionManager.ListSessions()
-				if err != nil {
-					return sprintf("Error listing sessions: %v", err)
-				}
-				return formatSessionList(sessions, app.session.ID)
-			},
-			func(id string) error {
-				session, err := app.sessionManager.LoadSession(id)
-				if err != nil {
-					return err
-				}
-				app.session = session
-				return nil
-			},
-		))
+	app.cmdRegistry.FeatureFlag("session", "Manage sessions")
 
-	app.cmdRegistry.Register("diff", "Show git diff",
-		commands.DiffHandler(func() string {
-			if app.gitContext == nil || !app.gitContext.IsRepo {
-				return "Not in a git repository."
-			}
-			return git.FormatDiff()
-		}))
+	app.cmdRegistry.FeatureFlag("plan", "Toggle plan mode (outline before executing)")
 
-	app.cmdRegistry.Register("commit", "Stage all changes and commit",
-		commands.CommitHandler(func(message string) (string, error) {
-			if err := app.requireGitRepo(); err != nil {
-				return "", err
-			}
-			repo := git.NewRepo(app.gitContext.Root)
-			if err := repo.Add("-A"); err != nil {
-				return "", fmt.Errorf("failed to stage changes: %w", err)
-			}
-			if err := repo.Commit(message); err != nil {
-				return "", fmt.Errorf("failed to commit: %w", err)
-			}
-			branch, _ := repo.CurrentBranch()
-			return fmt.Sprintf("Committed to %s: %s", branch, message), nil
-		}))
+	app.cmdRegistry.FeatureFlag("improve", "Run self-improvement workflow")
 
-	app.cmdRegistry.Register("plan", "Toggle plan mode",
-		commands.PlanHandler(
-			func() bool { return app.session.PlanMode },
-			func(on bool) string {
-				app.session.PlanMode = on
-				if on {
-					return "Plan mode ON. The agent will outline its approach before executing tools."
-				}
-				return "Plan mode OFF. The agent will execute tools directly."
-			},
-		))
-
-	app.cmdRegistry.Register("improve", "Run self-improvement workflow",
-		func(args string) (string, error) {
-			ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
-			defer cancel()
-
-			result, err := planning.Workflow{Root: app.cwd}.Run(ctx)
-			if err != nil {
-				return "", err
-			}
-			if !result.Verification.Passed {
-				if result.Verification.Output == "" {
-					return result.Summary(), result.Verification.Error
-				}
-				return result.Summary() + "\n\n" + result.Verification.Output, result.Verification.Error
-			}
-			return result.Summary(), nil
-		})
-
-	app.cmdRegistry.Register("memory", "Show system prompt and context state",
-		commands.MemoryHandler(func() string {
-			var b strings.Builder
-			b.WriteString("System Prompt\n")
-			b.WriteString(strings.Repeat("-", 40) + "\n")
-			b.WriteString(app.buildSystemPrompt())
-			b.WriteString("\n\nSession\n")
-			b.WriteString(strings.Repeat("-", 40) + "\n")
-			b.WriteString(fmt.Sprintf("Messages: %d\n", len(app.session.Messages)))
-			b.WriteString(fmt.Sprintf("Turns: %d\n", app.session.Turns))
-			b.WriteString(fmt.Sprintf("Model: %s\n", app.session.Model))
-			b.WriteString(fmt.Sprintf("Plan mode: %v\n", app.session.PlanMode))
-			if len(app.session.Messages) > 0 {
-				b.WriteString("\nRecent messages:\n")
-				start := len(app.session.Messages) - 5
-				if start < 0 {
-					start = 0
-				}
-				for i, msg := range app.session.Messages[start:] {
-					b.WriteString(fmt.Sprintf("  %d. %s\n", start+i+1, msg.Role))
-				}
-			}
-			return b.String()
-		}))
+	app.cmdRegistry.FeatureFlag("memory", "Show system prompt and context state")
 
 	app.cmdRegistry.Register("init", "Initialize project with standard files",
 		commands.InitHandler(func(projectType string) (string, error) {
 			return app.initProject(projectType)
 		}))
 
-	app.cmdRegistry.Register("pr", "Manage pull requests",
-		commands.PRHandler(
-			func(title, body string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				if !git.HasGhCLI() {
-					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				return repo.CreatePR(title, body)
-			},
-			func() (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				if !git.HasGhCLI() {
-					return "", fmt.Errorf("gh CLI not found. Install: https://cli.github.com")
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				return repo.ListPRs()
-			},
-		))
+	app.cmdRegistry.FeatureFlag("pr", "Manage pull requests")
 
-	app.cmdRegistry.Register("branch", "Manage git branches",
-		commands.BranchHandler(
-			func() (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				branches, err := repo.ListBranches()
-				if err != nil {
-					return "", err
-				}
-				current, _ := repo.CurrentBranch()
-				var lines []string
-				lines = append(lines, "Branches:")
-				for _, b := range branches {
-					b = strings.TrimSpace(b)
-					marker := "  "
-					if strings.TrimPrefix(b, "* ") == current {
-						marker = "● "
-						b = strings.TrimPrefix(b, "* ")
-					} else {
-						b = strings.TrimPrefix(b, "  ")
-					}
-					lines = append(lines, marker+b)
-				}
-				return strings.Join(lines, "\n"), nil
-			},
-			func(name string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if err := repo.CreateBranch(name); err != nil {
-					return "", err
-				}
-				return fmt.Sprintf("Created and switched to branch: %s", name), nil
-			},
-			func(name string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if err := repo.SwitchBranch(name); err != nil {
-					return "", err
-				}
-				return fmt.Sprintf("Switched to branch: %s", name), nil
-			},
-			func(name string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if err := repo.DeleteBranch(name); err != nil {
-					return "", err
-				}
-				return fmt.Sprintf("Deleted branch: %s", name), nil
-			},
-		))
+	app.cmdRegistry.FeatureFlag("branch", "Manage git branches")
 
 	app.cmdRegistry.Register("version", "Show version",
 		commands.VersionHandler(Version, sprintf("Built: %s Git: %s", BuildTime, GitSHA)))
 
-	app.cmdRegistry.Register("config", "Show configuration",
-		commands.ConfigHandler(func() string {
-			if app.config == nil {
-				return "No configuration loaded."
-			}
-			return app.config.GetConfigReport()
-		}))
+	app.cmdRegistry.FeatureFlag("config", "Show configuration")
 
-	app.cmdRegistry.Register("permissions", "Show or change permission mode",
-		commands.PermissionsHandler(
-			func() string { return app.config.PermissionMode.String() },
-			func(m string) error {
-				mode, err := config.ParsePermissionMode(m)
-				if err != nil {
-					return err
-				}
-				app.config.PermissionMode = mode
-				return nil
-			},
-			func() string {
-				if app.config == nil {
-					return "No configuration loaded."
-				}
-				return app.config.GetPermissionReport()
-			},
-		))
+	app.cmdRegistry.FeatureFlag("permissions", "Show or change permission mode")
 
-	app.cmdRegistry.Register("test", "Run project tests",
-		commands.TestHandler(func() (string, error) {
-			return app.runTests()
-		}))
+	app.cmdRegistry.FeatureFlag("agents", "Show available agents")
 
-	app.cmdRegistry.Register("worktree", "Manage git worktrees",
-		commands.WorktreeHandler(
-			func() (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				return repo.ListWorktrees()
-			},
-			func(path, branch string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if branch == "" {
-					branch = filepath.Base(path)
-				}
-				if err := repo.AddWorktree(path, branch); err != nil {
-					return "", err
-				}
-				return sprintf("Created worktree at %s for branch %s", path, branch), nil
-			},
-			func(path string) (string, error) {
-				if err := app.requireGitRepo(); err != nil {
-					return "", err
-				}
-				repo := git.NewRepo(app.gitContext.Root)
-				if err := repo.RemoveWorktree(path); err != nil {
-					return "", err
-				}
-				return sprintf("Removed worktree at %s", path), nil
-			},
-		))
-
-	app.cmdRegistry.Register("agents", "Show available agents",
-		commands.AgentsHandler(func(args string) string {
-			agentTypes := []struct {
-				name        string
-				description string
-			}{
-				{"default", "Standard agent with full tool access. Good for general tasks."},
-				{"reviewer", "Focuses on code review, critique, and suggesting improvements."},
-				{"tester", "Generates test cases and verifies code correctness."},
-				{"debugger", "Investigates errors, traces execution, and suggests fixes."},
-				{"explainer", "Explains code and concepts without making changes."},
-			}
-			if args != "" && args != "list" {
-				for _, a := range agentTypes {
-					if a.name == args {
-						return sprintf("Agent: %s\n%s", a.name, a.description)
-					}
-				}
-				var names []string
-				for _, a := range agentTypes {
-					names = append(names, a.name)
-				}
-				return sprintf("Agent not found: %s\n\nAvailable agents: %s", args, strings.Join(names, ", "))
-			}
-			var lines []string
-			lines = append(lines, "Available agents:")
-			lines = append(lines, "Use /agents <name> to view details.")
-			lines = append(lines, "Use the agent tool with agent_type to delegate.")
-			lines = append(lines, "")
-			for _, a := range agentTypes {
-				lines = append(lines, sprintf("  %-12s %s", a.name, a.description))
-			}
-			return strings.Join(lines, "\n")
-		}))
-
-	app.cmdRegistry.Register("skills", "Show available skills",
-		commands.SkillsHandler(func(args string) string {
-			skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
-			if err != nil {
-				return sprintf("No skills loaded: %v", err)
-			}
-			if args != "" && args != "list" {
-				sk, ok := skillReg.Get(args)
-				if !ok {
-					return sprintf("Skill not found: %s\n\n%s", args, formatSkillsList(skillReg.All()))
-				}
-				return formatSkillDetail(sk)
-			}
-			skillsList := skillReg.All()
-			if len(skillsList) == 0 {
-				return "No skills available in .agent-harness/skills"
-			}
-			return formatSkillsList(skillsList)
-		}))
+	app.cmdRegistry.FeatureFlag("skills", "Show available skills")
 
 	app.cmdRegistry.Register("workspace", "Show workspace information",
 		commands.WorkspaceHandler(func() string {
 			return app.getWorkspaceInfo()
 		}))
 
-	app.cmdRegistry.Register("reset", "Reset agent harness",
-		commands.ResetHandler(func() error {
-			return app.reset()
-		}))
+	app.cmdRegistry.FeatureFlag("logout", "Log out and clear credentials (use Settings tab)")
 
-	app.cmdRegistry.Register("logout", "Log out and clear credentials",
-		commands.LogoutHandler(func() error {
-			return app.logout()
-		}))
+	app.cmdRegistry.FeatureFlag("audit", "Show recent tool activity")
 
-	app.cmdRegistry.Register("audit", "Show recent tool activity",
-		commands.AuditHandler(func() string {
-			if app.auditLogger == nil {
-				return "Audit logging is not available."
-			}
-			entries, err := app.auditLogger.Recent(20)
-			if err != nil {
-				return fmt.Sprintf("Failed to load audit log: %v", err)
-			}
-			return audit.FormatEntries(entries)
-		}))
-
-	app.cmdRegistry.Register("persona", "Show or change persona",
-		commands.PersonaHandler(
-			func() string { return app.session.Persona },
-			func(p string) error {
-				parsed, err := persona.Parse(p)
-				if err != nil {
-					return err
-				}
-				app.session.Persona = parsed.String()
-				if app.tuiApp != nil {
-					app.tuiApp.SetSettings(app.getSettings())
-					app.tuiApp.SetChatPersona(app.session.Persona)
-					app.tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
-				}
-				return nil
-			},
-			func() string {
-				var lines []string
-				lines = append(lines, "Available personas:")
-				lines = append(lines, "")
-				for _, p := range persona.All() {
-					marker := "  "
-					if p.String() == app.session.Persona {
-						marker = "● "
-					}
-					lines = append(lines, fmt.Sprintf("%s%-12s %s", marker, p.String(), p.Description()))
-				}
-				return strings.Join(lines, "\n")
-			},
-		))
-
-	app.cmdRegistry.Register("login", "Log in with new credentials",
-		commands.LoginHandler(func() error {
-			return app.startLogin()
-		}))
+	app.cmdRegistry.FeatureFlag("login", "Log in with new credentials (use Settings tab)")
 
 	app.cmdRegistry.Register("quit", "Exit the application", commands.QuitHandler())
 	app.cmdRegistry.Register("exit", "Exit the application", commands.QuitHandler())
@@ -696,11 +326,7 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 			},
 		))
 
-	app.cmdRegistry.Register("steer", "Queue a message for the current turn",
-		commands.SteerHandler(func(msg string) {
-			tuiApp.QueueSteer(msg)
-			tuiApp.AddMessage("system", "Steered: "+msg)
-		}))
+	app.cmdRegistry.FeatureFlag("steer", "Queue a message for the current turn")
 }
 
 // requireGitRepo returns an error if the app is not inside a git repository.
