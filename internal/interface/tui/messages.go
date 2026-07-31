@@ -85,16 +85,16 @@ type ProviderReadinessMsg struct {
 }
 
 type SessionActivatedMsg struct {
-	SessionID     string
-	Transcript    []types.Message
-	Model         string
-	Persona       string
-	Sessions      []SessionInfo
-	Notice        string
-	NoticeType    string
-	SwitchToChat  bool
+	SessionID      string
+	Transcript     []types.Message
+	Model          string
+	Persona        string
+	Sessions       []SessionInfo
+	Notice         string
+	NoticeType     string
+	SwitchToChat   bool
 	PermissionMode string
-	EstTokens     int
+	EstTokens      int
 }
 
 type SessionsRefreshedMsg struct {
