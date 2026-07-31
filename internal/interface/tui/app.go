@@ -79,9 +79,9 @@ type App struct {
 	workspaceName string
 
 	// Provider readiness
-	providerReadiness     int    // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
-	providerReadinessMsg  string
-	providerReadinessGen  int // generation counter to discard stale results
+	providerReadiness    int // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
+	providerReadinessMsg string
+	providerReadinessGen int // generation counter to discard stale results
 
 	// External message channel for async updates
 	msgChan chan tea.Msg
@@ -532,7 +532,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
-		return a, nil
+		return a, tea.Batch(cmds...)
 
 	case SessionActivatedMsg:
 		a.chatModel.SetMessages(msg.Transcript)
@@ -781,7 +781,7 @@ func (a App) renderStatusBar() string {
 	if a.provider != "" {
 		parts = append(parts, a.provider)
 	}
-	
+
 	content := " " + strings.Join(parts, " · ")
 	if lipgloss.Width(content) > a.width-4 {
 		// Drop help/extra info

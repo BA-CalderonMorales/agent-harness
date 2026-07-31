@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.3.6] - 2026-07-31
+
+### Fixed
+- Fixed TUI slash command execution by dispatching `UserCommandMsg` asynchronously via `tea.Cmd`, preventing system response truncation.
+- Fixed command palette selection to immediately execute zero-argument commands and format prompt inputs for parameterized commands.
+- Enforced single source of truth for command discovery across `/help`, tab autocomplete, descriptions, and command palette.
+- Added Gopter property-based test suite for slash command execution invariants and discovery surface feature-flag isolation.
+
+## [0.3.5] - 2026-07-30
+
+### Fixed
+- Feature-flagged slash commands hidden from `/help`, tab completion, and autocomplete descriptions.
+
 ## [0.3.4] - 2026-05-01
 
 ### Changed

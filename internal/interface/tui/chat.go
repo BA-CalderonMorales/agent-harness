@@ -917,33 +917,6 @@ func (m ChatModel) composerHintLine() string {
 	return hint[:maxWidth-3] + "..."
 }
 
-func (m ChatModel) compactMetaLine(modelDisplay string) string {
-	model := compactModelName(modelDisplay)
-	line := "model: " + model
-	maxWidth := m.width - 4
-	if maxWidth < 12 {
-		maxWidth = 12
-	}
-	if len(line) <= maxWidth {
-		return line
-	}
-	if len(model) > maxWidth-3 {
-		model = model[len(model)-(maxWidth-3):]
-	}
-	return "..." + model
-}
-
-func compactModelName(model string) string {
-	parts := strings.Split(model, "/")
-	for i := len(parts) - 1; i >= 0; i-- {
-		part := strings.TrimSpace(parts[i])
-		if part != "" {
-			return part
-		}
-	}
-	return model
-}
-
 // syncSuggestionOffset keeps cursor inside visible window.
 func (m *ChatModel) syncSuggestionOffset() {
 	maxVisible := 6

@@ -454,7 +454,6 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 		if keepStart < 1 {
 			keepStart = 1
 		}
-		recentTokens = estimateTokens(state.messages[keepStart:])
 	}
 
 	removedPrefix := append([]types.Message(nil), state.messages[:keepStart]...)
