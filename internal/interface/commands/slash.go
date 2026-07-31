@@ -124,11 +124,6 @@ func (sr *SlashRegistry) findSimilar(name string) []string {
 			suggestions = append(suggestions, "/"+cmdName)
 		}
 	}
-	for cmdName := range sr.featureFlags {
-		if strings.HasPrefix(cmdName, name) || strings.HasPrefix(name, cmdName) {
-			suggestions = append(suggestions, "/"+cmdName+" (coming soon)")
-		}
-	}
 	sort.Strings(suggestions)
 	return suggestions
 }
@@ -159,8 +154,6 @@ func (sr *SlashRegistry) GetHelp() string {
 			categorized[cmd] = true
 			if desc, exists := sr.help[cmd]; exists {
 				catLines = append(catLines, fmt.Sprintf("  /%-15s %s", cmd, desc))
-			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
-				catLines = append(catLines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
 		if len(catLines) > 0 {
@@ -176,27 +169,15 @@ func (sr *SlashRegistry) GetHelp() string {
 			other = append(other, cmd)
 		}
 	}
-	for cmd := range sr.featureFlags {
-		if !categorized[cmd] {
-			other = append(other, cmd)
-		}
-	}
 	sort.Strings(other)
 	if len(other) > 0 {
 		lines = append(lines, "Other:")
 		for _, cmd := range other {
 			if desc, exists := sr.help[cmd]; exists {
 				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
-			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
-				lines = append(lines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
 		lines = append(lines, "")
-	}
-
-	if len(sr.featureFlags) > 0 {
-		lines = append(lines, "Commands marked [coming soon] are planned for upcoming releases.")
-		lines = append(lines, "Try OpenCode (https://opencode.ai) for similar features today.")
 	}
 
 	return strings.Join(lines, "\n")
@@ -204,14 +185,11 @@ func (sr *SlashRegistry) GetHelp() string {
 
 // GetCompletions returns all command names for tab completion
 func (sr *SlashRegistry) GetCompletions() []string {
-	completions := make([]string, 0, len(sr.commands)+len(sr.featureFlags))
+	completions := make([]string, 0, len(sr.commands))
 	for name := range sr.commands {
 		if name == "exit" {
 			continue
 		}
-		completions = append(completions, "/"+name)
-	}
-	for name := range sr.featureFlags {
 		completions = append(completions, "/"+name)
 	}
 	sort.Strings(completions)
@@ -220,15 +198,12 @@ func (sr *SlashRegistry) GetCompletions() []string {
 
 // GetCompletionDescriptions returns descriptions for visible command completions.
 func (sr *SlashRegistry) GetCompletionDescriptions() map[string]string {
-	descriptions := make(map[string]string, len(sr.help)+len(sr.featureFlags))
+	descriptions := make(map[string]string, len(sr.help))
 	for name, description := range sr.help {
 		if name == "exit" {
 			continue
 		}
 		descriptions["/"+name] = description
-	}
-	for name, description := range sr.featureFlags {
-		descriptions["/"+name] = description + " [coming soon]"
 	}
 	return descriptions
 }

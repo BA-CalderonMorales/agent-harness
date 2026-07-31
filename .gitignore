@@ -27,6 +27,9 @@ Thumbs.db
 .env
 *.local
 
+# Scratch stuff to not push up to remote.
+/scratch/
+
 # Workspace planning lives in /mnt/c/Users/bacm6/Projects/plans, not this repo
 /plans/
 

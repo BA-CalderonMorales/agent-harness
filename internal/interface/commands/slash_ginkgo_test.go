@@ -1523,15 +1523,14 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("coming soon"))
 		})
 
-		It("should include flagged commands in help output", func() {
+		It("should exclude flagged commands from help output", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			registry.FeatureFlag("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(ContainSubstring("[coming soon]"))
-			Expect(result).To(ContainSubstring("export"))
-			Expect(result).To(ContainSubstring("cost"))
+			Expect(result).ToNot(ContainSubstring("/export"))
+			Expect(result).ToNot(ContainSubstring("/cost"))
 		})
 
 		It("should show feature flag message for specific help query", func() {
@@ -1542,23 +1541,22 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("/export — coming soon"))
 		})
 
-		It("should include flagged commands in completions", func() {
+		It("should exclude flagged commands from completions", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			completions := registry.GetCompletions()
-			Expect(completions).To(ContainElement("/export"))
+			Expect(completions).ToNot(ContainElement("/export"))
 		})
 
-		It("should include flagged descriptions in completion descriptions", func() {
+		It("should exclude flagged descriptions from completion descriptions", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			descriptions := registry.GetCompletionDescriptions()
-			Expect(descriptions).To(HaveKey("/export"))
-			Expect(descriptions["/export"]).To(ContainSubstring("[coming soon]"))
+			Expect(descriptions).ToNot(HaveKey("/export"))
 		})
 
-		It("should suggest flagged commands in findSimilar", func() {
+		It("should exclude flagged commands from findSimilar", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			result, _, _ := registry.Handle("/exp")
-			Expect(result).To(ContainSubstring("/export (coming soon)"))
+			Expect(result).ToNot(ContainSubstring("/export"))
 		})
 
 		It("should not duplicate flagged commands in help when also registered", func() {

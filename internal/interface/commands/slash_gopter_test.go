@@ -69,14 +69,38 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("GetHelp includes feature-flagged commands under Coming Soon", prop.ForAll(
-		func(dummy int) bool {
+	properties.Property("Feature-flagged commands are excluded from GetHelp, GetCompletions, and GetCompletionDescriptions", prop.ForAll(
+		func(name string) bool {
+			if name == "" {
+				return true
+			}
 			reg := NewSlashRegistry()
-			reg.FeatureFlag("customcmd", "desc")
+			reg.FeatureFlag(name, "Hidden coming soon command")
 			help := reg.GetHelp()
-			return strings.Contains(help, "coming soon") && strings.Contains(help, "/customcmd")
+			comps := reg.GetCompletions()
+			descs := reg.GetCompletionDescriptions()
+			similar := reg.findSimilar(name)
+
+			// Feature-flagged command must NOT show up to end users
+			if strings.Contains(help, "/"+name) {
+				return false
+			}
+			for _, c := range comps {
+				if strings.TrimPrefix(c, "/") == name {
+					return false
+				}
+			}
+			if _, exists := descs["/"+name]; exists {
+				return false
+			}
+			for _, s := range similar {
+				if strings.Contains(s, name) {
+					return false
+				}
+			}
+			return true
 		},
-		gen.Int(),
+		gen.AlphaString(),
 	))
 
 	properties.Property("Registered command dispatch succeeds", prop.ForAll(
