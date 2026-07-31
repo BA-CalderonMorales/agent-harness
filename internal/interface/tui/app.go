@@ -1073,6 +1073,11 @@ func (a *App) SetCommandCompletions(commands []string) {
 	a.chatModel.SetCommandCompletions(commands)
 }
 
+// SetCommands sets available slash commands for the command palette.
+func (a *App) SetCommands(commands []CommandInfo) {
+	a.commandPalette.SetCommands(commands)
+}
+
 // handlePaletteSelection handles a command selected from the palette.
 // Commands with no arguments are executed immediately.
 // /model with no args opens the model picker.

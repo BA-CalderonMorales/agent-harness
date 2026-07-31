@@ -196,7 +196,49 @@ func (sr *SlashRegistry) GetCompletions() []string {
 	return completions
 }
 
-// GetCompletionDescriptions returns descriptions for visible command completions.
+// CommandInfo represents metadata for a command in the command palette or UI.
+type CommandInfo struct {
+	Command     string
+	Args        string
+	Description string
+	Category    string
+}
+
+// GetCommandInfos returns structured command metadata for all visible registered commands.
+func (sr *SlashRegistry) GetCommandInfos() []CommandInfo {
+	var infos []CommandInfo
+	for name, desc := range sr.help {
+		if name == "exit" {
+			continue
+		}
+		infos = append(infos, CommandInfo{
+			Command:     "/" + name,
+			Description: desc,
+			Category:    guessCategory(name),
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Command < infos[j].Command
+	})
+	return infos
+}
+
+func guessCategory(name string) string {
+	switch name {
+	case "help", "status", "clear", "compact", "session", "reset", "quit":
+		return "Session"
+	case "model", "current-model":
+		return "Model"
+	case "cost", "export", "diff":
+		return "Output"
+	case "branch", "pr", "worktree":
+		return "Git"
+	case "agents", "skills", "plan", "improve", "memory", "init":
+		return "Tools"
+	default:
+		return "System"
+	}
+}
 func (sr *SlashRegistry) GetCompletionDescriptions() map[string]string {
 	descriptions := make(map[string]string, len(sr.help))
 	for name, description := range sr.help {

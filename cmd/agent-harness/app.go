@@ -122,6 +122,7 @@ func (app *App) run() error {
 	tuiApp.SetProjectInfo(app.getProjectInfo())
 	tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
+	tuiApp.SetCommands(app.cmdRegistry.GetCommandInfos())
 
 	// Start provider readiness probe
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)

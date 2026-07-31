@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -13,12 +14,9 @@ import (
 // Triggered by typing "/" in chat input when empty
 // ---------------------------------------------------------------------------
 
-type commandInfo struct {
-	Command     string
-	Args        string
-	Description string
-	Category    string
-}
+type commandInfo = commands.CommandInfo
+
+type CommandInfo = commands.CommandInfo
 
 // CommandPaletteModel is the interactive command palette
 type CommandPaletteModel struct {
@@ -44,6 +42,15 @@ func NewCommandPalette() CommandPaletteModel {
 	}
 	m.filtered = m.commands
 	return m
+}
+
+// SetCommands updates the list of available commands in the palette dynamically.
+func (m *CommandPaletteModel) SetCommands(cmds []CommandInfo) {
+	if len(cmds) > 0 {
+		m.commands = cmds
+		m.filtered = m.commands
+		m.cursor = 0
+	}
 }
 
 func getAgentHarnessCommands() []commandInfo {

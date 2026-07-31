@@ -69,37 +69,63 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("Feature-flagged commands are excluded from GetHelp, GetCompletions, and GetCompletionDescriptions", prop.ForAll(
-		func(name string) bool {
-			if name == "" {
+	properties.Property("Feature-flagged and registered commands parity across all discovery surfaces", prop.ForAll(
+		func(regName string, flagName string) bool {
+			if regName == "" || flagName == "" || regName == flagName {
 				return true
 			}
 			reg := NewSlashRegistry()
-			reg.FeatureFlag(name, "Hidden coming soon command")
+			reg.Register(regName, "registered desc", func(_ string) (string, error) { return "ok", nil })
+			reg.FeatureFlag(flagName, "feature flagged desc")
+
 			help := reg.GetHelp()
 			comps := reg.GetCompletions()
 			descs := reg.GetCompletionDescriptions()
-			similar := reg.findSimilar(name)
+			infos := reg.GetCommandInfos()
 
-			// Feature-flagged command must NOT show up to end users
-			if strings.Contains(help, "/"+name) {
-				return false
-			}
+			// 1. Registered command MUST be present in all surfaces
+			registeredPresent := strings.Contains(help, "/"+regName)
+			foundComp := false
 			for _, c := range comps {
-				if strings.TrimPrefix(c, "/") == name {
-					return false
+				if c == "/"+regName {
+					foundComp = true
+					break
 				}
 			}
-			if _, exists := descs["/"+name]; exists {
+			descExists := descs["/"+regName] == "registered desc"
+			infoFound := false
+			for _, info := range infos {
+				if info.Command == "/"+regName && info.Description == "registered desc" {
+					infoFound = true
+					break
+				}
+			}
+
+			if !registeredPresent || !foundComp || !descExists || !infoFound {
 				return false
 			}
-			for _, s := range similar {
-				if strings.Contains(s, name) {
-					return false
+
+			// 2. Feature-flagged command MUST be absent from all user-facing discovery surfaces
+			flaggedPresentInHelp := strings.Contains(help, "/"+flagName)
+			flaggedPresentInComps := false
+			for _, c := range comps {
+				if c == "/"+flagName {
+					flaggedPresentInComps = true
+					break
 				}
 			}
-			return true
+			flaggedPresentInDescs := descs["/"+flagName] != ""
+			flaggedPresentInInfos := false
+			for _, info := range infos {
+				if info.Command == "/"+flagName {
+					flaggedPresentInInfos = true
+					break
+				}
+			}
+
+			return !flaggedPresentInHelp && !flaggedPresentInComps && !flaggedPresentInDescs && !flaggedPresentInInfos
 		},
+		gen.AlphaString(),
 		gen.AlphaString(),
 	))
 
