@@ -46,11 +46,9 @@ func NewCommandPalette() CommandPaletteModel {
 
 // SetCommands updates the list of available commands in the palette dynamically.
 func (m *CommandPaletteModel) SetCommands(cmds []CommandInfo) {
-	if len(cmds) > 0 {
-		m.commands = cmds
-		m.filtered = m.commands
-		m.cursor = 0
-	}
+	m.commands = cmds
+	m.filtered = m.commands
+	m.cursor = 0
 }
 
 func getAgentHarnessCommands() []commandInfo {

@@ -1389,6 +1389,15 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		if m.delegate != nil {
 			m.delegate.OnCommand(trimmed)
 		}
+		m.pasteDetected = false
+		m.textarea.SetValue("")
+		m.syncTextareaHeight()
+		m.refreshViewportFollow()
+		model = m
+		cmd = func() tea.Msg {
+			return UserCommandMsg{Command: trimmed}
+		}
+		return
 	} else {
 		// Regular message: collapse pasted text in display when it is
 		// multiline or exceeds the character threshold.

@@ -549,5 +549,6 @@ func (d *tuiChatDelegate) OnSubmit(text string) tea.Cmd {
 
 // OnCommand handles chat commands.
 func (d *tuiChatDelegate) OnCommand(command string) {
-	d.app.handleUserCommand(command, d.tuiApp)
+	// Commands are handled asynchronously via UserCommandMsg in App.Update to avoid
+	// mutating tuiApp state out-of-band during ChatModel.Update.
 }
