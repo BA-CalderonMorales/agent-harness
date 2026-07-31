@@ -132,12 +132,12 @@ type ChatModel struct {
 	delegate ChatDelegate
 
 	// Inline command suggestions (replaces modal palette)
-	showSuggestions        bool
-	suggestions            []string
-	suggestionCursor       int
-	suggestionOffset       int // scroll window start
-	allCommands            []string
-	commandDescriptions    map[string]string
+	showSuggestions     bool
+	suggestions         []string
+	suggestionCursor    int
+	suggestionOffset    int // scroll window start
+	allCommands         []string
+	commandDescriptions map[string]string
 
 	// Persona for contextual UI behavior
 	persona string
@@ -1402,6 +1402,15 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		if m.delegate != nil {
 			m.delegate.OnCommand(trimmed)
 		}
+		m.pasteDetected = false
+		m.textarea.SetValue("")
+		m.syncTextareaHeight()
+		m.refreshViewportFollow()
+		model = m
+		cmd = func() tea.Msg {
+			return UserCommandMsg{Command: trimmed}
+		}
+		return
 	} else {
 		// Regular message: collapse pasted text in display when it is
 		// multiline or exceeds the character threshold.

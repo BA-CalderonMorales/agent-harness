@@ -1073,16 +1073,23 @@ func (a *App) SetCommandCompletions(commands []string) {
 	a.chatModel.SetCommandCompletions(commands)
 }
 
-// SetCommandDescriptions adds explanatory text to inline slash suggestions.
-func (a *App) SetCommandDescriptions(descriptions map[string]string) {
-	a.chatModel.SetCommandDescriptions(descriptions)
+// SetCommands sets available slash commands for the command palette.
+func (a *App) SetCommands(commands []CommandInfo) {
+	a.commandPalette.SetCommands(commands)
 }
 
 // handlePaletteSelection handles a command selected from the palette.
-// Commands with no arguments are executed immediately.
+// Commands with no arguments are executed immediately via UserCommandMsg.
 // /model with no args opens the model picker.
 // Everything else is inserted into the input with a trailing space.
 func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
+	cmdName := selected.Command
+
+	if cmdName == "/model" && selected.Args == "" {
+		a.modelPicker.Open(a.width, a.height)
+		return *a, nil
+	}
+
 	noArgCommands := map[string]bool{
 		"/help":          true,
 		"/status":        true,
@@ -1100,18 +1107,11 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 		"/skills":        true,
 	}
 
-	cmdName := selected.Command
-	if noArgCommands[cmdName] {
-		if a.onUserCommand != nil {
-			a.chatModel.AddMessage("user", cmdName)
-			a.onUserCommand(cmdName, a)
+	if selected.Args == "" || noArgCommands[cmdName] {
+		a.chatModel.AddMessage("user", cmdName)
+		return *a, func() tea.Msg {
+			return UserCommandMsg{Command: cmdName}
 		}
-		return *a, nil
-	}
-
-	if cmdName == "/model" && selected.Args == "" {
-		a.modelPicker.Open(a.width, a.height)
-		return *a, nil
 	}
 
 	a.chatModel.SetInput(cmdName + " ")

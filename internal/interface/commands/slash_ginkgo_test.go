@@ -1216,15 +1216,14 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("coming soon"))
 		})
 
-		It("should include flagged commands in help output", func() {
+		It("should exclude flagged commands from main help output", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			registry.FeatureFlag("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).To(ContainSubstring("[coming soon]"))
-			Expect(result).To(ContainSubstring("export"))
-			Expect(result).To(ContainSubstring("cost"))
+			Expect(result).ToNot(ContainSubstring("/export"))
+			Expect(result).ToNot(ContainSubstring("/cost"))
 		})
 
 		It("should show feature flag message for specific help query", func() {
@@ -1235,23 +1234,106 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("/export — coming soon"))
 		})
 
-		It("should include flagged commands in completions", func() {
+		It("should exclude flagged commands from completions", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			completions := registry.GetCompletions()
-			Expect(completions).To(ContainElement("/export"))
+			Expect(completions).ToNot(ContainElement("/export"))
 		})
 
-		It("should include flagged descriptions in completion descriptions", func() {
+		It("should exclude flagged descriptions from completion descriptions", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			descriptions := registry.GetCompletionDescriptions()
-			Expect(descriptions).To(HaveKey("/export"))
-			Expect(descriptions["/export"]).To(ContainSubstring("[coming soon]"))
+			Expect(descriptions).ToNot(HaveKey("/export"))
 		})
 
-		It("should suggest flagged commands in findSimilar", func() {
+		It("should not suggest flagged commands in findSimilar", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			result, _, _ := registry.Handle("/exp")
-			Expect(result).To(ContainSubstring("/export (coming soon)"))
+			Expect(result).ToNot(ContainSubstring("/export"))
+		})
+
+		It("should not duplicate flagged commands in help when also registered", func() {
+			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "" }, func(string) error { return nil }))
+			registry.FeatureFlag("session", "Manage sessions")
+			result, handled, err := registry.Handle("/session")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(handled).To(BeTrue())
+			Expect(result).To(ContainSubstring("coming soon"))
+		})
+	})
+
+	Describe("Feature Flags", func() {
+		var registry *SlashRegistry
+
+		BeforeEach(func() {
+			registry = NewSlashRegistry()
+			registry.Register("help", "Show help", HelpHandler(registry))
+			registry.Register("clear", "Clear session", ClearHandler(func() error { return nil }, nil))
+		})
+
+		It("should mark commands as feature-flagged", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			Expect(registry.IsFeatureFlagged("export")).To(BeTrue())
+			Expect(registry.IsFeatureFlagged("clear")).To(BeFalse())
+		})
+
+		It("should return coming soon message for flagged commands", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			result, handled, err := registry.Handle("/export")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(handled).To(BeTrue())
+			Expect(result).To(ContainSubstring("/export — coming soon"))
+			Expect(result).To(ContainSubstring("opencode.ai"))
+		})
+
+		It("should not dispatch to handler when command is flagged", func() {
+			handlerCalled := false
+			registry.Register("model", "Switch model", func(string) (string, error) {
+				handlerCalled = true
+				return "should not reach", nil
+			})
+			registry.FeatureFlag("model", "Switch model")
+			result, handled, err := registry.Handle("/model gpt-4o")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(handled).To(BeTrue())
+			Expect(handlerCalled).To(BeFalse())
+			Expect(result).To(ContainSubstring("coming soon"))
+		})
+
+		It("should exclude flagged commands from help output", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			registry.FeatureFlag("cost", "Show token usage")
+			help := HelpHandler(registry)
+			result, err := help("")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).ToNot(ContainSubstring("/export"))
+			Expect(result).ToNot(ContainSubstring("/cost"))
+		})
+
+		It("should show feature flag message for specific help query", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			handler := HelpHandler(registry)
+			result, err := handler("export")
+			Expect(err).ToNot(HaveOccurred())
+			Expect(result).To(ContainSubstring("/export — coming soon"))
+		})
+
+		It("should exclude flagged commands from completions", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			completions := registry.GetCompletions()
+			Expect(completions).ToNot(ContainElement("/export"))
+		})
+
+		It("should exclude flagged descriptions from completion descriptions", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			descriptions := registry.GetCompletionDescriptions()
+			Expect(descriptions).ToNot(HaveKey("/export"))
+		})
+
+		It("should exclude flagged commands from findSimilar", func() {
+			registry.FeatureFlag("export", "Export conversation to file")
+			result, _, _ := registry.Handle("/exp")
+			Expect(result).ToNot(ContainSubstring("/export"))
 		})
 
 		It("should not duplicate flagged commands in help when also registered", func() {

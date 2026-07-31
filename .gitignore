@@ -23,9 +23,14 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Local config
+# Local config and local skills
 .env
 *.local
+.opencode/
+.claude/
+
+# Scratch stuff to not push up to remote.
+/scratch/
 
 # Workspace planning lives in /mnt/c/Users/bacm6/Projects/plans, not this repo
 /plans/

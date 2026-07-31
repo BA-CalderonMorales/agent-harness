@@ -124,11 +124,6 @@ func (sr *SlashRegistry) findSimilar(name string) []string {
 			suggestions = append(suggestions, "/"+cmdName)
 		}
 	}
-	for cmdName := range sr.featureFlags {
-		if strings.HasPrefix(cmdName, name) || strings.HasPrefix(name, cmdName) {
-			suggestions = append(suggestions, "/"+cmdName+" (coming soon)")
-		}
-	}
 	sort.Strings(suggestions)
 	return suggestions
 }
@@ -159,8 +154,6 @@ func (sr *SlashRegistry) GetHelp() string {
 			categorized[cmd] = true
 			if desc, exists := sr.help[cmd]; exists {
 				catLines = append(catLines, fmt.Sprintf("  /%-15s %s", cmd, desc))
-			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
-				catLines = append(catLines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
 		if len(catLines) > 0 {
@@ -176,27 +169,15 @@ func (sr *SlashRegistry) GetHelp() string {
 			other = append(other, cmd)
 		}
 	}
-	for cmd := range sr.featureFlags {
-		if !categorized[cmd] {
-			other = append(other, cmd)
-		}
-	}
 	sort.Strings(other)
 	if len(other) > 0 {
 		lines = append(lines, "Other:")
 		for _, cmd := range other {
 			if desc, exists := sr.help[cmd]; exists {
 				lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, desc))
-			} else if desc, flagged := sr.featureFlags[cmd]; flagged {
-				lines = append(lines, fmt.Sprintf("  /%-15s %s [coming soon]", cmd, desc))
 			}
 		}
 		lines = append(lines, "")
-	}
-
-	if len(sr.featureFlags) > 0 {
-		lines = append(lines, "Commands marked [coming soon] are planned for upcoming releases.")
-		lines = append(lines, "Try OpenCode (https://opencode.ai) for similar features today.")
 	}
 
 	return strings.Join(lines, "\n")
@@ -204,31 +185,67 @@ func (sr *SlashRegistry) GetHelp() string {
 
 // GetCompletions returns all command names for tab completion
 func (sr *SlashRegistry) GetCompletions() []string {
-	completions := make([]string, 0, len(sr.commands)+len(sr.featureFlags))
+	completions := make([]string, 0, len(sr.commands))
 	for name := range sr.commands {
 		if name == "exit" {
 			continue
 		}
 		completions = append(completions, "/"+name)
 	}
-	for name := range sr.featureFlags {
-		completions = append(completions, "/"+name)
-	}
 	sort.Strings(completions)
 	return completions
 }
 
-// GetCompletionDescriptions returns descriptions for visible command completions.
+// CommandInfo represents metadata for a command in the command palette or UI.
+type CommandInfo struct {
+	Command     string
+	Args        string
+	Description string
+	Category    string
+}
+
+// GetCommandInfos returns structured command metadata for all visible registered commands.
+func (sr *SlashRegistry) GetCommandInfos() []CommandInfo {
+	var infos []CommandInfo
+	for name, desc := range sr.help {
+		if name == "exit" {
+			continue
+		}
+		infos = append(infos, CommandInfo{
+			Command:     "/" + name,
+			Description: desc,
+			Category:    guessCategory(name),
+		})
+	}
+	sort.Slice(infos, func(i, j int) bool {
+		return infos[i].Command < infos[j].Command
+	})
+	return infos
+}
+
+func guessCategory(name string) string {
+	switch name {
+	case "help", "status", "clear", "compact", "session", "reset", "quit":
+		return "Session"
+	case "model", "current-model":
+		return "Model"
+	case "cost", "export", "diff":
+		return "Output"
+	case "branch", "pr", "worktree":
+		return "Git"
+	case "agents", "skills", "plan", "improve", "memory", "init":
+		return "Tools"
+	default:
+		return "System"
+	}
+}
 func (sr *SlashRegistry) GetCompletionDescriptions() map[string]string {
-	descriptions := make(map[string]string, len(sr.help)+len(sr.featureFlags))
+	descriptions := make(map[string]string, len(sr.help))
 	for name, description := range sr.help {
 		if name == "exit" {
 			continue
 		}
 		descriptions["/"+name] = description
-	}
-	for name, description := range sr.featureFlags {
-		descriptions["/"+name] = description + " [coming soon]"
 	}
 	return descriptions
 }
@@ -363,6 +380,27 @@ func ExportHandler(exportFn func(path string) (string, error)) SlashHandler {
 	}
 }
 
+// DiffHandler shows git diff
+func DiffHandler(getDiff func() string) SlashHandler {
+	return func(args string) (string, error) {
+		diff := getDiff()
+		if diff == "" {
+			return "No changes detected in workspace.", nil
+		}
+		return diff, nil
+	}
+}
+
+// CommitHandler stages changes and commits with the given message.
+func CommitHandler(commitFn func(message string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" {
+			return "Usage: /commit <message>\nStages all changes and commits.", nil
+		}
+		return commitFn(args)
+	}
+}
+
 // BranchHandler handles git branch operations.
 func BranchHandler(listFn func() (string, error), createFn func(string) (string, error), switchFn func(string) (string, error), deleteFn func(string) (string, error)) SlashHandler {
 	return func(args string) (string, error) {
@@ -414,6 +452,16 @@ func PlanHandler(getMode func() bool, setMode func(bool) string) SlashHandler {
 		default:
 			return "Usage: /plan [on|off]\nToggles plan mode. In plan mode the agent outlines steps before executing.", nil
 		}
+	}
+}
+
+// ImproveHandler runs a self-improvement workflow pass.
+func ImproveHandler(improveFn func() (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if improveFn == nil {
+			return "Self-improvement workflow is active. Run /improve to diagnose workspace health and suggest enhancements.", nil
+		}
+		return improveFn()
 	}
 }
 
@@ -481,10 +529,47 @@ func VersionHandler(version, buildInfo string) SlashHandler {
 	}
 }
 
+// WorktreeHandler handles git worktree commands
+func WorktreeHandler(listFn func() (string, error), addFn func(path, branch string) (string, error), removeFn func(path string) (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			return listFn()
+		}
+		parts := strings.SplitN(args, " ", 2)
+		switch parts[0] {
+		case "add":
+			if len(parts) < 2 {
+				return "Usage: /worktree add <path> [branch]", nil
+			}
+			addParts := strings.SplitN(parts[1], " ", 2)
+			path := addParts[0]
+			branch := ""
+			if len(addParts) > 1 {
+				branch = addParts[1]
+			}
+			return addFn(path, branch)
+		case "remove":
+			if len(parts) < 2 {
+				return "Usage: /worktree remove <path>", nil
+			}
+			return removeFn(parts[1])
+		default:
+			return "Usage: /worktree [list|add <path> [branch]|remove <path>]", nil
+		}
+	}
+}
+
 // AgentsHandler handles agent-related commands
 func AgentsHandler(handleFn func(args string) string) SlashHandler {
 	return func(args string) (string, error) {
 		return handleFn(args), nil
+	}
+}
+
+// TestHandler handles running project tests
+func TestHandler(runFn func() (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		return runFn()
 	}
 }
 
@@ -512,6 +597,19 @@ func SessionHandler(listSessions func() string, loadSession func(id string) erro
 	}
 }
 
+// ResetHandler handles resetting agent harness
+func ResetHandler(resetFn func() error) SlashHandler {
+	return func(args string) (string, error) {
+		if args != "--confirm" && args != "-y" {
+			return "reset: WARNING - this will delete your encrypted credentials and ALL session history. This action cannot be undone. Rerun with /reset --confirm to proceed.", nil
+		}
+		if err := resetFn(); err != nil {
+			return "", err
+		}
+		return "__RESET__", nil
+	}
+}
+
 // LogoutHandler handles logout - clears credentials from memory and storage.
 func LogoutHandler(logoutFn func() error) SlashHandler {
 	return func(args string) (string, error) {
@@ -529,6 +627,33 @@ func AuditHandler(getAudit func() string) SlashHandler {
 	}
 }
 
+// PersonaHandler handles persona switching.
+func PersonaHandler(getPersona func() string, setPersona func(string) error, listPersonas func() string) SlashHandler {
+	return func(args string) (string, error) {
+		if args == "" || args == "list" {
+			if listPersonas == nil {
+				return "", fmt.Errorf("persona listing is not available")
+			}
+			return listPersonas(), nil
+		}
+
+		if getPersona == nil || setPersona == nil {
+			return "", fmt.Errorf("persona switching is not available")
+		}
+
+		previous := getPersona()
+		if err := setPersona(args); err != nil {
+			return "", err
+		}
+		current := getPersona()
+
+		return fmt.Sprintf(`Persona updated
+  Previous         %s
+  Current          %s
+  Tip              Personality and tool hints updated for this session`, previous, current), nil
+	}
+}
+
 // LoginHandler handles login - starts the login wizard.
 func LoginHandler(startLoginFn func() error) SlashHandler {
 	return func(args string) (string, error) {
@@ -537,6 +662,11 @@ func LoginHandler(startLoginFn func() error) SlashHandler {
 		}
 		return "", nil
 	}
+}
+
+// IsReset checks if the result is a reset command
+func IsReset(result string) bool {
+	return result == "__RESET__"
 }
 
 // SteerHandler queues a message for the current chat turn without interrupting
