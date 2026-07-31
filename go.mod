@@ -1,6 +1,6 @@
 module github.com/BA-CalderonMorales/agent-harness
 
-go 1.25
+go 1.25.0
 
 require (
 	github.com/atotto/clipboard v0.1.4
