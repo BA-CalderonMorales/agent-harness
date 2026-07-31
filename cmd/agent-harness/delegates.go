@@ -12,7 +12,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -355,16 +354,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 }
 
 func (d *tuiSettingsDelegate) rebuildLLMClient() {
-	d.app.client = llm.NewHTTPClientWithBaseURL(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-	if d.app.loop != nil {
-		d.app.loop.Client = d.app.client
-	}
-	d.tuiApp.SetModels(d.app.getModelItems())
-	d.tuiApp.SetRuntimeContext(d.app.config.Provider, "medium", d.app.cwd)
-
-	// Start a new probe to verify the new configuration
-	prober := llm.NewHTTPProber(d.app.config.Provider, d.app.config.APIKey, d.app.config.EndpointURL)
-	d.tuiApp.StartProviderProbe(prober)
+	d.app.rebuildLLMClient()
 }
 
 // refreshPersonaUI updates persona-dependent UI state after a persona change.

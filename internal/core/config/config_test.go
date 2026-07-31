@@ -187,8 +187,8 @@ func TestLayeredLoader_RemoteProviderGetsProviderDefaultModel(t *testing.T) {
 	if cfg.Model != "gpt-4o" {
 		t.Fatalf("model = %q, want gpt-4o", cfg.Model)
 	}
-	if cfg.EndpointURL != "" {
-		t.Fatalf("endpoint = %q, want provider default", cfg.EndpointURL)
+	if cfg.EndpointURL != "https://api.openai.com/v1" {
+		t.Fatalf("endpoint = %q, want provider default https://api.openai.com/v1", cfg.EndpointURL)
 	}
 }
 

@@ -70,7 +70,7 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 				func(string) error { return nil },
 				func() string { return "Mode: read-only" },
 			))
-			registry.Register("config", "Show config", ConfigHandler(func() string { return "cfg" }))
+			registry.Register("config", "Show config", ConfigHandler(func() string { return "cfg" }, nil))
 
 			By("dispatching settings commands")
 			_, handled, err := registry.Handle("/permissions")

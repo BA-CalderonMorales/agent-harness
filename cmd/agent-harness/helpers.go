@@ -70,24 +70,31 @@ func convertToSessionInfos(sessions []state.SessionMetadata, current *state.Sess
 	return infos
 }
 
-// getSettings returns current settings for TUI.
+// getSettings returns current settings for TUI grouped by logical section.
 func (app *App) getSettings() []tui.Setting {
 	return []tui.Setting{
-		{Key: "persona", Label: "Persona", Value: app.session.Persona, Description: "Agent behavior mode. Affects how the agent responds and what tools it prefers. Persisted per session.", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
-		{Key: "model", Label: "Model", Value: app.session.Model, Description: "The AI model to use for this session. Saved as your default after change.", Type: "string"},
-		{Key: "provider", Label: "Provider", Value: app.config.Provider, Description: "API provider (openai, anthropic, openrouter, ollama, local). This-run only.", Type: "string"},
-		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Description: "Local runtime such as llama.cpp or ollama. This-run only.", Type: "string"},
-		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Description: "OpenAI-compatible API base URL (e.g. http://localhost:8080/v1). This-run only.", Type: "string"},
-		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Description: "Model context window in tokens. Limits conversation length. This-run only.", Type: "number"},
-		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Description: "Maximum response tokens per turn. This-run only.", Type: "number"},
-		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Description: "Sampling temperature (0.0-2.0). Lower = more deterministic. This-run only.", Type: "number"},
-		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Description: "Tool permission level. Persisted.", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
-		{Key: "execution_mode", Label: "Execution Mode", Value: app.executionMode.String(), Description: "Command approval mode (interactive or yolo). This-run only.", Type: "choice", Options: []string{"interactive", "yolo"}},
-		{Key: "perm_read", Label: "Allow Read", Value: "", Description: "Allow read/search tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermRead},
-		{Key: "perm_write", Label: "Allow Write", Value: "", Description: "Allow write/edit tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermWrite},
-		{Key: "perm_delete", Label: "Allow Delete", Value: "", Description: "Allow delete/remove tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermDelete},
-		{Key: "perm_execute", Label: "Allow Execute", Value: "", Description: "Allow bash/execute tools. Persists with permission mode.", Type: "bool", BoolValue: app.config.PermExecute},
-		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Description: "Directory for session log storage. Leave empty for default (~/.agent-harness/sessions). Set via AH_SESSION_DIR env var or config file.", Type: "string"},
+		// Provider & Connection
+		{Key: "provider", Label: "Provider", Value: app.config.Provider, Category: "Provider & Connection", Description: "API provider (openai, anthropic, openrouter, ollama, local).", Type: "choice", Options: []string{"local", "openai", "anthropic", "openrouter", "ollama"}},
+		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Category: "Provider & Connection", Description: "OpenAI-compatible API base URL (e.g. http://localhost:8080/v1 or https://openrouter.ai/api/v1).", Type: "string"},
+		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Category: "Provider & Connection", Description: "Local runtime such as llama.cpp or ollama.", Type: "string"},
+
+		// Model & Agent Behavior
+		{Key: "model", Label: "Model", Value: app.session.Model, Category: "Model & Agent Behavior", Description: "The AI model to use for this session. Saved as default.", Type: "string"},
+		{Key: "persona", Label: "Persona", Value: app.session.Persona, Category: "Model & Agent Behavior", Description: "Agent behavior mode (developer, designer, pm, scientist, explorer).", Type: "choice", Options: []string{"developer", "designer", "pm", "scientist", "explorer"}},
+		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Category: "Model & Agent Behavior", Description: "Model context window in tokens.", Type: "number"},
+		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Category: "Model & Agent Behavior", Description: "Maximum response tokens per turn.", Type: "number"},
+		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Category: "Model & Agent Behavior", Description: "Sampling temperature (0.0-2.0). Lower = more deterministic.", Type: "number"},
+
+		// Workspace & Permissions
+		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Category: "Workspace & Permissions", Description: "Tool permission level.", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
+		{Key: "execution_mode", Label: "Execution Mode", Value: app.executionMode.String(), Category: "Workspace & Permissions", Description: "Command approval mode (interactive or yolo).", Type: "choice", Options: []string{"interactive", "yolo"}},
+		{Key: "perm_read", Label: "Allow Read", Value: "", Category: "Workspace & Permissions", Description: "Allow read/search tools.", Type: "bool", BoolValue: app.config.PermRead},
+		{Key: "perm_write", Label: "Allow Write", Value: "", Category: "Workspace & Permissions", Description: "Allow write/edit tools.", Type: "bool", BoolValue: app.config.PermWrite},
+		{Key: "perm_delete", Label: "Allow Delete", Value: "", Category: "Workspace & Permissions", Description: "Allow delete/remove tools.", Type: "bool", BoolValue: app.config.PermDelete},
+		{Key: "perm_execute", Label: "Allow Execute", Value: "", Category: "Workspace & Permissions", Description: "Allow bash/execute tools.", Type: "bool", BoolValue: app.config.PermExecute},
+
+		// System & Storage
+		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Category: "System & Storage", Description: "Directory for session log storage (~/.agent-harness/sessions).", Type: "string"},
 	}
 }
 
@@ -870,6 +877,79 @@ func (app *App) formatConfig() string {
 	sb.WriteString(sprintf("  Permission Mode: %s\n", app.config.PermissionMode))
 	sb.WriteString(sprintf("  Execution Mode:  %s\n", app.executionMode))
 	return sb.String()
+}
+
+// updateConfiguration updates configuration options dynamically via /config and re-probes.
+func (app *App) updateConfiguration(key, value string) (string, error) {
+	key = strings.ToLower(strings.TrimSpace(key))
+	value = strings.TrimSpace(value)
+
+	switch key {
+	case "provider":
+		if value == "" {
+			return "", fmt.Errorf("usage: /config provider <local|openai|anthropic|openrouter|ollama>")
+		}
+		app.config.Provider = value
+		app.config.EndpointURL = config.DefaultEndpointForProvider(value)
+		app.config.Model = config.DefaultModelForProvider(value)
+		if app.session != nil {
+			app.session.Model = app.config.Model
+		}
+		app.rebuildLLMClient()
+		return sprintf("Provider updated to '%s'\n  Endpoint URL: %s\n  Model: %s\n  Status: Re-probing connection...",
+			app.config.Provider, app.config.EndpointURL, app.config.Model), nil
+
+	case "endpoint", "endpoint_url":
+		if value == "" {
+			return "", fmt.Errorf("usage: /config endpoint <url>")
+		}
+		app.config.EndpointURL = value
+		app.rebuildLLMClient()
+		return sprintf("Endpoint URL updated to '%s'\n  Status: Re-probing connection...", app.config.EndpointURL), nil
+
+	case "model":
+		if value == "" {
+			return "", fmt.Errorf("usage: /config model <model-name>")
+		}
+		app.config.Model = value
+		if app.session != nil {
+			app.session.Model = value
+		}
+		app.rebuildLLMClient()
+		return sprintf("Model updated to '%s'\n  Status: Re-probing connection...", app.config.Model), nil
+
+	case "key", "api_key":
+		app.config.APIKey = value
+		app.rebuildLLMClient()
+		return "API key updated\n  Status: Re-probing connection...", nil
+
+	case "reset":
+		app.config.Provider = config.DefaultProvider
+		app.config.EndpointURL = config.DefaultEndpointURL
+		app.config.Model = config.DefaultModel
+		if app.session != nil {
+			app.session.Model = config.DefaultModel
+		}
+		app.rebuildLLMClient()
+		return sprintf("Reset configuration to default local provider (%s)\n  Status: Re-probing connection...", config.DefaultEndpointURL), nil
+
+	default:
+		return "", fmt.Errorf("unknown config option '%s'. Available options: provider, endpoint, model, key, reset", key)
+	}
+}
+
+// rebuildLLMClient reconstructs client, updates models, and re-probes provider readiness.
+func (app *App) rebuildLLMClient() {
+	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	if app.loop != nil {
+		app.loop.Client = app.client
+	}
+	if app.tuiApp != nil {
+		app.tuiApp.SetModels(app.getModelItems())
+		app.tuiApp.SetRuntimeContext(app.config.Provider, "medium", app.cwd)
+		prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+		app.tuiApp.StartProviderProbe(prober)
+	}
 }
 
 // getPermissionsReport formats active permissions and modes.

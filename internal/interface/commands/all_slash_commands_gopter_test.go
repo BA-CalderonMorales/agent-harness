@@ -335,7 +335,10 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			registry.Register("improve", "Improve workspace", ImproveHandler(func() (string, error) { return "improved", nil }))
 			registry.Register("memory", "Show memory", MemoryHandler(func() string { return "memory" }))
 			registry.Register("version", "Show version", VersionHandler("1.0.0", "build"))
-			registry.Register("config", "Show config", ConfigHandler(func() string { return "config" }))
+			registry.Register("config", "Show config", ConfigHandler(
+				func() string { return "config" },
+				func(key, value string) (string, error) { return "config updated", nil },
+			))
 			registry.Register("permissions", "Show permissions", PermissionsHandler(func() string { return "interactive" }, func(_ string) error { return nil }, func() string { return "perm" }))
 			registry.Register("agents", "Show agents", AgentsHandler(func(_ string) string { return "agents" }))
 			registry.Register("skills", "Show skills", SkillsHandler(func(_ string) string { return "skills" }))

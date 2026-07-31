@@ -412,10 +412,18 @@ func (app *App) initCommands() {
 	app.cmdRegistry.Register("version", "Show version",
 		commands.VersionHandler(Version, sprintf("Built: %s Git: %s", BuildTime, GitSHA)))
 
-	app.cmdRegistry.Register("config", "Show configuration",
-		commands.ConfigHandler(func() string {
-			return app.formatConfig()
-		}))
+	app.cmdRegistry.Register("config", "Show or update configuration (usage: /config [provider|endpoint|model|key] <val>)",
+		commands.ConfigHandler(
+			func() string {
+				return app.formatConfig()
+			},
+			func(key, value string) (string, error) {
+				return app.updateConfiguration(key, value)
+			},
+		))
+
+	app.cmdRegistry.Register("settings", "Open settings dashboard tab",
+		commands.SettingsHandler())
 
 	app.cmdRegistry.Register("permissions", "Show or change permission mode",
 		commands.PermissionsHandler(

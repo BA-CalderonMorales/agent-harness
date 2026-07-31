@@ -27,6 +27,7 @@ type Setting struct {
 	Label       string
 	Value       string
 	Description string
+	Category    string // "Provider & Connection", "Model & Agent Behavior", "Workspace & Permissions", "System & Storage"
 	Type        string // "string", "bool", "number", "choice"
 	Options     []string
 	BoolValue   bool // For boolean settings
@@ -311,7 +312,17 @@ func (m SettingsModel) View() string {
 
 	// Build settings list content for viewport
 	var settingsContent strings.Builder
+	currentCat := ""
 	for i, setting := range m.settings {
+		if setting.Category != "" && setting.Category != currentCat {
+			if currentCat != "" {
+				settingsContent.WriteString("\n")
+			}
+			currentCat = setting.Category
+			categoryHeader := SectionHeaderStyle.Render("── " + currentCat + " ──")
+			settingsContent.WriteString(categoryHeader)
+			settingsContent.WriteString("\n")
+		}
 		settingsContent.WriteString(m.renderSetting(setting, i == m.cursor))
 		settingsContent.WriteString("\n")
 	}

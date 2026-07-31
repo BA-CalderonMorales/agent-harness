@@ -141,7 +141,7 @@ func (sr *SlashRegistry) GetHelp() string {
 		{"Core", []string{"help", "clear", "compact", "version", "quit", "workspace", "init", "current-model"}},
 		{"Session", []string{"status", "session", "steer"}},
 		{"Model", []string{"model"}},
-		{"Settings", []string{"permissions", "config", "login", "logout"}},
+		{"Settings", []string{"permissions", "config", "login", "logout", "settings"}},
 		{"Git", []string{"branch", "pr"}},
 		{"Output", []string{"cost", "export"}},
 		{"Tools", []string{"agents", "skills", "audit", "plan", "improve", "memory"}},
@@ -235,6 +235,8 @@ func guessCategory(name string) string {
 		return "Git"
 	case "agents", "skills", "plan", "improve", "memory", "init":
 		return "Tools"
+	case "permissions", "config", "login", "logout", "settings":
+		return "Settings"
 	default:
 		return "System"
 	}
@@ -362,11 +364,43 @@ func PermissionsHandler(getMode func() string, setMode func(string) error, getRe
 	}
 }
 
-// ConfigHandler shows configuration
-func ConfigHandler(getConfig func() string) SlashHandler {
+// ConfigHandler shows or updates configuration
+func ConfigHandler(getConfig func() string, setConfig func(key, value string) (string, error)) SlashHandler {
 	return func(args string) (string, error) {
-		return getConfig(), nil
+		if args == "" {
+			return getConfig(), nil
+		}
+		parts := strings.SplitN(args, " ", 2)
+		key := parts[0]
+		val := ""
+		if len(parts) > 1 {
+			val = strings.TrimSpace(parts[1])
+		}
+		if key == "set" && val != "" {
+			subParts := strings.SplitN(val, " ", 2)
+			key = subParts[0]
+			val = ""
+			if len(subParts) > 1 {
+				val = strings.TrimSpace(subParts[1])
+			}
+		}
+		if setConfig == nil {
+			return "", fmt.Errorf("configuration modification not supported")
+		}
+		return setConfig(key, val)
 	}
+}
+
+// SettingsHandler returns a switch to settings command
+func SettingsHandler() SlashHandler {
+	return func(args string) (string, error) {
+		return "__SETTINGS__", nil
+	}
+}
+
+// IsSettings checks if the result is a settings tab command
+func IsSettings(result string) bool {
+	return result == "__SETTINGS__"
 }
 
 // ExportHandler exports the session

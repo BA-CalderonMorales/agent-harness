@@ -39,6 +39,11 @@ var (
 			Foreground(ColorTextDim).
 			Bold(false)
 
+	// SectionHeaderStyle renders section category headers in views
+	SectionHeaderStyle = lipgloss.NewStyle().
+			Foreground(ColorPrimary).
+			Bold(true)
+
 	// TabActive is the style for the active tab with visual indicator
 	TabActive = lipgloss.NewStyle().
 			Padding(0, 2).

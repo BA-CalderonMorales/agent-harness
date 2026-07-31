@@ -32,9 +32,17 @@ func DefaultModelForProvider(provider string) string {
 
 func DefaultEndpointForProvider(provider string) string {
 	switch provider {
+	case "openai":
+		return "https://api.openai.com/v1"
+	case "anthropic":
+		return "https://api.anthropic.com/v1"
+	case "openrouter":
+		return "https://openrouter.ai/api/v1"
+	case "ollama":
+		return "http://127.0.0.1:11434/v1"
 	case "local":
 		return DefaultEndpointURL
 	default:
-		return ""
+		return DefaultEndpointURL
 	}
 }

@@ -434,9 +434,19 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 	// -------------------------------------------------------------------------
+	// View switching request
+	// -------------------------------------------------------------------------
+	case SwitchViewMsg:
+		return a, a.switchView(msg.View)
+
+	// -------------------------------------------------------------------------
 	// User command - handled synchronously so mutations are captured
 	// -------------------------------------------------------------------------
 	case UserCommandMsg:
+		if msg.Command == "/settings" {
+			a.switchView(viewSettings)
+			a.chatModel.AddMessage("system", "Switched to Settings tab.")
+		}
 		if a.onUserCommand != nil {
 			a.onUserCommand(msg.Command, &a)
 		}
@@ -1105,6 +1115,7 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 		"/reset":         true,
 		"/agents":        true,
 		"/skills":        true,
+		"/settings":      true,
 	}
 
 	if selected.Args == "" || noArgCommands[cmdName] {
