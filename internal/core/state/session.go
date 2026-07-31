@@ -219,7 +219,7 @@ func (s *Session) ExportToMarkdown() string {
 // and can be attached directly to maintainer reports.
 func (s *Session) ExportToText() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("Agent Harness Session Export\n"))
+	b.WriteString("Agent Harness Session Export\n")
 	b.WriteString(fmt.Sprintf("Session: %s\n", exportIDPrefix(s.ID)))
 	b.WriteString(fmt.Sprintf("Model: %s\n", redactExportString(s.Model)))
 	b.WriteString(fmt.Sprintf("Created: %s\n", s.CreatedAt.Format(time.RFC3339)))
