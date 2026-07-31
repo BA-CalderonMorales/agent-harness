@@ -45,6 +45,8 @@ type App struct {
 	executionMode  approval.ExecutionMode
 	mcpManager     *mcp.Manager
 	auditLogger    *audit.Logger
+	planMode       bool
+	steerQueue     []string
 
 	// Login wizard state
 	loginState       LoginState

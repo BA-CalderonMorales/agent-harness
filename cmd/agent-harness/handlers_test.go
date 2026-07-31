@@ -37,7 +37,7 @@ func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *A
 	}
 }
 
-func TestImproveCommandIsFeatureFlagged(t *testing.T) {
+func TestImproveCommandIsRegistered(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
 	app.initCommands()
 
@@ -48,8 +48,8 @@ func TestImproveCommandIsFeatureFlagged(t *testing.T) {
 	if !handled {
 		t.Fatal("/improve was not handled")
 	}
-	if !strings.Contains(result, "coming soon") {
-		t.Fatalf("expected coming soon message, got:\n%s", result)
+	if !strings.Contains(result, "Self-improvement") {
+		t.Fatalf("expected self-improvement response, got:\n%s", result)
 	}
 }
 

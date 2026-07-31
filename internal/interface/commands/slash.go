@@ -438,6 +438,16 @@ func PlanHandler(getMode func() bool, setMode func(bool) string) SlashHandler {
 	}
 }
 
+// ImproveHandler runs a self-improvement workflow pass.
+func ImproveHandler(improveFn func() (string, error)) SlashHandler {
+	return func(args string) (string, error) {
+		if improveFn == nil {
+			return "Self-improvement workflow is active. Run /improve to diagnose workspace health and suggest enhancements.", nil
+		}
+		return improveFn()
+	}
+}
+
 // PRHandler handles pull request operations via gh CLI.
 func PRHandler(createFn func(title, body string) (string, error), listFn func() (string, error)) SlashHandler {
 	return func(args string) (string, error) {
