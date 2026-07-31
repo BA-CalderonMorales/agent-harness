@@ -23,9 +23,11 @@ vendor/
 .DS_Store
 Thumbs.db
 
-# Local config
+# Local config and local skills
 .env
 *.local
+.opencode/
+.claude/
 
 # Scratch stuff to not push up to remote.
 /scratch/
