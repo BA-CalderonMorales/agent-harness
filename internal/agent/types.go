@@ -21,6 +21,7 @@ type QueryParams struct {
 	QuerySource     types.QuerySource
 	MaxOutputTokens int
 	Temperature     float64
+	ReasoningEffort string
 	MaxTurns        int
 	SkipCacheWrite  bool
 }
@@ -54,6 +55,10 @@ type Loop struct {
 	Client llm.Client
 	Config LoopConfig
 	mu     sync.Mutex
+
+	// LastUsage carries the token usage reported by the provider for the
+	// most recently completed turn. Read by the caller for cost tracking.
+	LastUsage types.TokenUsage
 }
 
 // LoopConfig tunes loop behavior.

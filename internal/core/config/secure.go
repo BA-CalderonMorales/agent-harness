@@ -10,16 +10,12 @@
 package config
 
 import (
-	"crypto/aes"
-	"crypto/cipher"
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
-
-	"golang.org/x/crypto/argon2"
 )
 
 const (
@@ -252,107 +248,6 @@ func (cm *CredentialManager) MigrateFromLegacy() (*SecureConfig, error) {
 	fmt.Println("Credentials migrated successfully. Legacy config removed.")
 	return secureCfg, nil
 }
-
-// encrypt encrypts plaintext using AES-256-GCM
-func (cm *CredentialManager) encrypt(plaintext, nonce []byte) ([]byte, error) {
-	block, err := aes.NewCipher(cm.masterKey)
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	return gcm.Seal(nil, nonce, plaintext, nil), nil
-}
-
-// decrypt decrypts ciphertext using AES-256-GCM
-func (cm *CredentialManager) decrypt(ciphertext, nonce []byte) ([]byte, error) {
-	block, err := aes.NewCipher(cm.masterKey)
-	if err != nil {
-		return nil, err
-	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	return gcm.Open(nil, nonce, ciphertext, nil)
-}
-
-// deriveKey derives a 32-byte key from password using Argon2id
-func deriveKey(password string, salt []byte) []byte {
-	return argon2.IDKey([]byte(password), salt, 3, 64*1024, 4, 32)
-}
-
-// PromptNewPassword prompts for a new password with confirmation
-func PromptNewPassword() (string, error) {
-	for {
-		password, err := PromptPassword("Create master password: ")
-		if err != nil {
-			return "", err
-		}
-
-		if len(password) < 8 {
-			fmt.Println("Password must be at least 8 characters.")
-			continue
-		}
-
-		confirm, err := PromptPassword("Confirm master password: ")
-		if err != nil {
-			return "", err
-		}
-
-		if password != confirm {
-			fmt.Println("Passwords do not match.")
-			continue
-		}
-
-		return password, nil
-	}
-}
-
-// writeFileSecure writes a file with specific permissions atomically
-func writeFileSecure(path string, data []byte, perm os.FileMode) error {
-	// Create temp file in same directory
-	dir := filepath.Dir(path)
-	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmpFile.Name()
-
-	// Ensure cleanup on error
-	defer func() {
-		if err != nil {
-			_ = os.Remove(tmpPath)
-		}
-	}()
-
-	// Set permissions before writing (security: prevent race condition)
-	if err = tmpFile.Chmod(perm); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-
-	// Write data
-	if _, err = tmpFile.Write(data); err != nil {
-		_ = tmpFile.Close()
-		return err
-	}
-
-	if err = tmpFile.Close(); err != nil {
-		return err
-	}
-
-	// Atomic rename
-	return os.Rename(tmpPath, path)
-}
-
-// ClearSecureConfig removes all secure credentials
 func (cm *CredentialManager) ClearSecureConfig() error {
 	if err := os.Remove(cm.configPath); err != nil && !os.IsNotExist(err) {
 		return err
@@ -446,11 +341,4 @@ func (e EncryptionMethod) String() string {
 	default:
 		return "Unknown"
 	}
-}
-
-// isKeychainAvailable checks if macOS keychain is available
-func isKeychainAvailable() bool {
-	// For now, return false as we haven't implemented keychain integration
-	// This would require cgo or external commands
-	return false
 }

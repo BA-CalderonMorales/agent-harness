@@ -163,7 +163,7 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given view switching", func() {
-			It("should blur old view and focus new view", func() {
+			It("should blur old view and leave the chat composer blurred", func() {
 				app.activeView = viewHome
 				app.homeModel.Focus()
 				Expect(app.homeModel.focused).To(BeTrue())
@@ -171,16 +171,17 @@ var _ = Describe("App", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
 				updated := model.(App)
 				Expect(updated.homeModel.focused).To(BeFalse())
-				Expect(updated.chatModel.focused).To(BeTrue())
+				Expect(updated.chatModel.focused).To(BeFalse())
+				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 		})
 
 		Context("Given tab cycling changes the view", func() {
-			It("should set insert mode when entering chat", func() {
+			It("should set navigate mode when entering chat", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
 				updated := model.(App)
 				Expect(updated.activeView).To(Equal(viewChat))
-				Expect(updated.mode).To(Equal(ModeInsert))
+				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 
 			It("should set normal mode when entering home from chat", func() {
@@ -196,10 +197,11 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given number shortcuts change the view", func() {
-			It("should set insert mode when switching to chat with '2'", func() {
+			It("should set navigate mode when switching to chat with '2'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 				updated := model.(App)
-				Expect(updated.mode).To(Equal(ModeInsert))
+				Expect(updated.mode).To(Equal(ModeNormal))
+				Expect(updated.chatModel.focused).To(BeFalse())
 			})
 
 			It("should set normal mode when switching to home with '1'", func() {
@@ -286,7 +288,7 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given the user switches to chat tab", func() {
-			It("should enter insert mode so typing works immediately", func() {
+			It("should land in navigate mode with the composer blurred", func() {
 				By("starting on home in normal mode")
 				Expect(app.mode).To(Equal(ModeNormal))
 
@@ -294,15 +296,21 @@ var _ = Describe("App", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 				updated := model.(App)
 
-				By("verifying insert mode is active and chat is focused")
-				Expect(updated.mode).To(Equal(ModeInsert))
-				Expect(updated.chatModel.focused).To(BeTrue())
+				By("verifying navigate mode is active and the composer is blurred")
+				Expect(updated.mode).To(Equal(ModeNormal))
+				Expect(updated.chatModel.focused).To(BeFalse())
 			})
 
-			It("should allow immediate text input in chat", func() {
+			It("should allow text input after entering insert mode with 'i'", func() {
 				By("switching to chat")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
 				chatApp := model.(App)
+
+				By("entering insert mode")
+				model, _ = chatApp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
+				chatApp = model.(App)
+				Expect(chatApp.mode).To(Equal(ModeInsert))
+				Expect(chatApp.chatModel.focused).To(BeTrue())
 
 				By("typing a message in chat")
 				model, _ = chatApp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
@@ -639,21 +647,72 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("[ready]"))
 			})
 
-			It("should render compact runtime context in the status bar", func() {
+			It("should render compact runtime context in the mode line and bottom bar", func() {
 				app.width = 180
+				app.activeView = viewChat
+				app.chatModel.width = 180
+				app.chatModel.height = 24
+				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				GinkgoT().Setenv("HOME", testHome)
 				workspace := filepath.Join(testHome, "sample-project")
 				app.SetChatModel("gpt-5.5")
 				app.SetRuntimeContext("openrouter", "medium", workspace)
+				app.SetTelemetry(3400, 8192, 0.12)
 
 				view := app.View()
 
 				Expect(view).To(ContainSubstring("[ready]"))
-				Expect(view).To(ContainSubstring("gpt-5.5"))
-				Expect(view).To(ContainSubstring("sample-project"))
-				Expect(view).To(ContainSubstring("openrouter"))
+				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
+				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
+				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
+				Expect(view).To(ContainSubstring("effort medium"))
+				Expect(view).To(ContainSubstring("ctrl+p commands"))
+				Expect(view).To(ContainSubstring("$0.12"))
 				Expect(view).ToNot(ContainSubstring(testHome))
+			})
+
+			Context("Given a constrained footer width", func() {
+				BeforeEach(func() {
+					testHome := GinkgoT().TempDir()
+					GinkgoT().Setenv("HOME", testHome)
+					workspace := filepath.Join(testHome, "sample-project", "nested", "deep", "path")
+					app.SetChatModel("gpt-5.5")
+					app.SetRuntimeContext("openrouter", "medium", workspace)
+					app.SetTelemetry(3400, 8192, 0.42)
+				})
+
+				It("should keep everything on a generous width", func() {
+					app.width = 180
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctrl+p commands"))
+					Expect(view).To(ContainSubstring("$0.42"))
+					Expect(view).To(ContainSubstring("ctx"))
+				})
+
+				It("should drop the hint before any metrics", func() {
+					app.width = 58
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctx"))
+					Expect(view).To(ContainSubstring("$0.42"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+				})
+
+				It("should drop cost next, keeping context usage", func() {
+					app.width = 44
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctx"))
+					Expect(view).ToNot(ContainSubstring("$0.42"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+				})
+
+				It("should degrade to health and a short ellipsized path", func() {
+					app.width = 30
+					view := app.View()
+					Expect(view).To(ContainSubstring("[ready]"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+					Expect(view).To(ContainSubstring("…"))
+				})
 			})
 
 			It("should show help overlay when active", func() {
@@ -857,10 +916,14 @@ var _ = Describe("App", func() {
 				updated := model.(App)
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
 				Expect(updated.chatModel.persona).To(Equal("developer"))
-				Expect(updated.chatModel.messages).To(HaveLen(1))
+				// The session notice prepends as the first chat message
+				// instead of cluttering the footer.
+				Expect(updated.chatModel.messages).To(HaveLen(2))
+				Expect(updated.chatModel.messages[0].Role).To(Equal("system"))
+				Expect(updated.chatModel.messages[0].Content).To(Equal("Loaded session sess-aaa"))
 				Expect(updated.activeView).To(Equal(viewChat))
-				Expect(updated.statusMessage).To(Equal("Loaded session sess-aaa"))
-				Expect(updated.statusType).To(Equal("success"))
+				Expect(updated.statusMessage).To(Equal(""))
+				Expect(updated.statusType).To(Equal(""))
 				Expect(updated.sessionsModel.sessions).To(HaveLen(1))
 				Expect(updated.homeModel.sessions).To(HaveLen(1))
 				Expect(updated.homeModel.model).To(Equal("gpt-4o"))
@@ -892,7 +955,11 @@ var _ = Describe("App", func() {
 				updated := model.(App)
 				Expect(updated.sessionsModel.sessions).To(HaveLen(2))
 				Expect(updated.homeModel.sessions).To(HaveLen(2))
-				Expect(updated.statusMessage).To(Equal("Refreshed"))
+				// Refresh notices are durable system messages in the chat
+				// pane, not footer clutter.
+				Expect(updated.chatModel.messages).To(HaveLen(1))
+				Expect(updated.chatModel.messages[0].Content).To(Equal("Refreshed"))
+				Expect(updated.statusMessage).To(Equal(""))
 			})
 		})
 	})

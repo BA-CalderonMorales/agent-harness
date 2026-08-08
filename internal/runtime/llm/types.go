@@ -22,4 +22,7 @@ type Request struct {
 	MaxTokens      int
 	Temperature    float64
 	ThinkingBudget int
+	// ReasoningEffort controls the provider's reasoning effort
+	// (low, medium, high, or "" to leave unset).
+	ReasoningEffort string
 }

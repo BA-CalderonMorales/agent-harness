@@ -47,6 +47,10 @@ func firstEnv(names ...string) string {
 	return ""
 }
 
+func envSet(names ...string) bool {
+	return firstEnv(names...) != ""
+}
+
 func stringValue(values map[string]interface{}, key string) (string, bool) {
 	v, ok := values[key].(string)
 	return v, ok && v != ""

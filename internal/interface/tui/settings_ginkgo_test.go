@@ -160,6 +160,76 @@ var _ = Describe("SettingsModel", func() {
 		})
 	})
 
+	Describe("System Messages Region", func() {
+		Context("Given system messages exist", func() {
+			BeforeEach(func() {
+				settings.SetSettings([]Setting{
+					{Key: "theme", Label: "Theme", Value: "dark", Type: "string"},
+					{Key: "provider", Label: "Provider", Value: "openrouter", Type: "choice", Options: []string{"openrouter", "openai"}},
+				})
+				settings.SetSystemMessages([]string{
+					"Started new chat abc123",
+					"Provider unavailable: connection refused",
+					"Deleted session def456",
+					"Provider ready: 12 models available",
+				})
+			})
+
+			It("should render the region under its own header", func() {
+				view := settings.View()
+				Expect(view).To(ContainSubstring("System Messages"))
+				Expect(view).To(ContainSubstring("Provider unavailable: connection refused"))
+			})
+
+			It("should enter the region past the last setting and scroll it", func() {
+				By("navigating to the last setting")
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				Expect(settings.cursor).To(Equal(1))
+				Expect(settings.inSystemMessages).To(BeFalse())
+
+				By("pressing down once more to enter the region")
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				Expect(settings.inSystemMessages).To(BeTrue())
+
+				By("scrolling within the region with down")
+				offsetBefore := settings.sysViewport.YOffset
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				Expect(settings.sysViewport.YOffset).To(BeNumerically(">=", offsetBefore))
+			})
+
+			It("should return to settings when scrolling up past the region top", func() {
+				By("entering the region")
+				settings.cursor = len(settings.settings) - 1
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				Expect(settings.inSystemMessages).To(BeTrue())
+
+				By("scrolling up at the top edge")
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyUp})
+				settings = m.(SettingsModel)
+				Expect(settings.inSystemMessages).To(BeFalse())
+			})
+
+			It("should not mutate settings while inside the region", func() {
+				By("entering the region")
+				settings.cursor = len(settings.settings) - 1
+				m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				before := settings.settings[1].Value
+
+				By("pressing left/right/enter inside the region")
+				settings.Update(tea.KeyMsg{Type: tea.KeyLeft})
+				settings.Update(tea.KeyMsg{Type: tea.KeyRight})
+				settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
+				Expect(settings.settings[1].Value).To(Equal(before))
+				Expect(settings.editing).To(BeFalse())
+			})
+		})
+	})
+
 	Describe("Focus and Blur", func() {
 		Context("Given the view is blurred while editing", func() {
 			BeforeEach(func() {
