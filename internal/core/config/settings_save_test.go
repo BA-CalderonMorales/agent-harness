@@ -83,6 +83,66 @@ func TestUserSettingsOverrideProjectYAML(t *testing.T) {
 	}
 }
 
+func TestEnvProviderMovesEndpointToProviderDefault(t *testing.T) {
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	clearConfigEnv(t)
+	t.Setenv("AH_API_KEY", "sk-test-123")
+	t.Setenv("AH_PROVIDER", "openrouter")
+
+	root := t.TempDir()
+	// A tracked project yml pins a local llama.cpp endpoint; the env-driven
+	// provider switch must not keep sending provider traffic there.
+	writeProjectYAML(t, root)
+
+	cfg, err := NewLayeredLoader(root).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Provider != "openrouter" {
+		t.Fatalf("provider = %q, want openrouter", cfg.Provider)
+	}
+	if cfg.EndpointURL != "https://openrouter.ai/api/v1" {
+		t.Errorf("endpoint = %q, want openrouter default (must follow env provider)", cfg.EndpointURL)
+	}
+	if cfg.APIKey != "sk-test-123" {
+		t.Errorf("api key = %q, want sk-test-123", cfg.APIKey)
+	}
+}
+
+func TestEnvEndpointStillWins(t *testing.T) {
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	clearConfigEnv(t)
+	t.Setenv("AH_PROVIDER", "openrouter")
+	t.Setenv("AH_ENDPOINT_URL", "https://proxy.example.com/v1")
+
+	cfg, err := NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.EndpointURL != "https://proxy.example.com/v1" {
+		t.Errorf("endpoint = %q, want explicit env endpoint", cfg.EndpointURL)
+	}
+}
+
+func TestLocalProviderKeepsPinnedYAMLEndpoint(t *testing.T) {
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	clearConfigEnv(t)
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "agent-harness.yml"),
+		[]byte("provider: local\nendpoint_url: http://127.0.0.1:9000/v1\n"), 0644); err != nil {
+		t.Fatalf("write yaml: %v", err)
+	}
+
+	cfg, err := NewLayeredLoader(root).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.EndpointURL != "http://127.0.0.1:9000/v1" {
+		t.Errorf("endpoint = %q, want yml-pinned local endpoint preserved", cfg.EndpointURL)
+	}
+}
+
 func TestProjectYAMLDefaultWithoutUserSettings(t *testing.T) {
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
 	clearConfigEnv(t)

@@ -105,6 +105,14 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 
 	ll.applyEnvOverrides(config)
+	// When the provider comes from the environment but the endpoint does
+	// not, the endpoint follows the provider's default. Otherwise a
+	// file-pinned endpoint (e.g. a local llama.cpp URL in agent-harness.yml)
+	// would keep sending provider traffic - and its API key - to the wrong
+	// host.
+	if config.EndpointURL == "" || (envSet("AH_PROVIDER", "AGENT_HARNESS_PROVIDER") && !envSet("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL")) {
+		config.EndpointURL = DefaultEndpointForProvider(config.Provider)
+	}
 
 	// Extract MCP servers
 	if mcpServers, ok := config.merged["mcpServers"].(map[string]interface{}); ok {
