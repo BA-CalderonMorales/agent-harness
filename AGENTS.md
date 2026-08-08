@@ -1,305 +1,104 @@
 # AGENTS.md - Agent Harness
 
-## Quick Reference
-
-- **Source**: `cmd/agent-harness/main.go`
-- **Run**: `./scripts/run-termux.sh` or `~/buckets/usr/bin/agent-harness`
-- **Persona**: `/persona <name>` — switch behavior mode (developer|designer|pm|scientist|explorer)
-- **Audit**: `/audit` — show recent tool activity
-- **Home tab**: `h` — jump to dashboard, `c` — jump to chat
-- **Local LLM**: `agent-harness.yml` targets Ornith-1.0 GGUF through a local `llama.cpp` OpenAI-compatible endpoint
-- **Fallback Local LLM**: `./scripts/ah-fast.sh` for small Ollama smoke tests
-- **Prune Branches**: `./scripts/prune-branches.sh` (or `--dry-run`)
-- **Commit from TUI**: `/commit <message>` — stages all changes and commits
-
-## Recent DX Improvements
-
-- **Persona system**: 5 functional personas (developer, designer, pm, scientist, explorer) adapt prompts, tools, and UI
-- **Home dashboard**: project overview, quick actions, recent sessions, contextual hints
-- **Audit logging**: append-only log of tool executions and approvals at `~/.agent-harness/audit/`
-- **Sandbox preview**: approval dialog shows diff preview for write/edit and risk level for bash
-- **Granular permissions**: individual toggles for read/write/delete/execute with mode presets
-- **Rich startup context**: system prompt auto-includes git status, recent commits, project file tree
-- **Session auto-resume**: loads the most recent session on startup for continuity
-- **Tool output truncation**: bash and read outputs are silently capped to protect context budget
-- **Loop auto-compaction**: old messages are trimmed automatically when approaching token limits
-- **Edit tool**: supports `replace_all` and gives actionable errors on mismatch
-
-## Core Agent Loop
-
-Standard agent control flow (`internal/agent/loop.go:queryLoop()`):
-
-```
-while not done:
-    1. Call LLM with current message context
-    2. If text-only response → done
-    3. If tool calls → execute, add results, continue
-    4. If max turns exceeded → error
-```
-
-Max turns: 10 (configurable). Tool execution supports batching by concurrency safety.
-
-## Modular Loop Architecture (New)
-
-The loop is decomposed into focused interfaces that can be implemented independently by "buckets" - domain-specific loop implementations.
-
-### Core Interfaces (`internal/loop/`)
-
-| Interface | Purpose | File |
-|-----------|---------|------|
-| `LoopBase` | Fundamental contract for all buckets | `base.go` |
-| `LoopConfig` | Unified configuration | `config.go` |
-| `LoopError` | Structured error handling | `error.go` |
-| `LoopResults` | Result aggregation | `results.go` |
-| `LoopSystemPrompts` | Prompt composition | `prompts.go` |
-| `LoopExecute` | Execution strategies | `execute.go` |
-| `LoopTool` | Tool management | `tool.go` |
-
-### Bucket Implementations (`internal/loop/buckets/`)
-
-| Type | Constructor | Handles | Capabilities |
-|------|-------------|---------|--------------|
-| `FileSystemBucket` | `FileSystem(basePath)` | read, write, glob, edit | Concurrency-safe, destructive |
-| `ShellBucket` | `Shell(basePath)` | bash, execute_command | Serial, destructive |
-| `SearchBucket` | `Search(basePath)` | grep, search, find | Concurrency-safe, read-only |
-| `GitBucket` | `Git(basePath)` | git_status, git_diff, git_commit | Serial, destructive |
-| `PlanBucket` | `Plan()` | enter_plan_mode, exit_plan_mode | - |
-| `TranscriptBucket` | `Transcript()` | search_transcript | Read-only |
-| `UIBucket` | `UI(exportDir, notebookDir)` | ask, todo, export | Interactive |
-| `WebBucket` | `Web()` | webfetch, web_search | Network, read-only |
-| `CodeBucket` | `Code(basePath)` | lint, format, analyze | Read-only |
-| `TestBucket` | `Test(basePath)` | run_tests | Destructive |
-| `AgentBucket` | `Agent(basePath, client)` | spawn sub-agents | Recursive |
-
-### Defaults System (`internal/loop/buckets/defaults/`)
-
-All hardcoded configuration centralized:
-
-```go
-// defaults/shell.go
-const ShellDefaultTimeout = 60 * time.Second
-var ShellBlockedCommands = []string{"rm -rf /", ":(){ :|:& };:"}
-```
-
-Buckets import and use - no magic numbers in implementations.
-
-### Creating an Orchestrator
-
-```go
-// Using factory presets
-orch := loop.CreateFromPreset(loop.PresetStandard, basePath, llmClient)
-orth := loop.CreateFromPreset(loop.PresetFast, basePath, llmClient)
-orth := loop.CreateFromPreset(loop.PresetSafe, basePath, llmClient)
-
-// Using factory with config
-factory := loop.NewFactory(basePath, llmClient).
-    WithConfig(loop.FastConfig())
-orth := factory.CreateStandard()
-
-// Using builder for custom setup
-orch := factory.NewBuilder().
-    WithFileSystem(func(fs *buckets.FileSystemBucket) {
-        fs.WithBlockedPaths("/etc", "/usr")
-    }).
-    WithShell(func(sh *buckets.ShellBucket) {
-        sh.WithTimeout(30).WithoutApproval()
-    }).
-    WithSearch().
-    Build()
-
-// Direct construction
-orch := loop.Orchestration(config, client,
-    buckets.FileSystem(basePath),
-    buckets.Shell(basePath),
-    buckets.Search(basePath),
-)
-```
-
-### Implementing a Custom Bucket
-
-```go
-type MyBucket struct{}
-
-func (b *MyBucket) Name() string { return "mybucket" }
-
-func (b *MyBucket) CanHandle(toolName string, input map[string]any) bool {
-    return toolName == "mytool"
-}
-
-func (b *MyBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
-    return loop.LoopResult{Success: true, Data: "result"}
-}
-
-func (b *MyBucket) Capabilities() loop.BucketCapabilities {
-    return loop.BucketCapabilities{
-        Category: "custom",
-        ToolNames: []string{"mytool"},
-        IsConcurrencySafe: true,
-    }
-}
-
-// Compile-time check
-var _ loop.LoopBase = (*MyBucket)(nil)
-```
-
-Then register:
-```go
-orch.RegisterBucket(&MyBucket{})
-```
-
-## Naming Conventions
-
-### Go Restriction: No Type/Function Name Collision
-
-Go does not allow a type and function to share the same name in one package:
-
-```go
-type Orchestrator struct {}  // Type declaration
-func Orchestrator() {}       // ERROR: redeclared (same name)
-func NewOrchestrator() {}    // OK: different name
-```
-
-### Bucket Suffix Pattern
-
-To achieve readable constructors without `New*` prefixes, we use:
-- **Type name**: `<Domain>Bucket` (e.g., `FileSystemBucket`)
-- **Constructor**: `<Domain>()` (e.g., `FileSystem()`)
-
-```go
-// Type declaration
-type FileSystemBucket struct { ... }
-
-// Constructor - readable, no "New" prefix
-func FileSystem(basePath string) *FileSystemBucket {
-    return &FileSystemBucket{...}
-}
-
-// Usage
-fs := buckets.FileSystem("/path")
-```
-
-This pattern applies to all buckets:
-| Type | Constructor |
-|------|-------------|
-| `OrchestrationBucket` | `loop.Orchestration(...)` |
-| `FileSystemBucket` | `buckets.FileSystem(...)` |
-| `ShellBucket` | `buckets.Shell(...)` |
-| `SearchBucket` | `buckets.Search(...)` |
-
-## Key Patterns
-
-- **Bucket Suffix Pattern**: Types end with `Bucket`, constructors use base name
-- **Bucket Architecture**: Domain-specific LoopBase implementations hide internals
-- **Tool Descriptor Pattern**: Structs with function fields, not interfaces
-- **Permission Stack**: deny → allow → ask → mode transforms → tool-specific checks
-- **File Operations**: cache by (path, offset, limit, mtime), stale-write protection, atomic writes
-
-## Code Organization
-
-Small, single-purpose files are the house style (mirroring the
-one-concept-per-file layout of the clean-api reference). Files creeping into
-the 1000s of lines are an anti-pattern and are actively split back down.
-
-- **Target ≤ 400 lines per file.** Extract at the natural seams well before
-  that; a growing file is a signal to split, not a reason to keep writing.
-- **One file = one concept.** Partition by responsibility, not by accident:
-  view rendering, key handling, status/streaming state, message types,
-  styles, command registrations, and report formatters each get their own
-  file inside the package.
-- **Facade for public surfaces.** A thin entry file (e.g. `api.go`,
-  `client.go`, `index`) exports what consumers need; implementations live in
-  focused sibling files. Types/constants get `types.go`, errors get
-  `errors.go`, styles get `styles.go`.
-- **Tests mirror sources.** Every meaningful source file gets a
-  same-named `_test.go` beside it. Unit tests live next to the code;
-  integration/e2e suites get their own `_integration_` package or test
-  directory.
-- **Splits are pure moves.** Never mix a refactor-move with logic changes in
-  one commit: `gofmt` first, adjust imports, `go test ./...`, then commit.
-  Behavior stays byte-identical; separate commits carry the actual changes.
-- **Stay inside the package boundary.** Split files before splitting
-  packages; promote to a new package only when the dependency direction is
-  clean and the wall of responsibility is real.
-
-## Security
-
-## Security
-
-- UNC paths rejected (prevent NTLM leaks)
-- Device paths blocked
-- Bash uses `exec.LookPath("sh")` for portability
-- Each bucket validates inputs before execution
-- Shell bucket has whitelist/blacklist pattern matching
-- Audit logging: all tool executions logged to `~/.agent-harness/audit/YYYY-MM-DD.log`
-- Sandbox preview: approval dialog shows file diff preview and bash risk assessment
-- Granular permissions: read/write/delete/execute toggles independent of mode presets
-
-## Termux
-
-- Build: `go build -o ./build/agent-harness ./cmd/agent-harness`
-- Use project-local dirs (not /tmp)
-- Shell at `$PREFIX/bin/sh`
-
-## Environment Variables
-
-- `AH_PROVIDER`: local, ollama, openrouter, openai, anthropic
-- `AH_RUNTIME`: llama.cpp, ollama, or another local runtime label
-- `AH_MODEL`: model identifier
-- `AH_MODEL_PATH`: local GGUF path when using a local runtime
-- `AH_ENDPOINT_URL`: OpenAI-compatible API base URL
-- `AH_CONTEXT_LENGTH`: model context window
-- `AH_TEMPERATURE`: sampling temperature
-- `AH_MAX_TOKENS`: maximum response tokens
-- `AH_WORKSPACE_PATH`: repository workspace path
-- `AH_LOCAL_SERVER_COMMAND`: command users should run for the local server
-- `AH_API_KEY`: API key (not needed for local or ollama)
-- `AH_PERMISSION_MODE`: read-only, workspace-write, danger-full-access
-- `AH_PERSONA`: default persona (developer, designer, pm, scientist, explorer)
-- `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
-
-## Testing
-
-- `go test ./...`
-- `go test -race ./...`
-
-## Critical Rules
-
-- Zero emojis in root-level .md files
-- Lowercase filenames (except README.md, AGENTS.md)
-- No horizontal rules as section separators
-- Tool calling must work flawlessly - no regressions
-- Follow Bucket Suffix naming pattern for new buckets
-
-## Branch Protection
-
-Protected branches: `main`, `develop`
-
-### Local Protection
-
-```bash
-# Safe deletion (checks protection)
-git del <branch>          # Delete merged branch
-git del-force <branch>    # Force delete
-
-# Prune all merged branches
-./scripts/prune-branches.sh --dry-run   # Preview
-./scripts/prune-branches.sh             # Execute
-```
-
-### Remote Protection
-
-Configure in GitHub: Settings → Branches → Add rule
-- Pattern: `main` and `develop`
-- Enable: "Restrict deletions"
-- Optional: Require PR reviews, status checks
-
-See `docs/branch-protection.md` for full setup.
-
-## Working Rules
-
-- Stop and explain before major architectural changes
-- One change per commit, commit before starting next
-- Conventional commits: `type(scope): description`
+## Current Shape
+
+- `cmd/agent-harness/` is the app wiring: boot, command registry, settings
+  state, and TUI delegates.
+- `internal/` holds domain packages. Each domain keeps a facade file where
+  the public surface matters (e.g. `api.go`, `index.go`, `client.go`), plus
+  one file per concept: types in `types.go`, errors in `errors.go`, styles
+  in `styles.go` (tui), and tests mirrored beside sources as `*_test.go`.
+  Files target ≤ 400 lines - growing past 400 is a signal to split, never a
+  reason to keep writing.
+- `internal/agent/` is the core agent loop; `internal/interface/tui/` the
+  terminal UI; `internal/runtime/{llm,tools}/` providers and tools;
+  `internal/core/{config,state,persona,audit}/` cross-cutting state;
+  `internal/loop/` the modular bucket rewrite (not yet the live path).
+- `pkg/` shared types, messages, git, bash, sandbox helpers.
+- `scripts/` local automation; `docs/` the reference reading for every
+  section below.
+- Pre-rewrite leftovers are pruned; use Git history for legacy reference.
+
+## Key Sections
+
+| To understand... | Read |
+|---|---|
+| The agent loop, buckets, and naming pattern | `docs/loop-architecture.md` |
+| Composer / chat behavior and conversation flow | `internal/interface/tui/`, `docs/conversation_flow.md` |
+| Command approval and permissions stacking | `docs/command-approval.md` |
+| Branch protection and release flow | `docs/branch-protection.md`, Makefile release targets |
+| Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
+| Environment variables | `docs/environment-variables.md` |
+| Recent DX improvements | `docs/dx-improvements.md` |
+| Everything else | `README.md`, then this file again |
+
+Lost in the woods? Start with `docs/architecture.md` for *why*, then
+`docs/conversation_flow.md` for *how* a turn moves.
+
+## Run
+
+- Build + run: `make build && make run`
+- Verify everything: `go test ./...` (unit), `go test -race ./...`
+- Local LLM: `agent-harness.yml` targets Ornith-1.0 GGUF via a llama.cpp
+  OpenAI-compatible endpoint; `./scripts/ah-fast.sh` for small Ollama smoke
+  tests; `./scripts/ah-local.sh` for the local server flow.
+- Structure check: `make verify` reports files over the line budget.
+- `/persona <name>` switches behavior mode; `/audit` shows tool activity;
+  `/commit <message>` stages and commits; `h`/`c` jump between Home and Chat.
+
+## CI
+
+- `.github/workflows/ci.yml` runs on PRs: build, vet, full test suite.
+- `release.yml` tags and publishes releases; `bump-version.yml` bumps
+  versions before a release cut.
+- Docs-only changes skip CI automatically where configured; trigger
+  `workflow_dispatch` when needed.
+
+## Branch Strategy
+
+- `main` and `develop` are protected (restrict deletions; local `git del`
+  honors protection, `./scripts/prune-branches.sh` prunes merged branches).
+- Feature and fix work lives on `release/<next-patch>` branches cut from
+  `develop`; the branch accumulates the release, then merges into `develop`
+  and is tagged from `main`.
+- Never merge dev-local working spaces (`scratch/`, `.workspace/`,
+  working ledgers) into `develop` or `main`.
+
+## Rules
+
+- Files target ≤ 400 lines (soft cap; spec files are exempt). Splits are
+  pure moves: `gofmt`, adjust imports, `go test ./...`, then commit.
+  Never mix a refactor-move with logic changes in one commit.
+- One file = one concept inside the package; facades for public surfaces;
+  tests mirror sources. Stay inside the package boundary; split files
+  before splitting packages.
+- No root-level helper scripts; scripts are bucketed under `scripts/`.
+- Conventional commits: `type(scope): description`. One change per commit;
+  stop and explain before major architectural changes.
+- Zero emojis in root-level .md files; lowercase filenames (except
+  README.md, AGENTS.md); no horizontal rules as section separators.
+- Tool calling must work flawlessly - no regressions.
+- Follow the Bucket Suffix naming pattern for new buckets.
+- Use `rg` for content search when available; `fzf` for interactive
+  selection when available.
+
+## Design Principles
+
+- **SRP** - one concept per file; a domain's facade is its public face.
+- **OCP** - extend by adding a file or bucket, not by widening an existing
+  one; defaults live in `defaults` files, never inline.
+- **ISP/DIP** - buckets implement `LoopBase`; orchestrators depend on
+  bucket faces, never internals (see `docs/loop-architecture.md`).
+- **DRY** - one authoritative home per piece of knowledge: one defaults
+  store, one model per concept, tests mirror sources.
+- **KISS** - boring beats novel; delete before adding.
+- **CQS** - pure queries separated from state-changing commands; read-only
+  vs destructive tool classification is this principle.
+- **Self-documentation** - durable names; `make verify` measures the
+  structure so shape is observable, not aspirational.
+- **POLA** - behavior must not astonish: user settings persist silently,
+  provider switches keep the current model, transient status never
+  clobbers session state.
 
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
