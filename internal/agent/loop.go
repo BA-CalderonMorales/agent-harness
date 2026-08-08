@@ -106,12 +106,13 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		req := llm.Request{
-			Messages:     messagesForQuery,
-			SystemPrompt: sysPrompt,
-			Tools:        params.ToolUseContext.Options.Tools,
-			Model:        model,
-			MaxTokens:    8192,
-			Temperature:  params.Temperature,
+			Messages:        messagesForQuery,
+			SystemPrompt:    sysPrompt,
+			Tools:           params.ToolUseContext.Options.Tools,
+			Model:           model,
+			MaxTokens:       8192,
+			Temperature:     params.Temperature,
+			ReasoningEffort: params.ReasoningEffort,
 		}
 
 		if state.maxOutputTokensOverride > 0 {
@@ -296,6 +297,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 			case types.LLMMessageStop:
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
+				l.LastUsage = e.Usage
 				if pendingToolUse != nil {
 					if toolInputBuffer != "" {
 						var input map[string]any

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -34,6 +35,9 @@ func (app *App) initConfig() error {
 		return errf("failed to load configuration: %w", err)
 	}
 	app.config = layeredConfig
+	if app.config.Effort == "" {
+		app.config.Effort = config.DefaultEffort
+	}
 	workspacePath, err := resolveWorkspacePath(app.cwd, app.config.WorkspacePath)
 	if err != nil {
 		return errf("invalid workspace_path: %w", err)
@@ -241,6 +245,7 @@ func (app *App) initCommands() {
 			app.session = app.session.Clear()
 			app.sessionManager.SetCurrent(app.session)
 			_, _ = app.sessionManager.SaveCurrent()
+			app.refreshTelemetry(app.tuiApp)
 			return nil
 		}, nil))
 
@@ -258,6 +263,7 @@ func (app *App) initCommands() {
 			if _, err := app.sessionManager.SaveCurrent(); err != nil {
 				return "", fmt.Errorf("save compacted session: %w", err)
 			}
+			app.refreshTelemetry(app.tuiApp)
 			return sprintf("Compacted: removed %d messages, kept %d", result.RemovedCount, result.KeptCount), nil
 		}))
 
@@ -280,6 +286,7 @@ func (app *App) initCommands() {
 				app.commitConfigChange()
 				app.sessionManager.SetCurrent(app.session)
 				_, _ = app.sessionManager.SaveCurrent()
+				app.refreshTelemetry(app.tuiApp)
 				return nil
 			},
 			func() []string {
@@ -294,6 +301,26 @@ func (app *App) initCommands() {
 
 	app.cmdRegistry.Register("current-model", "Show the current model",
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
+
+	app.cmdRegistry.Register("effort", "Show or cycle reasoning effort (usage: /effort [low|medium|high])",
+		commands.ModelHandler(
+			func() string { return app.config.Effort },
+			func(e string) error {
+				if e == "" {
+					e = nextEffort(app.config.Effort)
+				} else if !slices.Contains(config.EffortLevels, e) {
+					return fmt.Errorf("invalid effort '%s'. Available: low, medium, high", e)
+				}
+				app.config.Effort = e
+				app.commitConfigChange()
+				app.rebuildLLMClient()
+				if app.tuiApp != nil {
+					app.tuiApp.Send(tui.StatusMsg{Text: sprintf("Reasoning effort: %s", e), Type: "success"})
+				}
+				return nil
+			},
+			func() []string { return config.EffortLevels },
+		))
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(args string) (string, error) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -84,6 +85,7 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "context_length", Label: "Context Length", Value: fmt.Sprintf("%d", app.config.ContextLength), Category: "Model & Agent Behavior", Description: "Model context window in tokens.", Type: "number"},
 		{Key: "max_tokens", Label: "Max Tokens", Value: fmt.Sprintf("%d", app.config.MaxTokens), Category: "Model & Agent Behavior", Description: "Maximum response tokens per turn.", Type: "number"},
 		{Key: "temperature", Label: "Temperature", Value: fmt.Sprintf("%.2f", app.config.Temperature), Category: "Model & Agent Behavior", Description: "Sampling temperature (0.0-2.0). Lower = more deterministic.", Type: "number"},
+		{Key: "reasoning_effort", Label: "Reasoning Effort", Value: app.config.Effort, Category: "Model & Agent Behavior", Description: "Reasoning effort sent per request (low, medium, high).", Type: "choice", Options: config.EffortLevels},
 
 		// Workspace & Permissions
 		{Key: "permissions", Label: "Permission Mode", Value: app.config.PermissionMode.String(), Category: "Workspace & Permissions", Description: "Tool permission level.", Type: "choice", Options: []string{"read-only", "workspace-write", "danger-full-access"}},
@@ -927,6 +929,17 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 		app.rebuildLLMClient()
 		return "API key updated\n  Status: Re-probing connection...", nil
 
+	case "effort", "reasoning_effort":
+		if value == "" {
+			value = nextEffort(app.config.Effort)
+		} else if !slices.Contains(config.EffortLevels, value) {
+			return "", fmt.Errorf("invalid effort '%s'. Available: low, medium, high", value)
+		}
+		app.config.Effort = value
+		app.commitConfigChange()
+		app.rebuildLLMClient()
+		return sprintf("Reasoning effort updated to '%s'", value), nil
+
 	case "reset":
 		app.config.Provider = config.DefaultProvider
 		app.config.EndpointURL = config.DefaultEndpointURL
@@ -951,10 +964,36 @@ func (app *App) rebuildLLMClient() {
 	}
 	if app.tuiApp != nil {
 		app.tuiApp.SetModels(app.getModelItems())
-		app.tuiApp.SetRuntimeContext(app.config.Provider, "medium", app.cwd)
+		app.tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
 		prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 		app.tuiApp.StartProviderProbe(prober)
 	}
+}
+
+// nextEffort returns the next effort level in cycle order.
+func nextEffort(current string) string {
+	for i, level := range config.EffortLevels {
+		if level == current {
+			return config.EffortLevels[(i+1)%len(config.EffortLevels)]
+		}
+	}
+	return config.EffortLevels[0]
+}
+
+// refreshTelemetry pushes context usage and cost numbers to the TUI footer.
+func (app *App) refreshTelemetry(tuiApp *tui.App) {
+	if tuiApp == nil {
+		return
+	}
+	est := 0
+	if app.session != nil {
+		est = app.session.EstimateTokens()
+	}
+	cost := 0.0
+	if app.costTracker != nil {
+		cost = app.costTracker.GetTotalCost()
+	}
+	tuiApp.SetTelemetry(est, app.config.ContextLength, cost)
 }
 
 // syncModelFields converges app.config.Model and session.Model on the
@@ -975,13 +1014,14 @@ func (app *App) syncModelFields() {
 // belong to the encrypted credential store.
 func (app *App) persistUserSettings() {
 	values := map[string]interface{}{
-		"provider":       app.config.Provider,
-		"endpoint_url":   app.config.EndpointURL,
-		"runtime":        app.config.Runtime,
-		"model":          app.config.Model,
-		"context_length": app.config.ContextLength,
-		"temperature":    app.config.Temperature,
-		"max_tokens":     app.config.MaxTokens,
+		"provider":         app.config.Provider,
+		"endpoint_url":     app.config.EndpointURL,
+		"runtime":          app.config.Runtime,
+		"model":            app.config.Model,
+		"context_length":   app.config.ContextLength,
+		"temperature":      app.config.Temperature,
+		"max_tokens":       app.config.MaxTokens,
+		"reasoning_effort": app.config.Effort,
 	}
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {

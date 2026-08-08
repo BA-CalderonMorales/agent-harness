@@ -74,6 +74,9 @@ type LayeredConfig struct {
 	// Persona determines the agent's behavioral mode
 	Persona string
 
+	// Effort is the reasoning effort level used per request (low, medium, high)
+	Effort string
+
 	// SessionDir overrides the default session storage directory
 	SessionDir string
 }
@@ -300,6 +303,11 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v
+	}
+	if v, ok := stringValue(config.merged, "reasoning_effort"); ok {
+		if v == "low" || v == "medium" || v == "high" {
+			config.Effort = v
+		}
 	}
 	if v, ok := stringValue(config.merged, "session_dir"); ok {
 		config.SessionDir = v

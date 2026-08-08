@@ -137,6 +137,12 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 	if req.ThinkingBudget > 0 && c.Provider == "anthropic" {
 		payload["thinking"] = map[string]any{"type": "enabled", "budget_tokens": req.ThinkingBudget}
 	}
+	// OpenAI-compatible reasoning effort (OpenRouter passthrough, OpenAI,
+	// and local gateways that support it). Ignored when unset or off.
+	switch req.ReasoningEffort {
+	case "low", "medium", "high":
+		payload["reasoning_effort"] = req.ReasoningEffort
+	}
 
 	return json.Marshal(payload)
 }

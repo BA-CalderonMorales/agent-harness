@@ -222,6 +222,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		ToolUseContext:  toolCtx,
 		MaxOutputTokens: app.config.MaxTokens,
 		Temperature:     app.config.Temperature,
+		ReasoningEffort: app.config.Effort,
 	}
 
 	stream, err := app.loop.Query(ctx, params)
@@ -291,7 +292,18 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		return
 	}
 
+	// Feed provider-reported usage into the cost tracker, then close the turn.
+	if app.loop != nil {
+		usage := app.loop.LastUsage
+		app.costTracker.AddToCurrentTurn(agent.TokenUsage{
+			InputTokens:              usage.InputTokens,
+			OutputTokens:             usage.OutputTokens,
+			CacheReadInputTokens:     usage.CacheReadInputTokens,
+			CacheCreationInputTokens: usage.CacheCreationInputTokens,
+		})
+	}
 	app.costTracker.CompleteTurn()
+	app.refreshTelemetry(tuiApp)
 
 	tuiApp.Send(tui.AgentDoneMsg{
 		FullResponse: responseText.String(),

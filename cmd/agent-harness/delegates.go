@@ -2,6 +2,7 @@ package main
 
 import (
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -333,6 +334,13 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 			d.app.config.Temperature = n
 			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
+		}
+	case "reasoning_effort":
+		if slices.Contains(config.EffortLevels, value) {
+			d.app.config.Effort = value
+			d.app.commitConfigChange()
+			d.app.rebuildLLMClient()
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Reasoning effort: %s", value), Type: "success"})
 		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
