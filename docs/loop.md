@@ -1,26 +1,24 @@
-# Outcome Loop — Agent Harness
+# Outcome Loop Ledger
 
-## Constraints
+The outcome loop is the project's experiment ledger: every validated
+hypothesis here became a feature you can use in the released version. This
+ledger describes the state of the loop as of **v0.3.7** — all 21 experiments
+below are validated and live in the shipped harness. For how the loop moves a
+turn today, see [Loop architecture](loop-architecture.md); for what landed in
+which release, see [Changelog](changelog.md) and the
+[release ledger](releases/).
+
+## Method
+
 - One active outcome at a time
 - One active experiment per outcome
 - Commit after each experiment
 - KISS: minimal changes, maximum DX impact
 
-## Active Outcome
-_None. Batch complete. 21 experiments validated._
+## Experiment Ledger
 
-## Next Candidate Outcomes
-1. **Visual diff rendering** - Structured diffs in TUI instead of raw git diff
-2. **Session forking** - `/session fork` to branch conversations
-3. **OAuth authentication** - Browser flow for cloud model providers
-4. **Plugin system** - Hook-based extensibility
-5. **Update parity.md** - Document is severely outdated vs actual state
-
-## Experiments
-
-## Experiments
-| ID | Name | Hypothesis | Status |
-|----|------|------------|--------|
+| ID | Experiment | Hypothesis | Status |
+|----|------------|------------|--------|
 | 001 | auto-context-injection | If we enrich git context and system prompt with status, commits, and file tree, the LLM will provide more relevant first responses without extra tool calls. | validated |
 | 002 | output-truncation | If we cap bash and read outputs at ~12k chars / ~300 lines, the agent loop will not crash from context overflow on large files or verbose commands. | validated |
 | 003 | auto-resume-session | If we load the most recent session on startup instead of always creating a new one, users experience seamless continuity across restarts. | validated |
@@ -44,10 +42,28 @@ _None. Batch complete. 21 experiments validated._
 | 021 | graceful-shutdown | If SIGINT/SIGTERM triggers session save before exit, abrupt termination never loses conversation state. | validated |
 
 ## Picks
-- **001 auto-context-injection**: Enriching git context + system prompt improves startup awareness. Commit: 13eb7e9.
+
+- **001 auto-context-injection**: Enriching git context + system prompt improves
+  startup awareness. Commit: 13eb7e9.
 
 ## Failures
+
 _None yet._
 
 ## Decisions
-- 2026-04-17: Focus on context injection first (highest DX leverage) before touching TUI or tools.
+
+- 2026-04-17: Focus on context injection first (highest DX leverage) before
+  touching TUI or tools.
+
+## Roadmap Candidates
+
+Open outcome candidates for the next batches, in rough priority order:
+
+1. **Visual diff rendering** - Structured diffs in TUI instead of raw git diff
+2. **Session forking** - `/session fork` to branch conversations
+3. **OAuth authentication** - Browser flow for cloud model providers
+4. **Plugin system** - Hook-based extensibility
+5. **Parity documentation** - Refresh parity.md against current behavior
+
+Each candidate follows the same method: pick one, run one experiment, commit,
+validate.

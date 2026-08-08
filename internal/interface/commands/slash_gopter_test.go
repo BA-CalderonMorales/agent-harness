@@ -83,8 +83,21 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 			descs := reg.GetCompletionDescriptions()
 			infos := reg.GetCommandInfos()
 
+			// Help lines list each command as "  /name ...": match the
+			// exact name so a command like "/i" is never matched inside
+			// "/io", and "/io" never hides inside "/import".
+			helpLists := func(name string) bool {
+				for _, line := range strings.Split(help, "\n") {
+					line = strings.TrimSpace(line)
+					if line == "/"+name || strings.HasPrefix(line, "/"+name+" ") {
+						return true
+					}
+				}
+				return false
+			}
+
 			// 1. Registered command MUST be present in all surfaces
-			registeredPresent := strings.Contains(help, "/"+regName)
+			registeredPresent := helpLists(regName)
 			foundComp := false
 			for _, c := range comps {
 				if c == "/"+regName {
@@ -106,7 +119,7 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 			}
 
 			// 2. Feature-flagged command MUST be absent from all user-facing discovery surfaces
-			flaggedPresentInHelp := strings.Contains(help, "/"+flagName)
+			flaggedPresentInHelp := helpLists(flagName)
 			flaggedPresentInComps := false
 			for _, c := range comps {
 				if c == "/"+flagName {
