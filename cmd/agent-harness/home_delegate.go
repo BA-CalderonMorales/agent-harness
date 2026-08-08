@@ -11,6 +11,10 @@ type tuiHomeDelegate struct {
 	tuiApp *tui.App
 }
 
+func (d *tuiHomeDelegate) OnDeleteSession(id string) {
+	d.app.deleteSession(id, d.tuiApp)
+}
+
 func (d *tuiHomeDelegate) OnNewChat() {
 	if d.app.session == nil {
 		d.app.session = d.app.sessionManager.CreateSession("")

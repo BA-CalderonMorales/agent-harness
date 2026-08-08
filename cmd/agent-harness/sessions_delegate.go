@@ -44,41 +44,48 @@ func (d *tuiSessionsDelegate) OnSessionSelect(id string) {
 }
 
 func (d *tuiSessionsDelegate) OnSessionDelete(id string) {
-	isActive := d.app.session != nil && d.app.session.ID == id
+	d.app.deleteSession(id, d.tuiApp)
+}
+
+// deleteSession removes a session, replacing the active one if needed so
+// the harness always has a live session. Shared by the Sessions tab and
+// the Home dashboard's Recent Sessions list.
+func (app *App) deleteSession(id string, tuiApp *tui.App) {
+	isActive := app.session != nil && app.session.ID == id
 	if isActive {
-		model := d.app.session.Model
-		personaName := d.app.session.Persona
-		replacement := d.app.sessionManager.CreateSession(model)
+		model := app.session.Model
+		personaName := app.session.Persona
+		replacement := app.sessionManager.CreateSession(model)
 		replacement.Persona = personaName
-		d.app.sessionManager.SetCurrent(replacement)
-		d.app.session = replacement
-		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
-			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to create replacement session: %v", err), Type: "error"})
+		app.sessionManager.SetCurrent(replacement)
+		app.session = replacement
+		if _, err := app.sessionManager.SaveCurrent(); err != nil {
+			tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to create replacement session: %v", err), Type: "error"})
 			replacement.ID = ""
-			d.app.session = nil
+			app.session = nil
 			return
 		}
 	}
-	if err := d.app.sessionManager.DeleteSession(id); err != nil {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to delete session: %v", err), Type: "error"})
+	if err := app.sessionManager.DeleteSession(id); err != nil {
+		tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to delete session: %v", err), Type: "error"})
 		return
 	}
 	if isActive {
-		d.tuiApp.Send(tui.SessionActivatedMsg{
-			SessionID:      d.app.session.ID,
+		tuiApp.Send(tui.SessionActivatedMsg{
+			SessionID:      app.session.ID,
 			Transcript:     nil,
-			Model:          d.app.session.Model,
-			Persona:        d.app.session.Persona,
-			Sessions:       d.app.getSessionInfos(),
+			Model:          app.session.Model,
+			Persona:        app.session.Persona,
+			Sessions:       app.getSessionInfos(),
 			Notice:         sprintf("Deleted session %s; replacement active", shortID(id)),
 			NoticeType:     "success",
 			SwitchToChat:   true,
-			PermissionMode: d.app.config.PermissionMode.String(),
-			EstTokens:      d.app.session.EstimateTokens(),
+			PermissionMode: app.config.PermissionMode.String(),
+			EstTokens:      app.session.EstimateTokens(),
 		})
 	} else {
-		d.tuiApp.Send(tui.SessionsRefreshedMsg{
-			Sessions:   d.app.getSessionInfos(),
+		tuiApp.Send(tui.SessionsRefreshedMsg{
+			Sessions:   app.getSessionInfos(),
 			Notice:     sprintf("Deleted session %s", shortID(id)),
 			NoticeType: "success",
 		})

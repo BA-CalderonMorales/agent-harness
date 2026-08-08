@@ -11,6 +11,8 @@ type testHomeDelegate struct {
 	exportSessionCalled bool
 	loadSessionCalled   bool
 	loadSessionID       string
+	deleteSessionCalled bool
+	deleteSessionID     string
 }
 
 func (d *testHomeDelegate) OnNewChat()       { d.newChatCalled = true }
@@ -18,6 +20,10 @@ func (d *testHomeDelegate) OnExportSession() { d.exportSessionCalled = true }
 func (d *testHomeDelegate) OnLoadSession(id string) {
 	d.loadSessionCalled = true
 	d.loadSessionID = id
+}
+func (d *testHomeDelegate) OnDeleteSession(id string) {
+	d.deleteSessionCalled = true
+	d.deleteSessionID = id
 }
 
 var _ = Describe("HomeModel", func() {
@@ -144,6 +150,24 @@ var _ = Describe("HomeModel", func() {
 				home.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				Expect(delegate.loadSessionCalled).To(BeFalse())
 				Expect(delegate.newChatCalled).To(BeTrue())
+			})
+
+			It("should delete the session under the cursor on 'd'", func() {
+				By("navigating down to the first session")
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				home.Update(tea.KeyMsg{Type: tea.KeyDown})
+				Expect(home.cursorInActions()).To(BeFalse())
+
+				By("pressing d to delete")
+				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				Expect(delegate.deleteSessionCalled).To(BeTrue())
+				Expect(delegate.deleteSessionID).To(Equal("sess-alpha"))
+			})
+
+			It("should not delete when cursor is on an action", func() {
+				By("pressing d while an action is selected")
+				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				Expect(delegate.deleteSessionCalled).To(BeFalse())
 			})
 		})
 	})

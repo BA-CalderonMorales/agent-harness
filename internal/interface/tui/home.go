@@ -13,6 +13,7 @@ type HomeDelegate interface {
 	OnNewChat()
 	OnExportSession()
 	OnLoadSession(id string)
+	OnDeleteSession(id string)
 }
 
 // ---------------------------------------------------------------------------
@@ -156,6 +157,15 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				idx := m.cursorSessionIndex()
 				if idx >= 0 && idx < len(m.sessions) {
 					m.delegate.OnLoadSession(m.sessions[idx].ID)
+				}
+			}
+		case "d":
+			// Delete the session under the cursor (sessions region only;
+			// action shortcuts keep precedence elsewhere).
+			if !m.cursorInActions() && m.delegate != nil {
+				idx := m.cursorSessionIndex()
+				if idx >= 0 && idx < len(m.sessions) {
+					m.delegate.OnDeleteSession(m.sessions[idx].ID)
 				}
 			}
 		default:

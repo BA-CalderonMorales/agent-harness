@@ -132,6 +132,7 @@ func (m *HomeModel) renderRecentSessions() string {
 	var b strings.Builder
 
 	b.WriteString(HeaderSecondary.Render("  Recent Sessions"))
+	b.WriteString(HelpDimStyle.Render("   [d] delete"))
 	b.WriteString("\n\n")
 
 	count := 3
