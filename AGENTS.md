@@ -194,6 +194,35 @@ This pattern applies to all buckets:
 - **Permission Stack**: deny → allow → ask → mode transforms → tool-specific checks
 - **File Operations**: cache by (path, offset, limit, mtime), stale-write protection, atomic writes
 
+## Code Organization
+
+Small, single-purpose files are the house style (mirroring the
+one-concept-per-file layout of the clean-api reference). Files creeping into
+the 1000s of lines are an anti-pattern and are actively split back down.
+
+- **Target ≤ 400 lines per file.** Extract at the natural seams well before
+  that; a growing file is a signal to split, not a reason to keep writing.
+- **One file = one concept.** Partition by responsibility, not by accident:
+  view rendering, key handling, status/streaming state, message types,
+  styles, command registrations, and report formatters each get their own
+  file inside the package.
+- **Facade for public surfaces.** A thin entry file (e.g. `api.go`,
+  `client.go`, `index`) exports what consumers need; implementations live in
+  focused sibling files. Types/constants get `types.go`, errors get
+  `errors.go`, styles get `styles.go`.
+- **Tests mirror sources.** Every meaningful source file gets a
+  same-named `_test.go` beside it. Unit tests live next to the code;
+  integration/e2e suites get their own `_integration_` package or test
+  directory.
+- **Splits are pure moves.** Never mix a refactor-move with logic changes in
+  one commit: `gofmt` first, adjust imports, `go test ./...`, then commit.
+  Behavior stays byte-identical; separate commits carry the actual changes.
+- **Stay inside the package boundary.** Split files before splitting
+  packages; promote to a new package only when the dependency direction is
+  clean and the wall of responsibility is real.
+
+## Security
+
 ## Security
 
 - UNC paths rejected (prevent NTLM leaks)
