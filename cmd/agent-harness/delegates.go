@@ -302,13 +302,16 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "provider":
 		d.app.config.Provider = value
 		d.rebuildLLMClient()
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Provider updated to: %s", value), Type: "success"})
 	case "runtime":
 		d.app.config.Runtime = value
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Runtime updated to: %s", value), Type: "success"})
 	case "endpoint_url":
 		d.app.config.EndpointURL = value
 		d.rebuildLLMClient()
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Endpoint updated to: %s", value), Type: "success"})
 	case "context_length":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
@@ -316,16 +319,19 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 			if d.app.loop != nil {
 				d.app.loop.Config.BlockingTokenLimit = n
 			}
+			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Context length updated to: %d", n), Type: "success"})
 		}
 	case "max_tokens":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.MaxTokens = n
+			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Max tokens updated to: %d", n), Type: "success"})
 		}
 	case "temperature":
 		if n, err := strconv.ParseFloat(value, 64); err == nil {
 			d.app.config.Temperature = n
+			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
 		}
 	case "permissions":
@@ -380,18 +386,23 @@ func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 	}
 }
 
-// handleModelChange updates the model and saves to config.
+// handleModelChange updates the model and saves it as the default.
 func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	d.app.session.Model = value
 	d.app.costTracker.SetModel(value)
 	d.tuiApp.Send(tui.ModelChangedMsg{Model: value})
+	d.app.commitConfigChange()
 
+	// Keep the encrypted store in sync only when it exists; model now
+	// persists via ~/.agent-harness/settings.json so this is optional.
 	credManager := config.NewCredentialManager()
-	if err := credManager.UpdateDefaultModel(value); err != nil {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
-	} else {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Default model: %s", value), Type: "success"})
+	if credManager.HasSecureCredentials() {
+		if err := credManager.UpdateDefaultModel(value); err != nil {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
+			return
+		}
 	}
+	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Default model: %s", value), Type: "success"})
 }
 
 // handlePermissionModeChange updates permission mode and syncs granular toggles.

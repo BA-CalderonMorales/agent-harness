@@ -151,10 +151,10 @@ func (app *App) initSession() error {
 	// Try to resume the most recent session for continuity
 	if resumed, ok := sessionManager.ResumeLatestSession(); ok {
 		app.session = resumed
-		// Ensure model stays current if config changed
-		if app.config.Model != "" && app.config.Model != resumed.Model {
-			resumed.Model = app.config.Model
-		}
+		// The session keeps the model last used in it; adopt it as the
+		// running configuration instead of overwriting it, so a model
+		// picked in a previous session is not forgotten on restart.
+		app.syncModelFields()
 		// Apply configured persona if valid and session has no persona set
 		if app.config.Persona != "" && resumed.Persona == "" {
 			if p, err := persona.Parse(app.config.Persona); err == nil {
@@ -277,6 +277,7 @@ func (app *App) initCommands() {
 				if app.costTracker != nil {
 					app.costTracker.SetModel(m)
 				}
+				app.commitConfigChange()
 				app.sessionManager.SetCurrent(app.session)
 				_, _ = app.sessionManager.SaveCurrent()
 				return nil

@@ -55,6 +55,7 @@ func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
 		provider := resolveProviderInput(text)
 		app.loginProviderTmp = provider
 		app.config.Provider = provider
+		app.config.EndpointURL = config.DefaultEndpointForProvider(provider)
 		if config.IsLocalProvider(provider) {
 			app.config.APIKey = provider
 			app.loginState = loginModel
@@ -84,6 +85,7 @@ func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
 		app.config.Model = model
 		app.session.Model = model
 		app.costTracker.SetModel(model)
+		app.commitConfigChange()
 
 		if config.IsLocalProvider(app.loginProviderTmp) {
 			tuiApp.AddMessage("system", "Local provider configured.")

@@ -891,10 +891,11 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 		}
 		app.config.Provider = value
 		app.config.EndpointURL = config.DefaultEndpointForProvider(value)
-		app.config.Model = config.DefaultModelForProvider(value)
-		if app.session != nil {
-			app.session.Model = app.config.Model
+		// Keep the current model; only fall back to the provider default when unset.
+		if app.config.Model == "" {
+			app.config.Model = config.DefaultModelForProvider(value)
 		}
+		app.commitConfigChange()
 		app.rebuildLLMClient()
 		return sprintf("Provider updated to '%s'\n  Endpoint URL: %s\n  Model: %s\n  Status: Re-probing connection...",
 			app.config.Provider, app.config.EndpointURL, app.config.Model), nil
@@ -904,6 +905,7 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 			return "", fmt.Errorf("usage: /config endpoint <url>")
 		}
 		app.config.EndpointURL = value
+		app.commitConfigChange()
 		app.rebuildLLMClient()
 		return sprintf("Endpoint URL updated to '%s'\n  Status: Re-probing connection...", app.config.EndpointURL), nil
 
@@ -915,11 +917,13 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 		if app.session != nil {
 			app.session.Model = value
 		}
+		app.commitConfigChange()
 		app.rebuildLLMClient()
 		return sprintf("Model updated to '%s'\n  Status: Re-probing connection...", app.config.Model), nil
 
 	case "key", "api_key":
 		app.config.APIKey = value
+		app.persistAPIKey()
 		app.rebuildLLMClient()
 		return "API key updated\n  Status: Re-probing connection...", nil
 
@@ -930,6 +934,7 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 		if app.session != nil {
 			app.session.Model = config.DefaultModel
 		}
+		app.commitConfigChange()
 		app.rebuildLLMClient()
 		return sprintf("Reset configuration to default local provider (%s)\n  Status: Re-probing connection...", config.DefaultEndpointURL), nil
 
@@ -950,6 +955,71 @@ func (app *App) rebuildLLMClient() {
 		prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 		app.tuiApp.StartProviderProbe(prober)
 	}
+}
+
+// syncModelFields converges app.config.Model and session.Model on the
+// session's model (the live, per-request value) when one exists.
+func (app *App) syncModelFields() {
+	if app.session == nil {
+		return
+	}
+	if app.session.Model != "" {
+		app.config.Model = app.session.Model
+	} else if app.config.Model != "" {
+		app.session.Model = app.config.Model
+	}
+}
+
+// persistUserSettings writes the user's runtime preferences to the user
+// config layer (~/.agent-harness/settings.json). API keys stay out: they
+// belong to the encrypted credential store.
+func (app *App) persistUserSettings() {
+	values := map[string]interface{}{
+		"provider":       app.config.Provider,
+		"endpoint_url":   app.config.EndpointURL,
+		"runtime":        app.config.Runtime,
+		"model":          app.config.Model,
+		"context_length": app.config.ContextLength,
+		"temperature":    app.config.Temperature,
+		"max_tokens":     app.config.MaxTokens,
+	}
+	loader := config.NewLayeredLoader(app.cwd)
+	if err := loader.SaveSettings(config.SourceUser, values); err != nil {
+		msg := sprintf("Warning: failed to save settings: %v", err)
+		if app.tuiApp != nil {
+			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
+		}
+	}
+}
+
+// persistAPIKey updates the API key in the encrypted credential store so a
+// mid-session key change survives restarts without touching plaintext config.
+func (app *App) persistAPIKey() {
+	credManager := config.NewCredentialManager()
+	if !credManager.HasSecureCredentials() {
+		return
+	}
+	secureCfg, err := credManager.LoadSecure()
+	if err != nil {
+		return
+	}
+	secureCfg.APIKey = app.config.APIKey
+	if secureCfg.Provider == "" {
+		secureCfg.Provider = app.config.Provider
+	}
+	if err := credManager.SaveSecure(secureCfg); err != nil {
+		msg := sprintf("Warning: failed to save API key: %v", err)
+		if app.tuiApp != nil {
+			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
+		}
+	}
+}
+
+// commitConfigChange persists the current runtime configuration after any
+// in-session mutation so provider/model choices survive restarts.
+func (app *App) commitConfigChange() {
+	app.syncModelFields()
+	app.persistUserSettings()
 }
 
 // getPermissionsReport formats active permissions and modes.
