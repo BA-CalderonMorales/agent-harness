@@ -75,9 +75,9 @@ const (
 // Composer layout: a centered column with breathing room above and below the
 // input text, plus a mode line (mode · model · provider · reasoning effort).
 const (
-	ComposerColumnWidth = 84 // centered max width for the composer block
-	ComposerTopPadding  = 1  // blank rows above the input text
-	ComposerGapRows     = 1  // blank rows between the input and the mode line
+	ComposerColumnWidth = 100 // centered max width for the composer block
+	ComposerTopPadding  = 1   // blank rows above the input text
+	ComposerGapRows     = 1   // blank rows between the input and the mode line
 )
 
 // SubmitDebounceDuration is the window after Enter during which another
@@ -183,17 +183,12 @@ func NewChatModel() ChatModel {
 	ta.Placeholder = "Type a message..."
 	ta.Focus()
 
-	// CRITICAL FIX: Style the textarea to match our design system
-	// This removes the strange background color inconsistency
+	// Style the textarea to match our design system: transparent base (no
+	// background - a solid surface here reads as a black box behind the
+	// text and grows with every typed line).
 	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
-
-	// Style the textarea base to have consistent background
-	ta.FocusedStyle.Base = lipgloss.NewStyle().
-		Background(ColorSurface).
-		Foreground(ColorText)
-	ta.BlurredStyle.Base = lipgloss.NewStyle().
-		Background(ColorSurface).
-		Foreground(ColorTextDim)
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
 	vp := viewport.New(80, 20)
 
