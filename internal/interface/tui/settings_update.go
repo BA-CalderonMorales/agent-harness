@@ -17,6 +17,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight
+		m.sysViewport.Width = msg.Width
 
 	case tea.KeyMsg:
 		if !m.focused {
@@ -29,16 +30,31 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "up", "k":
-			if m.cursor > 0 {
+			if m.inSystemMessages {
+				// Scroll the System Messages region; exiting back into the
+				// settings list happens at its top edge.
+				m.sysViewport.LineUp(1)
+				if m.sysViewport.AtTop() {
+					m.inSystemMessages = false
+				}
+			} else if m.cursor > 0 {
 				m.cursor--
 			}
 
 		case "down", "j":
-			if m.cursor < len(m.settings)-1 {
+			if m.inSystemMessages {
+				m.sysViewport.LineDown(1)
+			} else if m.cursor < len(m.settings)-1 {
 				m.cursor++
+			} else if len(m.systemMessages) > 0 {
+				// Past the last setting: enter the System Messages region.
+				m.inSystemMessages = true
 			}
 
 		case "enter", " ":
+			if m.inSystemMessages {
+				return m, nil
+			}
 			if m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "bool" {
@@ -69,7 +85,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "left", "h":
-			if m.cursor < len(m.settings) {
+			if !m.inSystemMessages && m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
 					idx := 0
@@ -88,7 +104,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "right", "l":
-			if m.cursor < len(m.settings) {
+			if !m.inSystemMessages && m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
 					idx := 0
@@ -107,7 +123,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "r":
-			if m.delegate != nil {
+			if !m.inSystemMessages && m.delegate != nil {
 				m.delegate.OnSettingReload()
 			}
 		}

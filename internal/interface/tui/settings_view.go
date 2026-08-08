@@ -47,23 +47,29 @@ func (m SettingsModel) View() string {
 		settingsContent.WriteString("\n")
 	}
 
-	// System Messages section at the bottom of the page: durable log of
-	// provider errors and session notices, scrollable with the settings.
-	if len(m.systemMessages) > 0 {
-		settingsContent.WriteString("\n")
-		settingsContent.WriteString(SectionHeaderStyle.Render("── System Messages ──"))
-		settingsContent.WriteString("\n")
-		for _, line := range m.systemMessages {
-			settingsContent.WriteString("  " + HelpDimStyle.Render(line))
-			settingsContent.WriteString("\n")
-		}
-	}
-
-	// Update viewport content
+	// Update viewport content (settings rows only; System Messages has its
+	// own scrollable region below).
 	m.viewport.SetContent(settingsContent.String())
 
 	// Render viewport (scrollable settings list)
 	b.WriteString(m.viewport.View())
+
+	// System Messages: its own scrollable region at the bottom of the page.
+	// The cursor enters it past the last setting; ↑/↓ scroll within it.
+	if len(m.systemMessages) > 0 {
+		b.WriteString("\n")
+		if m.inSystemMessages {
+			b.WriteString(PromptStyle.Render("── System Messages ──"))
+		} else {
+			b.WriteString(SectionHeaderStyle.Render("── System Messages ──"))
+		}
+		b.WriteString("\n")
+		sysContent := m.sysViewport.View()
+		if strings.TrimSpace(sysContent) == "" {
+			sysContent = "  " + HelpDimStyle.Render("(none)")
+		}
+		b.WriteString(sysContent)
+	}
 
 	// Footer (always visible, not in viewport)
 	footerActions := []ActionHint{
