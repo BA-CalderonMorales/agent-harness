@@ -152,9 +152,9 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given input area styles", func() {
-			It("should keep the dark background on the editor but not the metadata line", func() {
+			It("should keep the editor and metadata transparent (no blocking background)", func() {
 				Expect(InputContainerStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
-				Expect(InputEditorStyle.GetBackground()).To(Equal(ColorSurface))
+				Expect(InputEditorStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
 				Expect(InputMetaStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
 			})
 		})

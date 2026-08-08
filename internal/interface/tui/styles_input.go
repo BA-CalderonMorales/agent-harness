@@ -14,17 +14,19 @@ var (
 			BorderForeground(ColorBorder).
 			Padding(0, 1)
 
-	// InputContainerStyle - styled container for the input area
-	// CRITICAL FIX: Consistent background, no strange color changes
+	// InputContainerStyle - styled container for the input area.
+	// No side padding: the centered composer column provides the breathing
+	// room, keeping the input flush inside its border.
 	InputContainerStyle = lipgloss.NewStyle().
 				BorderStyle(lipgloss.NormalBorder()).
 				BorderTop(true).
 				BorderForeground(ColorBorder).
-				Padding(0, 1)
+				Padding(0, 0)
 
+	// InputEditorStyle - the typing surface. Transparent (no background) so
+	// the text sits directly on the terminal surface like a modern composer.
 	InputEditorStyle = lipgloss.NewStyle().
-				Background(ColorSurface).
-				Padding(0, 1)
+				Padding(0, 0)
 
 	InputMetaStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted)
