@@ -212,7 +212,9 @@ func NewChatModel() ChatModel {
 		textarea: ta,
 		viewport: vp,
 		messages: make([]ChatMessage, 0),
-		focused:  true,
+		// The chat model is typing-ready by construction; the App blurs
+		// the composer at boot so navigate mode owns the keyboard.
+		focused: true,
 	}
 }
 

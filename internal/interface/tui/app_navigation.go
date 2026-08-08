@@ -8,13 +8,21 @@ func (a *App) switchView(v viewID) tea.Cmd {
 	a.blurActive()
 	a.activeView = v
 	a.setViewMode(v)
-	a.focusActive()
+	if v != viewChat {
+		// The chat composer stays blurred in navigate mode; 'i' focuses it.
+		a.focusActive()
+	} else {
+		a.tabActivity[v] = false
+	}
 	return a.initActiveView()
 }
 
 func (a *App) setViewMode(v viewID) {
 	if v == viewChat {
-		a.mode = ModeInsert
+		// Chat arrives in navigate mode: digits, j/k and h/c own the
+		// keyboard until 'i' focuses the composer for typing.
+		a.mode = ModeNormal
+		a.chatModel.SetModeLabel("navigate")
 		// Transient footer messages (e.g. settings confirmations) must not
 		// linger under the chat composer; the chat pane owns its own
 		// system messages.

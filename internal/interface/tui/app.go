@@ -114,6 +114,7 @@ func NewApp() *App {
 		msgChan:        make(chan tea.Msg, 64),
 	}
 	app.chatModel.SetModeLabel("navigate")
+	app.chatModel.Blur()
 	app.focusActive()
 	app.homeModel.Init()
 	return app
