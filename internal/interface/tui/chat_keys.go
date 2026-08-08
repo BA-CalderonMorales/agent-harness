@@ -26,9 +26,6 @@ func (m *ChatModel) resize(width, height int) {
 	m.viewport.Width = width
 	m.viewport.Height = vpHeight
 	columnWidth := width
-	if columnWidth > ComposerColumnWidth {
-		columnWidth = ComposerColumnWidth
-	}
 	textareaWidth := columnWidth - 8
 	if textareaWidth < 20 {
 		textareaWidth = 20

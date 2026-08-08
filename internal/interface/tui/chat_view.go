@@ -57,9 +57,6 @@ func (m ChatModel) View() string {
 	// a mode line (mode · model · provider · reasoning effort) under it, and
 	// optional inline suggestions between the editor and the mode line.
 	columnWidth := m.width
-	if columnWidth > ComposerColumnWidth {
-		columnWidth = ComposerColumnWidth
-	}
 
 	prompt := PromptStyle.Render("◆ ")
 	editorWidth := columnWidth - 4
@@ -90,9 +87,6 @@ func (m ChatModel) View() string {
 
 	// The mode line renders below the block, on the terminal background.
 	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
-	if m.width > columnWidth {
-		composerPanel = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, composerPanel)
-	}
 
 	sections = append(sections, composerPanel)
 

@@ -73,13 +73,13 @@ const (
 	MaxInputRows            = 4
 )
 
-// Composer layout: a centered column with a little breathing room above the
-// input text. The solid surface block hugs the text (the editor grows with
-// the lines); the mode line (mode · model · provider · reasoning effort)
-// renders below the block on the terminal background.
+// Composer layout: the input block spans the full terminal width with a
+// little breathing room above the text. The solid surface block hugs the
+// text (the editor grows with the lines); the mode line (mode · model ·
+// provider · reasoning effort) renders below the block on the terminal
+// background.
 const (
-	ComposerColumnWidth = 100 // centered max width for the composer block
-	ComposerTopPadding  = 1   // blank rows above the input text
+	ComposerTopPadding = 1 // blank rows above the input text
 )
 
 // SubmitDebounceDuration is the window after Enter during which another

@@ -22,13 +22,13 @@ func (a App) renderStatusBar() string {
 			style = InfoStyle
 		}
 		content := " " + style.Render(a.statusMessage)
-		return StatusBarStyle.Width(a.width).PaddingBottom(1).Render(content)
+		return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
 	}
 
+	// The footer spans the full terminal width, keeping flush edges with
+	// the composer block above it; a spacer row separates the bar from the
+	// mode line.
 	columnWidth := a.width
-	if columnWidth > ComposerColumnWidth {
-		columnWidth = ComposerColumnWidth
-	}
 
 	// Left: health + workspace-relative path
 	health := StatusOnline.Render("[ready]")
@@ -99,11 +99,7 @@ func (a App) renderStatusBar() string {
 	}
 	content := left + strings.Repeat(" ", gap) + right
 
-	if a.width > columnWidth {
-		content = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content)
-	}
-
-	return StatusBarStyle.Width(a.width).PaddingBottom(1).Render(content)
+	return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
 }
 
 // fitPath renders a path within a width budget, keeping the first segment
