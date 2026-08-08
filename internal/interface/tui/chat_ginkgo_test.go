@@ -48,8 +48,11 @@ var _ = Describe("ChatModel", func() {
 
 	Describe("Agent Event Ordering", func() {
 		It("should keep completed tool activity before the final assistant response", func() {
-			By("starting an agent turn and emitting a tool call")
+			By("starting an agent turn and letting the placeholder delay elapse")
 			model, _ := chat.Update(AgentStartMsg{})
+			chat = model.(ChatModel)
+			chat.startTime = time.Now().Add(-2 * time.Second)
+			model, _ = chat.Update(timerTickMsg{})
 			chat = model.(ChatModel)
 			model, _ = chat.Update(AgentToolStartMsg{
 				ToolID:       "tool-1",
@@ -59,25 +62,29 @@ var _ = Describe("ChatModel", func() {
 			})
 			chat = model.(ChatModel)
 
-			By("verifying the running tool is already in the transcript")
-			Expect(chat.messages).To(HaveLen(1))
-			Expect(chat.messages[0].Role).To(Equal("tool"))
-			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusRunning))
+			By("showing the thinking placeholder and the running tool")
+			Expect(chat.messages).To(HaveLen(2))
+			Expect(chat.messages[0].Role).To(Equal("assistant"))
+			Expect(chat.messages[0].Thinking).To(BeTrue())
+			Expect(chat.messages[0].Content).To(Equal(""))
+			Expect(chat.messages[1].Role).To(Equal("tool"))
+			Expect(chat.messages[1].ToolStatus).To(Equal(ToolStatusRunning))
 
 			By("finishing the tool before the agent response")
 			model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
 			chat = model.(ChatModel)
-			Expect(chat.messages).To(HaveLen(1))
-			Expect(chat.messages[0].Role).To(Equal("tool"))
-			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusSuccess))
+			Expect(chat.messages).To(HaveLen(2))
+			Expect(chat.messages[1].Role).To(Equal("tool"))
+			Expect(chat.messages[1].ToolStatus).To(Equal(ToolStatusSuccess))
 
 			By("finalizing the assistant response after tool activity")
 			model, _ = chat.Update(AgentDoneMsg{FullResponse: "tests passed"})
 			chat = model.(ChatModel)
 			Expect(chat.messages).To(HaveLen(2))
-			Expect(chat.messages[0].Role).To(Equal("tool"))
-			Expect(chat.messages[1].Role).To(Equal("assistant"))
-			Expect(chat.messages[1].Content).To(Equal("tests passed"))
+			Expect(chat.messages[0].Role).To(Equal("assistant"))
+			Expect(chat.messages[0].Thinking).To(BeFalse())
+			Expect(chat.messages[0].Content).To(Equal("tests passed"))
+			Expect(chat.messages[1].Role).To(Equal("tool"))
 		})
 
 		It("should ignore stale chunks, tool completions, and final responses after cancellation", func() {
@@ -115,6 +122,39 @@ var _ = Describe("ChatModel", func() {
 			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusError))
 			Expect(chat.messages[1].Role).To(Equal("system"))
 		})
+
+		Context("Given an agent response is in progress", func() {
+			It("should render an animated thinking header that disappears on completion", func() {
+				By("sizing the chat and starting a turn with the first chunk")
+				chat.width = 100
+				chat.height = 24
+				chat.SetInput("hi")
+				model, _ := chat.Update(AgentStartMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentChunkMsg{Text: "Hel", Timestamp: time.Now()})
+				chat = model.(ChatModel)
+
+				By("verifying the section stays hidden during the placeholder delay")
+				view := chat.View()
+				Expect(view).ToNot(ContainSubstring("(thinking"))
+
+				By("letting the placeholder delay elapse and confirming the spinner appears")
+				chat.startTime = time.Now().Add(-2 * time.Second)
+				model, _ = chat.Update(timerTickMsg{})
+				chat = model.(ChatModel)
+				view = chat.View()
+				Expect(view).To(ContainSubstring("(thinking"))
+				Expect(view).To(ContainSubstring("◐")) // spinning-diamond frame 0
+
+				By("finishing the turn")
+				model, _ = chat.Update(AgentDoneMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+
+				By("verifying the thinking indicator is gone")
+				view = chat.View()
+				Expect(view).ToNot(ContainSubstring("(thinking"))
+			})
+		})
 	})
 
 	Describe("Input Area Ergonomics", func() {
@@ -146,8 +186,8 @@ var _ = Describe("ChatModel", func() {
 
 				// Solid block hugs the text: border + top padding + editor
 				// rows + the mode line row below the block.
-				Expect(oneLineHeight).To(Equal(1 + ComposerTopPadding + MinInputRows + 1))
-				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + 1))
+				Expect(oneLineHeight).To(Equal(1 + ComposerTopPadding + MinInputRows + ComposerBottomPadding + 1))
+				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + ComposerBottomPadding + 1))
 			})
 		})
 
@@ -1167,6 +1207,9 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 				model, _ = chat.Update(AgentStartMsg{})
 				chat = model.(ChatModel)
+				chat.startTime = time.Now().Add(-2 * time.Second)
+				model, _ = chat.Update(timerTickMsg{})
+				chat = model.(ChatModel)
 
 				By("submitting a follow-up while thinking")
 				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q2")})
@@ -1174,10 +1217,12 @@ var _ = Describe("ChatModel", func() {
 				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				chat = model.(ChatModel)
 
-				By("verifying both user messages exist")
-				Expect(chat.messages).To(HaveLen(2))
+				By("verifying both user messages exist around the thinking placeholder")
+				Expect(chat.messages).To(HaveLen(3))
 				Expect(chat.messages[0].Content).To(Equal("q1"))
-				Expect(chat.messages[1].Content).To(Equal("q2"))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Thinking).To(BeTrue())
+				Expect(chat.messages[2].Content).To(Equal("q2"))
 			})
 		})
 	})
@@ -1191,6 +1236,11 @@ var _ = Describe("ChatModel", func() {
 				By("starting the agent response")
 				chat.AddMessage("user", "hello")
 				model, _ := chat.Update(AgentStartMsg{})
+				chat = model.(ChatModel)
+
+				By("letting the placeholder delay elapse")
+				chat.startTime = time.Now().Add(-2 * time.Second)
+				model, _ = chat.Update(timerTickMsg{})
 				chat = model.(ChatModel)
 
 				By("receiving the first chunk")
@@ -1394,13 +1444,18 @@ var _ = Describe("ChatModel", func() {
 				chat.SetPersona("developer")
 				model, _ := chat.Update(AgentStartMsg{})
 				chat = model.(ChatModel)
+				chat.startTime = time.Now().Add(-2 * time.Second)
+				model, _ = chat.Update(timerTickMsg{})
+				chat = model.(ChatModel)
 
 				By("switching persona")
 				chat.SetPersona("designer")
 
 				By("verifying state remains consistent")
 				Expect(chat.persona).To(Equal("designer"))
-				Expect(chat.messages).To(HaveLen(1))
+				Expect(chat.messages).To(HaveLen(2))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Thinking).To(BeTrue())
 				Expect(chat.thinking).To(BeTrue())
 			})
 		})

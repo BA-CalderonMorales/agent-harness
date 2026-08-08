@@ -52,6 +52,7 @@ type ChatMessage struct {
 	ToolStatus      ToolStatus    // pending, running, success, error
 	ResponseTime    time.Duration // Time taken to generate this response
 	StreamedChunks  int           // Token chunks streamed for this response
+	Thinking        bool          // In-progress response (drives the live spinner header)
 }
 
 // ToolStatus represents the execution state of a tool
@@ -79,8 +80,15 @@ const (
 // provider · reasoning effort) renders below the block on the terminal
 // background.
 const (
-	ComposerTopPadding = 1 // blank rows above the input text
+	ComposerTopPadding    = 1 // blank rows above the input text
+	ComposerBottomPadding = 1 // blank rows below the input text, inside the block
 )
+
+// PlaceholderDelay is how long the agent section waits before appearing
+// after a question is submitted. Chunks arriving during the delay are
+// buffered quietly; the header then pops in with the spinning ◆ thinking
+// indicator instead of an instant, jarring response row.
+const PlaceholderDelay = 1 * time.Second
 
 // SubmitDebounceDuration is the window after Enter during which another
 // keystroke causes the Enter to be treated as a newline (paste continuation).
@@ -156,6 +164,10 @@ type ChatModel struct {
 	pendingSubmit    bool
 	pendingSubmitGen int
 
+	// placeholderPending defers the assistant message (and its thinking
+	// header) until PlaceholderDelay has elapsed since the question.
+	placeholderPending bool
+
 	// Steer queue holds user messages to be auto-submitted after the current
 	// agent turn completes (like Claude Code's /btw).
 	steerQueue []string
@@ -185,12 +197,14 @@ func NewChatModel() ChatModel {
 	ta.Placeholder = "Type a message..."
 	ta.Focus()
 
-	// Style the textarea to match our design system: transparent base (no
-	// background - a solid surface here reads as a black box behind the
-	// text and grows with every typed line).
+	// Style the textarea to match our design system. The base carries the
+	// same surface as the editor panel: every cell the textarea emits -
+	// text, placeholder, and its own filler spaces - stays black, so the
+	// solid block spans the full row instead of stopping right after the
+	// text.
 	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
-	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
-	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorText)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorTextDim)
 
 	vp := viewport.New(80, 20)
 
@@ -273,9 +287,9 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	// The solid block hugs the text: border + top padding + editor rows.
+	// The solid block: border + top padding + editor rows + bottom padding.
 	// The mode line below the block adds one more row to the reserved area.
-	height := 1 + ComposerTopPadding + m.inputRows() + 1
+	height := 1 + ComposerTopPadding + m.inputRows() + ComposerBottomPadding + 1
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {

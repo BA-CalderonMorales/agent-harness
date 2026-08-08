@@ -72,11 +72,34 @@ const (
 // Loading spinner
 // ---------------------------------------------------------------------------
 
+// spinnerDots are the braille spinner frames shared by loading messages.
+var spinnerDots = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
+
+// thinkingSpinner is the spinning-diamond animation used by the live
+// thinking indicator in assistant headers: quarter arcs that read as a
+// spinning ◆.
+var thinkingSpinner = []string{"◐", "◓", "◑", "◒"}
+
+// spinnerFrameAt returns the spinner glyph for a monotonic tick counter.
+func spinnerFrameAt(tick int) string {
+	if len(spinnerDots) == 0 {
+		return " "
+	}
+	return spinnerDots[tick%len(spinnerDots)]
+}
+
+// thinkingFrameAt returns the spinning-diamond glyph for a tick counter.
+func thinkingFrameAt(tick int) string {
+	if len(thinkingSpinner) == 0 {
+		return "◆"
+	}
+	return thinkingSpinner[tick%len(thinkingSpinner)]
+}
+
 // SpinnerRender returns a loading message with a spinner.
 func SpinnerRender(msg string) string {
-	dots := []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
-	idx := int(time.Now().UnixMilli()/80) % len(dots)
-	return InfoStyle.Render(dots[idx]) + " " + HelpDimStyle.Render(msg)
+	idx := int(time.Now().UnixMilli()/80) % len(spinnerDots)
+	return InfoStyle.Render(spinnerDots[idx]) + " " + HelpDimStyle.Render(msg)
 }
 
 // ---------------------------------------------------------------------------

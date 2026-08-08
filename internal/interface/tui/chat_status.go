@@ -2,8 +2,20 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
+
+// dropPlaceholderIfEmpty removes the in-progress assistant message when it
+// never received content (cancelled or failed before the first token), so a
+// dead turn leaves no dangling thinking message behind.
+func (m *ChatModel) dropPlaceholderIfEmpty() {
+	idx := m.currentStreamingAssistantIdx
+	if idx >= 0 && idx < len(m.messages) && strings.TrimSpace(m.messages[idx].Content) == "" {
+		m.messages = append(m.messages[:idx], m.messages[idx+1:]...)
+	}
+	m.currentStreamingAssistantIdx = -1
+}
 
 // formatElapsed formats a duration as human-readable string
 func formatElapsed(d time.Duration) string {
@@ -25,6 +37,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 		m.messages[m.currentStreamingAssistantIdx].Content = content
 		m.messages[m.currentStreamingAssistantIdx].ResponseTime = m.elapsed
 		m.messages[m.currentStreamingAssistantIdx].StreamedChunks = m.chunkCount
+		m.messages[m.currentStreamingAssistantIdx].Thinking = true
 	} else {
 		m.messages = append(m.messages, ChatMessage{
 			Role:           "assistant",
@@ -32,6 +45,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 			Timestamp:      time.Now(),
 			ResponseTime:   m.elapsed,
 			StreamedChunks: m.chunkCount,
+			Thinking:       true,
 		})
 		m.currentStreamingAssistantIdx = len(m.messages) - 1
 	}
@@ -47,6 +61,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 		m.messages[m.currentStreamingAssistantIdx].Timestamp = time.Now()
 		m.messages[m.currentStreamingAssistantIdx].ResponseTime = m.elapsed
 		m.messages[m.currentStreamingAssistantIdx].StreamedChunks = m.chunkCount
+		m.messages[m.currentStreamingAssistantIdx].Thinking = false
 	} else {
 		m.messages = append(m.messages, ChatMessage{
 			Role:           "assistant",
@@ -54,6 +69,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 			Timestamp:      time.Now(),
 			ResponseTime:   m.elapsed,
 			StreamedChunks: m.chunkCount,
+			Thinking:       false,
 		})
 	}
 	m.currentStreamingAssistantIdx = -1

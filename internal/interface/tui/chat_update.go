@@ -38,6 +38,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case timerTickMsg:
 		if m.timerRunning {
 			m.elapsed = time.Since(m.startTime)
+			// After the placeholder delay, materialize the assistant
+			// section (with whatever has buffered so far) so the thinking
+			// header lags the question just a little.
+			if m.placeholderPending && m.elapsed >= PlaceholderDelay {
+				m.placeholderPending = false
+				m.updateOrCreateStreamingMessage(m.streamBuffer)
+			}
 			return m, m.startTimer()
 		}
 		return m, nil
@@ -69,6 +76,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timerRunning = true
 		m.elapsed = 0
 		m.chunkCount = 0
+		// Defer the assistant section: it materializes after
+		// PlaceholderDelay with whatever has buffered, so the thinking
+		// header lags the question a little instead of popping instantly.
+		m.placeholderPending = true
 		m.refreshViewport() // Ensure viewport scrolls to bottom after input height change
 		return m, m.startTimer()
 
@@ -82,8 +93,12 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.streaming && !m.turnInterrupted {
 			m.streamBuffer += msg.Text
 			m.chunkCount++
-			// Update or create the streaming assistant message
-			m.updateOrCreateStreamingMessage(m.streamBuffer)
+			// During the placeholder delay, chunks buffer quietly; the
+			// assistant section materializes on the next tick.
+			if !m.placeholderPending {
+				// Update or create the streaming assistant message
+				m.updateOrCreateStreamingMessage(m.streamBuffer)
+			}
 		}
 		return m, nil
 
@@ -164,6 +179,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.thinking = false
 		m.streaming = false
+		m.placeholderPending = false
 		// Finalize the streaming message
 		// For streamed responses, use streamBuffer. For direct responses, use FullResponse
 		finalContent := m.streamBuffer
@@ -204,7 +220,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timerRunning = false
 		m.turnInterrupted = true
 		m.streamBuffer = ""
-		m.currentStreamingAssistantIdx = -1
+		m.placeholderPending = false
+		m.dropPlaceholderIfEmpty()
 		m.currentTool = nil
 		m.currentToolMsg = nil
 		m.toolAnimation = nil
@@ -216,6 +233,14 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentErrorMsg:
 		m.thinking = false
 		m.streaming = false
+		m.placeholderPending = false
+		// Finalize the in-progress message so the thinking spinner does not
+		// stay stuck on its header; drop it entirely if nothing arrived.
+		if strings.TrimSpace(m.streamBuffer) == "" {
+			m.dropPlaceholderIfEmpty()
+		} else {
+			m.finalizeStreamingMessage(m.streamBuffer)
+		}
 
 		// Build informative error message with action hints
 		errStr := fmt.Sprintf("%v", msg.Error)
@@ -272,6 +297,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.messages = make([]ChatMessage, 0)
 		m.streamBuffer = ""
 		m.thinking = false
+		m.placeholderPending = false
 		m.currentToolMsg = nil
 		m.completedToolMsgs = nil
 		m.toolAnimation = nil

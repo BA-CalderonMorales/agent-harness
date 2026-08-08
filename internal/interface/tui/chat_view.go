@@ -83,6 +83,7 @@ func (m ChatModel) View() string {
 	blockPanel := InputContainerStyle.
 		Width(columnWidth).
 		PaddingTop(ComposerTopPadding).
+		PaddingBottom(ComposerBottomPadding).
 		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
 
 	// The mode line renders below the block, on the terminal background.
@@ -166,20 +167,33 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
 	}
-	// Show response time if available; a bracketed chunk count rides along
-	// so the thinking state is visible without repeating the elapsed time
-	// (which would duplicate the completion time): Agent 14:10 (1m7s) [45
-	// chunks].
-	if msg.ResponseTime > 0 {
-		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
-		if msg.StreamedChunks > 0 {
-			header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
-		}
+	// While the response is in progress the header carries a live status:
+	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
+	// from the model's clock, the chunk counter updates per chunk, and the
+	// spinner animates on the same clock.
+	elapsed := msg.ResponseTime
+	if msg.Thinking {
+		elapsed = m.elapsed
+	}
+	if elapsed > 0 {
+		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
+	}
+	if msg.StreamedChunks > 0 {
+		header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
+	}
+	if msg.Thinking {
+		spinner := InfoStyle.Render(thinkingFrameAt(int(m.elapsed.Seconds()) * 4))
+		header += HelpDimStyle.Render(fmt.Sprintf(" (thinking %s)", spinner))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content - render markdown for rich formatting (code blocks, bold, italic, etc.)
+	// Content - render markdown for rich formatting (code blocks, bold,
+	// italic, etc.). While thinking (before the first chunk) the bubble is
+	// hidden so only the animated header shows.
+	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
+		return b.String()
+	}
 	width := m.width - 4
 	if width < 1 {
 		width = 1
