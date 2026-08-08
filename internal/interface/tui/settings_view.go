@@ -47,6 +47,18 @@ func (m SettingsModel) View() string {
 		settingsContent.WriteString("\n")
 	}
 
+	// System Messages section at the bottom of the page: durable log of
+	// provider errors and session notices, scrollable with the settings.
+	if len(m.systemMessages) > 0 {
+		settingsContent.WriteString("\n")
+		settingsContent.WriteString(SectionHeaderStyle.Render("── System Messages ──"))
+		settingsContent.WriteString("\n")
+		for _, line := range m.systemMessages {
+			settingsContent.WriteString("  " + HelpDimStyle.Render(line))
+			settingsContent.WriteString("\n")
+		}
+	}
+
 	// Update viewport content
 	m.viewport.SetContent(settingsContent.String())
 

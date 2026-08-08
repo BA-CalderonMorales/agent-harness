@@ -865,10 +865,14 @@ var _ = Describe("App", func() {
 				updated := model.(App)
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
 				Expect(updated.chatModel.persona).To(Equal("developer"))
-				Expect(updated.chatModel.messages).To(HaveLen(1))
+				// The session notice prepends as the first chat message
+				// instead of cluttering the footer.
+				Expect(updated.chatModel.messages).To(HaveLen(2))
+				Expect(updated.chatModel.messages[0].Role).To(Equal("system"))
+				Expect(updated.chatModel.messages[0].Content).To(Equal("Loaded session sess-aaa"))
 				Expect(updated.activeView).To(Equal(viewChat))
-				Expect(updated.statusMessage).To(Equal("Loaded session sess-aaa"))
-				Expect(updated.statusType).To(Equal("success"))
+				Expect(updated.statusMessage).To(Equal(""))
+				Expect(updated.statusType).To(Equal(""))
 				Expect(updated.sessionsModel.sessions).To(HaveLen(1))
 				Expect(updated.homeModel.sessions).To(HaveLen(1))
 				Expect(updated.homeModel.model).To(Equal("gpt-4o"))

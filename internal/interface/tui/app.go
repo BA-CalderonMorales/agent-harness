@@ -77,6 +77,10 @@ type App struct {
 	contextLen int
 	costTotal  float64
 
+	// systemLog is the durable, capped list of system messages shown at the
+	// bottom of the settings page.
+	systemLog []string
+
 	// Provider readiness
 	providerReadiness    int // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
 	providerReadinessMsg string

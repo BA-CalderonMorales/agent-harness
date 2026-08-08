@@ -18,6 +18,20 @@ func (m *ChatModel) AddMessage(role, content string) {
 	m.refreshViewportFollow()
 }
 
+// PrependSystemNote inserts a system note as the first message of the
+// conversation so session notices land under the chat header exactly once;
+// the user can always scroll back up to it.
+func (m *ChatModel) PrependSystemNote(content string) {
+	note := ChatMessage{
+		Role:      "system",
+		Content:   content,
+		Timestamp: time.Now(),
+	}
+	m.messages = append([]ChatMessage{note}, m.messages...)
+	m.refreshViewport()
+	m.refreshViewportFollow()
+}
+
 // SetMessages replaces the visible chat transcript from persisted session
 // messages, preserving only user, assistant, system, and tool-result text.
 func (m *ChatModel) SetMessages(messages []types.Message) {

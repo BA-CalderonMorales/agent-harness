@@ -92,6 +92,33 @@ func (a *App) SetTelemetry(estTokens, contextLen int, cost float64) {
 	a.costTotal = cost
 }
 
+// maxSystemLog caps the durable system-message log shown in settings.
+const maxSystemLog = 50
+
+// logSystemMessage records a durable system message: it lands exactly once
+// as the first note of the chat conversation and is appended to the system
+// log rendered at the bottom of the settings page. Consecutive duplicates
+// (e.g. repeated provider probes) are suppressed.
+func (a *App) logSystemMessage(text string) {
+	if text == "" {
+		return
+	}
+	// Dedupe against the chat-head note and the previous log entry.
+	if len(a.chatModel.messages) > 0 && a.chatModel.messages[0].Role == "system" && a.chatModel.messages[0].Content == text {
+		return
+	}
+	if len(a.systemLog) > 0 && a.systemLog[len(a.systemLog)-1] == text {
+		return
+	}
+
+	a.chatModel.PrependSystemNote(text)
+	a.systemLog = append(a.systemLog, text)
+	if len(a.systemLog) > maxSystemLog {
+		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
+	}
+	a.settingsModel.SetSystemMessages(a.systemLog)
+}
+
 // SetChatPersona sets the current persona for contextual UI behavior.
 func (a *App) SetChatPersona(persona string) {
 	a.chatModel.SetPersona(persona)

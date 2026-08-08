@@ -174,8 +174,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.homeModel.SetSessions(msg.Sessions)
 		a.sessionsModel.SetSessions(msg.Sessions)
 		if msg.Notice != "" {
-			a.statusMessage = msg.Notice
-			a.statusType = msg.NoticeType
+			// Session notices belong in the conversation pane (first
+			// message, under the chat header), not in the footer.
+			a.chatModel.PrependSystemNote(msg.Notice)
 		}
 		if msg.SwitchToChat {
 			cmds = append(cmds, a.switchView(viewChat))
@@ -196,7 +197,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProviderReadinessMsg:
 		a.providerReadiness = msg.Readiness
 		a.providerReadinessMsg = msg.Message
-		// Update status bar with readiness information
+		// Readiness failures are durable system messages: they land in the
+		// chat pane (once) and in the Settings page's System Messages
+		// section instead of cluttering the footer.
 		switch msg.Readiness {
 		case 1: // ProviderReady
 			a.statusMessage = fmt.Sprintf("Provider ready: %s", msg.Message)
@@ -205,11 +208,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.statusMessage = fmt.Sprintf("Provider warning: %s", msg.Message)
 			a.statusType = "warning"
 		case 3: // ProviderUnavailable
-			a.statusMessage = fmt.Sprintf("Provider unavailable: %s", msg.Message)
-			a.statusType = "error"
+			a.logSystemMessage(fmt.Sprintf("Provider unavailable: %s", msg.Message))
 		case 4: // ProviderMisconfigured
-			a.statusMessage = fmt.Sprintf("Provider misconfigured: %s", msg.Message)
-			a.statusType = "error"
+			a.logSystemMessage(fmt.Sprintf("Provider misconfigured: %s", msg.Message))
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)

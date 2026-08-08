@@ -44,6 +44,10 @@ type SettingsModel struct {
 	editErr  string
 	viewport viewport.Model
 
+	// systemMessages holds the durable system log rendered at the bottom
+	// of the settings page (provider errors, session notices, ...).
+	systemMessages []string
+
 	delegate SettingsDelegate
 }
 
@@ -64,6 +68,12 @@ func (m *SettingsModel) SetDelegate(delegate SettingsDelegate) {
 // SetSettings updates the settings list.
 func (m *SettingsModel) SetSettings(settings []Setting) {
 	m.settings = settings
+}
+
+// SetSystemMessages replaces the system-message log rendered at the bottom
+// of the settings page.
+func (m *SettingsModel) SetSystemMessages(messages []string) {
+	m.systemMessages = append([]string(nil), messages...)
 }
 
 // UpdateSettingValue updates a single setting value by key.
