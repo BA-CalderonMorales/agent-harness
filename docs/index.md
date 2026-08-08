@@ -21,6 +21,7 @@ surface in one take.
 | [Architecture](architecture.md) | Why the harness is shaped this way |
 | [Conversation flow](conversation_flow.md) | How a turn moves through the app |
 | [Loop architecture](loop-architecture.md) | The agent loop, buckets, naming pattern |
+| [Loop ledger](loop.md) | The validated-experiment ledger behind the features |
 | [Command approval](command-approval.md) | How commands get approved, permissions stacking |
 | [TUI design patterns](tui-design-patterns.md) | The screen patterns the UI reuses |
 | [Services and features](services-features.md) | The runtime services surface |
