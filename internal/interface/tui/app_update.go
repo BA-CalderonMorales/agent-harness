@@ -117,6 +117,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ModelChangedMsg:
 		a.chatModel.SetModel(msg.Model)
 		a.settingsModel.UpdateSettingValue("model", msg.Model)
+		a.syncComposerContext()
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
@@ -132,6 +133,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
+		a.syncComposerContext()
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
@@ -169,6 +171,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.chatModel.SetMessages(msg.Transcript)
 		a.chatModel.SetModel(msg.Model)
 		a.chatModel.SetPersona(msg.Persona)
+		a.syncComposerContext()
 		a.settingsModel.UpdateSettingValue("model", msg.Model)
 		a.homeModel.SetStatus(msg.Model, msg.PermissionMode, msg.Persona, msg.EstTokens)
 		a.homeModel.SetSessions(msg.Sessions)

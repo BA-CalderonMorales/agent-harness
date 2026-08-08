@@ -92,6 +92,15 @@ func (a *App) SetTelemetry(estTokens, contextLen int, cost float64) {
 	a.costTotal = cost
 }
 
+// syncComposerContext refreshes the chat mode line from the app-level
+// runtime context so the visible mode · model · provider · effort always
+// reflects the active configuration. Some paths (login wizard, message
+// events) skip the client rebuild that normally pushes this state.
+func (a *App) syncComposerContext() {
+	a.chatModel.SetProvider(a.provider)
+	a.chatModel.SetEffort(a.effortProfile)
+}
+
 // maxSystemLog caps the durable system-message log shown in settings.
 const maxSystemLog = 50
 

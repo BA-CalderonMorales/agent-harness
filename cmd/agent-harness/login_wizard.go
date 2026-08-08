@@ -70,6 +70,7 @@ func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
 		// Update TUI
 		tuiApp.SetChatModel(model)
 		tuiApp.SetSettings(app.getSettings())
+		tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
 		tuiApp.SetModels(app.getModelItems())
 
 		app.loginState = loginIdle
