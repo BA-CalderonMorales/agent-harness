@@ -664,6 +664,49 @@ var _ = Describe("App", func() {
 				Expect(view).ToNot(ContainSubstring(testHome))
 			})
 
+			Context("Given a constrained footer width", func() {
+				BeforeEach(func() {
+					testHome := GinkgoT().TempDir()
+					GinkgoT().Setenv("HOME", testHome)
+					workspace := filepath.Join(testHome, "sample-project", "nested", "deep", "path")
+					app.SetChatModel("gpt-5.5")
+					app.SetRuntimeContext("openrouter", "medium", workspace)
+					app.SetTelemetry(3400, 8192, 0.42)
+				})
+
+				It("should keep everything on a generous width", func() {
+					app.width = 180
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctrl+p commands"))
+					Expect(view).To(ContainSubstring("$0.42"))
+					Expect(view).To(ContainSubstring("ctx"))
+				})
+
+				It("should drop the hint before any metrics", func() {
+					app.width = 58
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctx"))
+					Expect(view).To(ContainSubstring("$0.42"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+				})
+
+				It("should drop cost next, keeping context usage", func() {
+					app.width = 44
+					view := app.View()
+					Expect(view).To(ContainSubstring("ctx"))
+					Expect(view).ToNot(ContainSubstring("$0.42"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+				})
+
+				It("should degrade to health and a short ellipsized path", func() {
+					app.width = 30
+					view := app.View()
+					Expect(view).To(ContainSubstring("[ready]"))
+					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
+					Expect(view).To(ContainSubstring("…"))
+				})
+			})
+
 			It("should show help overlay when active", func() {
 				app.showHelp = true
 				app.helpModel.Open(80, 24, "")

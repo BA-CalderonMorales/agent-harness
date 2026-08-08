@@ -45,9 +45,9 @@ func (a App) renderStatusBar() string {
 	if path == "" {
 		path = "workspace"
 	}
-	left := health + " " + HelpDimStyle.Render(path)
 
-	// Right: context usage + cost + keybind hint
+	// Right segments in priority order (drop from the end as width shrinks:
+	// hint first, then cost; context usage survives the longest).
 	var telemetry []string
 	if a.contextLen > 0 {
 		used := a.estTokens
@@ -62,13 +62,41 @@ func (a App) renderStatusBar() string {
 		telemetry = append(telemetry, "$"+fmt.Sprintf("%.2f", a.costTotal))
 	}
 	telemetry = append(telemetry, "ctrl+p commands")
-	right := StatusHintStyle.Render(strings.Join(telemetry, " · "))
 
+	// Drop right segments until the health badge, a minimum path, the gap,
+	// and the remaining segments all fit.
+	const (
+		gapMin       = 2
+		minPathWidth = 8
+	)
+	healthW := lipgloss.Width(health)
+	right := ""
+	rightW := 0
+	for len(telemetry) > 0 {
+		candidate := StatusHintStyle.Render(strings.Join(telemetry, " · "))
+		cw := lipgloss.Width(candidate)
+		if gapMin+healthW+1+cw+minPathWidth <= columnWidth {
+			right, rightW = candidate, cw
+			break
+		}
+		telemetry = telemetry[:len(telemetry)-1]
+	}
+
+	// Path fills the remaining width, capped so it never dominates the bar.
+	pathMax := columnWidth - gapMin - healthW - 1 - rightW
+	if pathMax > 56 {
+		pathMax = 56
+	}
+	if pathMax < minPathWidth {
+		pathMax = minPathWidth
+	}
+	path = fitPath(path, pathMax)
+
+	left := health + " " + HelpDimStyle.Render(path)
 	leftW := lipgloss.Width(left)
-	rightW := lipgloss.Width(right)
 	gap := columnWidth - leftW - rightW
-	if gap < 2 {
-		gap = 2
+	if gap < gapMin {
+		gap = gapMin
 	}
 	content := left + strings.Repeat(" ", gap) + right
 
@@ -77,6 +105,49 @@ func (a App) renderStatusBar() string {
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+}
+
+// fitPath renders a path within a width budget, keeping the first segment
+// (e.g. ~) and the trailing segments and ellipsizing the middle:
+// ~/…/working/agent-harness.
+func fitPath(path string, max int) string {
+	if lipgloss.Width(path) <= max {
+		return path
+	}
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	if len(parts) == 1 {
+		if lipgloss.Width(path) <= max {
+			return path
+		}
+		return path[:max-1] + "…"
+	}
+	head := parts[0]
+
+	// Longest surviving tail (up to three segments).
+	tail := ""
+	for i := 1; i <= 3 && len(parts)-i >= 1; i++ {
+		candidate := strings.Join(parts[len(parts)-i:], "/")
+		short := head + "/…/" + candidate
+		if lipgloss.Width(short) <= max {
+			tail = candidate
+		} else {
+			break
+		}
+	}
+	if tail != "" {
+		return head + "/…/" + tail
+	}
+
+	// Even the last segment alone is too long: hard-ellipsize the tail.
+	last := parts[len(parts)-1]
+	if lipgloss.Width(head)+3 >= max {
+		return head[:max-2] + "…"
+	}
+	avail := max - lipgloss.Width(head) - 3
+	if avail < 1 {
+		avail = 1
+	}
+	return head + "/…/" + last[:avail-1] + "…"
 }
 
 // formatTokenCount renders a token count compactly (12k, 8182, 1.2m).
