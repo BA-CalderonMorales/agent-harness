@@ -1,5 +1,6 @@
 # Build artifacts
 /build/
+/bin/
 /agent-harness
 /models/
 
