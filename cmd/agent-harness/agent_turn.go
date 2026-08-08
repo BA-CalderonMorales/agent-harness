@@ -169,11 +169,15 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		Timestamp:    time.Now(),
 	})
 
-	// Auto-save check
+	// Auto-save check: notices land in the chat pane + Settings system
+	// log (deduped, once), never in the footer.
 	if app.session.Turns%5 == 0 {
 		if path, err := app.sessionManager.SaveCurrent(); err == nil {
-			tuiApp.Send(tui.StatusMsg{Text: sprintf("Auto-saved to %s", path), Type: "info"})
-			tuiApp.RefreshSessions(app.getSessionInfos())
+			tuiApp.Send(tui.SessionsRefreshedMsg{
+				Sessions:   app.getSessionInfos(),
+				Notice:     sprintf("Auto-saved to %s", path),
+				NoticeType: "info",
+			})
 		}
 	}
 }
