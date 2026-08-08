@@ -31,21 +31,21 @@ func TestComposerStaysVisibleAtBottom(t *testing.T) {
 	}
 }
 
-func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
+func TestInputAreaHeightIsConstant(t *testing.T) {
 	chat := NewChatModel()
 
 	cases := []struct {
 		name  string
 		input string
 		rows  int
-		area  int
 	}{
-		{name: "empty", rows: 1, area: 5},
-		{name: "single line", input: "hello", rows: 1, area: 5},
-		{name: "two lines", input: "hello\nworld", rows: 2, area: 6},
-		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 8},
+		{name: "empty", input: "", rows: 1},
+		{name: "single line", input: "hello", rows: 1},
+		{name: "two lines", input: "hello\nworld", rows: 2},
+		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4},
 	}
 
+	want := 1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			chat.SetInput(tc.input)
@@ -55,8 +55,10 @@ func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
 			if got := chat.textarea.Height(); got != tc.rows {
 				t.Fatalf("textarea.Height() = %d, want %d", got, tc.rows)
 			}
-			if got := chat.inputAreaHeight(); got != tc.area {
-				t.Fatalf("inputAreaHeight() = %d, want %d", got, tc.area)
+			// The composer area stays constant so the solid background
+			// block never grows or fragments with typed lines.
+			if got := chat.inputAreaHeight(); got != want {
+				t.Fatalf("inputAreaHeight() = %d, want %d", got, want)
 			}
 		})
 	}
@@ -81,12 +83,12 @@ func TestOneLineComposerLeavesTranscriptRoom(t *testing.T) {
 	if got, wantMax := len(lines), 18; got > wantMax {
 		t.Fatalf("rendered lines = %d, want <= %d\n%s", got, wantMax, view)
 	}
-	if got, want := chat.inputAreaHeight(), 5; got != want {
+	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+MaxInputRows+ComposerGapRows+1; got != want {
 		t.Fatalf("one-line input area height = %d, want %d", got, want)
 	}
-	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-4):], "\n")
+	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-10):], "\n")
 	if !strings.Contains(tail, "ready") {
-		t.Fatalf("compact composer input not near bottom; tail=%q", tail)
+		t.Fatalf("composer input not near bottom; tail=%q", tail)
 	}
 }
 
@@ -99,7 +101,7 @@ func TestMultilineComposerHasStablePadding(t *testing.T) {
 	if got, want := chat.inputRows(), 3; got != want {
 		t.Fatalf("inputRows() = %d, want %d", got, want)
 	}
-	if got, want := chat.inputAreaHeight(), 7; got != want {
+	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+MaxInputRows+ComposerGapRows+1; got != want {
 		t.Fatalf("multi-line input area height = %d, want %d", got, want)
 	}
 	view := chat.View()

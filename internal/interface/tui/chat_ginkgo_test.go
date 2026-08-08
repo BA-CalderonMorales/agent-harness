@@ -5,7 +5,6 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -138,24 +137,28 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given the draft grows from one line to many lines", func() {
-			It("should grow the input area predictably without reserving max height", func() {
+			It("should keep the composer height constant so the background block never grows", func() {
 				chat.SetInput("one")
 				oneLineHeight := chat.inputAreaHeight()
 
 				chat.SetInput("one\ntwo\nthree\nfour")
 				manyLineHeight := chat.inputAreaHeight()
 
-				// Border + top padding + editor + gap + mode line.
-				Expect(oneLineHeight).To(Equal(1 + ComposerTopPadding + MinInputRows + ComposerGapRows + 1))
-				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1))
+				// Fixed composer: border + top padding + max editor rows +
+				// gap + mode line, regardless of typed lines.
+				fixed := 1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1
+				Expect(oneLineHeight).To(Equal(fixed))
+				Expect(manyLineHeight).To(Equal(fixed))
 			})
 		})
 
 		Context("Given input area styles", func() {
-			It("should keep the editor and metadata transparent (no blocking background)", func() {
-				Expect(InputContainerStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
-				Expect(InputEditorStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
-				Expect(InputMetaStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
+			It("should render one solid surface for the composer block", func() {
+				// The container and editor share the same background so the
+				// typing area reads as one consistent block; the metadata
+				// line rides inside it.
+				Expect(InputContainerStyle.GetBackground()).To(Equal(ColorSurface))
+				Expect(InputEditorStyle.GetBackground()).To(Equal(ColorSurface))
 			})
 		})
 

@@ -70,7 +70,7 @@ func (m ChatModel) View() string {
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
-		Height(m.inputRows()).
+		Height(MaxInputRows).
 		Render(editorContent)
 
 	var composerParts []string

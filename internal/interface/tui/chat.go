@@ -272,8 +272,10 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	// Border + top padding + editor rows + gap + mode line.
-	height := 1 + ComposerTopPadding + m.inputRows() + ComposerGapRows + 1
+	// Fixed-height composer: border + top padding + max editor rows + gap
+	// + mode line. Constant regardless of typed lines, so the solid
+	// background block never grows or fragments.
+	height := 1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1
 	if m.thinking {
 		height++ // thinking/streaming status line above the mode line
 	}
