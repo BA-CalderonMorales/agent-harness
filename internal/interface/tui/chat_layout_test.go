@@ -20,13 +20,13 @@ func TestComposerStaysVisibleAtBottom(t *testing.T) {
 	if !strings.Contains(view, "ready") {
 		t.Fatalf("composer input is not visible in rendered view")
 	}
-	if !strings.Contains(view, "Enter send") {
-		t.Fatalf("composer hint line is not visible in rendered view")
+	if !strings.Contains(view, "effort") {
+		t.Fatalf("composer mode line is not visible in rendered view")
 	}
 
 	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
 	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-8):], "\n")
-	if !strings.Contains(tail, "ready") || !strings.Contains(tail, "Enter send") {
+	if !strings.Contains(tail, "ready") || !strings.Contains(tail, "effort") {
 		t.Fatalf("composer is not anchored near the bottom; tail=%q", tail)
 	}
 }
@@ -40,10 +40,10 @@ func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
 		rows  int
 		area  int
 	}{
-		{name: "empty", rows: 1, area: 3},
-		{name: "single line", input: "hello", rows: 1, area: 3},
-		{name: "two lines", input: "hello\nworld", rows: 2, area: 4},
-		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 6},
+		{name: "empty", rows: 1, area: 5},
+		{name: "single line", input: "hello", rows: 1, area: 5},
+		{name: "two lines", input: "hello\nworld", rows: 2, area: 6},
+		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 8},
 	}
 
 	for _, tc := range cases {
@@ -81,7 +81,7 @@ func TestOneLineComposerLeavesTranscriptRoom(t *testing.T) {
 	if got, wantMax := len(lines), 18; got > wantMax {
 		t.Fatalf("rendered lines = %d, want <= %d\n%s", got, wantMax, view)
 	}
-	if got, want := chat.inputAreaHeight(), 3; got != want {
+	if got, want := chat.inputAreaHeight(), 5; got != want {
 		t.Fatalf("one-line input area height = %d, want %d", got, want)
 	}
 	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-4):], "\n")
@@ -99,7 +99,7 @@ func TestMultilineComposerHasStablePadding(t *testing.T) {
 	if got, want := chat.inputRows(), 3; got != want {
 		t.Fatalf("inputRows() = %d, want %d", got, want)
 	}
-	if got, want := chat.inputAreaHeight(), 5; got != want {
+	if got, want := chat.inputAreaHeight(), 7; got != want {
 		t.Fatalf("multi-line input area height = %d, want %d", got, want)
 	}
 	view := chat.View()
@@ -120,7 +120,7 @@ func TestStatusLineStaysQuietAtNarrowWidth(t *testing.T) {
 	if strings.Contains(view, "Auto-saved") {
 		t.Fatalf("status line should not show noisy persistence metadata\n%s", view)
 	}
-	if !strings.Contains(view, "Enter send") {
-		t.Fatalf("status line should show composer hints\n%s", view)
+	if !strings.Contains(view, "effort") {
+		t.Fatalf("mode line should stay visible at narrow width\n%s", view)
 	}
 }

@@ -429,6 +429,8 @@ func (h Help) renderContent() string {
 	lines = append(lines, CategoryStyle.Render("  Chat"))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Enter"), HelpDimStyle.Render("Send message")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("↑/↓"), HelpDimStyle.Render("Navigate history")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+P"), HelpDimStyle.Render("Open command palette")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+R"), HelpDimStyle.Render("Cycle reasoning effort")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("/help"), HelpDimStyle.Render("Show commands")))
 	lines = append(lines, "")
 

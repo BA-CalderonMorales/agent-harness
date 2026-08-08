@@ -80,6 +80,14 @@ const (
 	MaxInputRows            = 4
 )
 
+// Composer layout: a centered column with breathing room above and below the
+// input text, plus a mode line (mode · model · provider · reasoning effort).
+const (
+	ComposerColumnWidth = 84 // centered max width for the composer block
+	ComposerTopPadding  = 1  // blank rows above the input text
+	ComposerGapRows     = 1  // blank rows between the input and the mode line
+)
+
 // SubmitDebounceDuration is the window after Enter during which another
 // keystroke causes the Enter to be treated as a newline (paste continuation).
 var SubmitDebounceDuration = 80 * time.Millisecond
@@ -99,6 +107,11 @@ type ChatModel struct {
 	thinking     bool
 	thinkingText string
 	model        string
+
+	// Composer mode line metadata (set by the app-level runtime context)
+	provider  string
+	effort    string
+	modeLabel string // "typing" / "navigate" when persona is empty
 
 	// Streaming state
 	streaming       bool
@@ -376,6 +389,21 @@ func (m *ChatModel) SetPersona(persona string) {
 	m.persona = persona
 }
 
+// SetProvider sets the provider shown in the composer mode line.
+func (m *ChatModel) SetProvider(provider string) {
+	m.provider = provider
+}
+
+// SetEffort sets the reasoning effort shown in the composer mode line.
+func (m *ChatModel) SetEffort(effort string) {
+	m.effort = effort
+}
+
+// SetModeLabel sets the vim-mode label used when no persona is set.
+func (m *ChatModel) SetModeLabel(label string) {
+	m.modeLabel = label
+}
+
 // GetModel returns the model name.
 func (m ChatModel) GetModel() string {
 	return m.model
@@ -405,7 +433,11 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	height := m.inputRows() + 2 // editor line(s), metadata line, top border
+	// Border + top padding + editor rows + gap + mode line.
+	height := 1 + ComposerTopPadding + m.inputRows() + ComposerGapRows + 1
+	if m.thinking {
+		height++ // thinking/streaming status line above the mode line
+	}
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
@@ -441,7 +473,11 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight
-		textareaWidth := msg.Width - 8
+		columnWidth := msg.Width
+		if columnWidth > ComposerColumnWidth {
+			columnWidth = ComposerColumnWidth
+		}
+		textareaWidth := columnWidth - 8
 		if textareaWidth < 20 {
 			textareaWidth = 20
 		}
@@ -906,52 +942,80 @@ func (m ChatModel) View() string {
 		Render(vpContent)
 	sections = append(sections, vpRendered)
 
-	// Input area with a stable editor panel plus separate metadata.
-	inputContainer := InputContainerStyle.Width(m.width)
+	// Composer: centered column with padding above and below the input text,
+	// a mode line (mode · model · provider · reasoning effort) under it, and
+	// optional inline suggestions between the editor and the mode line.
+	columnWidth := m.width
+	if columnWidth > ComposerColumnWidth {
+		columnWidth = ComposerColumnWidth
+	}
 
 	prompt := PromptStyle.Render("◆ ")
-	editorWidth := m.width - 4
+	editorWidth := columnWidth - 4
 	if editorWidth < 20 {
-		editorWidth = m.width
+		editorWidth = columnWidth
 	}
 	editorContent := prompt + m.textarea.View()
-
-	var metaLine string
-	if m.thinking {
-		metaLine = m.renderStatusLine()
-	} else {
-		metaLine = InputMetaStyle.Render(m.composerHintLine())
-	}
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
 		Height(m.inputRows()).
 		Render(editorContent)
-	inputContent := lipgloss.JoinVertical(lipgloss.Left, editorPanel, metaLine)
 
-	// Inline suggestions dropdown
-	if m.showSuggestions && len(m.suggestions) > 0 {
-		inputContent += "\n" + m.renderSuggestions()
+	var composerParts []string
+	composerParts = append(composerParts, editorPanel)
+	if m.thinking {
+		composerParts = append(composerParts, m.renderStatusLine())
 	}
 
-	sections = append(sections, inputContainer.Render(inputContent))
+	// Inline suggestions dropdown (below editor, above the gap)
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		composerParts = append(composerParts, m.renderSuggestions())
+	}
+
+	for i := 0; i < ComposerGapRows; i++ {
+		composerParts = append(composerParts, "")
+	}
+	composerParts = append(composerParts, m.renderModeLine())
+
+	inputContent := lipgloss.JoinVertical(lipgloss.Left, composerParts...)
+	composerPanel := InputContainerStyle.
+		Width(columnWidth).
+		PaddingTop(ComposerTopPadding).
+		Render(inputContent)
+	if m.width > columnWidth {
+		composerPanel = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, composerPanel)
+	}
+
+	sections = append(sections, composerPanel)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
 }
 
-func (m ChatModel) composerHintLine() string {
-	hint := "Enter send · Alt+Enter newline · / commands"
-	maxWidth := m.width - 4
-	if maxWidth < 12 {
-		maxWidth = 12
+// renderModeLine renders the mode · model · provider · reasoning-effort line
+// shown under the input, mirroring modern composer status rows.
+func (m ChatModel) renderModeLine() string {
+	mode := m.modeLabel
+	if m.persona != "" {
+		mode = m.persona
+	} else if mode == "" {
+		mode = "typing"
 	}
-	if len(hint) <= maxWidth {
-		return hint
+
+	parts := []string{mode}
+	if m.model != "" {
+		parts = append(parts, ShortenModelName(m.model))
 	}
-	if maxWidth < 20 {
-		return "Enter send · / cmds"
+	if m.provider != "" {
+		parts = append(parts, m.provider)
 	}
-	return hint[:maxWidth-3] + "..."
+	effort := m.effort
+	if effort == "" {
+		effort = "medium"
+	}
+	parts = append(parts, "effort "+effort)
+
+	return InputMetaStyle.Render(strings.Join(parts, " · "))
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.

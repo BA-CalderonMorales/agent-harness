@@ -78,6 +78,11 @@ type App struct {
 	workspacePath string
 	workspaceName string
 
+	// Telemetry for the bottom bar: context usage and session cost
+	estTokens  int
+	contextLen int
+	costTotal  float64
+
 	// Provider readiness
 	providerReadiness    int // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
 	providerReadinessMsg string
@@ -110,6 +115,7 @@ func NewApp() *App {
 		modelPicker:    NewModelPicker(),
 		msgChan:        make(chan tea.Msg, 64),
 	}
+	app.chatModel.SetModeLabel("navigate")
 	app.focusActive()
 	app.homeModel.Init()
 	return app
@@ -273,6 +279,17 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, cmd
 		}
 
+		// Global chords: palette and reasoning-effort cycle.
+		switch msg.String() {
+		case "ctrl+p":
+			return a, func() tea.Msg { return openCommandPaletteMsg{} }
+		case "ctrl+r":
+			if a.onUserCommand != nil {
+				a.onUserCommand("/effort", &a)
+			}
+			return a, nil
+		}
+
 		switch msg.Type {
 		case tea.KeyCtrlC:
 			if a.activeView == viewChat && a.chatModel.GetInput() != "" {
@@ -302,6 +319,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			if !a.activeViewConsumesEsc() {
 				a.mode = ModeNormal
+				a.chatModel.SetModeLabel("navigate")
 				a.blurActive()
 				return a, nil
 			}
@@ -312,11 +330,13 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			switch msg.String() {
 			case "ctrl+n":
 				a.mode = ModeNormal
+				a.chatModel.SetModeLabel("navigate")
 				a.blurActive()
 				return a, nil
 			case "i":
 				if a.mode == ModeNormal {
 					a.mode = ModeInsert
+					a.chatModel.SetModeLabel("typing")
 					a.focusActive()
 					return a, nil
 				}
@@ -724,10 +744,10 @@ func (a App) renderActiveView() string {
 // Status bar rendering
 // ---------------------------------------------------------------------------
 
-// renderStatusBar renders the status bar at the bottom.
-// Shows meaningful model info and actionable hints - never just "default".
+// renderStatusBar renders the bottom bar: workspace path on the left,
+// context usage / cost / keybind hints on the right, centered like the
+// composer column above it.
 func (a App) renderStatusBar() string {
-	status := StatusOnline.Render("[ready]")
 	if a.statusMessage != "" {
 		var style lipgloss.Style
 		switch a.statusType {
@@ -744,65 +764,70 @@ func (a App) renderStatusBar() string {
 		return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
 	}
 
-	modelName := a.chatModel.GetModel()
-	if modelName == "" {
-		status = StatusConnecting.Render("[! no model]")
+	columnWidth := a.width
+	if columnWidth > ComposerColumnWidth {
+		columnWidth = ComposerColumnWidth
 	}
 
-	model := ShortenModelName(modelName)
-	if model == "" {
-		model = "no model"
+	// Left: health + workspace-relative path
+	health := StatusOnline.Render("[ready]")
+	if a.chatModel.GetModel() == "" {
+		health = StatusConnecting.Render("[! no model]")
 	}
 
-	effort := a.effortProfile
-	if effort == "" {
-		effort = "medium"
-	}
-
-	workspacePath := a.workspacePath
-	workspacePath = displayWorkspacePath(workspacePath)
-	workspace := a.workspaceName
-	if workspace == "" && workspacePath != "" {
-		workspace = filepath.Base(workspacePath)
-	}
-	if workspace == "" {
+	path := displayWorkspacePath(a.workspacePath)
+	if path == "" {
 		if cwd, err := os.Getwd(); err == nil {
-			workspace = filepath.Base(cwd)
+			path = displayWorkspacePath(cwd)
 		}
 	}
-	if workspace == "" || workspace == "." {
-		workspace = "workspace"
+	if path == "" {
+		path = "workspace"
 	}
+	left := health + " " + HelpDimStyle.Render(path)
 
-	modeStr := "[typing]"
-	if a.mode == ModeNormal {
-		modeStr = "[navigate]"
+	// Right: context usage + cost + keybind hint
+	var telemetry []string
+	if a.contextLen > 0 {
+		used := a.estTokens
+		if used > a.contextLen {
+			used = a.contextLen
+		}
+		telemetry = append(telemetry, fmt.Sprintf("ctx %s/%s (%d%% left)",
+			formatTokenCount(used), formatTokenCount(a.contextLen),
+			100-used*100/a.contextLen))
 	}
+	if a.costTotal > 0 {
+		telemetry = append(telemetry, "$"+fmt.Sprintf("%.2f", a.costTotal))
+	}
+	telemetry = append(telemetry, "ctrl+p commands")
+	right := StatusHintStyle.Render(strings.Join(telemetry, " · "))
 
-	// Build compact status line with width priorities
-	// Priority: health+mode > model > workspace > provider > help
-	parts := []string{status, modeStr}
-	if modelName != "" {
-		parts = append(parts, model)
+	leftW := lipgloss.Width(left)
+	rightW := lipgloss.Width(right)
+	gap := columnWidth - leftW - rightW
+	if gap < 2 {
+		gap = 2
 	}
-	if workspace != "" && workspace != "workspace" {
-		parts = append(parts, workspace)
-	}
-	if a.provider != "" {
-		parts = append(parts, a.provider)
-	}
+	content := left + strings.Repeat(" ", gap) + right
 
-	content := " " + strings.Join(parts, " · ")
-	if lipgloss.Width(content) > a.width-4 {
-		// Drop help/extra info
-		content = " " + status + " · " + model + " · " + workspace
-	}
-	if lipgloss.Width(content) > a.width-4 {
-		// Minimal: just health + model
-		content = " " + status + " · " + model
+	if a.width > columnWidth {
+		content = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content)
 	}
 
 	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+}
+
+// formatTokenCount renders a token count compactly (12k, 8182, 1.2m).
+func formatTokenCount(n int) string {
+	switch {
+	case n >= 1_000_000:
+		return fmt.Sprintf("%.1fm", float64(n)/1_000_000)
+	case n >= 1000:
+		return fmt.Sprintf("%dk", n/1000)
+	default:
+		return fmt.Sprintf("%d", n)
+	}
 }
 
 func displayWorkspacePath(path string) string {
@@ -1061,6 +1086,15 @@ func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
 	if workspacePath != "" {
 		a.workspaceName = filepath.Base(workspacePath)
 	}
+	a.chatModel.SetProvider(provider)
+	a.chatModel.SetEffort(effortProfile)
+}
+
+// SetTelemetry pushes context-usage and cost numbers for the bottom bar.
+func (a *App) SetTelemetry(estTokens, contextLen int, cost float64) {
+	a.estTokens = estTokens
+	a.contextLen = contextLen
+	a.costTotal = cost
 }
 
 // SetChatPersona sets the current persona for contextual UI behavior.

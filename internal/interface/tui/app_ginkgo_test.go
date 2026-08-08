@@ -639,20 +639,28 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("[ready]"))
 			})
 
-			It("should render compact runtime context in the status bar", func() {
+			It("should render compact runtime context in the mode line and bottom bar", func() {
 				app.width = 180
+				app.activeView = viewChat
+				app.chatModel.width = 180
+				app.chatModel.height = 24
+				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				GinkgoT().Setenv("HOME", testHome)
 				workspace := filepath.Join(testHome, "sample-project")
 				app.SetChatModel("gpt-5.5")
 				app.SetRuntimeContext("openrouter", "medium", workspace)
+				app.SetTelemetry(3400, 8192, 0.12)
 
 				view := app.View()
 
 				Expect(view).To(ContainSubstring("[ready]"))
-				Expect(view).To(ContainSubstring("gpt-5.5"))
-				Expect(view).To(ContainSubstring("sample-project"))
-				Expect(view).To(ContainSubstring("openrouter"))
+				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
+				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
+				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
+				Expect(view).To(ContainSubstring("effort medium"))
+				Expect(view).To(ContainSubstring("ctrl+p commands"))
+				Expect(view).To(ContainSubstring("$0.12"))
 				Expect(view).ToNot(ContainSubstring(testHome))
 			})
 
