@@ -8,8 +8,12 @@ const (
 	DefaultContextLength      = 8192
 	DefaultMaxTokens          = 4096
 	DefaultTemperature        = 0.2
+	DefaultEffort             = "medium"
 	DefaultLocalServerCommand = "llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080"
 )
+
+// EffortLevels lists supported reasoning effort values in cycle order.
+var EffortLevels = []string{"low", "medium", "high"}
 
 func IsLocalProvider(provider string) bool {
 	return provider == "local" || provider == "ollama"
@@ -32,9 +36,17 @@ func DefaultModelForProvider(provider string) string {
 
 func DefaultEndpointForProvider(provider string) string {
 	switch provider {
+	case "openai":
+		return "https://api.openai.com/v1"
+	case "anthropic":
+		return "https://api.anthropic.com/v1"
+	case "openrouter":
+		return "https://openrouter.ai/api/v1"
+	case "ollama":
+		return "http://127.0.0.1:11434/v1"
 	case "local":
 		return DefaultEndpointURL
 	default:
-		return ""
+		return DefaultEndpointURL
 	}
 }

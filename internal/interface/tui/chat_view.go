@@ -1,0 +1,237 @@
+package tui
+
+import (
+	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
+	"github.com/charmbracelet/lipgloss"
+	"strings"
+)
+
+func (m ChatModel) View() string {
+	if m.width == 0 || m.height == 0 {
+		return "  Initializing chat..."
+	}
+
+	m.syncTextareaHeight()
+	inputHeight := m.inputAreaHeight()
+
+	headerHeight := 2 // Header takes 2 lines
+	separatorHeight := 1
+
+	// Ensure minimum height for viewport
+	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
+	if vpHeight < 5 {
+		vpHeight = 5
+	}
+
+	// Ensure viewport has correct dimensions
+	m.viewport.Width = m.width
+	m.viewport.Height = vpHeight
+
+	// Build the view
+	var sections []string
+
+	// Header (like Settings has)
+	header := RenderHeader(HeaderConfig{
+		Title:    "Chat",
+		Subtitle: "Agent conversation",
+		Count:    len(m.messages),
+	})
+	sections = append(sections, header)
+
+	// Viewport for messages
+	vpContent := m.viewport.View()
+	if strings.TrimSpace(vpContent) == "" {
+		hint := m.emptyStateHint()
+		vpContent = HelpDimStyle.Render("  " + hint)
+	}
+
+	// Constrain viewport to calculated height
+	vpRendered := lipgloss.NewStyle().
+		Height(vpHeight).
+		MaxHeight(vpHeight).
+		Render(vpContent)
+	sections = append(sections, vpRendered)
+
+	// Composer: centered column with padding above and below the input text,
+	// a mode line (mode · model · provider · reasoning effort) under it, and
+	// optional inline suggestions between the editor and the mode line.
+	columnWidth := m.width
+
+	prompt := PromptStyle.Render("◆ ")
+	editorWidth := columnWidth - 4
+	if editorWidth < 20 {
+		editorWidth = columnWidth
+	}
+	editorContent := prompt + m.textarea.View()
+
+	editorPanel := InputEditorStyle.
+		Width(editorWidth).
+		Height(m.inputRows()).
+		Render(editorContent)
+
+	// The solid surface block covers the editor (and, transiently, inline
+	// suggestions); it hugs the text so there is never a large slab of
+	// background under where the user types. The agent's thinking state
+	// lives in the message header, not here.
+	var blockParts []string
+	blockParts = append(blockParts, editorPanel)
+	if m.showSuggestions && len(m.suggestions) > 0 {
+		blockParts = append(blockParts, m.renderSuggestions())
+	}
+
+	blockPanel := InputContainerStyle.
+		Width(columnWidth).
+		PaddingTop(ComposerTopPadding).
+		PaddingBottom(ComposerBottomPadding).
+		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
+
+	// The mode line renders below the block, on the terminal background.
+	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
+
+	sections = append(sections, composerPanel)
+
+	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// renderModeLine renders the mode · model · provider · reasoning-effort line
+// shown under the input, mirroring modern composer status rows.
+func (m ChatModel) renderModeLine() string {
+	mode := m.modeLabel
+	if m.persona != "" {
+		mode = m.persona
+	} else if mode == "" {
+		mode = "typing"
+	}
+
+	parts := []string{mode}
+	if m.model != "" {
+		parts = append(parts, ShortenModelName(m.model))
+	}
+	if m.provider != "" {
+		parts = append(parts, m.provider)
+	}
+	effort := m.effort
+	if effort == "" {
+		effort = "medium"
+	}
+	parts = append(parts, "effort "+effort)
+
+	return InputMetaStyle.Render(strings.Join(parts, " · "))
+}
+
+// syncSuggestionOffset keeps cursor inside visible window.
+func (m ChatModel) renderMessage(msg ChatMessage) string {
+	switch msg.Role {
+	case "user":
+		return m.renderUserMessage(msg)
+	case "assistant":
+		return m.renderAssistantMessage(msg)
+	case "tool":
+		return m.renderToolMessage(msg)
+	case "system":
+		return m.renderSystemMessage(msg)
+	default:
+		return msg.Content
+	}
+}
+
+func (m ChatModel) renderUserMessage(msg ChatMessage) string {
+	var b strings.Builder
+
+	// Header
+	header := UserPromptStyle.Render("You")
+	if !msg.Timestamp.IsZero() {
+		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+	}
+	b.WriteString(header)
+	b.WriteString("\n")
+
+	// Content - render markdown for rich formatting
+	width := m.width - 4
+	if width < 1 {
+		width = 1
+	}
+	renderedContent := renderMarkdown(msg.Content, width)
+	content := MessageBubbleUser.Width(width).Render(renderedContent)
+	b.WriteString(content)
+
+	return b.String()
+}
+
+func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
+	var b strings.Builder
+
+	// Header
+	header := AssistantStyle.Render("Agent")
+	if !msg.Timestamp.IsZero() {
+		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+	}
+	// While the response is in progress the header carries a live status:
+	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
+	// from the model's clock, the chunk counter updates per chunk, and the
+	// spinner animates on the same clock.
+	elapsed := msg.ResponseTime
+	if msg.Thinking {
+		elapsed = m.elapsed
+	}
+	if elapsed > 0 {
+		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
+	}
+	if msg.StreamedChunks > 0 {
+		header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
+	}
+	if msg.Thinking {
+		spinner := InfoStyle.Render(thinkingFrameAt(int(m.elapsed.Seconds()) * 4))
+		header += HelpDimStyle.Render(fmt.Sprintf(" (thinking %s)", spinner))
+	}
+	b.WriteString(header)
+	b.WriteString("\n")
+
+	// Content - render markdown for rich formatting (code blocks, bold,
+	// italic, etc.). While thinking (before the first chunk) the bubble is
+	// hidden so only the animated header shows.
+	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
+		return b.String()
+	}
+	width := m.width - 4
+	if width < 1 {
+		width = 1
+	}
+	renderedContent := renderMarkdown(msg.Content, width)
+	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
+	b.WriteString(content)
+
+	return b.String()
+}
+
+func (m ChatModel) renderToolMessage(msg ChatMessage) string {
+	// Choose style based on tool status
+	var style lipgloss.Style
+	switch msg.ToolStatus {
+	case ToolStatusRunning:
+		style = ToolRunningStyle
+	case ToolStatusSuccess, ToolStatusComplete:
+		style = ToolDoneStyle
+	case ToolStatusError:
+		style = ToolErrorStyle
+	default:
+		style = ToolCallStyle
+	}
+
+	// Content already has status indicator and command preview from formatToolContent
+	return style.Render(msg.Content)
+}
+
+func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
+	return SystemMessageStyle.Render(msg.Content)
+}
+
+// emptyStateHint returns a contextual hint based on the current persona.
+func (m ChatModel) emptyStateHint() string {
+	p, err := persona.Parse(m.persona)
+	if err != nil {
+		return persona.Default().EmptyStateHint()
+	}
+	return p.EmptyStateHint()
+}

@@ -334,6 +334,7 @@ func TestClearChatWithoutFollowUpMsg(t *testing.T) {
 // OUTCOME: When "/" is typed in empty input, inline suggestion list appears.
 func TestInlineSuggestionsAppear(t *testing.T) {
 	chat := NewChatModel()
+	chat.Focus()
 	chat.SetCommandCompletions([]string{"/clear", "/compact", "/config", "/model"})
 
 	// Simulate typing "/" in empty input
@@ -379,6 +380,7 @@ func TestInlineSuggestionsFilter(t *testing.T) {
 // OUTCOME: Down arrow moves selection; Enter inserts selected command.
 func TestInlineSuggestionsNavigate(t *testing.T) {
 	chat := NewChatModel()
+	chat.Focus()
 	chat.SetCommandCompletions([]string{"/clear", "/compact", "/config"})
 	chat.showSuggestions = true
 	chat.suggestions = chat.filterSuggestions("/")
@@ -405,6 +407,7 @@ func TestInlineSuggestionsNavigate(t *testing.T) {
 // OUTCOME: Enter inserts the selected command into the textarea.
 func TestInlineSuggestionsSelect(t *testing.T) {
 	chat := NewChatModel()
+	chat.Focus()
 	chat.SetCommandCompletions([]string{"/clear", "/compact"})
 	chat.showSuggestions = true
 	chat.suggestions = chat.filterSuggestions("/")
@@ -427,6 +430,7 @@ func TestInlineSuggestionsSelect(t *testing.T) {
 // OUTCOME: Esc dismisses the suggestion list without modifying input.
 func TestInlineSuggestionsCancel(t *testing.T) {
 	chat := NewChatModel()
+	chat.Focus()
 	chat.SetCommandCompletions([]string{"/clear"})
 	chat.showSuggestions = true
 	chat.suggestions = chat.filterSuggestions("/")
@@ -467,6 +471,7 @@ func TestInlineSuggestionsConsumeKeys(t *testing.T) {
 // OUTCOME: Hitting down past item 6 shows items 1-7 with cursor at 7.
 func TestSuggestionScrollWindow(t *testing.T) {
 	chat := NewChatModel()
+	chat.Focus()
 	chat.SetCommandCompletions([]string{
 		"/agents", "/branch", "/clear", "/compact", "/config",
 		"/cost", "/diff", "/export", "/help", "/model",

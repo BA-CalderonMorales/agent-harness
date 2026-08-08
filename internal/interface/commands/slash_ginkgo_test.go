@@ -437,7 +437,7 @@ var _ = Describe("Slash Commands", func() {
 	Describe("ConfigHandler", func() {
 		It("should return configuration", func() {
 			By("given a config function")
-			handler := ConfigHandler(func() string { return "provider: openrouter\nmodel: gpt-4o" })
+			handler := ConfigHandler(func() string { return "provider: openrouter\nmodel: gpt-4o" }, nil)
 
 			By("when invoking /config")
 			result, err := handler("")

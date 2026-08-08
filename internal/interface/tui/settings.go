@@ -3,7 +3,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/bubbles/viewport"
@@ -27,6 +26,7 @@ type Setting struct {
 	Label       string
 	Value       string
 	Description string
+	Category    string // "Provider & Connection", "Model & Agent Behavior", "Workspace & Permissions", "System & Storage"
 	Type        string // "string", "bool", "number", "choice"
 	Options     []string
 	BoolValue   bool // For boolean settings
@@ -46,15 +46,22 @@ type SettingsModel struct {
 	editErr  string
 	viewport viewport.Model
 
+	// systemMessages holds the durable system log rendered in its own
+	// scrollable region at the bottom of the settings page.
+	systemMessages   []string
+	sysViewport      viewport.Model
+	inSystemMessages bool
+
 	delegate SettingsDelegate
 }
 
 // NewSettingsModel creates a new settings model.
 func NewSettingsModel() SettingsModel {
 	return SettingsModel{
-		settings: make([]Setting, 0),
-		cursor:   0,
-		viewport: viewport.New(80, 20),
+		settings:    make([]Setting, 0),
+		cursor:      0,
+		viewport:    viewport.New(80, 20),
+		sysViewport: viewport.New(80, 6),
 	}
 }
 
@@ -66,6 +73,35 @@ func (m *SettingsModel) SetDelegate(delegate SettingsDelegate) {
 // SetSettings updates the settings list.
 func (m *SettingsModel) SetSettings(settings []Setting) {
 	m.settings = settings
+}
+
+// SetSystemMessages replaces the system-message log rendered in its own
+// scrollable region at the bottom of the settings page.
+func (m *SettingsModel) SetSystemMessages(messages []string) {
+	m.systemMessages = append([]string(nil), messages...)
+	m.syncSystemViewport()
+}
+
+// systemMessagesHeight is the max visible rows of the System Messages
+// region; fewer messages shrink it to fit.
+const systemMessagesHeight = 6
+
+// syncSystemViewport rebuilds the System Messages scroll region's content
+// and height from the current log.
+func (m *SettingsModel) syncSystemViewport() {
+	content := strings.Join(m.systemMessages, "\n")
+	m.sysViewport.SetContent(content)
+	h := len(m.systemMessages)
+	if h > systemMessagesHeight {
+		h = systemMessagesHeight
+	}
+	if h < 1 {
+		h = 1
+	}
+	m.sysViewport.Height = h
+	if m.width > 0 {
+		m.sysViewport.Width = m.width
+	}
 }
 
 // UpdateSettingValue updates a single setting value by key.
@@ -82,334 +118,6 @@ func (m *SettingsModel) UpdateSettingValue(key, value string) {
 func (m SettingsModel) Init() tea.Cmd {
 	return nil
 }
-
-// Update handles messages.
-func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
-		// Reserve space for header (3 lines) and footer (2 lines)
-		vpHeight := msg.Height - 5
-		if vpHeight < 5 {
-			vpHeight = 5
-		}
-		m.viewport.Width = msg.Width
-		m.viewport.Height = vpHeight
-
-	case tea.KeyMsg:
-		if !m.focused {
-			return m, nil
-		}
-
-		if m.editing {
-			return m.handleEditMode(msg)
-		}
-
-		switch msg.String() {
-		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
-
-		case "down", "j":
-			if m.cursor < len(m.settings)-1 {
-				m.cursor++
-			}
-
-		case "enter", " ":
-			if m.cursor < len(m.settings) {
-				s := &m.settings[m.cursor]
-				if s.Type == "bool" {
-					s.BoolValue = !s.BoolValue
-					if m.delegate != nil {
-						value := "false"
-						if s.BoolValue {
-							value = "true"
-						}
-						m.delegate.OnSettingChange(s.Key, value)
-					}
-				} else if s.Type == "choice" && len(s.Options) > 0 {
-					idx := -1
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx + 1) % len(s.Options)
-					s.Value = s.Options[idx]
-					if m.delegate != nil {
-						m.delegate.OnSettingChange(s.Key, s.Value)
-					}
-				} else {
-					m.startEditing()
-				}
-			}
-
-		case "left", "h":
-			if m.cursor < len(m.settings) {
-				s := &m.settings[m.cursor]
-				if s.Type == "choice" && len(s.Options) > 0 {
-					idx := 0
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx - 1 + len(s.Options)) % len(s.Options)
-					s.Value = s.Options[idx]
-					if m.delegate != nil {
-						m.delegate.OnSettingChange(s.Key, s.Value)
-					}
-				}
-			}
-
-		case "right", "l":
-			if m.cursor < len(m.settings) {
-				s := &m.settings[m.cursor]
-				if s.Type == "choice" && len(s.Options) > 0 {
-					idx := 0
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx + 1) % len(s.Options)
-					s.Value = s.Options[idx]
-					if m.delegate != nil {
-						m.delegate.OnSettingChange(s.Key, s.Value)
-					}
-				}
-			}
-
-		case "r":
-			if m.delegate != nil {
-				m.delegate.OnSettingReload()
-			}
-		}
-	}
-
-	return m, nil
-}
-
-func (m *SettingsModel) handleEditMode(msg tea.KeyMsg) (SettingsModel, tea.Cmd) {
-	m.editErr = ""
-	switch msg.Type {
-	case tea.KeyEnter:
-		if m.cursor < len(m.settings) && m.delegate != nil {
-			s := &m.settings[m.cursor]
-			if errMsg := m.validateSetting(s, m.editBuf); errMsg != "" {
-				m.editErr = errMsg
-				return *m, nil
-			}
-			m.delegate.OnSettingChange(s.Key, m.editBuf)
-			s.Value = m.editBuf
-		}
-		m.editing = false
-		m.editBuf = ""
-
-	case tea.KeyEsc:
-		m.editing = false
-		m.editBuf = ""
-		m.editErr = ""
-
-	case tea.KeyBackspace:
-		if len(m.editBuf) > 0 {
-			runes := []rune(m.editBuf)
-			m.editBuf = string(runes[:len(runes)-1])
-		}
-
-	case tea.KeyRunes:
-		m.editBuf += string(msg.Runes)
-	}
-
-	return *m, nil
-}
-
-func (m *SettingsModel) validateSetting(s *Setting, value string) string {
-	switch s.Key {
-	case "context_length", "max_tokens":
-		if value == "" {
-			return "value required"
-		}
-		n := 0
-		for _, c := range value {
-			if c < '0' || c > '9' {
-				return "must be a positive integer"
-			}
-			n = n*10 + int(c-'0')
-		}
-		if n <= 0 {
-			return "must be a positive integer"
-		}
-	case "temperature":
-		if value == "" {
-			return "value required"
-		}
-	case "persona":
-		valid := []string{"developer", "designer", "pm", "scientist", "explorer"}
-		found := false
-		for _, v := range valid {
-			if v == value {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return "must be one of: developer, designer, pm, scientist, explorer"
-		}
-	case "permissions":
-		valid := []string{"read-only", "workspace-write", "danger-full-access"}
-		found := false
-		for _, v := range valid {
-			if v == value {
-				found = true
-				break
-			}
-		}
-		if !found {
-			return "must be one of: read-only, workspace-write, danger-full-access"
-		}
-	}
-	return ""
-}
-
-func (m *SettingsModel) startEditing() {
-	if m.cursor < len(m.settings) {
-		m.editing = true
-		m.editBuf = m.settings[m.cursor].Value
-	}
-}
-
-// View renders the settings.
-func (m SettingsModel) View() string {
-	if m.width == 0 {
-		return "Loading..."
-	}
-
-	if len(m.settings) == 0 {
-		return RenderEmptyState(ViewPort{Width: m.width, Height: m.height}, EmptyState{
-			Title:       "No Settings",
-			Description: "Settings will appear here when available.",
-			Actions: []ActionHint{
-				{Key: "r", Desc: "Reload settings"},
-			},
-		})
-	}
-
-	var b strings.Builder
-
-	// Header (always visible, not in viewport)
-	b.WriteString(RenderHeader(HeaderConfig{
-		Title:    "Settings",
-		Subtitle: "Configuration options",
-		Count:    len(m.settings),
-	}))
-
-	// Build settings list content for viewport
-	var settingsContent strings.Builder
-	for i, setting := range m.settings {
-		settingsContent.WriteString(m.renderSetting(setting, i == m.cursor))
-		settingsContent.WriteString("\n")
-	}
-
-	// Update viewport content
-	m.viewport.SetContent(settingsContent.String())
-
-	// Render viewport (scrollable settings list)
-	b.WriteString(m.viewport.View())
-
-	// Footer (always visible, not in viewport)
-	footerActions := []ActionHint{
-		{Key: "↑/↓", Desc: "Navigate"},
-		{Key: "Enter/Space", Desc: "Edit / toggle"},
-		{Key: "←/→", Desc: "Cycle choice"},
-		{Key: "r", Desc: "Reload"},
-	}
-	if m.editing {
-		footerActions = []ActionHint{
-			{Key: "Enter", Desc: "Save"},
-			{Key: "Esc", Desc: "Cancel"},
-		}
-		if m.editErr != "" {
-			footerActions = append(footerActions, ActionHint{Key: "!", Desc: m.editErr})
-		}
-	}
-	b.WriteString(RenderFooter(footerActions))
-
-	return b.String()
-}
-
-func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
-	var b strings.Builder
-
-	prefix := IndicatorUnselected
-	style := ListItemStyle
-	valueStyle := DataValue
-
-	if selected {
-		prefix = IndicatorSelected
-		style = ListSelectedStyle
-		valueStyle = ListSelectedStyle
-	}
-
-	// For boolean settings, show checkbox
-	if setting.Type == "bool" {
-		checkbox := "[ ]"
-		if setting.BoolValue {
-			checkbox = "[x]"
-		}
-		if selected {
-			checkbox = PromptStyle.Render(checkbox)
-		}
-		label := style.Render(prefix + checkbox + " " + setting.Label)
-		b.WriteString(label)
-
-		// Description for boolean
-		if selected {
-			b.WriteString("\n")
-			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("    %s", setting.Description)))
-		}
-		return b.String()
-	}
-
-	// Label and value
-	label := style.Render(prefix + setting.Label)
-	b.WriteString(label)
-
-	// Show edit indicator if editing
-	if selected && m.editing {
-		b.WriteString("\n")
-		editLine := fmt.Sprintf("    %s %s",
-			HelpDimStyle.Render("→"),
-			PromptStyle.Render(m.editBuf+"█"))
-		b.WriteString(editLine)
-	} else {
-		// Show current value
-		value := setting.Value
-		if value == "" {
-			value = "(empty)"
-		}
-		b.WriteString(" ")
-		b.WriteString(valueStyle.Render(value))
-		if setting.Type == "choice" && len(setting.Options) > 0 {
-			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(setting.Options, "/"))))
-		}
-	}
-
-	// Description
-	if selected && !m.editing {
-		b.WriteString("\n")
-		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("    %s", setting.Description)))
-	}
-
-	return b.String()
-}
-
-// Focus focuses the settings view.
 func (m *SettingsModel) Focus() {
 	m.focused = true
 }
@@ -440,6 +148,14 @@ func (m SettingsModel) CapturesAllKeys() bool {
 // Scroll scrolls the list and updates viewport.
 // CRITICAL FIX: Also scrolls the viewport to ensure all settings are visible
 func (m *SettingsModel) Scroll(lines int) {
+	if m.inSystemMessages {
+		if lines > 0 {
+			m.sysViewport.LineDown(lines)
+		} else {
+			m.sysViewport.LineUp(-lines)
+		}
+		return
+	}
 	oldCursor := m.cursor
 	if lines > 0 {
 		for i := 0; i < lines && m.cursor < len(m.settings)-1; i++ {

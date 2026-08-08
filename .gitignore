@@ -1,5 +1,6 @@
 # Build artifacts
 /build/
+/bin/
 /agent-harness
 /models/
 
@@ -27,7 +28,9 @@ Thumbs.db
 .env
 *.local
 .opencode/
-.claude/
+
+# Tools that expect .claude/ reach it through a local symlink to .agents/ (never tracked)
+/.claude
 
 # Scratch stuff to not push up to remote.
 /scratch/

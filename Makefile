@@ -108,3 +108,16 @@ lint:
 		exit $$status; \
 	}
 	@printf '[ok] Lint passed\n'
+
+verify-structure:
+	@printf '==> Checking file structure (<= 400 lines per source file)\n'
+	@./scripts/verify-structure.sh
+
+verify: verify-structure
+	@printf '==> Running tests\n'
+	@go test ./... || { \
+		status=$$?; \
+		printf '\n[fail] Tests failed with exit status %s.\n' "$$status"; \
+		exit $$status; \
+	}
+	@printf '[ok] All checks passed\n'

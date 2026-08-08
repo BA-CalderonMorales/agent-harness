@@ -1,5 +1,36 @@
 # Changelog
 
+## [0.3.7] - 2026-08-08
+
+### Added
+- Spinning-diamond thinking indicator in agent headers with a one-second
+  quiet beat before the response materializes; instant answers skip the
+  thinking phase entirely.
+- Command palette (Ctrl+P) and reasoning-effort cycling (Ctrl+R).
+- Layered user settings persistence with delta writes, local-over-user
+  precedence, and encrypted credential storage.
+- Laptop-first local model flow: agent-harness.yml targets a llama.cpp
+  server; /diagnose resolves config and endpoint reachability.
+- VHS demo stack: tab-tour tape, mock OpenAI-compatible server, and
+  demo boot wrapper under scripts/demo.
+
+### Changed
+- Chat lands in navigate mode with the composer blurred; digits, j/k and
+  h/c own the keyboard until 'i' enables typing.
+- Composer and footer span the full terminal width with the input block
+  on a solid surface, quiet system messages, and streamed chunk counts
+  in agent headers.
+- Welcome message renders the git root as its basename, never the full
+  path.
+- README and docs reorganized in the terminal-jarvis shape with a
+  docs-index hub and a demo guide.
+
+### Fixed
+- Slash command output no longer truncated by synchronous dispatch.
+- Provider switching keeps the current model and follows the endpoint.
+- Session model wins at boot instead of being clobbered by defaults.
+- Repo no longer tracks a stale 20MB root-level binary.
+
 ## [0.3.6] - 2026-07-31
 
 ### Fixed

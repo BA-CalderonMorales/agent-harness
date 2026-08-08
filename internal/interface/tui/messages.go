@@ -102,3 +102,8 @@ type SessionsRefreshedMsg struct {
 	Notice     string
 	NoticeType string
 }
+
+// SwitchViewMsg requests switching the active tab view (0=Home, 1=Chat, 2=Sessions, 3=Settings)
+type SwitchViewMsg struct {
+	View viewID
+}
