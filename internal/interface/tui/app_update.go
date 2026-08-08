@@ -198,16 +198,15 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case ProviderReadinessMsg:
 		a.providerReadiness = msg.Readiness
 		a.providerReadinessMsg = msg.Message
-		// Readiness failures are durable system messages: they land in the
-		// chat pane (once) and in the Settings page's System Messages
-		// section instead of cluttering the footer.
+		// Every readiness state is a durable system message: it lands
+		// exactly once at the top of the chat pane and in the Settings
+		// page's System Messages section. Nothing provider-related ever
+		// clutters the footer.
 		switch msg.Readiness {
 		case 1: // ProviderReady
-			a.statusMessage = fmt.Sprintf("Provider ready: %s", msg.Message)
-			a.statusType = "success"
+			a.logSystemMessage(fmt.Sprintf("Provider ready: %s", msg.Message))
 		case 2: // ProviderWarning
-			a.statusMessage = fmt.Sprintf("Provider warning: %s", msg.Message)
-			a.statusType = "warning"
+			a.logSystemMessage(fmt.Sprintf("Provider warning: %s", msg.Message))
 		case 3: // ProviderUnavailable
 			a.logSystemMessage(fmt.Sprintf("Provider unavailable: %s", msg.Message))
 		case 4: // ProviderMisconfigured
