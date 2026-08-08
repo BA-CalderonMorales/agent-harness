@@ -65,10 +65,6 @@ var (
 	ToolErrorStyle = lipgloss.NewStyle().
 			Foreground(ColorError)
 
-	StreamingStyle = lipgloss.NewStyle().
-			Foreground(ColorTextDim).
-			Italic(true)
-
 	SpinnerStyle = lipgloss.NewStyle().
 			Foreground(ColorInfo)
 

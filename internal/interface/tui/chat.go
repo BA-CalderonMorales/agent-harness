@@ -73,12 +73,13 @@ const (
 	MaxInputRows            = 4
 )
 
-// Composer layout: a centered column with breathing room above and below the
-// input text, plus a mode line (mode · model · provider · reasoning effort).
+// Composer layout: a centered column with a little breathing room above the
+// input text. The solid surface block hugs the text (the editor grows with
+// the lines); the mode line (mode · model · provider · reasoning effort)
+// renders below the block on the terminal background.
 const (
 	ComposerColumnWidth = 100 // centered max width for the composer block
 	ComposerTopPadding  = 1   // blank rows above the input text
-	ComposerGapRows     = 1   // blank rows between the input and the mode line
 )
 
 // SubmitDebounceDuration is the window after Enter during which another
@@ -272,13 +273,9 @@ func (m ChatModel) inputRows() int {
 }
 
 func (m ChatModel) inputAreaHeight() int {
-	// Fixed-height composer: border + top padding + max editor rows + gap
-	// + mode line. Constant regardless of typed lines, so the solid
-	// background block never grows or fragments.
-	height := 1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1
-	if m.thinking {
-		height++ // thinking/streaming status line above the mode line
-	}
+	// The solid block hugs the text: border + top padding + editor rows.
+	// The mode line below the block adds one more row to the reserved area.
+	height := 1 + ComposerTopPadding + m.inputRows() + 1
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {

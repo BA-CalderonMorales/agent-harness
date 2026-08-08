@@ -70,30 +70,26 @@ func (m ChatModel) View() string {
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
-		Height(MaxInputRows).
+		Height(m.inputRows()).
 		Render(editorContent)
 
-	var composerParts []string
-	composerParts = append(composerParts, editorPanel)
-	if m.thinking {
-		composerParts = append(composerParts, m.renderStatusLine())
-	}
-
-	// Inline suggestions dropdown (below editor, above the gap)
+	// The solid surface block covers the editor (and, transiently, inline
+	// suggestions); it hugs the text so there is never a large slab of
+	// background under where the user types. The agent's thinking state
+	// lives in the message header, not here.
+	var blockParts []string
+	blockParts = append(blockParts, editorPanel)
 	if m.showSuggestions && len(m.suggestions) > 0 {
-		composerParts = append(composerParts, m.renderSuggestions())
+		blockParts = append(blockParts, m.renderSuggestions())
 	}
 
-	for i := 0; i < ComposerGapRows; i++ {
-		composerParts = append(composerParts, "")
-	}
-	composerParts = append(composerParts, m.renderModeLine())
-
-	inputContent := lipgloss.JoinVertical(lipgloss.Left, composerParts...)
-	composerPanel := InputContainerStyle.
+	blockPanel := InputContainerStyle.
 		Width(columnWidth).
 		PaddingTop(ComposerTopPadding).
-		Render(inputContent)
+		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
+
+	// The mode line renders below the block, on the terminal background.
+	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
 	if m.width > columnWidth {
 		composerPanel = lipgloss.PlaceHorizontal(m.width, lipgloss.Center, composerPanel)
 	}
@@ -176,13 +172,14 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
 	}
-	// Show response time if available; while thinking (and after
-	// completion) a bracketed thinking-time and chunk count rides along:
-	// Agent 14:10 (1m7s) [1m7s | 45 chunks]
+	// Show response time if available; a bracketed chunk count rides along
+	// so the thinking state is visible without repeating the elapsed time
+	// (which would duplicate the completion time): Agent 14:10 (1m7s) [45
+	// chunks].
 	if msg.ResponseTime > 0 {
 		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
 		if msg.StreamedChunks > 0 {
-			header += HelpDimStyle.Render(fmt.Sprintf(" [%s | %d chunks]", formatElapsed(msg.ResponseTime), msg.StreamedChunks))
+			header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
 		}
 	}
 	b.WriteString(header)

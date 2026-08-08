@@ -137,18 +137,17 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given the draft grows from one line to many lines", func() {
-			It("should keep the composer height constant so the background block never grows", func() {
+			It("should grow the input area predictably with the draft", func() {
 				chat.SetInput("one")
 				oneLineHeight := chat.inputAreaHeight()
 
 				chat.SetInput("one\ntwo\nthree\nfour")
 				manyLineHeight := chat.inputAreaHeight()
 
-				// Fixed composer: border + top padding + max editor rows +
-				// gap + mode line, regardless of typed lines.
-				fixed := 1 + ComposerTopPadding + MaxInputRows + ComposerGapRows + 1
-				Expect(oneLineHeight).To(Equal(fixed))
-				Expect(manyLineHeight).To(Equal(fixed))
+				// Solid block hugs the text: border + top padding + editor
+				// rows + the mode line row below the block.
+				Expect(oneLineHeight).To(Equal(1 + ComposerTopPadding + MinInputRows + 1))
+				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + 1))
 			})
 		})
 

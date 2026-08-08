@@ -79,10 +79,4 @@ func SpinnerRender(msg string) string {
 	return InfoStyle.Render(dots[idx]) + " " + HelpDimStyle.Render(msg)
 }
 
-// ToolSpinnerRender returns a tool-specific spinner animation
-func ToolSpinnerRender(frame int) string {
-	frames := []string{"◐", "◓", "◑", "◒"}
-	return frames[frame%len(frames)]
-}
-
 // ---------------------------------------------------------------------------
