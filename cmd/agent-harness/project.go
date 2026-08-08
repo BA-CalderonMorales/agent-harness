@@ -50,7 +50,7 @@ func (app *App) buildWelcomeMessage() string {
 	}
 
 	if app.gitContext != nil && app.gitContext.IsRepo {
-		parts = append(parts, sprintf("  Git: %s (%s)", app.gitContext.Root, app.gitContext.Branch))
+		parts = append(parts, sprintf("  Git: %s (%s)", filepath.Base(app.gitContext.Root), app.gitContext.Branch))
 		if len(app.gitContext.RecentCommits) > 0 {
 			parts = append(parts, sprintf("  Last commit: %s", app.gitContext.RecentCommits[0]))
 		}
