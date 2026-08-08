@@ -904,7 +904,11 @@ var _ = Describe("App", func() {
 				updated := model.(App)
 				Expect(updated.sessionsModel.sessions).To(HaveLen(2))
 				Expect(updated.homeModel.sessions).To(HaveLen(2))
-				Expect(updated.statusMessage).To(Equal("Refreshed"))
+				// Refresh notices are durable system messages in the chat
+				// pane, not footer clutter.
+				Expect(updated.chatModel.messages).To(HaveLen(1))
+				Expect(updated.chatModel.messages[0].Content).To(Equal("Refreshed"))
+				Expect(updated.statusMessage).To(Equal(""))
 			})
 		})
 	})

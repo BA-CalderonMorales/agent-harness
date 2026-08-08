@@ -175,8 +175,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.sessionsModel.SetSessions(msg.Sessions)
 		if msg.Notice != "" {
 			// Session notices belong in the conversation pane (first
-			// message, under the chat header), not in the footer.
-			a.chatModel.PrependSystemNote(msg.Notice)
+			// message, under the chat header) and in the Settings system
+			// log, not in the footer.
+			a.logSystemMessage(msg.Notice)
 		}
 		if msg.SwitchToChat {
 			cmds = append(cmds, a.switchView(viewChat))
@@ -188,8 +189,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.homeModel.SetSessions(msg.Sessions)
 		a.sessionsModel.SetSessions(msg.Sessions)
 		if msg.Notice != "" {
-			a.statusMessage = msg.Notice
-			a.statusType = msg.NoticeType
+			// Same as above: durable system message, not footer clutter.
+			a.logSystemMessage(msg.Notice)
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
