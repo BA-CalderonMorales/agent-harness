@@ -22,7 +22,7 @@ func (a App) renderStatusBar() string {
 			style = InfoStyle
 		}
 		content := " " + style.Render(a.statusMessage)
-		return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+		return StatusBarStyle.Width(a.width).PaddingBottom(1).Render(content)
 	}
 
 	columnWidth := a.width
@@ -64,31 +64,30 @@ func (a App) renderStatusBar() string {
 	telemetry = append(telemetry, "ctrl+p commands")
 
 	// Drop right segments until the health badge, a minimum path, the gap,
-	// and the remaining segments all fit.
+	// and the remaining segments all fit end-to-end inside the column. The
+	// path cap is included in the decision so the bar can never overflow.
 	const (
 		gapMin       = 2
 		minPathWidth = 8
+		maxPathWidth = 56
 	)
 	healthW := lipgloss.Width(health)
 	right := ""
 	rightW := 0
+	pathMax := minPathWidth
 	for len(telemetry) > 0 {
 		candidate := StatusHintStyle.Render(strings.Join(telemetry, " · "))
 		cw := lipgloss.Width(candidate)
-		if gapMin+healthW+1+cw+minPathWidth <= columnWidth {
-			right, rightW = candidate, cw
+		budget := columnWidth - gapMin - healthW - 1 - cw
+		effective := budget
+		if effective > maxPathWidth {
+			effective = maxPathWidth
+		}
+		if effective >= minPathWidth {
+			right, rightW, pathMax = candidate, cw, effective
 			break
 		}
 		telemetry = telemetry[:len(telemetry)-1]
-	}
-
-	// Path fills the remaining width, capped so it never dominates the bar.
-	pathMax := columnWidth - gapMin - healthW - 1 - rightW
-	if pathMax > 56 {
-		pathMax = 56
-	}
-	if pathMax < minPathWidth {
-		pathMax = minPathWidth
 	}
 	path = fitPath(path, pathMax)
 
@@ -104,7 +103,7 @@ func (a App) renderStatusBar() string {
 		content = lipgloss.PlaceHorizontal(a.width, lipgloss.Center, content)
 	}
 
-	return StatusBarStyle.Width(a.width).PaddingBottom(1).PaddingLeft(1).Render(content)
+	return StatusBarStyle.Width(a.width).PaddingBottom(1).Render(content)
 }
 
 // fitPath renders a path within a width budget, keeping the first segment

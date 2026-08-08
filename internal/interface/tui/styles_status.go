@@ -8,9 +8,11 @@ import (
 // Status bar
 // ---------------------------------------------------------------------------
 var (
+	// Flush left/right (no interior padding) so the footer's text edges
+	// align exactly with the composer block above it.
 	StatusBarStyle = lipgloss.NewStyle().
 			Foreground(ColorTextDim).
-			Padding(0, 1)
+			Padding(0, 0)
 
 	StatusOnline = lipgloss.NewStyle().
 			Foreground(ColorSuccess).

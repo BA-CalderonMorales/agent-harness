@@ -15,6 +15,11 @@ func (a *App) switchView(v viewID) tea.Cmd {
 func (a *App) setViewMode(v viewID) {
 	if v == viewChat {
 		a.mode = ModeInsert
+		// Transient footer messages (e.g. settings confirmations) must not
+		// linger under the chat composer; the chat pane owns its own
+		// system messages.
+		a.statusMessage = ""
+		a.statusType = ""
 	} else {
 		a.mode = ModeNormal
 	}
