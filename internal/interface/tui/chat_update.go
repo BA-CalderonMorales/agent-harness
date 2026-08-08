@@ -221,24 +221,38 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		errStr := fmt.Sprintf("%v", msg.Error)
 		var feedback string
 
-		// Check for common error patterns and provide specific guidance
+		// Check for common error patterns and provide specific guidance.
+		// Local providers never involve API keys, so their hints point at
+		// the local model server instead.
+		isLocal := m.provider == "local" || m.provider == "ollama"
 		switch {
 		case strings.Contains(errStr, "timeout") || strings.Contains(errStr, "deadline"):
 			feedback = "[!] Model timed out. The model may be overloaded or unresponsive.\n\n" +
 				"[>] Try switching models: type /model <name> or press Tab to go to Settings\n" +
 				"[?] Popular alternatives: claude-3-5-sonnet, gpt-4o, deepseek-chat"
 		case strings.Contains(errStr, "connection") || strings.Contains(errStr, "network"):
-			feedback = "[!] Connection error. Check your internet connection and API key.\n\n" +
-				"[>] Verify settings: /config or Tab → Settings\n" +
-				"[>] Check API key: /config"
+			if isLocal {
+				feedback = "[!] Connection error. The local model server is not responding.\n\n" +
+					"[>] Start it (e.g. llama-server or ollama) and verify the endpoint:\n" +
+					"[>] Tab → Settings → Endpoint URL"
+			} else {
+				feedback = "[!] Connection error. Check your internet connection and API key.\n\n" +
+					"[>] Verify settings: /config or Tab → Settings\n" +
+					"[>] Check API key: /config"
+			}
 		case strings.Contains(errStr, "rate limit") || strings.Contains(errStr, "quota"):
 			feedback = "[!] Rate limit or quota exceeded.\n\n" +
 				"[>] Try a different model: /model <name>\n" +
 				"[>] Check your account at your provider's dashboard"
 		case strings.Contains(errStr, "authentication") || strings.Contains(errStr, "api key"):
-			feedback = "[!] Authentication failed. Your API key may be invalid.\n\n" +
-				"[>] Update API key: Tab → Settings → Provider\n" +
-				"[>] Check /config for current settings"
+			if isLocal {
+				feedback = "[!] Local provider does not use API keys.\n\n" +
+					"[>] Verify the endpoint and model in: Tab → Settings"
+			} else {
+				feedback = "[!] Authentication failed. Your API key may be invalid.\n\n" +
+					"[>] Update API key: Tab → Settings → Provider\n" +
+					"[>] Check /config for current settings"
+			}
 		case strings.Contains(errStr, "model") && strings.Contains(errStr, "not found"):
 			feedback = "[!] Model not found or unavailable.\n\n" +
 				"[>] List available models: /model (with no args)\n" +
