@@ -48,8 +48,8 @@ type SettingsModel struct {
 
 	// systemMessages holds the durable system log rendered in its own
 	// scrollable region at the bottom of the settings page.
-	systemMessages []string
-	sysViewport     viewport.Model
+	systemMessages   []string
+	sysViewport      viewport.Model
 	inSystemMessages bool
 
 	delegate SettingsDelegate
@@ -58,10 +58,10 @@ type SettingsModel struct {
 // NewSettingsModel creates a new settings model.
 func NewSettingsModel() SettingsModel {
 	return SettingsModel{
-		settings:     make([]Setting, 0),
-		cursor:       0,
-		viewport:     viewport.New(80, 20),
-		sysViewport:  viewport.New(80, 6),
+		settings:    make([]Setting, 0),
+		cursor:      0,
+		viewport:    viewport.New(80, 20),
+		sysViewport: viewport.New(80, 6),
 	}
 }
 
