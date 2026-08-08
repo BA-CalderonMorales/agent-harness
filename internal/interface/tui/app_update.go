@@ -18,212 +18,22 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 	// -------------------------------------------------------------------------
-	// Global keys
+	// Global keys (dispatched in app_keys.go)
 	// -------------------------------------------------------------------------
 	case tea.KeyMsg:
-		// Help toggle — only in normal mode to avoid interfering with typing
-		if msg.String() == "?" && !a.showHelp && a.mode == ModeNormal {
-			a.showHelp = true
-			a.helpModel.Open(a.width, a.height, "")
-			return a, nil
-		}
-
-		// When help is open, delegate scrolling to the help viewport
-		if a.showHelp {
-			switch msg.String() {
-			case "?", "esc", "q":
-				a.showHelp = false
-				return a, nil
-			}
-			return a, nil
-		}
-
-		// When command palette is open, delegate to it
-		if a.commandPalette.IsShowing() {
-			closed, cmd := a.commandPalette.Update(msg)
-			if closed {
-				if selected := a.commandPalette.SelectedCommand(); selected != nil {
-					return a.handlePaletteSelection(selected)
-				}
-			}
+		var cmd tea.Cmd
+		var handled bool
+		a, cmd, handled = a.handleKeys(msg)
+		if handled {
 			return a, cmd
 		}
-
-		// When model picker is open, delegate to it
-		if a.modelPicker.IsShowing() {
-			closed, cmd := a.modelPicker.Update(msg)
-			if closed {
-				if selected := a.modelPicker.SelectedModel(); selected != nil {
-					cmdText := "/model " + selected.ID
-					if a.onUserCommand != nil {
-						a.onUserCommand(cmdText, &a)
-					}
-				}
-			}
-			return a, cmd
-		}
-
-		// When approval dialog is open, delegate to it
-		if a.approvalDialog.IsVisible() {
-			dialog, cmd := a.approvalDialog.Update(msg)
-			a.approvalDialog = dialog
-			return a, cmd
-		}
-
-		// Global chords: palette and reasoning-effort cycle.
-		switch msg.String() {
-		case "ctrl+p":
-			return a, func() tea.Msg { return openCommandPaletteMsg{} }
-		case "ctrl+r":
-			if a.onUserCommand != nil {
-				a.onUserCommand("/effort", &a)
-			}
-			return a, nil
-		}
-
-		switch msg.Type {
-		case tea.KeyCtrlC:
-			if a.activeView == viewChat && a.chatModel.GetInput() != "" {
-				a.chatModel.ClearInput()
-				a.ShowStatus("Input cleared. Press Ctrl+C again to quit.", "info")
-				return a, nil
-			}
-			return a, tea.Quit
-
-		case tea.KeyTab:
-			if !a.activeViewConsumesTab() {
-				return a, a.switchView((a.activeView + 1) % viewCount)
-			}
-
-		case tea.KeyShiftTab:
-			if !a.activeViewConsumesTab() {
-				return a, a.switchView((a.activeView - 1 + viewCount) % viewCount)
-			}
-
-		case tea.KeyEsc:
-			// If agent is running, cancel it first
-			if a.agentCancelFunc != nil {
-				a.CancelAgent()
-				return a, func() tea.Msg {
-					return AgentCancelMsg{}
-				}
-			}
-			if !a.activeViewConsumesEsc() {
-				a.mode = ModeNormal
-				a.chatModel.SetModeLabel("navigate")
-				a.blurActive()
-				return a, nil
-			}
-		}
-
-		if !a.activeViewCapturesAllKeys() {
-			// Mode switching
-			switch msg.String() {
-			case "ctrl+n":
-				a.mode = ModeNormal
-				a.chatModel.SetModeLabel("navigate")
-				a.blurActive()
-				return a, nil
-			case "i":
-				if a.mode == ModeNormal {
-					a.mode = ModeInsert
-					a.chatModel.SetModeLabel("typing")
-					a.focusActive()
-					return a, nil
-				}
-			}
-
-			// View switching shortcuts
-			switch msg.String() {
-			case "ctrl+1", "1":
-				return a, a.switchView(viewHome)
-			case "ctrl+2", "2":
-				return a, a.switchView(viewChat)
-			case "ctrl+3", "3":
-				return a, a.switchView(viewSessions)
-			case "ctrl+4", "4":
-				return a, a.switchView(viewSettings)
-			}
-
-			// Navigation in normal mode
-			if a.mode == ModeNormal {
-				switch msg.String() {
-				case "j", "down":
-					a.scrollActiveView(1)
-					return a, nil
-				case "k", "up":
-					a.scrollActiveView(-1)
-					return a, nil
-				case "g", "home":
-					a.gotoActiveViewTop()
-					return a, nil
-				case "G", "end":
-					a.gotoActiveViewBottom()
-					return a, nil
-				case "h":
-					if a.activeView != viewSessions {
-						return a, a.switchView(viewHome)
-					}
-				case "c":
-					if a.activeView != viewSessions {
-						return a, a.switchView(viewChat)
-					}
-				}
-			}
-		}
+		cmds = append(cmds, cmd)
 
 	// -------------------------------------------------------------------------
-	// Window resize
+	// Window resize (propagated in app_keys.go)
 	// -------------------------------------------------------------------------
 	case tea.WindowSizeMsg:
-		a.width = msg.Width
-		a.height = msg.Height
-
-		// Reserve space for tab bar (3: padding top + content + border bottom)
-		// + status bar (2: content + padding bottom) = 5 total
-		reserved := 5
-		contentMsg := tea.WindowSizeMsg{
-			Width:  msg.Width,
-			Height: msg.Height - reserved,
-		}
-
-		// Propagate to sub-models
-		homeModel, cmd := a.homeModel.Update(contentMsg)
-		if m, ok := homeModel.(*HomeModel); ok {
-			a.homeModel = m
-		}
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-
-		if chatModel, cmd := a.chatModel.Update(contentMsg); chatModel != nil {
-			if m, ok := chatModel.(ChatModel); ok {
-				a.chatModel = m
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-
-		if sessionsModel, cmd := a.sessionsModel.Update(contentMsg); sessionsModel != nil {
-			if m, ok := sessionsModel.(SessionsModel); ok {
-				a.sessionsModel = m
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-
-		if settingsModel, cmd := a.settingsModel.Update(contentMsg); settingsModel != nil {
-			if m, ok := settingsModel.(SettingsModel); ok {
-				a.settingsModel = m
-			}
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
-		}
-
-		return a, tea.Batch(cmds...)
+		return a.resize(msg.Width, msg.Height)
 
 	// -------------------------------------------------------------------------
 	// Status messages
