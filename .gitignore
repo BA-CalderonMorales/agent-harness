@@ -29,7 +29,7 @@ Thumbs.db
 .opencode/
 
 # Tools that expect .claude/ reach it through a local symlink to .agents/ (never tracked)
-/.claude/
+/.claude
 
 # Scratch stuff to not push up to remote.
 /scratch/
