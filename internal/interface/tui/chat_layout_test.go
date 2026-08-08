@@ -40,10 +40,10 @@ func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
 		rows  int
 		area  int
 	}{
-		{name: "empty", rows: 1, area: 1 + ComposerTopPadding + 1 + 1},
-		{name: "single line", input: "hello", rows: 1, area: 1 + ComposerTopPadding + 1 + 1},
-		{name: "two lines", input: "hello\nworld", rows: 2, area: 1 + ComposerTopPadding + 2 + 1},
-		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 1 + ComposerTopPadding + 4 + 1},
+		{name: "empty", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
+		{name: "single line", input: "hello", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
+		{name: "two lines", input: "hello\nworld", rows: 2, area: 1 + ComposerTopPadding + 2 + ComposerBottomPadding + 1},
+		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 1 + ComposerTopPadding + 4 + ComposerBottomPadding + 1},
 	}
 
 	for _, tc := range cases {
@@ -83,7 +83,7 @@ func TestOneLineComposerLeavesTranscriptRoom(t *testing.T) {
 	if got, wantMax := len(lines), 18; got > wantMax {
 		t.Fatalf("rendered lines = %d, want <= %d\n%s", got, wantMax, view)
 	}
-	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+1+1; got != want {
+	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+1+ComposerBottomPadding+1; got != want {
 		t.Fatalf("one-line input area height = %d, want %d", got, want)
 	}
 	tail := strings.Join(lines[maxLayoutInt(0, len(lines)-10):], "\n")
@@ -101,7 +101,7 @@ func TestMultilineComposerHasStablePadding(t *testing.T) {
 	if got, want := chat.inputRows(), 3; got != want {
 		t.Fatalf("inputRows() = %d, want %d", got, want)
 	}
-	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+3+1; got != want {
+	if got, want := chat.inputAreaHeight(), 1+ComposerTopPadding+3+ComposerBottomPadding+1; got != want {
 		t.Fatalf("multi-line input area height = %d, want %d", got, want)
 	}
 	view := chat.View()

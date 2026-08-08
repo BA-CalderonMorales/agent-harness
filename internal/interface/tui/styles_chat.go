@@ -71,9 +71,11 @@ var (
 	TimestampStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
+	// SystemMessageStyle - command results and system notes render as quiet
+	// in-flow messages, not alert banners: dim foreground, no italic, no
+	// separators.
 	SystemMessageStyle = lipgloss.NewStyle().
-				Foreground(ColorWarning).
-				Italic(true)
+				Foreground(ColorMuted)
 
 	SeparatorStyle = lipgloss.NewStyle().
 			Foreground(ColorBorder)
