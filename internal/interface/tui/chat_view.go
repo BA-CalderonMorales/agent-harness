@@ -176,9 +176,14 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
 	}
-	// Show response time if available
+	// Show response time if available; while thinking (and after
+	// completion) a bracketed thinking-time and chunk count rides along:
+	// Agent 14:10 (1m7s) [1m7s | 45 chunks]
 	if msg.ResponseTime > 0 {
 		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
+		if msg.StreamedChunks > 0 {
+			header += HelpDimStyle.Render(fmt.Sprintf(" [%s | %d chunks]", formatElapsed(msg.ResponseTime), msg.StreamedChunks))
+		}
 	}
 	b.WriteString(header)
 	b.WriteString("\n")

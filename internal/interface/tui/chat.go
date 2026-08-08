@@ -51,6 +51,7 @@ type ChatMessage struct {
 	ToolDisplayName string        // User-friendly display name for the tool
 	ToolStatus      ToolStatus    // pending, running, success, error
 	ResponseTime    time.Duration // Time taken to generate this response
+	StreamedChunks  int           // Token chunks streamed for this response
 }
 
 // ToolStatus represents the execution state of a tool
