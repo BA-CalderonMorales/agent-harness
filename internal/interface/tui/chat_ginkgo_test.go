@@ -144,7 +144,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 				view = chat.View()
 				Expect(view).To(ContainSubstring("(thinking"))
-				Expect(view).To(ContainSubstring("◐")) // spinning-diamond frame 0
+				Expect(view).To(ContainSubstring("⬖")) // spinning-diamond frame 0
 
 				By("finishing the turn")
 				model, _ = chat.Update(AgentDoneMsg{Timestamp: time.Now()})
@@ -153,6 +153,46 @@ var _ = Describe("ChatModel", func() {
 				By("verifying the thinking indicator is gone")
 				view = chat.View()
 				Expect(view).ToNot(ContainSubstring("(thinking"))
+			})
+		})
+
+		Context("Given the LLM answers before the placeholder delay elapses", func() {
+			It("should skip the thinking phase entirely and show the final answer", func() {
+				By("starting a turn and completing it instantly (no tick)")
+				chat.width = 100
+				chat.height = 24
+				chat.AddMessage("user", "what's 2+2?")
+				model, _ := chat.Update(AgentStartMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+				model, _ = chat.Update(AgentDoneMsg{
+					FullResponse: "4",
+					Timestamp:    time.Now(),
+				})
+				chat = model.(ChatModel)
+
+				By("verifying the final answer is present without a thinking flash")
+				Expect(chat.messages).To(HaveLen(2))
+				Expect(chat.messages[1].Role).To(Equal("assistant"))
+				Expect(chat.messages[1].Thinking).To(BeFalse())
+				Expect(chat.messages[1].Content).To(Equal("4"))
+				Expect(chat.View()).ToNot(ContainSubstring("(thinking"))
+			})
+
+			It("should also skip the thinking phase when the answer arrives with the tick", func() {
+				By("starting a turn and completing it at the boundary")
+				chat.AddMessage("user", "hi")
+				model, _ := chat.Update(AgentStartMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+				chat.startTime = time.Now().Add(-1100 * time.Millisecond)
+				model, _ = chat.Update(timerTickMsg{})
+				chat = model.(ChatModel)
+				Expect(chat.messages[1].Thinking).To(BeTrue()) // header formed
+
+				By("completing immediately after")
+				model, _ = chat.Update(AgentDoneMsg{FullResponse: "hi back", Timestamp: time.Now()})
+				chat = model.(ChatModel)
+				Expect(chat.messages[1].Content).To(Equal("hi back"))
+				Expect(chat.messages[1].Thinking).To(BeFalse())
 			})
 		})
 	})

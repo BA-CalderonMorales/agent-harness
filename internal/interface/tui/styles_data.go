@@ -76,9 +76,10 @@ const (
 var spinnerDots = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // thinkingSpinner is the spinning-diamond animation used by the live
-// thinking indicator in assistant headers: quarter arcs that read as a
-// spinning ◆.
-var thinkingSpinner = []string{"◐", "◓", "◑", "◒"}
+// thinking indicator in assistant headers. The half-diamond frames rotate
+// through their four corners, reading as a genuine ◆ spinning in place:
+// ⬖ (top-left) → ⬗ (top-right) → ⬘ (bottom-right) → ⬙ (bottom-left).
+var thinkingSpinner = []string{"⬖", "⬗", "⬘", "⬙"}
 
 // spinnerFrameAt returns the spinner glyph for a monotonic tick counter.
 func spinnerFrameAt(tick int) string {
