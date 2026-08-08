@@ -1,0 +1,162 @@
+package tui
+
+import (
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+	tea "github.com/charmbracelet/bubbletea"
+	"path/filepath"
+)
+
+func (a *App) AddMessage(role, content string) {
+	a.chatModel.AddMessage(role, content)
+}
+
+// SetInput sets the chat input text.
+func (a *App) SetInput(text string) {
+	a.chatModel.SetInput(text)
+}
+
+// GetInput returns the current chat input.
+func (a *App) GetInput() string {
+	return a.chatModel.GetInput()
+}
+
+// ClearInput clears the chat input.
+func (a *App) ClearInput() {
+	a.chatModel.ClearInput()
+}
+
+// SetChatMessages replaces the visible chat transcript with session messages.
+func (a *App) SetChatMessages(messages []types.Message) {
+	a.chatModel.SetMessages(messages)
+}
+
+// RemoveLastUserMessage removes the most recent user message from chat display.
+func (a *App) RemoveLastUserMessage() {
+	a.chatModel.RemoveLastUserMessage()
+}
+
+// QueueSteer adds a message to the steer queue for auto-submission after the
+// current agent turn completes.
+func (a *App) QueueSteer(text string) {
+	a.chatModel.QueueSteer(text)
+}
+
+// SetThinking sets the thinking state.
+func (a *App) SetThinking(thinking bool, text string) {
+	a.chatModel.SetThinking(thinking, text)
+}
+
+// ShowStatus shows a status message.
+func (a *App) ShowStatus(text string, statusType string) {
+	a.statusMessage = text
+	a.statusType = statusType
+}
+
+// RefreshSessions refreshes the sessions list.
+func (a *App) RefreshSessions(sessions []SessionInfo) {
+	a.sessionsModel.SetSessions(sessions)
+	a.homeModel.SetSessions(sessions)
+}
+
+// SetSettings sets the settings list.
+func (a *App) SetSettings(settings []Setting) {
+	a.settingsModel.SetSettings(settings)
+}
+
+// SetModels sets the available models for the model picker.
+func (a *App) SetModels(models []ModelItem) {
+	a.modelPicker.SetModels(models)
+}
+
+// SetChatModel sets the current model name for display in the status bar.
+func (a *App) SetChatModel(model string) {
+	a.chatModel.SetModel(model)
+}
+
+// SetRuntimeContext sets compact runtime metadata for the bottom status line.
+func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
+	a.provider = provider
+	a.effortProfile = effortProfile
+	a.workspacePath = workspacePath
+	if workspacePath != "" {
+		a.workspaceName = filepath.Base(workspacePath)
+	}
+	a.chatModel.SetProvider(provider)
+	a.chatModel.SetEffort(effortProfile)
+}
+
+// SetTelemetry pushes context-usage and cost numbers for the bottom bar.
+func (a *App) SetTelemetry(estTokens, contextLen int, cost float64) {
+	a.estTokens = estTokens
+	a.contextLen = contextLen
+	a.costTotal = cost
+}
+
+// SetChatPersona sets the current persona for contextual UI behavior.
+func (a *App) SetChatPersona(persona string) {
+	a.chatModel.SetPersona(persona)
+}
+
+// SetProjectInfo updates the home dashboard project context.
+func (a *App) SetProjectInfo(info ProjectInfo) {
+	a.homeModel.SetProjectInfo(info)
+}
+
+// SetHomeStatus updates the home dashboard status line.
+func (a *App) SetHomeStatus(model, permissionMode, persona string, estimatedTokens int) {
+	a.homeModel.SetStatus(model, permissionMode, persona, estimatedTokens)
+}
+
+// SetCommandCompletions sets available slash commands for inline autocomplete.
+func (a *App) SetCommandCompletions(commands []string) {
+	a.chatModel.SetCommandCompletions(commands)
+}
+
+// SetCommands sets available slash commands for the command palette.
+func (a *App) SetCommands(commands []CommandInfo) {
+	a.commandPalette.SetCommands(commands)
+}
+
+// handlePaletteSelection handles a command selected from the palette.
+// Commands with no arguments are executed immediately via UserCommandMsg.
+// /model with no args opens the model picker.
+// Everything else is inserted into the input with a trailing space.
+func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
+	cmdName := selected.Command
+
+	if cmdName == "/model" && selected.Args == "" {
+		a.modelPicker.Open(a.width, a.height)
+		return *a, nil
+	}
+
+	noArgCommands := map[string]bool{
+		"/help":          true,
+		"/status":        true,
+		"/clear":         true,
+		"/compact":       true,
+		"/cost":          true,
+		"/diff":          true,
+		"/version":       true,
+		"/config":        true,
+		"/workspace":     true,
+		"/quit":          true,
+		"/current-model": true,
+		"/reset":         true,
+		"/agents":        true,
+		"/skills":        true,
+		"/settings":      true,
+	}
+
+	if selected.Args == "" || noArgCommands[cmdName] {
+		a.chatModel.AddMessage("user", cmdName)
+		return *a, func() tea.Msg {
+			return UserCommandMsg{Command: cmdName}
+		}
+	}
+
+	a.chatModel.SetInput(cmdName + " ")
+	return *a, nil
+}
+
+// ShortenModelName returns a compact display name for a model.
+// Never returns "default" - always shows something actionable or informative.
