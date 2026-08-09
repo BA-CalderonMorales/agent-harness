@@ -1448,6 +1448,56 @@ var _ = Describe("ChatModel", func() {
 				Expect(chat.messages).To(HaveLen(0))
 			})
 		})
+
+		Context("Given the composer is blurred (navigate mode)", func() {
+			It("should teach the 'i' key in the placeholder", func() {
+				By("blurring the composer")
+				chat.Blur()
+
+				By("verifying the navigate affordance")
+				Expect(chat.textarea.Placeholder).To(Equal("Press i to type a message"))
+			})
+
+			It("should restore the typing affordance on focus", func() {
+				By("focusing back into the composer")
+				chat.Blur()
+				chat.Focus()
+
+				By("verifying the typing placeholder is back")
+				Expect(chat.textarea.Placeholder).To(Equal("Type a message..."))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Mode Guidance — the vim-style mode line must never hide the mode
+	// ========================================================================
+	Describe("Mode Guidance", func() {
+		Context("Given a persona is set", func() {
+			It("should keep the mode as the first beat of the mode line", func() {
+				By("setting navigate mode with a persona")
+				chat.modeLabel = "navigate"
+				chat.SetPersona("developer")
+				chat.width = 100
+				chat.height = 24
+
+				By("rendering the mode line")
+				line := chat.renderModeLine()
+
+				By("verifying the mode comes first and the persona follows")
+				Expect(line).To(ContainSubstring("navigate"))
+				Expect(line).To(ContainSubstring("developer"))
+				Expect(strings.Index(line, "navigate")).To(BeNumerically("<", strings.Index(line, "developer")))
+			})
+		})
+
+		Context("Given the mode label is empty", func() {
+			It("should default to navigate", func() {
+				chat.modeLabel = ""
+				line := chat.renderModeLine()
+				Expect(line).To(ContainSubstring("navigate"))
+			})
+		})
 	})
 
 	// ========================================================================

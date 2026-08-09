@@ -302,18 +302,31 @@ func (m ChatModel) inputAreaHeight() int {
 	return height
 }
 
-// Init initializes the chat model.
+// Focus focuses the chat input and returns it to the typing affordance.
 func (m *ChatModel) Focus() {
 	m.focused = true
 	m.textarea.Focus()
+	m.togglePlaceholder()
 }
 
-// Blur blurs the chat input.
+// Blur blurs the chat input and turns the composer into a vim-style
+// navigate affordance: the placeholder teaches the 'i' key.
 func (m *ChatModel) Blur() {
 	m.focused = false
 	m.textarea.Blur()
 	m.pendingSubmit = false
 	m.pendingSubmitGen++
+	m.togglePlaceholder()
+}
+
+// togglePlaceholder keeps the composer honest about its mode: in navigate
+// mode the placeholder says what to press; in typing mode it invites text.
+func (m *ChatModel) togglePlaceholder() {
+	if m.focused {
+		m.textarea.Placeholder = "Type a message..."
+	} else {
+		m.textarea.Placeholder = "Press i to type a message"
+	}
 }
 func (m *ChatModel) SetInput(text string) {
 	m.textarea.SetValue(text)
