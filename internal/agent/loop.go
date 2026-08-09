@@ -189,12 +189,13 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 		state.toolCallCount += len(toolUses)
 
-		// Convergence guard: the same tool with the same canonical input is
-		// allowed a couple of runs (a model may legitimately re-read a file
-		// after editing it), but a repeating cycle must abort the turn.
+		// Convergence guard: re-running the same tool with the same
+		// canonical input inside one turn is the signature of a looping
+		// model, not a workflow - the second call aborts the turn instead
+		// of cloning another row into the transcript.
 		maxIdentical := l.Config.MaxIdenticalToolUses
 		if maxIdentical <= 0 {
-			maxIdentical = 2
+			maxIdentical = 1
 		}
 		for _, tu := range toolUses {
 			key := toolCallSignature(tu)

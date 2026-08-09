@@ -80,7 +80,7 @@ func DefaultLoopConfig() LoopConfig {
 		MaxOutputTokensRecovery: 3,
 		DefaultMaxTurns:         10,
 		MaxToolCalls:            15,
-		MaxIdenticalToolUses:    2,
+		MaxIdenticalToolUses:    1,
 		BlockingTokenLimit:      180000,
 	}
 }
@@ -101,8 +101,8 @@ type loopState struct {
 	turnCount                    int
 	toolCallCount                int
 	// executedTools counts how many times each (tool, canonical-input)
-	// signature has run in this query, so identical calls can be allowed
-	// once or twice but a repeating cycle aborts the turn.
+	// signature has run in this query, so an identical repeat can be
+	// detected and the repeating cycle aborted.
 	executedTools map[string]int
 }
 
