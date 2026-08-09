@@ -72,7 +72,8 @@ const (
 // Loading spinner
 // ---------------------------------------------------------------------------
 
-// spinnerDots are the braille spinner frames shared by loading messages.
+// spinnerDots are the braille frames used by SpinnerRender for loading
+// messages.
 var spinnerDots = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
 // thinkingSpinner is the spinning-diamond animation used by the live
@@ -80,14 +81,6 @@ var spinnerDots = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧
 // through their four corners, reading as a genuine ◆ spinning in place:
 // ⬖ (top-left) → ⬗ (top-right) → ⬘ (bottom-right) → ⬙ (bottom-left).
 var thinkingSpinner = []string{"⬖", "⬗", "⬘", "⬙"}
-
-// spinnerFrameAt returns the spinner glyph for a monotonic tick counter.
-func spinnerFrameAt(tick int) string {
-	if len(spinnerDots) == 0 {
-		return " "
-	}
-	return spinnerDots[tick%len(spinnerDots)]
-}
 
 // thinkingFrameAt returns the spinning-diamond glyph for a tick counter.
 func thinkingFrameAt(tick int) string {
