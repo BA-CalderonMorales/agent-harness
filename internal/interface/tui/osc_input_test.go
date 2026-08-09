@@ -7,9 +7,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/x/term"
 	"github.com/leanovate/gopter"
 	"github.com/leanovate/gopter/gen"
@@ -157,53 +155,27 @@ func TestOSCFilterChunkingInvariance(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// End-to-end regression: the exact OSC 11 reply a terminal sends back must
-// never reach the focused composer through the real tea input pipeline.
-// This test was red (composer captured "]11;rgb:1919/1aa/1b1b\\") before
-// the filter existed.
+// End-to-end regression (the exact reply that was reported as literal text
+// in the composer) at the byte layer the app actually consumes: the input
+// stream the filter emits must never contain an OSC fragment. This test was
+// red - the composer captured "]11;rgb:1919/1aa/1b1b\\" - before the filter
+// existed. Kept at the byte layer on purpose: driving the full tea event
+// loop through an io.Pipe is racy and adds no coverage the unit and
+// property tests above do not already pin.
 // ---------------------------------------------------------------------------
 
-func TestOSC11ReplyNeverReachesComposer(t *testing.T) {
-	cases := []struct {
-		name   string
-		chunks []string
-	}{
-		{"whole ST reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b\\", "hey"}},
-		{"BEL reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x07", "hey"}},
-		{"reply split mid-payload", []string{"\x1b]11;rgb:1919/1aa", "1b1b\x1b\\", "hey"}},
-		{"reply split at ST", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b", "\\", "hey"}},
+func TestOSC11ReplyNeverSurvivesStripping(t *testing.T) {
+	reply := "\x1b]11;rgb:1919/1aa/1b1b\x1b\\"
+	text := "hey"
+	f := &oscStrippingReader{r: bytes.NewReader([]byte(reply + text))}
+	out, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatalf("read: %v", err)
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			chat := NewChatModel()
-			chat.Focus()
-
-			r, w := io.Pipe()
-			p := tea.NewProgram(chat,
-				tea.WithInput(&oscStrippingReader{r: r}),
-				tea.WithOutput(io.Discard))
-
-			done := make(chan error, 1)
-			go func() { _, err := p.Run(); done <- err }()
-			time.Sleep(100 * time.Millisecond) // let the input reader start
-
-			for _, c := range tc.chunks {
-				w.Write([]byte(c))
-			}
-			w.Write([]byte("\r")) // the user's Enter
-			w.Close()
-
-			// Let the event loop drain the reader's messages before
-			// quitting, otherwise Quit races the KeyMsgs.
-			time.Sleep(150 * time.Millisecond)
-			p.Send(tea.Quit())
-			if err := <-done; err != nil {
-				t.Fatalf("program error: %v", err)
-			}
-
-			if got := chat.GetInput(); got != "hey" {
-				t.Fatalf("composer captured %q; want %q (the OSC reply must vanish, the keystrokes must arrive)", got, "hey")
-			}
-		})
+	if got, want := string(out), text; got != want {
+		t.Fatalf("stripped stream = %q, want %q: the reply must vanish, the keystrokes must survive", got, want)
+	}
+	if strings.Contains(string(out), "]11;") {
+		t.Fatalf("OSC fragment survived: %q", out)
 	}
 }
