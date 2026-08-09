@@ -3,12 +3,14 @@ package tui
 import (
 	"bytes"
 	"io"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/term"
 	"github.com/leanovate/gopter"
 	"github.com/leanovate/gopter/gen"
 	"github.com/leanovate/gopter/prop"
@@ -59,6 +61,26 @@ func TestOSCStrippingReaderKeepsLoneESCEscapeKeys(t *testing.T) {
 	}
 	if got, want := string(out), "a\x1bb"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// term.File identity - tea only enters raw mode when the input implements
+// term.File AND the fd is a terminal. The stripped wrapper must keep that
+// identity so j/k/Tab stay unbuffered; the raw-mode gate runs on Fd while
+// the bytes still flow through the filtered Read.
+// ---------------------------------------------------------------------------
+
+func TestOSCStrippingReaderKeepsTerminalIdentity(t *testing.T) {
+	f := newOSCStrippingReader(os.Stdin)
+	if _, ok := any(f).(term.File); !ok {
+		t.Fatal("stripped input no longer satisfies term.File; tea will skip raw mode")
+	}
+	if f.Fd() != os.Stdin.Fd() {
+		t.Fatalf("Fd() = %d, want stdin fd %d", f.Fd(), os.Stdin.Fd())
+	}
+	if err := f.Close(); err != nil {
+		t.Fatalf("closing the stdin wrapper must be a no-op, got err: %v", err)
 	}
 }
 
@@ -146,10 +168,10 @@ func TestOSC11ReplyNeverReachesComposer(t *testing.T) {
 		name   string
 		chunks []string
 	}{
-		{"whole ST reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b\\"}},
-		{"BEL reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x07"}},
-		{"reply split mid-payload", []string{"\x1b]11;rgb:1919/1aa", "1b1b\x1b\\"}},
-		{"reply split at ST", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b", "\\"}},
+		{"whole ST reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b\\", "hey"}},
+		{"BEL reply", []string{"\x1b]11;rgb:1919/1aa/1b1b\x07", "hey"}},
+		{"reply split mid-payload", []string{"\x1b]11;rgb:1919/1aa", "1b1b\x1b\\", "hey"}},
+		{"reply split at ST", []string{"\x1b]11;rgb:1919/1aa/1b1b\x1b", "\\", "hey"}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -171,13 +193,16 @@ func TestOSC11ReplyNeverReachesComposer(t *testing.T) {
 			w.Write([]byte("\r")) // the user's Enter
 			w.Close()
 
+			// Let the event loop drain the reader's messages before
+			// quitting, otherwise Quit races the KeyMsgs.
+			time.Sleep(150 * time.Millisecond)
 			p.Send(tea.Quit())
 			if err := <-done; err != nil {
 				t.Fatalf("program error: %v", err)
 			}
 
-			if got := chat.GetInput(); got != "" {
-				t.Fatalf("composer captured %q; want empty", got)
+			if got := chat.GetInput(); got != "hey" {
+				t.Fatalf("composer captured %q; want %q (the OSC reply must vanish, the keystrokes must arrive)", got, "hey")
 			}
 		})
 	}
