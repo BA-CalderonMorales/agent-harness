@@ -5,10 +5,12 @@ package tui
 
 import (
 	"context"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	tea "github.com/charmbracelet/bubbletea"
+	"os"
 	"strconv"
 	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ---------------------------------------------------------------------------
@@ -281,7 +283,8 @@ type StatusMsg struct {
 // Run starts the TUI application and returns when it exits.
 func Run(app *App) error {
 	// Use AltScreen for proper TUI experience (like lumina-bot)
-	p := tea.NewProgram(app, tea.WithAltScreen())
+	p := tea.NewProgram(app, tea.WithAltScreen(),
+		tea.WithInput(&oscStrippingReader{r: os.Stdin}))
 	_, err := p.Run()
 	return err
 }
