@@ -195,6 +195,31 @@ var _ = Describe("ChatModel", func() {
 				Expect(chat.messages[1].Thinking).To(BeFalse())
 			})
 		})
+
+		Context("Given a tool-only turn ends with no streamed text", func() {
+			It("should settle the tool placeholder instead of leaving it stuck", func() {
+				By("materializing a tool placeholder")
+				chat.AddMessage("user", "list the repo")
+				chat.messages = append(chat.messages, ChatMessage{
+					Role:           "assistant",
+					Content:        "→ ls map[path:/tmp]",
+					Timestamp:      time.Now(),
+					Thinking:       true,
+					StreamedChunks: 6,
+				})
+				chat.currentStreamingAssistantIdx = 1
+
+				By("finishing the turn with no text content")
+				model, _ := chat.Update(AgentDoneMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+
+				By("verifying the placeholder settled in place")
+				Expect(len(chat.messages)).To(Equal(2))
+				Expect(chat.messages[1].Content).To(Equal("→ ls map[path:/tmp]"))
+				Expect(chat.messages[1].Thinking).To(BeFalse())
+				Expect(chat.currentStreamingAssistantIdx).To(Equal(-1))
+			})
+		})
 	})
 
 	Describe("Input Area Ergonomics", func() {
