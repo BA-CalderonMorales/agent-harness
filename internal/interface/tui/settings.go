@@ -150,9 +150,9 @@ func (m SettingsModel) CapturesAllKeys() bool {
 func (m *SettingsModel) Scroll(lines int) {
 	if m.inSystemMessages {
 		if lines > 0 {
-			m.sysViewport.LineDown(lines)
+			m.sysViewport.ScrollDown(lines)
 		} else {
-			m.sysViewport.LineUp(-lines)
+			m.sysViewport.ScrollUp(-lines)
 		}
 		return
 	}

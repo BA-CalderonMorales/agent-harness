@@ -33,7 +33,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.inSystemMessages {
 				// Scroll the System Messages region; exiting back into the
 				// settings list happens at its top edge.
-				m.sysViewport.LineUp(1)
+				m.sysViewport.ScrollUp(1)
 				if m.sysViewport.AtTop() {
 					m.inSystemMessages = false
 				}
@@ -43,7 +43,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case "down", "j":
 			if m.inSystemMessages {
-				m.sysViewport.LineDown(1)
+				m.sysViewport.ScrollDown(1)
 			} else if m.cursor < len(m.settings)-1 {
 				m.cursor++
 			} else if len(m.systemMessages) > 0 {
