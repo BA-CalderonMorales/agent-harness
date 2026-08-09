@@ -161,7 +161,6 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		}
 	}
 	return a, nil, false
-	return a, nil, false
 }
 
 // resize propagates a terminal resize to the active sub-models.
