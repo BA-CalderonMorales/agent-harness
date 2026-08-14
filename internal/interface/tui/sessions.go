@@ -50,6 +50,11 @@ type SessionsModel struct {
 	confirmingDelete bool
 	deleteTargetIdx  int
 
+	// notice is a transient operation result (deleted/exported/copied/
+	// loaded) shown under the header until the user navigates.
+	notice     string
+	noticeType string
+
 	delegate SessionsDelegate
 }
 
@@ -74,6 +79,13 @@ func (m *SessionsModel) SetSessions(sessions []SessionInfo) {
 	if m.cursor >= len(sessions) && len(sessions) > 0 {
 		m.cursor = len(sessions) - 1
 	}
+}
+
+// SetNotice shows a transient operation result on the sessions page; it
+// stays until the user navigates.
+func (m *SessionsModel) SetNotice(text, noticeType string) {
+	m.notice = text
+	m.noticeType = noticeType
 }
 
 // Init initializes the sessions model.
@@ -130,12 +142,14 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "up", "k":
+			m.notice = ""
 			if m.cursor > 0 {
 				m.cursor--
 				m.syncViewportToCursor()
 			}
 
 		case "down", "j":
+			m.notice = ""
 			if m.cursor < len(m.sessions)-1 {
 				m.cursor++
 				m.syncViewportToCursor()

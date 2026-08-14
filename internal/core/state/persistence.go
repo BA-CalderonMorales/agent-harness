@@ -22,7 +22,7 @@ func NewSessionStore(path string) *SessionStore {
 
 // EnsureDir creates the session directory if needed.
 func (s *SessionStore) EnsureDir() error {
-	return os.MkdirAll(filepath.Dir(s.Path), 0755)
+	return os.MkdirAll(filepath.Dir(s.Path), 0700)
 }
 
 // WriteMessage appends a message to the session log.
@@ -31,7 +31,7 @@ func (s *SessionStore) WriteMessage(msg types.Message) error {
 	if err := s.EnsureDir(); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(s.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(s.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -52,7 +52,7 @@ func (s *SessionStore) WriteMessagesBlocking(msgs []types.Message) error {
 	if err := s.EnsureDir(); err != nil {
 		return err
 	}
-	f, err := os.OpenFile(s.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(s.Path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}

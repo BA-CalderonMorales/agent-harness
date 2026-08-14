@@ -55,8 +55,8 @@ func (c *HTTPClient) ListModels() ([]string, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(body))
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
+		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, sanitizeError(fmt.Errorf("%s", string(body)), c.APIKey))
 	}
 
 	var result struct {

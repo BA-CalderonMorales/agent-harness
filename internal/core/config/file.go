@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -46,7 +47,12 @@ func LoadFile(path string) (*FileConfig, error) {
 
 // Save writes configuration to a JSON file.
 func (c *FileConfig) Save(path string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if c.APIKey != "" {
+		// API keys never belong in a plaintext config writer; the
+		// encrypted credential store (/login) is the only home for them.
+		return fmt.Errorf("refusing to write an API key to a plaintext config file; use the encrypted credential store")
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
 	data, err := json.MarshalIndent(c, "", "  ")

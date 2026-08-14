@@ -65,6 +65,8 @@ type App struct {
 	helpModel      Help
 	commandPalette CommandPaletteModel
 	modelPicker    ModelPickerModel
+	providerPicker ProviderPickerModel
+	loginDialog    LoginDialogModel
 	tabActivity    [viewCount]bool
 
 	// Status
@@ -93,9 +95,11 @@ type App struct {
 	msgChan chan tea.Msg
 
 	// Handlers for user actions (set by main.go)
-	onUserSubmit  func(string, *App)
-	onUserCommand func(string, *App)
-	onGitContext  func(*git.Context, *App)
+	onUserSubmit   func(string, *App)
+	onUserCommand  func(string, *App)
+	onGitContext   func(*git.Context, *App)
+	onLogin        LoginHandler
+	onProviderPick ProviderPickHandler
 
 	// Agent cancellation context
 	agentCancelFunc context.CancelFunc
@@ -115,6 +119,8 @@ func NewApp() *App {
 		helpModel:      NewHelp(),
 		commandPalette: NewCommandPalette(),
 		modelPicker:    NewModelPicker(),
+		providerPicker: NewProviderPicker(),
+		loginDialog:    NewLoginDialog(),
 		msgChan:        make(chan tea.Msg, 64),
 	}
 	app.chatModel.SetModeLabel("navigate")
@@ -151,6 +157,39 @@ func (a *App) SetUserCommandHandler(handler func(string, *App)) {
 // it runs on the event loop, so the receiver may mutate app state safely.
 func (a *App) SetGitContextHandler(handler func(*git.Context, *App)) {
 	a.onGitContext = handler
+}
+
+// SetLoginHandler sets the handler that receives completed login wizard
+// values (provider, api key, model) on the event loop.
+func (a *App) SetLoginHandler(handler LoginHandler) {
+	a.onLogin = handler
+}
+
+// OpenLoginDialog opens the modal login wizard. storedKeyHint is a masked
+// hint of an already-stored key (empty when none exists); the dialog then
+// lets the user finish without re-entering the key.
+func (a *App) OpenLoginDialog(storedKeyHint string) {
+	a.loginDialog.Open(a.width, a.height, storedKeyHint)
+}
+
+// SetProviderPickHandler sets the handler that receives the provider
+// chosen in the provider-switch modal, on the event loop.
+func (a *App) SetProviderPickHandler(handler ProviderPickHandler) {
+	a.onProviderPick = handler
+}
+
+// OpenProviderPicker opens the provider-switch modal.
+func (a *App) OpenProviderPicker() {
+	a.providerPicker.Open(a.width, a.height)
+}
+
+// ShowModelPicker populates and opens the model picker for the given
+// provider, listing the full model set so the user never has to go
+// digging for a model.
+func (a *App) ShowModelPicker(models []ModelItem, provider string) {
+	a.modelPicker.SetTitle("Models - " + provider)
+	a.modelPicker.SetModels(models)
+	a.modelPicker.Open(a.width, a.height)
 }
 
 // SetSessionsDelegate sets the sessions handler delegate.
@@ -198,6 +237,7 @@ func (a *App) StartProviderProbe(prober llm.ProviderProber) int {
 			Readiness: int(readiness),
 			Message:   msg,
 			Endpoint:  "", // Will be set by caller if needed
+			Gen:       gen,
 		})
 	}()
 

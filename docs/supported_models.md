@@ -128,6 +128,56 @@ export AGENT_HARNESS_MODEL="gpt-4o"
 
 ---
 
+## Fireworks AI
+
+OpenAI-compatible serverless inference for open-source models, via
+`https://api.fireworks.ai/inference/v1` (Bearer key). Model IDs use the
+`accounts/fireworks/models/<name>` form; `/models` lists the full catalog
+in the model picker.
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `accounts/fireworks/models/llama-v3p3-70b-instruct` | ✅ Default | Solid all-round tool use |
+| `accounts/fireworks/models/deepseek-v4-flash-0731` | ✅ Supported | Fast reasoning-capable flash model |
+| `accounts/fireworks/models/mixtral-8x22b-instruct` | ✅ Supported | High-throughput mixture of experts |
+
+### Configuration
+
+```bash
+export AGENT_HARNESS_PROVIDER="fireworks"
+export AGENT_HARNESS_MODEL="accounts/fireworks/models/llama-v3p3-70b-instruct"
+```
+
+Or run `/login` and pick Fireworks (the key is stored encrypted).
+
+---
+
+## NVIDIA
+
+NVIDIA NIM build.nvidia.com endpoint, OpenAI-compatible at
+`https://integrate.api.nvidia.com/v1` (Bearer key). Nemotron models include
+a free tier (rate-limited).
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `nvidia/nemotron-3.5-lightning` | ✅ Default | Fast, good tool use |
+| `nvidia/nemotron-3.5-lightning:free` | ⚠️ Free tier | Rate-limited |
+
+### Configuration
+
+```bash
+export AGENT_HARNESS_PROVIDER="nvidia"
+export AGENT_HARNESS_MODEL="nvidia/nemotron-3.5-lightning"
+```
+
+Or run `/login` and pick NVIDIA (the key is stored encrypted).
+
+---
+
 ## Model Selection Guide
 
 ### For Development/Testing

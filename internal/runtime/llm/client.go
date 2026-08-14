@@ -49,6 +49,10 @@ func defaultBaseURL(provider string) string {
 		baseURL = "http://localhost:11434/v1"
 	case "local":
 		baseURL = "http://127.0.0.1:8080/v1"
+	case "fireworks":
+		baseURL = "https://api.fireworks.ai/inference/v1"
+	case "nvidia":
+		baseURL = "https://integrate.api.nvidia.com/v1"
 	}
 	return baseURL
 }
@@ -79,9 +83,13 @@ func (c *HTTPClient) Stream(ctx context.Context, req Request) (<-chan types.LLME
 		return nil, err
 	}
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
+		// Provider error bodies can echo the request back (OpenAI and
+		// OpenRouter include the key prefix in 401 messages); the error
+		// surfaces in the chat pane and session files, so the key must
+		// never ride along.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		resp.Body.Close()
-		return nil, fmt.Errorf("LLM API error %d: %s", resp.StatusCode, string(body))
+		return nil, fmt.Errorf("LLM API error %d: %s", resp.StatusCode, sanitizeError(fmt.Errorf("%s", string(body)), c.APIKey))
 	}
 
 	out := make(chan types.LLMEvent, 32)

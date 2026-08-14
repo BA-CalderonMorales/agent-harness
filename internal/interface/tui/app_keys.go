@@ -52,6 +52,34 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, cmd, true
 	}
 
+	// When the provider picker is open, delegate to it. A pick closes the
+	// picker and hands the provider to the app, which opens the model
+	// picker — a fast provider switch never asks for the API key again.
+	if a.providerPicker.IsShowing() {
+		done, cancelled, provider := a.providerPicker.Update(msg)
+		if done || cancelled {
+			a.providerPicker.Close()
+			if done && a.onProviderPick != nil {
+				a.onProviderPick(provider, &a)
+			}
+		}
+		return a, nil, true
+	}
+
+	// When the login dialog is open, delegate to it. It renders its own
+	// masked input, so every key (including pastes) stays inside the
+	// modal and never reaches the composer.
+	if a.loginDialog.IsShowing() {
+		done, cancelled, provider, apiKey, model := a.loginDialog.Update(msg)
+		if done || cancelled {
+			a.loginDialog.Close()
+			if done && a.onLogin != nil {
+				a.onLogin(provider, apiKey, model, &a)
+			}
+		}
+		return a, nil, true
+	}
+
 	// When approval dialog is open, delegate to it
 	if a.approvalDialog.IsVisible() {
 		dialog, cmd := a.approvalDialog.Update(msg)

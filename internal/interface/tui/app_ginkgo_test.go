@@ -61,7 +61,7 @@ var _ = Describe("App", func() {
 			It("should dispatch new chat on 'n' key", func() {
 				By("pressing 'n' while home is focused")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
-				updated := model.(App)
+				updated := model.(*App)
 
 				By("verifying the delegate was called")
 				Expect(homeDelegate.newChatCalled).To(BeTrue())
@@ -84,14 +84,14 @@ var _ = Describe("App", func() {
 		Context("Given Tab is pressed", func() {
 			It("should cycle to next view", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewChat))
 			})
 
 			It("should wrap around from last to first view", func() {
 				app.activeView = viewSettings
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 			})
 		})
@@ -100,14 +100,14 @@ var _ = Describe("App", func() {
 			It("should cycle to previous view", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 			})
 
 			It("should wrap around from first to last view", func() {
 				app.activeView = viewHome
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSettings))
 			})
 		})
@@ -120,25 +120,25 @@ var _ = Describe("App", func() {
 			It("should switch to Home with '1'", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 			})
 
 			It("should switch to Chat with '2'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewChat))
 			})
 
 			It("should switch to Sessions with '3'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("3")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSessions))
 			})
 
 			It("should switch to Settings with '4'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSettings))
 			})
 		})
@@ -151,13 +151,13 @@ var _ = Describe("App", func() {
 			It("should switch to Home with 'h'", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 			})
 
 			It("should switch to Chat with 'c'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewChat))
 			})
 		})
@@ -169,7 +169,7 @@ var _ = Describe("App", func() {
 				Expect(app.homeModel.focused).To(BeTrue())
 
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.homeModel.focused).To(BeFalse())
 				Expect(updated.chatModel.focused).To(BeFalse())
 				Expect(updated.mode).To(Equal(ModeNormal))
@@ -179,7 +179,7 @@ var _ = Describe("App", func() {
 		Context("Given tab cycling changes the view", func() {
 			It("should set navigate mode when entering chat", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewChat))
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
@@ -190,7 +190,7 @@ var _ = Describe("App", func() {
 				app.chatModel.Focus()
 
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
@@ -199,7 +199,7 @@ var _ = Describe("App", func() {
 		Context("Given number shortcuts change the view", func() {
 			It("should set navigate mode when switching to chat with '2'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.mode).To(Equal(ModeNormal))
 				Expect(updated.chatModel.focused).To(BeFalse())
 			})
@@ -211,7 +211,7 @@ var _ = Describe("App", func() {
 
 				app.mode = ModeNormal
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 		})
@@ -221,14 +221,14 @@ var _ = Describe("App", func() {
 		Context("Given normal mode", func() {
 			It("should switch to insert mode with 'i'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.mode).To(Equal(ModeInsert))
 			})
 
 			It("should focus active view when entering insert mode", func() {
 				app.homeModel.Blur()
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.homeModel.focused).To(BeTrue())
 			})
 		})
@@ -240,21 +240,21 @@ var _ = Describe("App", func() {
 
 			It("should switch to normal mode with Esc", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 
 			It("should blur active view when exiting insert mode", func() {
 				app.homeModel.Focus()
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.homeModel.focused).To(BeFalse())
 			})
 
 			It("should not switch view on 'h' in insert mode", func() {
 				app.activeView = viewChat
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewChat))
 			})
 		})
@@ -271,7 +271,7 @@ var _ = Describe("App", func() {
 
 				By("pressing Ctrl+C")
 				model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
-				updated := model.(App)
+				updated := model.(*App)
 
 				By("verifying the app stayed open and showed feedback")
 				Expect(cmd).To(BeNil())
@@ -294,7 +294,7 @@ var _ = Describe("App", func() {
 
 				By("switching to chat")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-				updated := model.(App)
+				updated := model.(*App)
 
 				By("verifying navigate mode is active and the composer is blurred")
 				Expect(updated.mode).To(Equal(ModeNormal))
@@ -304,17 +304,17 @@ var _ = Describe("App", func() {
 			It("should allow text input after entering insert mode with 'i'", func() {
 				By("switching to chat")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-				chatApp := model.(App)
+				chatApp := model.(*App)
 
 				By("entering insert mode")
 				model, _ = chatApp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
-				chatApp = model.(App)
+				chatApp = model.(*App)
 				Expect(chatApp.mode).To(Equal(ModeInsert))
 				Expect(chatApp.chatModel.focused).To(BeTrue())
 
 				By("typing a message in chat")
 				model, _ = chatApp.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-				updated := model.(App)
+				updated := model.(*App)
 
 				By("verifying the character was inserted into textarea")
 				Expect(updated.chatModel.GetInput()).To(Equal("h"))
@@ -326,28 +326,28 @@ var _ = Describe("App", func() {
 		Context("Given '?' is pressed in normal mode", func() {
 			It("should show help", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.showHelp).To(BeTrue())
 			})
 
 			It("should hide help when '?' is pressed again", func() {
 				app.showHelp = true
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.showHelp).To(BeFalse())
 			})
 
 			It("should hide help with Esc", func() {
 				app.showHelp = true
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.showHelp).To(BeFalse())
 			})
 
 			It("should hide help with 'q'", func() {
 				app.showHelp = true
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.showHelp).To(BeFalse())
 			})
 		})
@@ -356,7 +356,7 @@ var _ = Describe("App", func() {
 			It("should not show help", func() {
 				app.mode = ModeInsert
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("?")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.showHelp).To(BeFalse())
 			})
 		})
@@ -371,20 +371,20 @@ var _ = Describe("App", func() {
 			It("should delegate keys to palette", func() {
 				Expect(app.commandPalette.IsShowing()).To(BeTrue())
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyDown})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.commandPalette.cursor).To(Equal(1))
 			})
 
 			It("should close palette on Esc", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.commandPalette.IsShowing()).To(BeFalse())
 			})
 
 			It("should handle palette selection", func() {
 				// Select first command with Enter
 				model, cmd := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.commandPalette.IsShowing()).To(BeFalse())
 				Expect(cmd).ToNot(BeNil())
 				msg := cmd()
@@ -405,13 +405,13 @@ var _ = Describe("App", func() {
 			It("should delegate keys to picker", func() {
 				Expect(app.modelPicker.IsShowing()).To(BeTrue())
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyDown})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.modelPicker.cursor).To(Equal(0)) // only 1 model
 			})
 
 			It("should close picker on Esc", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.modelPicker.IsShowing()).To(BeFalse())
 			})
 		})
@@ -429,13 +429,13 @@ var _ = Describe("App", func() {
 			It("should delegate keys to dialog", func() {
 				Expect(app.approvalDialog.IsVisible()).To(BeTrue())
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyDown})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.approvalDialog.selected).To(Equal(1))
 			})
 
 			It("should hide dialog on approval", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("a")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.approvalDialog.IsVisible()).To(BeFalse())
 			})
 		})
@@ -445,41 +445,41 @@ var _ = Describe("App", func() {
 		Context("Given agent streaming messages", func() {
 			It("should route AgentStartMsg to chat model", func() {
 				model, _ := app.Update(AgentStartMsg{})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.thinking).To(BeTrue())
 			})
 
 			It("should route AgentChunkMsg to chat model", func() {
 				m, _ := app.Update(AgentStartMsg{})
-				a := m.(App)
+				a := m.(*App)
 				m2, _ := a.Update(AgentChunkMsg{Text: "hello"})
-				updated := m2.(App)
+				updated := m2.(*App)
 				Expect(updated.chatModel.streamBuffer).To(Equal("hello"))
 			})
 
 			It("should route AgentDoneMsg to chat model", func() {
 				app.Update(AgentStartMsg{})
 				model, _ := app.Update(AgentDoneMsg{FullResponse: "done"})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.thinking).To(BeFalse())
 			})
 
 			It("should route AgentErrorMsg to chat model", func() {
 				model, _ := app.Update(AgentErrorMsg{Error: fmt.Errorf("test error")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.messages).ToNot(BeEmpty())
 			})
 
 			It("should route AgentToolStartMsg to chat model", func() {
 				model, _ := app.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "bash"})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.currentToolMsg).ToNot(BeNil())
 			})
 
 			It("should route AgentToolDoneMsg to chat model", func() {
 				app.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "bash"})
 				model, _ := app.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.currentToolMsg).To(BeNil())
 			})
 
@@ -494,14 +494,14 @@ var _ = Describe("App", func() {
 		Context("Given a window resize message", func() {
 			It("should update app dimensions", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.width).To(Equal(100))
 				Expect(updated.height).To(Equal(50))
 			})
 
 			It("should propagate to sub-models", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.homeModel.width).To(Equal(100))
 				Expect(updated.chatModel.width).To(Equal(100))
 				Expect(updated.sessionsModel.width).To(Equal(100))
@@ -510,7 +510,7 @@ var _ = Describe("App", func() {
 
 			It("should reserve space for tab and status bars", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
-				updated := model.(App)
+				updated := model.(*App)
 				// Sub-models should get height minus reserved space (5)
 				Expect(updated.homeModel.height).To(Equal(19))
 			})
@@ -521,7 +521,7 @@ var _ = Describe("App", func() {
 		Context("Given a StatusMsg", func() {
 			It("should update status text and type", func() {
 				model, _ := app.Update(StatusMsg{Text: "Test status", Type: "info"})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.statusMessage).To(Equal("Test status"))
 				Expect(updated.statusType).To(Equal("info"))
 			})
@@ -553,14 +553,14 @@ var _ = Describe("App", func() {
 		Context("Given ModelChangedMsg", func() {
 			It("should update chat model", func() {
 				model, _ := app.Update(ModelChangedMsg{Model: "gpt-4"})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4"))
 			})
 
 			It("should update settings model", func() {
 				app.SetSettings([]Setting{{Key: "model", Value: "old"}})
 				model, _ := app.Update(ModelChangedMsg{Model: "gpt-4"})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.settingsModel.settings[0].Value).To(Equal("gpt-4"))
 			})
 		})
@@ -573,14 +573,14 @@ var _ = Describe("App", func() {
 				Expect(app.chatModel.messages).To(HaveLen(1))
 
 				model, _ := app.Update(ClearChatMsg{})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.messages).To(BeEmpty())
 			})
 
 			It("should add follow-up message when provided", func() {
 				app.AddMessage("user", "hello")
 				model, _ := app.Update(ClearChatMsg{FollowUpMsg: "Cleared."})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.messages).To(HaveLen(1))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Cleared."))
 			})
@@ -591,7 +591,7 @@ var _ = Describe("App", func() {
 		Context("Given AgentCancelMsg", func() {
 			It("should add cancellation message to chat", func() {
 				model, _ := app.Update(AgentCancelMsg{})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.messages).ToNot(BeEmpty())
 				Expect(updated.chatModel.messages[0].Content).To(ContainSubstring("cancelled"))
 			})
@@ -602,7 +602,7 @@ var _ = Describe("App", func() {
 		Context("Given ToolExecutingMsg", func() {
 			It("should add tool message to chat", func() {
 				model, _ := app.Update(ToolExecutingMsg{ToolID: "t1", ToolName: "bash", Command: "ls"})
-				updated := model.(App)
+				updated := model.(*App)
 				found := false
 				for _, msg := range updated.chatModel.messages {
 					if msg.IsTool && msg.ID == "t1" {
@@ -621,7 +621,7 @@ var _ = Describe("App", func() {
 					ID: "test", ToolName: "bash", Command: "ls",
 				})
 				model, _ := app.Update(ApprovalRequestMsg{Request: req})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.approvalDialog.IsVisible()).To(BeTrue())
 			})
 		})
@@ -754,7 +754,7 @@ var _ = Describe("App", func() {
 				app.chatModel.viewport.Height = 3
 				app.chatModel.viewport.SetContent("line1\nline2\nline3\nline4\nline5")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.viewport.YOffset).To(BeNumerically(">", 0))
 			})
 
@@ -763,7 +763,7 @@ var _ = Describe("App", func() {
 				app.chatModel.viewport.SetContent("line1\nline2\nline3\nline4\nline5")
 				app.chatModel.viewport.SetYOffset(2)
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.viewport.YOffset).To(Equal(1))
 			})
 
@@ -771,14 +771,14 @@ var _ = Describe("App", func() {
 				app.chatModel.viewport.SetContent("line1\nline2\nline3")
 				app.chatModel.viewport.SetYOffset(2)
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("g")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.viewport.YOffset).To(Equal(0))
 			})
 
 			It("should goto bottom with 'G'", func() {
 				app.chatModel.viewport.SetContent("line1\nline2\nline3")
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("G")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.viewport.AtBottom()).To(BeTrue())
 			})
 		})
@@ -913,7 +913,7 @@ var _ = Describe("App", func() {
 					PermissionMode: "workspace-write",
 					EstTokens:      100,
 				})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
 				Expect(updated.chatModel.persona).To(Equal("developer"))
 				// The session notice prepends as the first chat message
@@ -936,7 +936,7 @@ var _ = Describe("App", func() {
 					SessionID:    "sess-bbb22222",
 					SwitchToChat: false,
 				})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewHome))
 			})
 		})
@@ -952,7 +952,7 @@ var _ = Describe("App", func() {
 					Notice:     "Refreshed",
 					NoticeType: "info",
 				})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.sessionsModel.sessions).To(HaveLen(2))
 				Expect(updated.homeModel.sessions).To(HaveLen(2))
 				// Refresh notices are durable system messages in the chat
@@ -979,14 +979,14 @@ var _ = Describe("App", func() {
 				delegate := &testSessionsDelegate{}
 				app.sessionsModel.SetDelegate(delegate)
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("c")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSessions))
 				Expect(delegate.copiedSession).To(Equal("sess-eee55555"))
 			})
 
 			It("should not intercept 'h' globally when sessions view is active", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("h")})
-				updated := model.(App)
+				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSessions))
 			})
 
@@ -994,12 +994,12 @@ var _ = Describe("App", func() {
 				delegate := &testSessionsDelegate{}
 				app.sessionsModel.SetDelegate(delegate)
 				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-				updated := m.(App)
+				updated := m.(*App)
 				Expect(delegate.deletedSession).To(Equal(""))
 				Expect(updated.sessionsModel.confirmingDelete).To(BeTrue())
 
 				m2, _ := updated.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
-				final := m2.(App)
+				final := m2.(*App)
 				Expect(delegate.deletedSession).To(Equal("sess-eee55555"))
 				Expect(final.sessionsModel.confirmingDelete).To(BeFalse())
 			})
@@ -1008,11 +1008,11 @@ var _ = Describe("App", func() {
 				delegate := &testSessionsDelegate{}
 				app.sessionsModel.SetDelegate(delegate)
 				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
-				updated := m.(App)
+				updated := m.(*App)
 				Expect(updated.sessionsModel.confirmingDelete).To(BeTrue())
 
 				m2, _ := updated.Update(tea.KeyMsg{Type: tea.KeyEsc})
-				final := m2.(App)
+				final := m2.(*App)
 				Expect(final.sessionsModel.confirmingDelete).To(BeFalse())
 				Expect(delegate.deletedSession).To(Equal(""))
 			})
@@ -1029,29 +1029,28 @@ var _ = Describe("App", func() {
 					{Key: "model", Label: "Model", Value: "", Type: "string"},
 				})
 				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyEnter})
-				app2 := m.(App)
-				*app = app2
+				app2 := m.(*App)
+				app = app2
 			})
 
 			It("should route printable characters to the edit buffer", func() {
 				app.mode = ModeNormal
 				for _, r := range "gpt-4.1" {
 					m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{r}})
-					a := m.(App)
-					*app = a
+					app = m.(*App)
 				}
 				Expect(app.settingsModel.editBuf).To(Equal("gpt-4.1"))
 			})
 
 			It("should not switch views on number keys while editing", func() {
 				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("1")})
-				a := m.(App)
+				a := m.(*App)
 				Expect(a.activeView).To(Equal(viewSettings))
 			})
 
 			It("should not switch views on 'i' while editing", func() {
 				m, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("i")})
-				a := m.(App)
+				a := m.(*App)
 				Expect(a.settingsModel.editBuf).To(Equal("i"))
 			})
 		})

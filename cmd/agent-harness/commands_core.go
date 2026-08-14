@@ -105,7 +105,7 @@ func (app *App) initCommandsCore() {
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(args string) (string, error) {
-			return exportSession(app.session, args)
+			return exportSession(app.session, args, app.config.APIKey)
 		}))
 
 	app.cmdRegistry.Register("session", "Manage sessions",

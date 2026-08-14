@@ -22,7 +22,7 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
 	applyEnvString(firstEnv("AH_MODEL_PATH", "AGENT_HARNESS_MODEL_PATH"), &config.ModelPath)
 	applyEnvString(firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"), &config.EndpointURL)
-	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY"), &config.APIKey)
+	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY"), &config.APIKey)
 	if config.Provider == "nvidia" && config.APIKey == "" {
 		// NVIDIA's hosted API uses its own key convention (nvapi-...).
 		applyEnvString(firstEnv("NVIDIA_API_KEY"), &config.APIKey)

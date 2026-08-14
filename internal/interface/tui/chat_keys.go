@@ -65,12 +65,18 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 			}
 			return m, nil, true
 		case "enter":
-			if len(m.suggestions) > 0 && m.suggestionCursor < len(m.suggestions) {
+			// An exact match means the user typed the whole command:
+			// submit it instead of completing to the same string (which
+			// used to swallow the Enter and leave the command unrun).
+			if len(m.suggestions) > 0 && m.suggestionCursor < len(m.suggestions) &&
+				m.suggestions[m.suggestionCursor] != m.textarea.Value() {
 				m.textarea.SetValue(m.suggestions[m.suggestionCursor] + " ")
 				m.syncTextareaHeight()
 				m.showSuggestions = false
 				return m, nil, true
 			}
+			// Partial completion or empty list: fall through so Enter
+			// submits normally.
 		case "tab":
 			if len(m.suggestions) > 0 {
 				m.textarea.SetValue(m.suggestions[0] + " ")
