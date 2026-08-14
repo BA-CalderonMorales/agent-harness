@@ -700,3 +700,23 @@ func TestFuzzySearchReturnsAllOnSlash(t *testing.T) {
 		t.Errorf("expected 3 results for '/', got %d", len(results))
 	}
 }
+
+// TestReplaceWelcomeMessage verifies the late git context path: the boot
+// welcome is replaced in place (same position), not duplicated.
+func TestReplaceWelcomeMessage(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("system", "Agent Harness v0.3.8\n  Dir: /tmp")
+	chat.AddMessage("user", "hello")
+
+	chat.ReplaceWelcomeMessage("Agent Harness v0.3.8\n  Git: agent-harness (release/v0.3.8)\n  Status: clean")
+
+	if len(chat.messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(chat.messages))
+	}
+	if got := chat.messages[0].Content; !strings.Contains(got, "Git: agent-harness") {
+		t.Fatalf("welcome not replaced: %q", got)
+	}
+	if got := chat.messages[1].Content; got != "hello" {
+		t.Fatalf("user message disturbed: %q", got)
+	}
+}

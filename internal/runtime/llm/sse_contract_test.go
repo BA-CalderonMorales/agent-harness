@@ -245,3 +245,30 @@ func assertErrorContains(t *testing.T, err error, fragments ...string) {
 		}
 	}
 }
+
+// TestReadSSEIgnoresNvidiaReasoningContent pins the NVIDIA thinking
+// stream contract: nemotron models interleave reasoning_content deltas
+// with content deltas, and the parser must ignore the reasoning field
+// (it carries no usable tool/text data for this harness) while keeping
+// the visible content and finish metadata intact.
+func TestReadSSEIgnoresNvidiaReasoningContent(t *testing.T) {
+	events := collectSSEEvents(t, context.Background(), fixtureBody(t, "nvidia-thinking.sse", 3))
+	got := observeSSEEvents(events)
+
+	if len(got.errors) != 0 {
+		t.Fatalf("unexpected parser errors: %v", got.errors)
+	}
+	if want := []string{"The answer"}; !reflect.DeepEqual(got.text, want) {
+		t.Errorf("text deltas = %#v, want %#v (reasoning_content must be ignored)", got.text, want)
+	}
+	if len(got.stops) != 1 {
+		t.Fatalf("message stops = %#v, want exactly one stop", got.stops)
+	}
+	if got.stops[0].StopReason != "stop" || got.stops[0].Model != "nvidia/nemotron-3.5-lightning-30b-a3b" {
+		t.Errorf("stop = %#v, want stop reason 'stop' with the nvidia model id", got.stops[0])
+	}
+	wantUsage := types.TokenUsage{InputTokens: 5, OutputTokens: 2}
+	if got.stops[0].Usage != wantUsage {
+		t.Errorf("usage = %#v, want %#v", got.stops[0].Usage, wantUsage)
+	}
+}

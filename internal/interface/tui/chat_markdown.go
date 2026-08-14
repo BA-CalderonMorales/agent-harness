@@ -25,8 +25,13 @@ func detectTermux() bool {
 // getMarkdownRenderer returns a shared glamour renderer instance
 func getMarkdownRenderer() (*glamour.TermRenderer, error) {
 	markdownRendererOnce.Do(func() {
+		// WithAutoStyle queries the terminal for its background color on
+		// the first render (termenv.HasDarkBackground), which can stall
+		// the boot for termenv's OSCTimeout when the reply races. The
+		// app's palette is hardcoded dark (themeinit pins it), so the
+		// dark style is the deterministic choice.
 		markdownRenderer, markdownRendererErr = glamour.NewTermRenderer(
-			glamour.WithAutoStyle(),
+			glamour.WithStandardStyle("dark"),
 			glamour.WithWordWrap(0), // We'll handle wrapping separately
 		)
 	})

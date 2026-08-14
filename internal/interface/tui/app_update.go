@@ -106,6 +106,16 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, nil
 
 	// -------------------------------------------------------------------------
+	// Git context collected after boot - the dashboard and welcome fill
+	// in when it lands instead of blocking the TUI start.
+	// -------------------------------------------------------------------------
+	case GitContextMsg:
+		if a.onGitContext != nil {
+			a.onGitContext(msg.Context, &a)
+		}
+		return a, nil
+
+	// -------------------------------------------------------------------------
 	// Quit request
 	// -------------------------------------------------------------------------
 	case QuitMsg:
