@@ -35,6 +35,13 @@ type ModelPickerModel struct {
 	searchQuery string
 	selected    *ModelItem
 	showing     bool
+	title       string
+}
+
+// SetTitle sets the header line (e.g. "Models - openrouter" after a
+// provider switch).
+func (m *ModelPickerModel) SetTitle(title string) {
+	m.title = title
 }
 
 // NewModelPicker creates a new model picker instance
@@ -230,7 +237,11 @@ func (m *ModelPickerModel) updateContent() {
 func (m ModelPickerModel) buildContent() string {
 	var b strings.Builder
 
-	b.WriteString(HelpTitleStyle.Render("Select Model") + "\n\n")
+	title := m.title
+	if title == "" {
+		title = "Select Model"
+	}
+	b.WriteString(HelpTitleStyle.Render(title) + "\n\n")
 
 	if m.searchQuery != "" {
 		b.WriteString("Filter: " + InfoStyle.Render(m.searchQuery) + " " + HelpDimStyle.Render("(type to filter, Backspace to clear)") + "\n\n")
@@ -269,6 +280,10 @@ func (m ModelPickerModel) renderModelLine(model ModelItem, isSelected bool) stri
 		providerLabel = "[OR] "
 	case "anthropic":
 		providerLabel = "[Anthropic] "
+	case "fireworks":
+		providerLabel = "[FW] "
+	case "nvidia":
+		providerLabel = "[NVIDIA] "
 	default:
 		providerLabel = "[" + model.Provider + "] "
 	}

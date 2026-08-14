@@ -70,7 +70,7 @@ func TestExportSessionWritesRedactedJSONToRequestedPath(t *testing.T) {
 	})
 
 	path := filepath.Join(t.TempDir(), "maintainer.json")
-	gotPath, err := exportSession(session, "--format json "+path)
+	gotPath, err := exportSession(session, "--format json "+path, "sk-test-secret")
 	if err != nil {
 		t.Fatalf("exportSession() error = %v", err)
 	}
@@ -102,7 +102,7 @@ func TestExportSessionInfersMarkdownFormatFromPath(t *testing.T) {
 	})
 
 	path := filepath.Join(t.TempDir(), "session.md")
-	gotPath, err := exportSession(session, path)
+	gotPath, err := exportSession(session, path, "sk-test-secret")
 	if err != nil {
 		t.Fatalf("exportSession() error = %v", err)
 	}
@@ -124,7 +124,7 @@ func TestExportSessionReturnsSaveError(t *testing.T) {
 	session.ID = "12345678-1234-1234-1234-123456789abc"
 
 	dirPath := t.TempDir()
-	_, err := exportSession(session, "--format json "+dirPath)
+	_, err := exportSession(session, "--format json "+dirPath, "sk-test-secret")
 	if err == nil {
 		t.Fatal("expected error when export path is a directory")
 	}

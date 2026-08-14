@@ -49,7 +49,7 @@ func (d *tuiHomeDelegate) OnNewChat() {
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
-	path, err := exportSession(d.app.session, "")
+	path, err := exportSession(d.app.session, "", d.app.config.APIKey)
 	if err != nil {
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Export failed: %v", err), Type: "error"})
 		return

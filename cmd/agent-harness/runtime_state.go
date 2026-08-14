@@ -82,29 +82,6 @@ func (app *App) persistUserSettings() {
 	}
 }
 
-// persistAPIKey updates the API key in the encrypted credential store so a
-// mid-session key change survives restarts without touching plaintext config.
-func (app *App) persistAPIKey() {
-	credManager := config.NewCredentialManager()
-	if !credManager.HasSecureCredentials() {
-		return
-	}
-	secureCfg, err := credManager.LoadSecure()
-	if err != nil {
-		return
-	}
-	secureCfg.APIKey = app.config.APIKey
-	if secureCfg.Provider == "" {
-		secureCfg.Provider = app.config.Provider
-	}
-	if err := credManager.SaveSecure(secureCfg); err != nil {
-		msg := sprintf("Warning: failed to save API key: %v", err)
-		if app.tuiApp != nil {
-			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
-		}
-	}
-}
-
 // commitConfigChange persists the current runtime configuration after any
 // in-session mutation so provider/model choices survive restarts.
 func (app *App) commitConfigChange() {

@@ -8,11 +8,16 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 )
 
-func exportSession(session *state.Session, args string) (string, error) {
+// exportSession writes a redacted session export. The active API key is
+// registered for exact redaction so no provider-specific key format can
+// slip past the pattern-based scrubber.
+func exportSession(session *state.Session, args, secret string) (string, error) {
 	format, path, err := parseExportArgs(args, session.ID)
 	if err != nil {
 		return "", err
 	}
+	state.SetExportRedactSecret(secret)
+	defer state.SetExportRedactSecret("")
 	if err := session.SaveExportToFile(path, format); err != nil {
 		return "", err
 	}

@@ -77,6 +77,16 @@ func (app *App) initCommandsSystem() {
 			return app.startLogin()
 		}))
 
+	app.cmdRegistry.Register("provider", "Switch provider and pick a model",
+		commands.LoginHandler(func() error {
+			return app.startProviderPicker()
+		}))
+
+	app.cmdRegistry.Register("models", "Pick a model from the full list",
+		commands.LoginHandler(func() error {
+			return app.startModelPicker()
+		}))
+
 	app.cmdRegistry.Register("persona", "Switch behavior mode",
 		commands.PersonaHandler(
 			func() string { return app.session.Persona },

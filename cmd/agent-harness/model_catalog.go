@@ -45,6 +45,12 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: config.DefaultModel, Name: "Ornith 1.0 9B GGUF", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultModel},
 			{ID: "local-model", Name: "OpenAI-compatible local model", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == "local-model"},
 		}
+	case "fireworks":
+		return []tui.ModelItem{
+			{ID: "accounts/fireworks/models/llama-v3p3-70b-instruct", Name: "Llama 3.3 70B Instruct", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/llama-v3p3-70b-instruct"},
+			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
+			{ID: "accounts/fireworks/models/mixtral-8x22b-instruct", Name: "Mixtral 8x22B Instruct", Provider: "fireworks", ContextLen: 65536, IsDefault: currentModel == "accounts/fireworks/models/mixtral-8x22b-instruct"},
+		}
 	default:
 		return []tui.ModelItem{
 			{ID: "nvidia/nemotron-3-super-120b-a12b:free", Name: "Nemotron 3 Super 120B (free)", Provider: "openrouter", ContextLen: 128000, IsDefault: currentModel == "nvidia/nemotron-3-super-120b-a12b:free"},

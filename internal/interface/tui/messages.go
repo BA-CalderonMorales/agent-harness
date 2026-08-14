@@ -56,6 +56,9 @@ type openCommandPaletteMsg struct{}
 // openModelPickerMsg signals the model picker should open
 type openModelPickerMsg struct{}
 
+// openProviderPickerMsg signals the provider-switch modal should open
+type openProviderPickerMsg struct{}
+
 // ClearChatMsg signals the chat should be cleared.
 // If FollowUpMsg is set, it is added after clearing (atomically, avoiding races).
 type ClearChatMsg struct {
@@ -83,6 +86,10 @@ type ProviderReadinessMsg struct {
 	Message   string
 	Model     string
 	Endpoint  string
+	// Gen is the probe generation the result belongs to; results from a
+	// generation older than the current one are stale and discarded
+	// (0 = no generation, always applied, e.g. boot notices).
+	Gen int
 }
 
 type SessionActivatedMsg struct {

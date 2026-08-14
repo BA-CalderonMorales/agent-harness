@@ -102,3 +102,28 @@ func expectNoRawSensitiveValues(out string) {
 		Expect(strings.Contains(out, value)).To(BeFalse(), "export leaked %q in:\n%s", value, out)
 	}
 }
+
+var _ = Describe("exact runtime key redaction", func() {
+	It("scrubs the active API key even when it has no recognizable format", func() {
+		s := NewSession("test-model")
+		s.Messages = []types.Message{
+			{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "my key is abcd-1234-custom-format"}}},
+		}
+		SetExportRedactSecret("abcd-1234-custom-format")
+		defer SetExportRedactSecret("")
+
+		text := s.ExportToText()
+		Expect(text).NotTo(ContainSubstring("abcd-1234-custom-format"))
+		Expect(text).To(ContainSubstring("<redacted>"))
+	})
+
+	It("clears the redaction when unset", func() {
+		s := NewSession("test-model")
+		s.Messages = []types.Message{
+			{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "value xyz-789"}}},
+		}
+		SetExportRedactSecret("")
+		text := s.ExportToText()
+		Expect(text).To(ContainSubstring("xyz-789"))
+	})
+})

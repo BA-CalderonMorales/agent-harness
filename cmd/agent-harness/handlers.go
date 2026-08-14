@@ -11,12 +11,6 @@ import (
 
 // handleUserSubmit processes user message submission.
 func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
-	// Login wizard intercept
-	if app.loginState != loginIdle {
-		app.handleLoginStep(text, tuiApp)
-		return
-	}
-
 	validator := ui.NewTermuxValidator()
 	normalizedInput, valid := validator.ValidateInput(text)
 	if !valid {

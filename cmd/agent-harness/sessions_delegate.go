@@ -98,7 +98,7 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to load session for export: %v", err), Type: "error"})
 		return
 	}
-	path, err := exportSession(session, "")
+	path, err := exportSession(session, "", d.app.config.APIKey)
 	if err != nil {
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to export: %v", err), Type: "error"})
 		return
@@ -107,7 +107,11 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 	if absErr != nil {
 		absPath = path
 	}
-	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions:   d.app.getSessionInfos(),
+		Notice:     sprintf("Exported to %s", absPath),
+		NoticeType: "success",
+	})
 }
 
 func (d *tuiSessionsDelegate) OnSessionCopy(id string) {
@@ -119,13 +123,18 @@ func (d *tuiSessionsDelegate) OnSessionCopy(id string) {
 
 	content := formatSessionForClipboard(session)
 	if err := clipboard.WriteAll(content); err != nil {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to copy to clipboard: %v", err), Type: "error"})
+		d.tuiApp.Send(tui.SessionsRefreshedMsg{
+			Sessions:   d.app.getSessionInfos(),
+			Notice:     sprintf("Failed to copy to clipboard: %v (needs xclip or xsel)", err),
+			NoticeType: "error",
+		})
 		return
 	}
 
-	d.tuiApp.Send(tui.StatusMsg{
-		Text: sprintf("Copied %d messages from session %s", len(session.Messages), shortID(id)),
-		Type: "success",
+	d.tuiApp.Send(tui.SessionsRefreshedMsg{
+		Sessions:   d.app.getSessionInfos(),
+		Notice:     sprintf("Copied %d messages from session %s", len(session.Messages), shortID(id)),
+		NoticeType: "success",
 	})
 }
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"strings"
 )
@@ -40,7 +41,49 @@ func (app *App) formatConfig() string {
 	sb.WriteString(sprintf("  Workspace Path:  %s\n", app.cwd))
 	sb.WriteString(sprintf("  Permission Mode: %s\n", app.config.PermissionMode))
 	sb.WriteString(sprintf("  Execution Mode:  %s\n", app.executionMode))
+	sb.WriteString(sprintf("  API Key:         %s\n", keyDisplay(app.config.APIKey)))
+	sb.WriteString(sprintf("  Key Source:      %s\n", keySource(app.config.APIKey)))
+	sb.WriteString(sprintf("  Credential Store: %s\n", config.SecureConfigPath()))
 	return sb.String()
+}
+
+// keyDisplay reports whether a key is configured without revealing any
+// key material: /config output lands in chat history, so even key
+// prefixes/suffixes are one fragment too many.
+func keyDisplay(key string) string {
+	if key == "" {
+		return "(not configured)"
+	}
+	return "(configured)"
+}
+
+// keySource describes where the active key came from without revealing
+// it. The source is derived from the runtime key value only, never from
+// the original reference (which may embed manager paths or tokens).
+func keySource(key string) string {
+	if key == "" {
+		return "none - run /login or set api_key (or a secret:// reference)"
+	}
+	return "env var / config file / secrets backend (resolved at boot)"
+}
+
+// keyHint renders a masked hint of the stored key for the login modal
+// (e.g. "sk-or-…7f75"). Only the provider prefix and the last four
+// characters are shown — never enough key material to reconstruct or
+// use the secret — so the hint is safe to render on screen.
+func keyHint(key string) string {
+	if key == "" {
+		return ""
+	}
+	const tailLen = 4
+	if len(key) <= tailLen+1 {
+		return "…" + key
+	}
+	prefix := key
+	if len(prefix) > 6 {
+		prefix = prefix[:6]
+	}
+	return prefix + "…" + key[len(key)-tailLen:]
 }
 
 // updateConfiguration updates configuration options dynamically via /config and re-probes.

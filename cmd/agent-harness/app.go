@@ -18,16 +18,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 )
 
-// LoginState tracks which step of the login wizard is active.
-type LoginState int
-
-const (
-	loginIdle LoginState = iota
-	loginProvider
-	loginAPIKey
-	loginModel
-)
-
 // App holds the application state and coordinates all components.
 type App struct {
 	config         *config.LayeredConfig
@@ -48,10 +38,9 @@ type App struct {
 	planMode       bool
 	steerQueue     []string
 
-	// Login wizard state
-	loginState       LoginState
-	loginProviderTmp string
-	loginModelTmp    string
+	// bootNotice carries a credential/config problem discovered before
+	// the TUI exists; run() surfaces it once the TUI is up.
+	bootNotice string
 }
 
 // newApp creates and initializes a new App instance.
@@ -109,6 +98,12 @@ func (app *App) run() error {
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
+		app.completeLogin(provider, apiKey, model, ta)
+	})
+	tuiApp.SetProviderPickHandler(func(provider string, ta *tui.App) {
+		app.pickProvider(provider, ta)
+	})
 	tuiApp.SetGitContextHandler(func(ctx *git.Context, ta *tui.App) {
 		app.gitContext = ctx
 		ta.SetProjectInfo(app.getProjectInfo())
@@ -134,7 +129,11 @@ func (app *App) run() error {
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
 	tuiApp.SetCommands(app.cmdRegistry.GetCommandInfos())
 
-	// Start provider readiness probe
+	// Surface boot-time credential/config problems in the TUI (durable
+	// system message + misconfigured readiness), then start the probe.
+	if app.bootNotice != "" {
+		tuiApp.Send(tui.ProviderReadinessMsg{Readiness: 4, Message: app.bootNotice})
+	}
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
 

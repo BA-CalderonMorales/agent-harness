@@ -15,23 +15,28 @@ func (app *App) getSessionInfos() []tui.SessionInfo {
 		sessions = []state.SessionMetadata{}
 	}
 
-	// Ensure current session is included
+	// Ensure current session is included (a fresh, not-yet-saved session
+	// is invisible on disk and would otherwise vanish from the list the
+	// moment it is created).
 	currentSession := app.sessionManager.GetCurrent()
-	if currentSession != nil {
-		sessions = ensureCurrentSession(sessions, currentSession.ID)
-	}
+	sessions = ensureCurrentSession(sessions, currentSession)
 
 	return convertToSessionInfos(sessions, currentSession)
 }
 
-// ensureCurrentSession adds current session to list if missing.
-func ensureCurrentSession(sessions []state.SessionMetadata, currentID string) []state.SessionMetadata {
+// ensureCurrentSession adds the current session to the list when it is
+// missing (fresh in-memory session not yet persisted). Dedupes
+// defensively: the disk list may already contain it.
+func ensureCurrentSession(sessions []state.SessionMetadata, current *state.Session) []state.SessionMetadata {
+	if current == nil || current.ID == "" {
+		return sessions
+	}
 	for _, s := range sessions {
-		if s.ID == currentID {
+		if s.ID == current.ID {
 			return sessions
 		}
 	}
-	return sessions
+	return append(sessions, current.GetMetadata())
 }
 
 // convertToSessionInfos converts SessionMetadata to SessionInfo.
