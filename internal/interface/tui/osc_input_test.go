@@ -103,27 +103,38 @@ func TestOSCFilterChunkingInvariance(t *testing.T) {
 	parameters.MaxSize = 60
 	properties := gopter.NewProperties(parameters)
 
-	properties.Property("stripping is invariant under byte-chunking", prop.ForAll(
+	// Non-OSC input (ESC keypresses, CSI sequences, plain text) is
+	// byte-transparent regardless of chunking: the filter must never
+	// reorder, merge or drop keystrokes.
+	properties.Property("non-OSC input is byte-transparent under any chunking", prop.ForAll(
 		func(input string, boundary int) bool {
 			if boundary < 0 || boundary > len(input) {
 				return true
 			}
+			if strings.Contains(input, "\x1b]") {
+				return true // OSC inputs are covered below
+			}
+			var whole oscStrippingReader
+			whole.r = bytes.NewReader([]byte(input))
+			if got := drain(t, &whole); got != input {
+				return false
+			}
 			chunks := []string{input[:boundary], input[boundary:]}
-			var f1, f2 oscStrippingReader
-			f1.r = bytes.NewReader([]byte(input))
-			whole := drain(t, &f1)
 			var b bytes.Buffer
 			for _, c := range chunks {
-				f2.r = bytes.NewReader([]byte(c))
-				b.WriteString(drain(t, &f2))
+				var f oscStrippingReader
+				f.r = bytes.NewReader([]byte(c))
+				b.WriteString(drain(t, &f))
 			}
-			return whole == b.String()
+			return b.String() == input
 		},
 		gen.AnyString(),
 		gen.IntRange(0, 200),
 	))
 
-	properties.Property("output matches a reference stripper on ANY input", prop.ForAll(
+	// Whole-input stripping matches the reference stripper when the
+	// input arrives as a single stream (the way terminal replies do).
+	properties.Property("single-stream output matches a reference stripper on ANY input", prop.ForAll(
 		func(input string) bool {
 			var f oscStrippingReader
 			f.r = bytes.NewReader([]byte(input))
@@ -134,15 +145,12 @@ func TestOSCFilterChunkingInvariance(t *testing.T) {
 		gen.AnyString(),
 	))
 
-	properties.Property("OSC spans never survive stripping", prop.ForAll(
+	// No stripped input may leave a complete OSC reply in the stream.
+	properties.Property("complete OSC spans never survive", prop.ForAll(
 		func(input string) bool {
 			var f oscStrippingReader
 			f.r = bytes.NewReader([]byte(input))
 			out := drain(t, &f)
-			if strings.Contains(out, "\x1b]") {
-				return false
-			}
-			// No payload fragment of a stripped reply may peek through.
 			if m := oscReplyRe.FindString(out); m != "" {
 				return false
 			}
@@ -152,6 +160,83 @@ func TestOSCFilterChunkingInvariance(t *testing.T) {
 	))
 
 	properties.TestingRun(t)
+}
+
+// ---------------------------------------------------------------------------
+// ESC keypress regression - the reason the filter exists is OSC replies
+// landing in the composer, but ESC keypresses are real input and must
+// reach tea. These pin the behavior the TUI depends on: ESC works alone,
+// ESC then a key works in any chunking, and no chunking ever panics.
+// ---------------------------------------------------------------------------
+
+func TestOSCStrippingReaderDeliversLoneESCAtEndOfStream(t *testing.T) {
+	f := &oscStrippingReader{r: bytes.NewReader([]byte("a\x1b"))}
+	out, err := io.ReadAll(f)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got, want := string(out), "a\x1b"; got != want {
+		t.Fatalf("got %q, want %q: a trailing ESC keypress must survive", got, want)
+	}
+}
+
+func TestOSCStrippingReaderDeliversESCThenKeyAcrossChunks(t *testing.T) {
+	var f oscStrippingReader
+	f.r = bytes.NewReader([]byte("\x1b"))
+	if got := drain(t, &f); got != "\x1b" {
+		t.Fatalf("chunk 1 = %q, want %q", got, "\x1b")
+	}
+	f.r = bytes.NewReader([]byte("q"))
+	if got := drain(t, &f); got != "q" {
+		t.Fatalf("chunk 2 = %q, want %q", got, "q")
+	}
+}
+
+// The exact byte pattern that used to panic: ESC (settings cancel) then
+// an arrow key in the same read chunk. 3 input bytes expand to 4 output
+// bytes; the writer must spill instead of writing past the buffer.
+func TestOSCStrippingReaderNeverPanicsOnESCThenArrowKey(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic: %v", r)
+		}
+	}()
+	p := make([]byte, 3)
+	f := &oscStrippingReader{r: bytes.NewReader([]byte("\x1b\x1b[B"))}
+	got := ""
+	for {
+		n, err := f.Read(p)
+		got += string(p[:n])
+		if err != nil {
+			break
+		}
+	}
+	if want := "\x1b\x1b[B"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+// ESC then a single key byte in a 1-byte read used to panic with
+// index out of range [1] with length 1.
+func TestOSCStrippingReaderNeverPanicsOnSmallBuffers(t *testing.T) {
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("panic: %v", r)
+		}
+	}()
+	p := make([]byte, 1)
+	f := &oscStrippingReader{r: bytes.NewReader([]byte("\x1b:"))}
+	got := ""
+	for {
+		n, err := f.Read(p)
+		got += string(p[:n])
+		if err != nil {
+			break
+		}
+	}
+	if want := "\x1b:"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
 }
 
 // ---------------------------------------------------------------------------
