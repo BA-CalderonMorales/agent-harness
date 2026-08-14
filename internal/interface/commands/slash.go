@@ -140,7 +140,7 @@ func (sr *SlashRegistry) GetHelp() string {
 	}{
 		{"Core", []string{"help", "clear", "compact", "version", "quit", "workspace", "init", "current-model"}},
 		{"Session", []string{"status", "session", "steer"}},
-		{"Model", []string{"model"}},
+		{"Model", []string{"model", "models", "provider"}},
 		{"Settings", []string{"permissions", "config", "login", "logout", "settings"}},
 		{"Git", []string{"branch", "pr"}},
 		{"Output", []string{"cost", "export"}},

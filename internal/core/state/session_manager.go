@@ -34,7 +34,7 @@ func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
 		sessionsDir = filepath.Join(home, ".agent-harness", "sessions")
 	}
 
-	if err := os.MkdirAll(sessionsDir, 0755); err != nil {
+	if err := os.MkdirAll(sessionsDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
 	}
 

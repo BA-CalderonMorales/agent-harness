@@ -5,97 +5,74 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	"strings"
 )
 
-// handleLoginStep processes one step of the login wizard.
-func (app *App) handleLoginStep(text string, tuiApp *tui.App) {
-	switch app.loginState {
-	case loginProvider:
-		provider := resolveProviderInput(text)
-		app.loginProviderTmp = provider
-		app.config.Provider = provider
-		app.config.EndpointURL = config.DefaultEndpointForProvider(provider)
-		if config.IsLocalProvider(provider) {
-			app.config.APIKey = provider
-			app.loginState = loginModel
-			tuiApp.AddMessage("system", sprintf("Provider: %s (local)\nEnter model [%s]:", provider, getDefaultModel(provider)))
+// completeLogin persists the modal login wizard's result: the provider,
+// the (masked-input) API key, and the model. The key goes to the
+// encrypted store; the provider/model go through the normal config
+// commit path. Runs on the event loop via SetLoginHandler.
+func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
+	if provider == "" {
+		return
+	}
+	app.config.Provider = provider
+	app.config.EndpointURL = config.DefaultEndpointForProvider(provider)
+
+	if config.IsLocalProvider(provider) {
+		app.config.APIKey = provider
+		tuiApp.AddMessage("system", sprintf("Local provider configured. Model: %s", model))
+	} else if apiKey != "" {
+		app.config.APIKey = apiKey
+		credManager := config.NewCredentialManager()
+		secureCfg := &config.SecureConfig{
+			Provider: provider,
+			APIKey:   apiKey,
+			Model:    model,
+		}
+		if err := credManager.SaveSecure(secureCfg); err != nil {
+			tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
 		} else {
-			app.loginState = loginAPIKey
-			tuiApp.AddMessage("system", sprintf("Provider: %s\nEnter API key (input visible - type carefully):", provider))
+			tuiApp.AddMessage("system", sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath()))
 		}
+	} else if app.config.APIKey != "" {
+		// No key typed and one is already configured: retain it. Only
+		// the provider/model in the store are refreshed so a provider
+		// switch survives restarts without re-authenticating. The
+		// message must not echo any key material (not even the masked
+		// hint): chat messages persist to session files and exports.
+		tuiApp.AddMessage("system", sprintf("Using stored API key. Provider: %s", provider))
+		credManager := config.NewCredentialManager()
+		if secureCfg, err := credManager.LoadSecure(); err == nil {
+			secureCfg.Provider = provider
+			secureCfg.Model = model
+			_ = credManager.SaveSecure(secureCfg)
+		}
+	} else {
+		tuiApp.AddMessage("system", "No API key entered; provider left misconfigured.")
+	}
 
-	case loginAPIKey:
-		key := strings.TrimSpace(text)
-		if key == "" {
-			tuiApp.AddMessage("system", "API key cannot be empty. Enter API key:")
-			return
-		}
-		app.config.APIKey = key
-		app.loginState = loginModel
-		tuiApp.RemoveLastUserMessage() // hide key from chat history
-		tuiApp.AddMessage("system", "API key received.\nEnter model (or press Enter for default):")
-
-	case loginModel:
-		model := strings.TrimSpace(text)
-		if model == "" {
-			model = getDefaultModel(app.loginProviderTmp)
-		}
-		app.loginModelTmp = model
-		app.config.Model = model
+	if model == "" {
+		model = getDefaultModel(provider)
+	}
+	app.config.Model = model
+	if app.session != nil {
 		app.session.Model = model
+	}
+	if app.costTracker != nil {
 		app.costTracker.SetModel(model)
-		app.commitConfigChange()
-
-		if config.IsLocalProvider(app.loginProviderTmp) {
-			tuiApp.AddMessage("system", "Local provider configured.")
-		} else {
-			credManager := config.NewCredentialManager()
-			secureCfg := &config.SecureConfig{
-				Provider: app.loginProviderTmp,
-				APIKey:   app.config.APIKey,
-				Model:    model,
-			}
-			if err := credManager.SaveSecure(secureCfg); err != nil {
-				tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
-			} else {
-				tuiApp.AddMessage("system", "Credentials saved.")
-			}
-		}
-
-		// Recreate LLM client
-		app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
-		app.loop = agent.NewLoop(app.client)
-
-		// Update TUI
-		tuiApp.SetChatModel(model)
-		tuiApp.SetSettings(app.getSettings())
-		tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
-		tuiApp.SetModels(app.getModelItems())
-
-		app.loginState = loginIdle
-		tuiApp.AddMessage("system", sprintf("Logged in. Provider: %s | Model: %s", app.loginProviderTmp, model))
 	}
-}
+	app.commitConfigChange()
 
-// resolveProviderInput maps numeric or name input to provider.
-func resolveProviderInput(input string) string {
-	switch strings.TrimSpace(input) {
-	case "2", "openai":
-		return "openai"
-	case "3", "anthropic":
-		return "anthropic"
-	case "4", "openrouter":
-		return "openrouter"
-	case "1", "local", "llama.cpp", "llama":
-		return "local"
-	case "5", "ollama":
-		return "ollama"
-	case "6", "nvidia":
-		return "nvidia"
-	default:
-		return "local"
-	}
-}
+	// Recreate the LLM client and refresh the TUI state.
+	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.loop = agent.NewLoop(app.client)
+	tuiApp.SetChatModel(model)
+	tuiApp.SetSettings(app.getSettings())
+	tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
+	tuiApp.SetModels(app.getModelItems())
+	tuiApp.AddMessage("system", sprintf("Logged in. Provider: %s | Model: %s", provider, model))
 
-// handleUserCommand processes slash commands.
+	// Re-probe the new provider.
+	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	tuiApp.StartProviderProbe(prober)
+}

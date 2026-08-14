@@ -32,12 +32,12 @@ func TestTUIRapid_SlashCommandStateTransitions(t *testing.T) {
 		})
 		app.Init()
 
-		var m tea.Model = *app
+		var m tea.Model = app
 		m, _ = m.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
 
 		// Property 1: Dispatching /settings via UserCommandMsg switches view to viewSettings (3)
 		m, _ = m.Update(UserCommandMsg{Command: "/settings"})
-		appVal, ok := m.(App)
+		appVal, ok := m.(*App)
 		if !ok {
 			t.Fatalf("Expected App value, got %T", m)
 		}
@@ -51,18 +51,11 @@ func TestTUIRapid_SlashCommandStateTransitions(t *testing.T) {
 		}
 
 		// Property 2: Palette selection for /settings triggers view switch
-		m, cmd := appVal.handlePaletteSelection(&commandInfo{
+		appVal.handlePaletteSelection(&commandInfo{
 			Command: "/settings",
 			Args:    "",
 		})
-		if cmd != nil {
-			msg := cmd()
-			m, _ = m.Update(msg)
-		}
-		appVal2, ok := m.(App)
-		if !ok {
-			t.Fatalf("Expected App value")
-		}
+		appVal2 := appVal
 		if appVal2.activeView != viewSettings {
 			t.Fatalf("Expected activeView to remain viewSettings (3) after palette /settings")
 		}

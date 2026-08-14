@@ -164,6 +164,9 @@ func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string 
 }
 
 func compactCommandForWidth(cmd string, maxLen int) string {
+	if maxLen <= 0 || len(cmd) <= maxLen {
+		return cmd
+	}
 	if maxLen <= 3 {
 		return cmd[:maxLen]
 	}

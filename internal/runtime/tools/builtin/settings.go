@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -52,11 +53,18 @@ var SettingsTool = tools.NewTool(tools.Tool{
 		key := getString(input, "key")
 		configPath := defaultConfigPath()
 
+		// Secrets never travel through this tool: tool input and results
+		// land in the chat pane, session files, and exports. Credentials
+		// belong to the encrypted store (/login), never a plaintext file.
+		if key != "" && isSecretLikeKey(key) {
+			return tools.ToolResult{Data: fmt.Sprintf("Setting '%s' is a credential and is not readable or writable through the settings tool; use /login instead.", key)}, nil
+		}
+
 		data := loadSettingsMap(configPath)
 
 		if action == "get" {
 			if key == "" {
-				pretty, _ := json.MarshalIndent(data, "", "  ")
+				pretty, _ := json.MarshalIndent(redactSecretMap(data), "", "  ")
 				return tools.ToolResult{Data: string(pretty)}, nil
 			}
 			val, ok := data[key]
@@ -102,12 +110,38 @@ func loadSettingsMap(path string) map[string]any {
 }
 
 func saveSettingsMap(path string, data map[string]any) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
 		return err
 	}
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0644)
+	return os.WriteFile(path, append(b, '\n'), 0600)
+}
+
+// isSecretLikeKey reports whether a settings key could carry credential
+// material. The settings tool refuses these on both read and write.
+func isSecretLikeKey(key string) bool {
+	k := strings.ToLower(strings.TrimSpace(key))
+	for _, needle := range []string{"key", "token", "secret", "password"} {
+		if strings.Contains(k, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+// redactSecretMap masks credential-like values so a legacy plaintext
+// settings dump can never surface them.
+func redactSecretMap(data map[string]any) map[string]any {
+	out := make(map[string]any, len(data))
+	for k, v := range data {
+		if isSecretLikeKey(k) {
+			out[k] = "****"
+			continue
+		}
+		out[k] = v
+	}
+	return out
 }

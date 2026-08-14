@@ -56,7 +56,7 @@ func TestTUICommandExecutionProperties(t *testing.T) {
 
 			// Dispatch UserCommandMsg
 			model, _ := app.Update(UserCommandMsg{Command: "/" + cmdName})
-			updatedApp := model.(App)
+			updatedApp := model.(*App)
 
 			msgs := updatedApp.chatModel.messages
 			if len(msgs) == 0 {
