@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -94,6 +95,7 @@ type App struct {
 	// Handlers for user actions (set by main.go)
 	onUserSubmit  func(string, *App)
 	onUserCommand func(string, *App)
+	onGitContext  func(*git.Context, *App)
 
 	// Agent cancellation context
 	agentCancelFunc context.CancelFunc
@@ -143,6 +145,12 @@ func (a *App) SetUserSubmitHandler(handler func(string, *App)) {
 // SetUserCommandHandler sets the handler for slash commands.
 func (a *App) SetUserCommandHandler(handler func(string, *App)) {
 	a.onUserCommand = handler
+}
+
+// SetGitContextHandler sets the handler for late-arriving git context;
+// it runs on the event loop, so the receiver may mutate app state safely.
+func (a *App) SetGitContextHandler(handler func(*git.Context, *App)) {
+	a.onGitContext = handler
 }
 
 // SetSessionsDelegate sets the sessions handler delegate.

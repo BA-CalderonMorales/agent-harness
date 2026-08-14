@@ -5,6 +5,7 @@ package tui
 
 import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -106,4 +107,11 @@ type SessionsRefreshedMsg struct {
 // SwitchViewMsg requests switching the active tab view (0=Home, 1=Chat, 2=Sessions, 3=Settings)
 type SwitchViewMsg struct {
 	View viewID
+}
+
+// GitContextMsg delivers the collected git context after boot; the
+// dashboard and welcome populate when it lands instead of blocking the
+// TUI start.
+type GitContextMsg struct {
+	Context *git.Context
 }
