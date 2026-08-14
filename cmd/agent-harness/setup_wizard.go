@@ -68,7 +68,8 @@ func promptProvider() string {
 	fmt.Println("    3) Anthropic")
 	fmt.Println("    4) OpenRouter")
 	fmt.Println("    5) Ollama")
-	fmt.Print("  Enter choice (1-5) [1]: ")
+	fmt.Println("    6) NVIDIA (build.nvidia.com free tier)")
+	fmt.Print("  Enter choice (1-6) [1]: ")
 
 	reader := bufio.NewReader(os.Stdin)
 	choice, _ := reader.ReadString('\n')
@@ -83,6 +84,8 @@ func promptProvider() string {
 		return "openrouter"
 	case "5":
 		return "ollama"
+	case "6":
+		return "nvidia"
 	default:
 		return "local"
 	}

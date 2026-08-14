@@ -1,0 +1,7 @@
+data: {"id":"chatcmpl-nvidia","object":"chat.completion.chunk","model":"nvidia/nemotron-3.5-lightning-30b-a3b","choices":[{"index":0,"delta":{"role":"assistant","reasoning_content":"Let me think about this carefully"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-nvidia","object":"chat.completion.chunk","model":"nvidia/nemotron-3.5-lightning-30b-a3b","choices":[{"index":0,"delta":{"content":"The answer"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-nvidia","object":"chat.completion.chunk","model":"nvidia/nemotron-3.5-lightning-30b-a3b","choices":[{"index":0,"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":5,"completion_tokens":2,"total_tokens":7}}
+
+data: [DONE]
