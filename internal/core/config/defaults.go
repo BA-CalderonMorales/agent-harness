@@ -44,6 +44,8 @@ func DefaultEndpointForProvider(provider string) string {
 		return "https://openrouter.ai/api/v1"
 	case "ollama":
 		return "http://127.0.0.1:11434/v1"
+	case "nvidia":
+		return "https://integrate.api.nvidia.com/v1"
 	case "local":
 		return DefaultEndpointURL
 	default:

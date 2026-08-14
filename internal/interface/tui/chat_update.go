@@ -186,10 +186,20 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if finalContent == "" && msg.FullResponse != "" {
 			finalContent = msg.FullResponse
 		}
+		// Tool-only turns stream no text: the placeholder already holds the
+		// tool display, so settle it in place instead of leaving a stuck
+		// assistant bubble behind.
+		if finalContent == "" && m.currentStreamingAssistantIdx >= 0 &&
+			m.currentStreamingAssistantIdx < len(m.messages) {
+			finalContent = m.messages[m.currentStreamingAssistantIdx].Content
+		}
 		if finalContent != "" {
 			m.finalizeStreamingMessage(finalContent)
 		}
 		m.streamBuffer = ""
+		m.currentToolMsg = nil
+		m.currentTool = nil
+		m.toolAnimation = nil
 
 		m.completedToolMsgs = nil
 		m.refreshViewport()

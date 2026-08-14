@@ -195,6 +195,31 @@ var _ = Describe("ChatModel", func() {
 				Expect(chat.messages[1].Thinking).To(BeFalse())
 			})
 		})
+
+		Context("Given a tool-only turn ends with no streamed text", func() {
+			It("should settle the tool placeholder instead of leaving it stuck", func() {
+				By("materializing a tool placeholder")
+				chat.AddMessage("user", "list the repo")
+				chat.messages = append(chat.messages, ChatMessage{
+					Role:           "assistant",
+					Content:        "→ ls map[path:/tmp]",
+					Timestamp:      time.Now(),
+					Thinking:       true,
+					StreamedChunks: 6,
+				})
+				chat.currentStreamingAssistantIdx = 1
+
+				By("finishing the turn with no text content")
+				model, _ := chat.Update(AgentDoneMsg{Timestamp: time.Now()})
+				chat = model.(ChatModel)
+
+				By("verifying the placeholder settled in place")
+				Expect(len(chat.messages)).To(Equal(2))
+				Expect(chat.messages[1].Content).To(Equal("→ ls map[path:/tmp]"))
+				Expect(chat.messages[1].Thinking).To(BeFalse())
+				Expect(chat.currentStreamingAssistantIdx).To(Equal(-1))
+			})
+		})
 	})
 
 	Describe("Input Area Ergonomics", func() {
@@ -1446,6 +1471,56 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying no message was submitted")
 				Expect(chat.messages).To(HaveLen(0))
+			})
+		})
+
+		Context("Given the composer is blurred (navigate mode)", func() {
+			It("should teach the 'i' key in the placeholder", func() {
+				By("blurring the composer")
+				chat.Blur()
+
+				By("verifying the navigate affordance")
+				Expect(chat.textarea.Placeholder).To(Equal("Press i to type a message"))
+			})
+
+			It("should restore the typing affordance on focus", func() {
+				By("focusing back into the composer")
+				chat.Blur()
+				chat.Focus()
+
+				By("verifying the typing placeholder is back")
+				Expect(chat.textarea.Placeholder).To(Equal("Type a message..."))
+			})
+		})
+	})
+
+	// ========================================================================
+	// Mode Guidance — the vim-style mode line must never hide the mode
+	// ========================================================================
+	Describe("Mode Guidance", func() {
+		Context("Given a persona is set", func() {
+			It("should keep the mode as the first beat of the mode line", func() {
+				By("setting navigate mode with a persona")
+				chat.modeLabel = "navigate"
+				chat.SetPersona("developer")
+				chat.width = 100
+				chat.height = 24
+
+				By("rendering the mode line")
+				line := chat.renderModeLine()
+
+				By("verifying the mode comes first and the persona follows")
+				Expect(line).To(ContainSubstring("navigate"))
+				Expect(line).To(ContainSubstring("developer"))
+				Expect(strings.Index(line, "navigate")).To(BeNumerically("<", strings.Index(line, "developer")))
+			})
+		})
+
+		Context("Given the mode label is empty", func() {
+			It("should default to navigate", func() {
+				chat.modeLabel = ""
+				line := chat.renderModeLine()
+				Expect(line).To(ContainSubstring("navigate"))
 			})
 		})
 	})

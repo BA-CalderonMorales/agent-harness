@@ -97,14 +97,18 @@ func (m ChatModel) View() string {
 // renderModeLine renders the mode · model · provider · reasoning-effort line
 // shown under the input, mirroring modern composer status rows.
 func (m ChatModel) renderModeLine() string {
+	// The mode is always the first beat of the line: vim-style users read
+	// navigate/typing instantly, and the persona never hides it.
 	mode := m.modeLabel
-	if m.persona != "" {
-		mode = m.persona
-	} else if mode == "" {
-		mode = "typing"
+	if mode == "" {
+		mode = "navigate"
 	}
+	modeBit := ModePromptStyle.Render(mode)
 
-	parts := []string{mode}
+	parts := []string{modeBit}
+	if m.persona != "" {
+		parts = append(parts, m.persona)
+	}
 	if m.model != "" {
 		parts = append(parts, ShortenModelName(m.model))
 	}

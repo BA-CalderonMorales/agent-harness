@@ -91,6 +91,8 @@ func resolveProviderInput(input string) string {
 		return "local"
 	case "5", "ollama":
 		return "ollama"
+	case "6", "nvidia":
+		return "nvidia"
 	default:
 		return "local"
 	}

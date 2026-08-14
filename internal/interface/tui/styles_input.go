@@ -35,6 +35,10 @@ var (
 	InputMetaStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted)
 
+	ModePromptStyle = lipgloss.NewStyle().
+			Foreground(ColorPrimary).
+			Bold(true)
+
 	PromptStyle = lipgloss.NewStyle().
 			Foreground(ColorPrimary).
 			Bold(true)

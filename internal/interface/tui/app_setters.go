@@ -10,6 +10,12 @@ func (a *App) AddMessage(role, content string) {
 	a.chatModel.AddMessage(role, content)
 }
 
+// ReplaceWelcomeMessage swaps the boot welcome in place when late context
+// (git) arrives.
+func (a *App) ReplaceWelcomeMessage(content string) {
+	a.chatModel.ReplaceWelcomeMessage(content)
+}
+
 // SetInput sets the chat input text.
 func (a *App) SetInput(text string) {
 	a.chatModel.SetInput(text)

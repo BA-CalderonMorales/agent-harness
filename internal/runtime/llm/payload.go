@@ -49,6 +49,18 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 	if req.ThinkingBudget > 0 && c.Provider == "anthropic" {
 		payload["thinking"] = map[string]any{"type": "enabled", "budget_tokens": req.ThinkingBudget}
 	}
+	// NVIDIA's hosted API has no reasoning_effort; it budgets thinking via
+	// extra_body (chat_template_kwargs.enable_thinking + reasoning_budget).
+	if c.Provider == "nvidia" {
+		if req.ReasoningEffort != "" && req.ReasoningEffort != "off" {
+			payload["extra_body"] = map[string]any{
+				"chat_template_kwargs": map[string]any{"enable_thinking": true},
+				"reasoning_budget":     nvidiaReasoningBudget(req.ReasoningEffort),
+			}
+		}
+		return json.Marshal(payload)
+	}
+
 	// OpenAI-compatible reasoning effort (OpenRouter passthrough, OpenAI,
 	// and local gateways that support it). Ignored when unset or off.
 	switch req.ReasoningEffort {
@@ -57,6 +69,19 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 	}
 
 	return json.Marshal(payload)
+}
+
+// nvidiaReasoningBudget maps the harness effort profiles to NVIDIA's
+// reasoning_budget tokens (the free tier caps at 16384).
+func nvidiaReasoningBudget(effort string) int {
+	switch effort {
+	case "low":
+		return 1024
+	case "high":
+		return 16384
+	default:
+		return 4096
+	}
 }
 
 func (c *HTTPClient) convertMessage(m types.Message) map[string]any {
