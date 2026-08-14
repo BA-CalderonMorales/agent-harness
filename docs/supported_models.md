@@ -28,6 +28,27 @@ environment override details.
 
 ---
 
+## NVIDIA
+
+NVIDIA's hosted API (`https://integrate.api.nvidia.com/v1`) offers a
+generous free tier for learning and demo work. Set the provider to
+`nvidia` and authenticate with an `nvapi-...` key via
+`NVIDIA_API_KEY` (or `/login` / the setup wizard).
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `nvidia/nemotron-3.5-lightning-30b-a3b` | ✅ Default | Thinking-capable, great tool use, free tier |
+| `nvidia/nemotron-3-super-120b-a12b` | ✅ Supported | Strong reasoning |
+| `nvidia/llama-3.1-nemotron-ultra-253b-v1` | ✅ Supported | Largest hosted Nemotron |
+
+Reasoning effort profiles (`/effort`) map to NVIDIA's `reasoning_budget`
+(thinking) via `extra_body`; the harness ignores `reasoning_content`
+deltas in the stream.
+
+---
+
 ## OpenRouter
 
 OpenRouter provides access to multiple hosted model providers through a single
