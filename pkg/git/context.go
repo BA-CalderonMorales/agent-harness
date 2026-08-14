@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
 // Context holds git context information
@@ -29,6 +30,11 @@ func GetContext() (*Context, error) {
 }
 
 // GetContextForDir retrieves git context for a specific directory.
+//
+// The subprocess calls run in parallel and git status is executed once:
+// on slow filesystems (WSL mounts, OneDrive) each `git status` costs
+// seconds, and the old serial collection with two status calls blocked
+// the TUI boot for the sum of every command.
 func GetContextForDir(dir string) (*Context, error) {
 	ctx := &Context{}
 
@@ -42,38 +48,49 @@ func GetContextForDir(dir string) (*Context, error) {
 	ctx.IsRepo = true
 	ctx.Root = root
 
-	// Get branch
-	if branch, err := getGitBranch(dir); err == nil {
-		ctx.Branch = branch
-	}
+	var wg sync.WaitGroup
+	wg.Add(6)
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if branch, err := getGitBranch(dir); err == nil {
+			ctx.Branch = branch
+		}
+	}()
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if commit, err := getGitCommit(dir); err == nil {
+			ctx.Commit = commit
+		}
+	}()
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if remote, err := getRemoteURL(dir); err == nil {
+			ctx.RemoteURL = remote
+		}
+	}()
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if commits, err := getRecentCommits(dir, 3); err == nil {
+			ctx.RecentCommits = commits
+		}
+	}()
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if status, err := getStatusShort(dir, 20); err == nil {
+			ctx.StatusFiles = status
+		}
+	}()
+	go func() { //nolint:errcheck
+		defer wg.Done()
+		if files, err := getTopLevelFiles(dir, 15); err == nil {
+			ctx.TopLevelFiles = files
+		}
+	}()
+	wg.Wait()
 
-	// Get commit hash
-	if commit, err := getGitCommit(dir); err == nil {
-		ctx.Commit = commit
-	}
-
-	// Check for uncommitted changes
-	ctx.HasChanges = hasUncommittedChanges(dir)
-
-	// Get remote URL
-	if remote, err := getRemoteURL(dir); err == nil {
-		ctx.RemoteURL = remote
-	}
-
-	// Rich context: recent commits
-	if commits, err := getRecentCommits(dir, 3); err == nil {
-		ctx.RecentCommits = commits
-	}
-
-	// Rich context: status files (capped)
-	if status, err := getStatusShort(dir, 20); err == nil {
-		ctx.StatusFiles = status
-	}
-
-	// Rich context: top-level files (capped)
-	if files, err := getTopLevelFiles(dir, 15); err == nil {
-		ctx.TopLevelFiles = files
-	}
+	// One status call feeds both fields: any tracked change in the
+	// capped list means the tree is dirty.
+	ctx.HasChanges = len(ctx.StatusFiles) > 0
 
 	return ctx, nil
 }
@@ -106,16 +123,6 @@ func getGitCommit(dir string) (string, error) {
 		return "", err
 	}
 	return strings.TrimSpace(string(out)), nil
-}
-
-// hasUncommittedChanges checks if there are uncommitted changes
-func hasUncommittedChanges(dir string) bool {
-	cmd := gitCommand(dir, "status", "--porcelain")
-	out, err := cmd.Output()
-	if err != nil {
-		return false
-	}
-	return len(strings.TrimSpace(string(out))) > 0
 }
 
 // getRemoteURL returns the origin remote URL

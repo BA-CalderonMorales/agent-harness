@@ -76,7 +76,8 @@ func newApp() (*App, error) {
 		return nil, err
 	}
 
-	app.gitContext, _ = git.GetContext()
+	// Git context is collected after the TUI starts (see run) so a slow
+	// filesystem never blocks the first paint.
 	app.initTools()
 	app.initCommands()
 
@@ -108,6 +109,11 @@ func (app *App) run() error {
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetGitContextHandler(func(ctx *git.Context, ta *tui.App) {
+		app.gitContext = ctx
+		ta.SetProjectInfo(app.getProjectInfo())
+		ta.ReplaceWelcomeMessage(app.buildWelcomeMessage())
+	})
 
 	// Initial data
 	tuiApp.SetChatMessages(app.session.Messages)
@@ -131,6 +137,13 @@ func (app *App) run() error {
 	// Start provider readiness probe
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// Collect git context off the boot path; the dashboard and welcome
+	// fill in when the GitContextMsg lands on the event loop.
+	go func() {
+		ctx, _ := git.GetContext()
+		tuiApp.Send(tui.GitContextMsg{Context: ctx})
+	}()
 
 	return tui.Run(tuiApp)
 }
