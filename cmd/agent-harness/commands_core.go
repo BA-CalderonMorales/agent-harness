@@ -140,11 +140,6 @@ func (app *App) initCommandsCore() {
 			},
 		))
 
-	app.cmdRegistry.Register("improve", "Run self-improvement workflow",
-		commands.ImproveHandler(func() (string, error) {
-			return "Self-improvement workflow complete: workspace health verified, build & tests passing.", nil
-		}))
-
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()

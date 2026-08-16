@@ -35,22 +35,6 @@ func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *A
 	}
 }
 
-func TestImproveCommandIsRegistered(t *testing.T) {
-	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
-	app.initCommands()
-
-	result, handled, err := app.cmdRegistry.Handle("/improve")
-	if err != nil {
-		t.Fatalf("/improve error = %v", err)
-	}
-	if !handled {
-		t.Fatal("/improve was not handled")
-	}
-	if !strings.Contains(result, "Self-improvement") {
-		t.Fatalf("expected self-improvement response, got:\n%s", result)
-	}
-}
-
 func receiveTUIMessage(t *testing.T, app *tui.App) tea.Msg {
 	t.Helper()
 

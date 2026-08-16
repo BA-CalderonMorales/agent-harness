@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
@@ -19,6 +20,13 @@ var _ = Describe("App", func() {
 		app = NewApp()
 		app.width = 80
 		app.height = 24
+		// The boot path feeds the palette from the registry (app.go); the
+		// palette is empty until then, so mirror that feed here.
+		reg := commands.NewSlashRegistry()
+		for _, name := range []string{"help", "status", "clear", "model", "persona", "quit"} {
+			reg.Register(name, "desc "+name, func(string) (string, error) { return "", nil })
+		}
+		app.commandPalette.SetCommands(reg.GetCommandInfos())
 	})
 
 	Describe("Initialization", func() {

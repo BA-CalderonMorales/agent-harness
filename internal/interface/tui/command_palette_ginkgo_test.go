@@ -4,6 +4,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 )
 
 func maxInt(a, b int) int {
@@ -16,8 +18,47 @@ func maxInt(a, b int) int {
 var _ = Describe("CommandPaletteModel", func() {
 	var palette CommandPaletteModel
 
+	// seedPalette mirrors the app boot path: the registry is the single
+	// source of truth and SetCommands feeds the palette; there is no
+	// hardcoded seed anymore. Descriptions mirror the real registry so
+	// description-filtering specs stay meaningful.
+	seedPalette := func(extra ...string) {
+		descs := map[string]string{
+			"help": "Show available commands", "status": "Show session status",
+			"clear": "Clear the session history", "compact": "Compact session to reduce token usage",
+			"cost": "Show token usage and cost", "export": "Export conversation to file",
+			"model": "Show or change the current model", "current-model": "Show the current model",
+			"diff": "Show git diff", "version": "Show version",
+			"config": "Show configuration", "permissions": "Show or change permission mode",
+			"workspace": "Show workspace information", "agents": "Show available agents",
+			"skills": "Show available skills", "persona": "Switch behavior mode",
+			"audit": "Show recent tool activity", "login": "Log in to a provider",
+			"logout": "Clear stored credentials", "provider": "Switch provider",
+			"models": "List available models", "reset": "Reset agent harness (destructive)",
+			"steer": "Queue a message for current turn", "commit": "Stage and commit changes",
+			"branch": "Show or create branches", "pr": "Open a pull request",
+			"session": "Manage sessions", "quit": "Exit application",
+		}
+		reg := commands.NewSlashRegistry()
+		for _, name := range append([]string{
+			"help", "status", "clear", "compact", "cost", "export",
+			"model", "current-model", "diff", "version", "config",
+			"permissions", "workspace", "agents", "skills", "persona",
+			"audit", "login", "logout", "provider", "models", "reset",
+			"steer", "commit", "branch", "pr", "session", "quit",
+		}, extra...) {
+			desc := descs[name]
+			if desc == "" {
+				desc = "desc " + name
+			}
+			reg.Register(name, desc, func(string) (string, error) { return "", nil })
+		}
+		palette.SetCommands(reg.GetCommandInfos())
+	}
+
 	BeforeEach(func() {
 		palette = NewCommandPalette()
+		seedPalette()
 	})
 
 	Describe("Initialization", func() {

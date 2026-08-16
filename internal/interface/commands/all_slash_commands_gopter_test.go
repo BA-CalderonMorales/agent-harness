@@ -332,7 +332,6 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			registry.Register("export", "Export session", ExportHandler(func(p string) (string, error) { return p, nil }))
 			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "sessions" }, func(_ string) error { return nil }))
 			registry.Register("plan", "Toggle plan mode", PlanHandler(func() bool { return false }, func(_ bool) string { return "plan" }))
-			registry.Register("improve", "Improve workspace", ImproveHandler(func() (string, error) { return "improved", nil }))
 			registry.Register("memory", "Show memory", MemoryHandler(func() string { return "memory" }))
 			registry.Register("version", "Show version", VersionHandler("1.0.0", "build"))
 			registry.Register("config", "Show config", ConfigHandler(
@@ -359,7 +358,7 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			// Handled result must be non-empty string
 			return result != ""
 		},
-		gen.OneConstOf("help", "status", "clear", "compact", "cost", "current-model", "model", "export", "session", "plan", "improve", "memory", "version", "config", "permissions", "agents", "skills", "quit"),
+		gen.OneConstOf("help", "status", "clear", "compact", "cost", "current-model", "model", "export", "session", "plan", "memory", "version", "config", "permissions", "agents", "skills", "quit"),
 		gen.AlphaString(),
 	))
 
