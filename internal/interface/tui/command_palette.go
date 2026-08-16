@@ -319,6 +319,33 @@ func (m CommandPaletteModel) renderCommandLine(cmd commandInfo, isSelected bool)
 	return line
 }
 
+// paletteFooterHint returns a footer hint that fits the palette panel's
+// inner width. The panel is viewport.Width wide minus its border and
+// padding; the longest variant that still fits wins, so the footer never
+// clips or wraps at narrow terminal widths.
+func paletteFooterHint(panelWidth int, canScroll bool) string {
+	inner := panelWidth - 4 // border (2) + padding (2)
+	if inner < 10 {
+		inner = 10
+	}
+	scroll := ""
+	if canScroll {
+		scroll = " scroll"
+	}
+	candidates := []string{
+		"Esc:cancel Enter:select",
+		"j/k:nav Enter:select",
+		"j/k:nav Enter:select Tab:auto",
+		"j/k: navigate  Enter: select  Tab: auto-complete",
+	}
+	for _, base := range candidates {
+		if lipgloss.Width(base+scroll) <= inner {
+			return HelpDimStyle.Render(base + scroll)
+		}
+	}
+	return HelpDimStyle.Render(candidates[0])
+}
+
 // View renders the command palette centered
 func (m CommandPaletteModel) View(width, height int) string {
 	if !m.ready || !m.showing {
@@ -327,26 +354,7 @@ func (m CommandPaletteModel) View(width, height int) string {
 
 	body := m.viewport.View()
 
-	pct := m.viewport.ScrollPercent()
-	var scrollHint string
-	if width < 50 {
-		scrollHint = HelpDimStyle.Render("Esc:cancel Enter:select")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Esc:cancel")
-		}
-	} else if width < 70 {
-		scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Tab:auto")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Tab:auto scroll")
-		}
-	} else {
-		scrollHint = HelpDimStyle.Render("j/k: navigate  Enter: select  Tab: auto-complete")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k: navigate  Enter: select  Tab: auto-complete  scroll")
-		}
-	}
-
-	content := body + "\n" + scrollHint
+	content := body + "\n" + paletteFooterHint(m.viewport.Width, m.viewport.ScrollPercent() < 1.0)
 
 	panel := lipgloss.NewStyle().
 		Width(m.viewport.Width).

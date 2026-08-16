@@ -91,6 +91,12 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+p":
 		return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
+	case ":":
+		// k9s-style: ':' opens the command palette from any normal-mode
+		// view. In insert mode ':' types into the composer untouched.
+		if a.mode == ModeNormal {
+			return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
+		}
 	case "ctrl+r":
 		if a.onUserCommand != nil {
 			a.onUserCommand("/effort", &a)
