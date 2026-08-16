@@ -43,7 +43,15 @@ class Driver:
         os.makedirs(CWD, exist_ok=True)
         env = os.environ.copy()
         env.update({"TERM": "tmux-256color", "HOME": HOME,
-                    "AH_ENDPOINT_URL": MOCK_ENDPOINT})
+                    "AH_ENDPOINT_URL": MOCK_ENDPOINT,
+                    # The burst demo executes real (harmless) bash calls;
+                    # the demo env must allow execute like demo-boot.sh.
+                    "AH_PERMISSION_MODE": "workspace-write",
+                    "AH_PERM_EXECUTE": "true",
+                    # The burst demo runs 15 tools back-to-back; yolo
+                    # mode skips the per-tool approval dialogs (the
+                    # approval-dialog walk is its own demo).
+                    "AH_EXECUTION_MODE": "yolo"})
         env.pop("AH_PROVIDER", None)
         env.pop("AH_API_KEY", None)
         env.pop("AH_MODEL", None)
@@ -67,9 +75,16 @@ class Driver:
                 run(["tmux", "-f", "/dev/null", "send-keys", "-t", SESSION, "Enter"])
             elif ch == "\x10":
                 run(["tmux", "-f", "/dev/null", "send-keys", "-t", SESSION, "C-p"])
+            elif ch == "\x1b":
+                run(["tmux", "-f", "/dev/null", "send-keys", "-t", SESSION, "Escape"])
             else:
                 run(["tmux", "-f", "/dev/null", "send-keys", "-t", SESSION, ch])
             time.sleep(delay)
+
+    def send_key(self, name, delay=0.3):
+        """Send one named tmux key (Escape, C-p, Enter, ...)."""
+        run(["tmux", "-f", "/dev/null", "send-keys", "-t", SESSION, name])
+        time.sleep(delay)
 
     def wait_for(self, pattern, timeout=25, step=0.25):
         rx = re.compile(pattern)

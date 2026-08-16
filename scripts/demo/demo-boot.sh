@@ -15,4 +15,9 @@ export AH_RUNTIME=llama.cpp
 export AH_MODEL=demo-1.0
 export AH_ENDPOINT_URL=http://127.0.0.1:8080/v1
 export AH_API_KEY=local
+# The tool-burst demo executes real (harmless) bash calls; the fresh
+# config defaults to read-only, so the demo pins workspace-write and
+# execute for the collapse to have anything to collapse.
+export AH_PERMISSION_MODE=workspace-write
+export AH_PERM_EXECUTE=true
 exec ./build/agent-harness "$@"

@@ -53,6 +53,7 @@ type ChatMessage struct {
 	ResponseTime    time.Duration // Time taken to generate this response
 	StreamedChunks  int           // Token chunks streamed for this response
 	Thinking        bool          // In-progress response (drives the live spinner header)
+	Turn            int           // Agent turn that produced this message (tool-run grouping key)
 }
 
 // ToolStatus represents the execution state of a tool
@@ -140,8 +141,18 @@ type ChatModel struct {
 
 	// completedToolMsgs tracks all finalized tool messages for the current turn.
 	// Previously this was a single pointer for single-line replacement, but users
-	// want to see every tool call that happens during a conversation turn.
+	// want to see every tool call that happens during a conversation turn. The
+	// render path reads the transcript (m.messages) instead of these copies -
+	// they exist for state inspection and are cleared per turn.
 	completedToolMsgs []ChatMessage
+
+	// turnCounter stamps tool messages with their agent turn so collapsed
+	// tool runs never merge across turn boundaries.
+	turnCounter int
+
+	// toolsCollapsed renders consecutive same-tool runs as one count line
+	// (t toggles); errors, approvals, and running tools never collapse.
+	toolsCollapsed bool
 
 	// Delegate
 	delegate ChatDelegate
@@ -215,6 +226,9 @@ func NewChatModel() ChatModel {
 		// The chat model is typing-ready by construction; the App blurs
 		// the composer at boot so navigate mode owns the keyboard.
 		focused: true,
+		// Tool runs render collapsed by default: the wall of identical
+		// tool lines is the long-horizon reading pain, not the collapse.
+		toolsCollapsed: true,
 	}
 }
 

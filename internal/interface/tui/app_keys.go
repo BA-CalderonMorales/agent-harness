@@ -202,6 +202,13 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				// back. The msg path runs on the live app, exactly like
 				// a typed /login.
 				return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
+			case "t":
+				// Toggle tool-run collapsing: the long-horizon trace
+				// reads as count lines by default; 't' expands or
+				// collapses the detail. Errors and running tools are
+				// never hidden by either state.
+				a.chatModel.ToggleToolsCollapsed()
+				return a, nil, true
 			}
 		}
 	}
