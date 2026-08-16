@@ -9,6 +9,7 @@ package tui
 import (
 	"strings"
 
+	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -25,6 +26,23 @@ const (
 // loginProviders are the selectable providers in the modal.
 var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "fireworks", "nvidia"}
 
+// providerBlurbs give each provider a one-line "what is this / pick when"
+// so the first-run user never faces a bare list (requirement #3).
+var providerBlurbs = map[string]string{
+	"local":      "A local OpenAI-compatible server (llama.cpp/ollama)",
+	"openai":     "OpenAI hosted models (GPT-4o family) - needs an API key",
+	"anthropic":  "Anthropic Claude models - needs an API key",
+	"openrouter": "One key for many models across vendors",
+	"ollama":     "Ollama on this machine - no API key needed",
+	"fireworks":  "Fireworks fast hosted inference - needs an API key",
+	"nvidia":     "NVIDIA NIM hosted models (nemotron family)",
+}
+
+// LoginModelsProvider resolves the model list the wizard's model step
+// shows for a candidate provider+key: a live list is the verified
+// connection, the static catalog is the honest fallback.
+type LoginModelsProvider func(provider, apiKey string) ([]ModelItem, error)
+
 // LoginHandler receives the completed wizard values on the event loop.
 type LoginHandler func(provider, apiKey, model string, a *App)
 
@@ -37,8 +55,13 @@ type LoginDialogModel struct {
 
 	providerIdx int
 	apiKeyBuf   string
-	modelBuf    string
 	errorMsg    string
+
+	// modelsProvider is wired by the app (SetLoginModelsProvider); the
+	// model step is the live-probed picker, not a free-text field.
+	modelsProvider LoginModelsProvider
+	picker         ModelPickerModel
+	probeErr       string
 
 	// storedKeyHint is the masked hint of an already-stored key
 	// (e.g. "sk-or-…7f75"). When set, the dialog lets the user finish
@@ -51,6 +74,12 @@ func NewLoginDialog() LoginDialogModel {
 	return LoginDialogModel{step: LoginStepProvider}
 }
 
+// SetModelsProvider wires the live model probe into the wizard's model
+// step (the app feeds it at boot, mirroring SetLoginHandler).
+func (m *LoginDialogModel) SetModelsProvider(provider LoginModelsProvider) {
+	m.modelsProvider = provider
+}
+
 // Open resets and shows the dialog. storedKeyHint is a masked hint of an
 // existing stored key; an empty value means no key is stored yet.
 func (m *LoginDialogModel) Open(width, height int, storedKeyHint string) {
@@ -60,9 +89,39 @@ func (m *LoginDialogModel) Open(width, height int, storedKeyHint string) {
 	m.step = LoginStepProvider
 	m.providerIdx = 0
 	m.apiKeyBuf = ""
-	m.modelBuf = ""
 	m.errorMsg = ""
+	m.probeErr = ""
+	m.picker = NewModelPicker()
 	m.storedKeyHint = storedKeyHint
+}
+
+// loadModels fetches the live model list for the candidate provider+key
+// and populates the picker. A failed probe surfaces the error next to
+// the static catalog - never a silent default.
+func (m *LoginDialogModel) loadModels() {
+	m.probeErr = ""
+	if m.modelsProvider == nil {
+		return
+	}
+	models, err := m.modelsProvider(m.provider(), strings.TrimSpace(m.apiKeyBuf))
+	if err != nil {
+		m.probeErr = err.Error()
+	}
+	if len(models) > 0 {
+		// Size the picker viewport for the dialog panel: Width drives the
+		// name truncation, Height the scroll window and cursor sync.
+		vpW := 44
+		vpH := m.height - 14
+		if vpH < 5 {
+			vpH = 5
+		}
+		if vpH > 12 {
+			vpH = 12
+		}
+		m.picker.viewport = viewport.New(vpW, vpH)
+		m.picker.SetTitle("Models - " + m.provider())
+		m.picker.SetModels(models)
+	}
 }
 
 // Close hides the dialog.
@@ -97,8 +156,9 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 			}
 		case "enter", " ":
 			p := m.provider()
-			if p == "local" {
+			if p == "local" || m.storedKeyHint != "" {
 				m.step = LoginStepModel
+				m.loadModels()
 			} else {
 				m.step = LoginStepAPIKey
 			}
@@ -117,6 +177,7 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 				return false, false, "", "", ""
 			}
 			m.step = LoginStepModel
+			m.loadModels()
 			m.errorMsg = ""
 		case "backspace":
 			if len(m.apiKeyBuf) > 0 {
@@ -129,19 +190,23 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 		}
 
 	case LoginStepModel:
-		switch msg.String() {
-		case "esc":
-			return false, true, "", "", ""
-		case "enter":
-			return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), strings.TrimSpace(m.modelBuf)
-		case "backspace":
-			if len(m.modelBuf) > 0 {
-				m.modelBuf = m.modelBuf[:len(m.modelBuf)-1]
+		// The model step is the live-probed picker: type to filter,
+		// j/k to navigate, Enter to finish, Esc to cancel. Enter with
+		// no selection keeps completeLogin's empty->default fallback
+		// (the picker itself needs a selection to close, so an empty
+		// list is completed here).
+		if msg.String() == "enter" && len(m.picker.filtered) == 0 {
+			return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), ""
+		}
+		closed, _ := m.picker.Update(msg)
+		if closed {
+			if selected := m.picker.SelectedModel(); selected != nil {
+				return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), selected.ID
 			}
-		default:
-			if msg.Paste || msg.Type == tea.KeyRunes {
-				m.modelBuf += string(msg.Runes)
+			if msg.String() == "esc" || msg.String() == "q" {
+				return false, true, "", "", ""
 			}
+			return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), ""
 		}
 	}
 	return false, false, "", "", ""
@@ -163,6 +228,7 @@ func (m LoginDialogModel) View() string {
 				marker = IndicatorSelected + " "
 			}
 			body.WriteString(marker + p + "\n")
+			body.WriteString(HelpDimStyle.Render("    "+providerBlurbs[p]) + "\n")
 		}
 		body.WriteString("\n" + HelpDimStyle.Render("j/k: navigate  Enter: select  Esc: cancel"))
 
@@ -180,15 +246,29 @@ func (m LoginDialogModel) View() string {
 		body.WriteString("\n" + HelpDimStyle.Render("Enter: continue  Esc: cancel"))
 
 	case LoginStepModel:
-		body.WriteString(HelpTitleStyle.Render("Login - model") + "\n\n")
-		body.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n\n")
-		body.WriteString(HelpDimStyle.Render("Enter model (Enter for default):") + "\n")
-		body.WriteString("  " + PromptStyle.Render(m.modelBuf+"█") + "\n")
-		body.WriteString("\n" + HelpDimStyle.Render("Enter: finish  Esc: cancel"))
+		body.WriteString(HelpTitleStyle.Render("Login - model") + "\n")
+		body.WriteString(HelpDimStyle.Render("Provider: "+m.provider()+"  ·  the list below is live from the endpoint") + "\n")
+		if m.probeErr != "" {
+			body.WriteString(ErrorStyle.Render("[!] Could not reach endpoint: "+m.probeErr) + "\n")
+			body.WriteString(HelpDimStyle.Render("    Showing the static catalog; Enter still finishes.") + "\n")
+		}
+		body.WriteString("\n")
+		body.WriteString(m.picker.viewport.View())
+		body.WriteString("\n" + HelpDimStyle.Render("Type to filter  j/k: navigate  Enter: finish  Esc: cancel"))
+	}
+
+	// The provider step lists blurbs and needs a wider panel; the model
+	// step hosts the picker viewport. lipgloss truncates content wider
+	// than the style width, so the panel must fit its step's longest line.
+	panelWidth := 64
+	if m.step == LoginStepAPIKey {
+		panelWidth = 48
+	} else if m.step == LoginStepModel {
+		panelWidth = 54
 	}
 
 	panel := lipgloss.NewStyle().
-		Width(48).
+		Width(panelWidth).
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)

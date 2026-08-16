@@ -101,6 +101,7 @@ func (app *App) run() error {
 	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
 		app.completeLogin(provider, apiKey, model, ta)
 	})
+	tuiApp.SetLoginModelsProvider(app.wizardModels)
 	tuiApp.SetProviderPickHandler(func(provider string, ta *tui.App) {
 		app.pickProvider(provider, ta)
 	})

@@ -13,6 +13,9 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 PORT = 8080
 MODEL = "demo-1.0"
+# The local provider's pinned default (config defaults); the demo model
+# list includes it so the login wizard's picker shows the [default] pin.
+DEFAULT_MODEL = "deepreinforce-ai/Ornith-1.0-9B-GGUF"
 CHUNK_DELAY = 0.25
 WELCOME = "Hello! Agent-harness is live: this agent loop can read your workspace, run shell commands, and stream every result straight into the conversation."
 
@@ -32,6 +35,7 @@ class Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         if self.path.rstrip("/").endswith("/models"):
             self._json({"object": "list", "data": [
+                {"id": DEFAULT_MODEL, "object": "model", "owned_by": "agent-harness-demo"},
                 {"id": MODEL, "object": "model", "owned_by": "agent-harness-demo"},
             ]})
             return

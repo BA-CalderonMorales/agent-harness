@@ -21,7 +21,14 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_RUNTIME", "AGENT_HARNESS_RUNTIME"), &config.Runtime)
 	applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
 	applyEnvString(firstEnv("AH_MODEL_PATH", "AGENT_HARNESS_MODEL_PATH"), &config.ModelPath)
-	applyEnvString(firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"), &config.EndpointURL)
+	if endpoint := firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"); endpoint != "" {
+		applyEnvString(endpoint, &config.EndpointURL)
+		// An env-pinned endpoint survives provider switches: runtime
+		// provider mutations must not clobber an explicit endpoint with
+		// the provider default, or the wizard's verified connection
+		// would lie about what the app will actually use.
+		config.EndpointPinned = true
+	}
 	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY"), &config.APIKey)
 	if config.Provider == "nvidia" && config.APIKey == "" {
 		// NVIDIA's hosted API uses its own key convention (nvapi-...).

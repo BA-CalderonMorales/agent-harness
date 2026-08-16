@@ -48,6 +48,7 @@ type LayeredConfig struct {
 	Provider       string
 	APIKey         string
 	Model          string
+	EndpointPinned bool // endpoint came from AH_ENDPOINT_URL; survives provider switches
 	Runtime        string
 	ModelPath      string
 	EndpointURL    string

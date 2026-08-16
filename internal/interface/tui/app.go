@@ -165,6 +165,14 @@ func (a *App) SetLoginHandler(handler LoginHandler) {
 	a.onLogin = handler
 }
 
+// SetLoginModelsProvider wires the login wizard's model step to the app's
+// live model probe: the wizard shows the actual models the candidate
+// endpoint can serve (verified connection) with the static catalog as the
+// honest fallback.
+func (a *App) SetLoginModelsProvider(provider LoginModelsProvider) {
+	a.loginDialog.SetModelsProvider(provider)
+}
+
 // OpenLoginDialog opens the modal login wizard. storedKeyHint is a masked
 // hint of an already-stored key (empty when none exists); the dialog then
 // lets the user finish without re-entering the key.

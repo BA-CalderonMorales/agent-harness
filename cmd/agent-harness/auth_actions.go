@@ -62,7 +62,7 @@ func (app *App) pickProvider(provider string, tuiApp *tui.App) {
 	}
 	if provider != app.config.Provider {
 		app.config.Provider = provider
-		app.config.EndpointURL = config.DefaultEndpointForProvider(provider)
+		app.config.EndpointURL = app.wizardEndpoint(provider)
 		if config.IsLocalProvider(provider) {
 			app.config.APIKey = provider
 		}
