@@ -53,6 +53,12 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
                 self.wfile.flush()
                 time.sleep(CHUNK_DELAY)
+            # A final chunk with finish_reason="stop" is mandatory: the
+            # SSE reader treats a stream that ends without it as an empty
+            # message and the whole turn is lost (stuck thinking header).
+            finish = {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+            self.wfile.write(("data: " + json.dumps(finish) + "\n\n").encode())
+            self.wfile.flush()
             self.wfile.write(b"data: [DONE]\n\n")
             self.wfile.flush()
             return

@@ -41,3 +41,7 @@ Thumbs.db
 # Temporary files folder - never commit
 tmp/
 /session-*
+scripts/demo/__pycache__/
+
+# Dev-local workspaces - never merged into develop/main (AGENTS.md)
+/.workspace/
