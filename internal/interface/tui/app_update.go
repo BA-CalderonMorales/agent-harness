@@ -107,6 +107,21 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
+	// Login completed - land in chat, ready to type
+	// -------------------------------------------------------------------------
+	case LoginCompletedMsg:
+		// switchView resets the mode to normal; the insert-mode
+		// assignments must come after it. The listener chain must be
+		// re-armed or every later Send (agent start, chunks, probe
+		// results) is dropped and the first chat dies silently.
+		cmds = append(cmds, a.switchView(viewChat))
+		a.mode = ModeInsert
+		a.chatModel.SetModeLabel("typing")
+		a.chatModel.Focus()
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
 	// Command palette open request
 	// -------------------------------------------------------------------------
 	case openCommandPaletteMsg:
@@ -244,6 +259,9 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		a.providerReadiness = msg.Readiness
 		a.providerReadinessMsg = msg.Message
+		// A misconfigured probe is the setup dead end: the home banner and
+		// the statusbar badge become the fix (l: login), not prose.
+		a.homeModel.SetSetupRequired(msg.Readiness == 4)
 		// Every readiness state is a durable system message: it lands
 		// exactly once at the top of the chat pane and in the Settings
 		// page's System Messages section. Nothing provider-related ever

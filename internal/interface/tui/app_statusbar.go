@@ -30,10 +30,20 @@ func (a App) renderStatusBar() string {
 	// mode line.
 	columnWidth := a.width
 
-	// Left: health + workspace-relative path
+	// Left: health + workspace-relative path. The badge reflects the
+	// provider probe (checking/ready/warning/unavailable/misconfigured),
+	// never a model-empty proxy - a first-run user with no key must see
+	// the gap, and the (l: login) handle is the fix, not prose.
 	health := StatusOnline.Render("[ready]")
-	if a.chatModel.GetModel() == "" {
-		health = StatusConnecting.Render("[! no model]")
+	switch a.providerReadiness {
+	case 0: // checking
+		health = StatusConnecting.Render("[checking…]")
+	case 2: // warning
+		health = StatusConnecting.Render("[! warning]")
+	case 3: // unavailable
+		health = StatusOffline.Render("[! not connected] (l: login)")
+	case 4: // misconfigured
+		health = StatusOffline.Render("[! setup required] (l: login)")
 	}
 
 	path := displayWorkspacePath(a.workspacePath)

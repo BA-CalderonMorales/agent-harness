@@ -53,6 +53,11 @@ type QuitMsg struct{}
 // openCommandPaletteMsg signals the command palette should open
 type openCommandPaletteMsg struct{}
 
+// LoginCompletedMsg lands after the login wizard finishes: the app
+// switches to chat in insert mode, ready to type - the first-run happy
+// path never strands the user on the home screen.
+type LoginCompletedMsg struct{}
+
 // openModelPickerMsg signals the model picker should open
 type openModelPickerMsg struct{}
 

@@ -49,8 +49,9 @@ var _ = Describe("HomeModel", func() {
 				home = *m.(*HomeModel)
 			})
 
-			It("should show the setup required banner if no model is set", func() {
+			It("should show the setup required banner when the probe reports misconfigured", func() {
 				home.SetStatus("", "workspace-write", "developer", 0)
+				home.SetSetupRequired(true)
 				Expect(home.View()).To(ContainSubstring("[!] Setup Required"))
 			})
 

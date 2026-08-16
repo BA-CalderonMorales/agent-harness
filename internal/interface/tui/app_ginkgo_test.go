@@ -651,6 +651,7 @@ var _ = Describe("App", func() {
 			It("should render status bar", func() {
 				app.width = 120
 				app.SetChatModel("gpt-4")
+				app.providerReadiness = 1
 				view := app.View()
 				Expect(view).To(ContainSubstring("[ready]"))
 			})
@@ -667,6 +668,7 @@ var _ = Describe("App", func() {
 				app.SetChatModel("gpt-5.5")
 				app.SetRuntimeContext("openrouter", "medium", workspace)
 				app.SetTelemetry(3400, 8192, 0.12)
+				app.providerReadiness = 1
 
 				view := app.View()
 
@@ -716,6 +718,7 @@ var _ = Describe("App", func() {
 
 				It("should degrade to health and a short ellipsized path", func() {
 					app.width = 30
+					app.providerReadiness = 1
 					view := app.View()
 					Expect(view).To(ContainSubstring("[ready]"))
 					Expect(view).ToNot(ContainSubstring("ctrl+p commands"))
@@ -743,9 +746,11 @@ var _ = Describe("App", func() {
 		})
 
 		Context("Given no model is set", func() {
-			It("should show no-model warning in status bar", func() {
+			It("should show the setup-required warning with its handle in the status bar", func() {
+				app.providerReadiness = 4
 				view := app.View()
-				Expect(view).To(ContainSubstring("no model"))
+				Expect(view).To(ContainSubstring("setup required"))
+				Expect(view).To(ContainSubstring("(l: login)"))
 			})
 		})
 	})

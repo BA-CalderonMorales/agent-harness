@@ -118,4 +118,8 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	// Re-probe the new provider.
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// Land the user in chat, ready to type: the first-run happy path
+	// never strands them on the home screen after authenticating.
+	tuiApp.Send(tui.LoginCompletedMsg{})
 }

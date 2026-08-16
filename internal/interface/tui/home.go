@@ -42,6 +42,7 @@ type HomeModel struct {
 	permissionMode  string
 	persona         string
 	estimatedTokens int
+	setupRequired   bool
 
 	// Quick action cursor (spans both actions and sessions)
 	actionCursor int
@@ -115,9 +116,10 @@ func (m *HomeModel) SetStatus(model, permissionMode, persona string, estimatedTo
 	m.estimatedTokens = estimatedTokens
 }
 
-// SetSetupRequired shows a setup prompt when no credentials are configured.
+// SetSetupRequired shows the setup banner when the provider probe reports
+// a misconfigured state (no key/model), giving the dead end a handle.
 func (m *HomeModel) SetSetupRequired(required bool) {
-	// This is a no-op for now; the home view checks m.model == "" as a proxy
+	m.setupRequired = required
 }
 
 // Init initializes the home model.

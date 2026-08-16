@@ -191,6 +191,17 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				if a.activeView != viewSessions {
 					return a, a.switchView(viewChat), true
 				}
+			case "l":
+				// The setup dead-end handle: the statusbar badge and the
+				// home banner advertise (l: login) - one keypress opens
+				// the wizard. In insert mode 'l' types into the composer.
+				// Routed as a UserCommandMsg (not a direct handler call):
+				// handleKeys works on a copy, and a synchronous handler
+				// mutation (startLogin opens the dialog) would be
+				// clobbered when *a = next copies the pre-call state
+				// back. The msg path runs on the live app, exactly like
+				// a typed /login.
+				return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
 			}
 		}
 	}
