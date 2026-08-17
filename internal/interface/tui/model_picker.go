@@ -210,7 +210,7 @@ func (m *ModelPickerModel) applyFilter() {
 		m.filtered = make([]ModelItem, len(m.models))
 		copy(m.filtered, m.models)
 	} else {
-		m.filtered = m.filtered[:0]
+		m.filtered = make([]ModelItem, 0, len(m.models))
 		query := strings.ToLower(m.searchQuery)
 		for _, model := range m.models {
 			if strings.Contains(strings.ToLower(model.Name), query) ||
