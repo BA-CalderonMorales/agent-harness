@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -144,6 +146,24 @@ func (app *App) initCommandsCore() {
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()
 		}))
+
+	app.cmdRegistry.Register("limit", "Show or set the session tool-call limit",
+		commands.LimitHandler(
+			func() int {
+				if app.session != nil {
+					return app.session.ToolLimit
+				}
+				return 0
+			},
+			func(n int) error {
+				app.session.ToolLimit = n
+				app.session.UpdatedAt = time.Now()
+				app.session.Version++
+				app.sessionManager.SetCurrent(app.session)
+				_, err := app.sessionManager.SaveCurrent()
+				return err
+			},
+		))
 
 	app.cmdRegistry.Register("init", "Initialize project with standard files",
 		commands.InitHandler(func(projectType string) (string, error) {

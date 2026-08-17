@@ -23,7 +23,10 @@ type QueryParams struct {
 	Temperature     float64
 	ReasoningEffort string
 	MaxTurns        int
-	SkipCacheWrite  bool
+	// MaxToolCalls overrides the loop's default tool ceiling for this
+	// query (the session-scoped /limit knob); 0 keeps the default.
+	MaxToolCalls   int
+	SkipCacheWrite bool
 }
 
 // TerminalReason explains why the query loop ended.

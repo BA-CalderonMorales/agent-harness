@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -64,6 +65,34 @@ func CostHandler(getCost func() string) SlashHandler {
 func CurrentModelHandler(getModel func() string) SlashHandler {
 	return func(args string) (string, error) {
 		return fmt.Sprintf("Current model: %s", getModel()), nil
+	}
+}
+
+// LimitHandler manages the session-scoped tool-call ceiling (the /limit
+// knob). No args reports the current ceiling; a number sets it for this
+// session only; anything else is rejected honestly.
+func LimitHandler(getLimit func() int, setLimit func(int) error) SlashHandler {
+	const defaultLimit = 15
+	const maxLimit = 100
+	return func(args string) (string, error) {
+		if args == "" {
+			current := getLimit()
+			if current <= 0 {
+				current = defaultLimit
+			}
+			return fmt.Sprintf("Tool call limit: %d (default %d). Use /limit <n> to change it for this session.", current, defaultLimit), nil
+		}
+		n, err := strconv.Atoi(args)
+		if err != nil || n < 1 {
+			return fmt.Sprintf("Tool call limit must be a number between 1 and %d; got %q.", maxLimit, args), nil
+		}
+		if n > maxLimit {
+			return fmt.Sprintf("Tool call limit capped at %d; got %d.", maxLimit, n), nil
+		}
+		if err := setLimit(n); err != nil {
+			return "", err
+		}
+		return fmt.Sprintf("Tool call limit set to %d for this session.", n), nil
 	}
 }
 

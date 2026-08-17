@@ -26,6 +26,9 @@ type Session struct {
 	Version   int             `json:"version"`
 	PlanMode  bool            `json:"plan_mode"`
 	Persona   string          `json:"persona"`
+	// ToolLimit overrides the loop's per-query tool ceiling for this
+	// session (the /limit knob); 0 keeps the loop default.
+	ToolLimit int `json:"tool_limit,omitempty"`
 }
 
 // SessionMetadata contains lightweight session info
