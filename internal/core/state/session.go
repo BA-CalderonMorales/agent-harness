@@ -205,7 +205,8 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 	}
 }
 
-// Clear creates a new empty session with the same ID
+// Clear creates a new empty session with the same ID, preserving
+// the tool-call limit setting.
 func (s *Session) Clear() *Session {
 	return &Session{
 		ID:        s.ID,
@@ -217,6 +218,7 @@ func (s *Session) Clear() *Session {
 		Version:   s.Version + 1,
 		PlanMode:  s.PlanMode,
 		Persona:   s.Persona,
+		ToolLimit: s.ToolLimit,
 	}
 }
 
