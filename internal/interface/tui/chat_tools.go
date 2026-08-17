@@ -21,7 +21,9 @@ func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
 		ToolStatus:      ToolStatusComplete,
 	}
 	m.messages = append(m.messages, msg)
-	m.refreshViewportFollow()
+	// Background tool activity must never yank a scrolled-up user back
+	// to the bottom: follow only when the view was already there.
+	m.refreshViewport()
 }
 
 // AddOrUpdateToolMessage adds a tool message or updates existing one by ID.
@@ -41,7 +43,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 			m.messages[i].Content = content
 			m.messages[i].ToolStatus = status
 			m.messages[i].Timestamp = time.Now()
-			m.refreshViewportFollow()
+			m.refreshViewport()
 			return
 		}
 	}
@@ -58,7 +60,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 		ToolStatus:      status,
 	}
 	m.messages = append(m.messages, msg)
-	m.refreshViewportFollow()
+	m.refreshViewport()
 }
 
 // formatToolContent formats tool message content based on status.
