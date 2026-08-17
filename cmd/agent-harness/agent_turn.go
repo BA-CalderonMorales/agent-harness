@@ -81,6 +81,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		MaxOutputTokens: app.config.MaxTokens,
 		Temperature:     app.config.Temperature,
 		ReasoningEffort: app.config.Effort,
+		// The session-scoped /limit knob overrides the loop default.
+		MaxToolCalls: app.session.ToolLimit,
 	}
 
 	stream, err := app.loop.Query(ctx, params)
