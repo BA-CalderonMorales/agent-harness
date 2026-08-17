@@ -43,9 +43,18 @@ generous free tier for learning and demo work. Set the provider to
 | `nvidia/nemotron-3-super-120b-a12b` | ✅ Supported | Strong reasoning |
 | `nvidia/llama-3.1-nemotron-ultra-253b-v1` | ✅ Supported | Largest hosted Nemotron |
 
-Reasoning effort profiles (`/effort`) map to NVIDIA's `reasoning_budget`
-(thinking) via `extra_body`; the harness ignores `reasoning_content`
-deltas in the stream.
+Reasoning effort profiles (`/effort`) map to NVIDIA's top-level
+`reasoning_budget` plus `chat_template_kwargs.enable_thinking` (the
+hosted API rejects unknown body keys, so `extra_body` is never sent);
+the harness ignores `reasoning_content` deltas in the stream.
+
+### Demo
+
+`scripts/demo/demo-boot-nvidia.sh` boots straight into the TUI against
+the hosted API when `NVIDIA_API_KEY` is set, and falls back to the
+offline mock (`scripts/demo/mock-llm.py`) when it is not - the free tier
+makes the hosted path ideal for recording the first-run wizard and the
+tool-burst collapse (see [demo](demo.md)).
 
 ---
 

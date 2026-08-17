@@ -15,14 +15,14 @@ type Client interface {
 
 // Request is the payload sent to the LLM.
 type Request struct {
-	Messages       []types.Message
-	SystemPrompt   string
-	Tools          []tools.Tool
-	Model          string
-	MaxTokens      int
-	Temperature    float64
-	ThinkingBudget int
+	Messages     []types.Message
+	SystemPrompt string
+	Tools        []tools.Tool
+	Model        string
+	MaxTokens    int
+	Temperature  float64
 	// ReasoningEffort controls the provider's reasoning effort
-	// (low, medium, high, or "" to leave unset).
+	// (low, medium, high, or "" to leave unset). Each provider expresses
+	// it in its own documented vocabulary (see applyReasoningParams).
 	ReasoningEffort string
 }
