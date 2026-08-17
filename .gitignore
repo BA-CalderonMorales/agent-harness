@@ -45,3 +45,8 @@ scripts/demo/__pycache__/
 
 # Dev-local workspaces - never merged into develop/main (AGENTS.md)
 /.workspace/
+
+# Any javascript stuff
+/node_modules/
+package.json
+package-lock.json
