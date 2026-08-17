@@ -124,8 +124,13 @@ type ChatModel struct {
 
 	// Index of the assistant message currently being streamed. Tracked so that
 	// mid-stream system/user messages do not break the update target, while
-	// ensuring a new user turn always gets a fresh assistant message.
+	// ensuring a new user turn always gets a fresh assistant message. The
+	// index DRIFTS when a mid-turn PrependSystemNote (provider probe,
+	// auto-save notice) inserts at position 0 - message lookup goes by
+	// currentStreamingAssistantID, and the index is maintained alongside
+	// for readers.
 	currentStreamingAssistantIdx int
+	currentStreamingAssistantID  string
 
 	// Timer state for response tracking
 	startTime    time.Time

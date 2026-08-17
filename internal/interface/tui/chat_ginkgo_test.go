@@ -201,6 +201,7 @@ var _ = Describe("ChatModel", func() {
 				By("materializing a tool placeholder")
 				chat.AddMessage("user", "list the repo")
 				chat.messages = append(chat.messages, ChatMessage{
+					ID:             "ph-1",
 					Role:           "assistant",
 					Content:        "→ ls map[path:/tmp]",
 					Timestamp:      time.Now(),
@@ -208,6 +209,7 @@ var _ = Describe("ChatModel", func() {
 					StreamedChunks: 6,
 				})
 				chat.currentStreamingAssistantIdx = 1
+				chat.currentStreamingAssistantID = "ph-1"
 
 				By("finishing the turn with no text content")
 				model, _ := chat.Update(AgentDoneMsg{Timestamp: time.Now()})
