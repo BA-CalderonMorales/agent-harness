@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 const (
 	DefaultProvider           = "local"
 	DefaultRuntime            = "llama.cpp"
@@ -10,7 +12,31 @@ const (
 	DefaultTemperature        = 0.2
 	DefaultEffort             = "medium"
 	DefaultLocalServerCommand = "llama-server -m ./models/ornith-1.0-9b-Q4_K_M.gguf -c 8192 --host 127.0.0.1 --port 8080"
+
+	// Timeout windows. Local providers evaluate the prompt on CPU before the
+	// first token: a tight hosted-API guard would kill a legitimate turn.
+	// DefaultStreamIdleTimeoutFor / DefaultHTTPTimeoutFor scale with provider.
+	DefaultLocalStreamIdleTimeout = 30 * time.Minute
+	DefaultLocalHTTPTimeout       = 45 * time.Minute
+	DefaultRemoteStreamIdleTimeout = 90 * time.Second
+	DefaultRemoteHTTPTimeout       = 120 * time.Second
 )
+
+// DefaultStreamIdleTimeoutFor returns the stream-idle watchdog window for a provider.
+func DefaultStreamIdleTimeoutFor(provider string) time.Duration {
+	if IsLocalProvider(provider) {
+		return DefaultLocalStreamIdleTimeout
+	}
+	return DefaultRemoteStreamIdleTimeout
+}
+
+// DefaultHTTPTimeoutFor returns the HTTP client timeout for a provider.
+func DefaultHTTPTimeoutFor(provider string) time.Duration {
+	if IsLocalProvider(provider) {
+		return DefaultLocalHTTPTimeout
+	}
+	return DefaultRemoteHTTPTimeout
+}
 
 // EffortLevels lists supported reasoning effort values in cycle order.
 var EffortLevels = []string{"low", "medium", "high"}

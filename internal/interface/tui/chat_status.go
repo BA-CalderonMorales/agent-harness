@@ -51,6 +51,21 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
+// thinkingHintThreshold is how long the first token may stay pending before
+// the UI assumes a slow local model and shows the explanatory progress line.
+const thinkingHintThreshold = 5 * time.Second
+
+// thinkingHint returns the prompt-eval progress line once the first token
+// has been pending long enough that a slow local model (CPU prompt eval)
+// is the likely explanation. Before the threshold, and once streaming has
+// started, the header's live elapsed clock is enough.
+func thinkingHint(elapsed time.Duration) string {
+	if elapsed < thinkingHintThreshold {
+		return ""
+	}
+	return "still thinking — first token can take minutes on CPU models"
+}
+
 // ConsumesTab returns whether this view consumes Tab key.
 // When inline suggestions are showing, Tab is used for auto-completion.
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {

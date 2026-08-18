@@ -107,7 +107,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	app.commitConfigChange()
 
 	// Recreate the LLM client and refresh the TUI state.
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
 	tuiApp.SetChatModel(model)
 	tuiApp.SetSettings(app.getSettings())

@@ -70,11 +70,12 @@ func newApp() (*App, error) {
 	app.initTools()
 	app.initCommands()
 
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
 	if app.config.ContextLength > 0 {
 		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
 	}
+	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
 	return app, nil
 }

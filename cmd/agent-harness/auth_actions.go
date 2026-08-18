@@ -69,6 +69,7 @@ func (app *App) pickProvider(provider string, tuiApp *tui.App) {
 		if app.config.Model == "" {
 			app.config.Model = getDefaultModel(provider)
 		}
+		app.config.ApplyTimeoutDefaults()
 		app.commitConfigChange()
 		app.rebuildLLMClient()
 	}

@@ -8,9 +8,10 @@ import (
 
 // rebuildLLMClient reconstructs client, updates models, and re-probes provider readiness.
 func (app *App) rebuildLLMClient() {
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	if app.loop != nil {
 		app.loop.Client = app.client
+		app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 	}
 	if app.tuiApp != nil {
 		app.tuiApp.SetModels(app.getModelItems())

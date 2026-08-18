@@ -73,6 +73,10 @@ type LoopConfig struct {
 	MaxToolCalls            int
 	MaxIdenticalToolUses    int
 	BlockingTokenLimit      int
+	// StreamIdleTimeout overrides the package-default idle watchdog
+	// (maxStreamIdle). Local providers need multi-minute first-token
+	// windows for CPU prompt eval; 0 keeps the package default.
+	StreamIdleTimeout time.Duration
 }
 
 // DefaultLoopConfig returns sensible defaults.

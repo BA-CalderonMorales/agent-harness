@@ -24,8 +24,19 @@ func NewHTTPClient(provider, apiKey string) *HTTPClient {
 	return NewHTTPClientWithBaseURL(provider, apiKey, "")
 }
 
+// defaultHTTPTimeout guards hosted API calls. Local providers must pass a
+// longer window via NewHTTPClientWithBaseURLTimeout: CPU prompt eval can
+// take minutes before the first token.
+const defaultHTTPTimeout = 120 * time.Second
+
 // NewHTTPClientWithBaseURL creates an LLM client with an optional endpoint override.
 func NewHTTPClientWithBaseURL(provider, apiKey, baseURL string) *HTTPClient {
+	return NewHTTPClientWithBaseURLTimeout(provider, apiKey, baseURL, defaultHTTPTimeout)
+}
+
+// NewHTTPClientWithBaseURLTimeout creates an LLM client with an optional
+// endpoint override and an explicit HTTP client timeout.
+func NewHTTPClientWithBaseURLTimeout(provider, apiKey, baseURL string, timeout time.Duration) *HTTPClient {
 	if baseURL == "" {
 		baseURL = defaultBaseURL(provider)
 	}
@@ -33,7 +44,7 @@ func NewHTTPClientWithBaseURL(provider, apiKey, baseURL string) *HTTPClient {
 	return &HTTPClient{
 		BaseURL:    baseURL,
 		APIKey:     apiKey,
-		HTTPClient: &http.Client{Timeout: 120 * time.Second},
+		HTTPClient: &http.Client{Timeout: timeout},
 		Provider:   provider,
 	}
 }

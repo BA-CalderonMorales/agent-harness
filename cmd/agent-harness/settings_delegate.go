@@ -24,9 +24,8 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleModelChange(value)
 	case "provider":
 		d.app.config.Provider = value
-		// The endpoint follows the provider so requests (and the API key)
-		// reach the right host; matches /config provider behavior.
 		d.app.config.EndpointURL = config.DefaultEndpointForProvider(value)
+		d.app.config.ApplyTimeoutDefaults()
 		d.rebuildLLMClient()
 		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Provider updated to: %s", value), Type: "success"})
