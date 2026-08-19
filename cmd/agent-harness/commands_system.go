@@ -108,11 +108,6 @@ func (app *App) initCommandsSystem() {
 			return app.reset()
 		}))
 
-	app.cmdRegistry.Register("steer", "Queue a message for current turn",
-		commands.SteerHandler(func(msg string) {
-			app.steerQueue = append(app.steerQueue, msg)
-		}))
-
 	app.cmdRegistry.Register("quit", "Exit the application", commands.QuitHandler())
 	app.cmdRegistry.Register("exit", "Exit the application", commands.QuitHandler())
 }

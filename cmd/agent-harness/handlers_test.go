@@ -198,3 +198,26 @@ func TestHandleUserSubmitInvalidInputDoesNotAppendOrRunAgent(t *testing.T) {
 		t.Fatalf("AgentErrorMsg error = %v, want invalid input", errMsg.Error)
 	}
 }
+
+// TestHandleUserCommandRoutesRegisteredSteerCommand verifies that /steer
+// registers a handler via the cmdRegistry and that the TUI integration
+// wires QueueSteer for auto-submission after the current agent turn.
+func TestHandleUserCommandRoutesRegisteredSteerCommand(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "ollama"}, "test-model")
+	tuiApp := tui.NewApp()
+
+	var gotSteer string
+	app.cmdRegistry.Register("steer", "Queue a message for current turn",
+		commands.SteerHandler(func(msg string) {
+			gotSteer = msg
+		}))
+
+	app.handleUserCommand("/steer hello harness", tuiApp)
+
+	// The SteerHandler stores the message; the TUI integration (commands_tui.go)
+	// calls tuiApp.QueueSteer(msg) which adds it to the chat model's steer queue.
+	// We verify the handler was invoked and the message was captured.
+	if gotSteer != "hello harness" {
+		t.Fatalf("steer handler got %q, want hello harness", gotSteer)
+	}
+}

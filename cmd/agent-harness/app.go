@@ -36,7 +36,6 @@ type App struct {
 	mcpManager     *mcp.Manager
 	auditLogger    *audit.Logger
 	planMode       bool
-	steerQueue     []string
 
 	// bootNotice carries a credential/config problem discovered before
 	// the TUI exists; run() surfaces it once the TUI is up.

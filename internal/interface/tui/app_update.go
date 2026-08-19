@@ -250,6 +250,20 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
+	case timerTickMsg:
+		// P2-5: route timer tick to chat regardless of active view so
+		// the elapsed timer doesn't freeze when Chat tab is not active.
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
 	case ProviderReadinessMsg:
 		// A probe from a previous provider (or an older key) may finish
 		// after a switch started a new probe: only the newest generation
