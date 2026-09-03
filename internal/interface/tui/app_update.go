@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"os"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
@@ -23,7 +22,6 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			diag.Panic("tui.app_update", r)
-			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] App.Update: %v\n", r)
 			// Durable + visible: the panic site is in the diagnostics
 			// log, and the transcript says so — a silently-swallowed
 			// panic is a bug report nobody can reproduce.

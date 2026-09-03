@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"fmt"
-	"os"
 	"strings"
 	"time"
 
@@ -223,7 +221,6 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		defer func() {
 			if r := recover(); r != nil {
 				diag.Panic("tui.textarea", r)
-				fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] textarea.Update: %v\n", r)
 			}
 		}()
 		newTA, cmd = m.textarea.Update(msg)

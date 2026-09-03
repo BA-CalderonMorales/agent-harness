@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"os"
 	"regexp"
 	"strings"
@@ -10,6 +9,8 @@ import (
 	"github.com/charmbracelet/glamour"
 	"github.com/charmbracelet/glamour/ansi"
 	"github.com/charmbracelet/glamour/styles"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
 var (
@@ -113,12 +114,19 @@ func getMarkdownRenderer(width int) *glamour.TermRenderer {
 	return renderer
 }
 
-// renderMarkdown converts markdown text to ANSI-styled text
-// In Termux, this returns plain text to avoid performance issues
+// renderMarkdown converts markdown text to ANSI-styled text.
+// A glamour panic on pathological input must never reach stderr: in a
+// TUI, stderr interleaves with the rendered UI. It is logged to diag
+// with a content snippet and the input falls through unstyled.
 func renderMarkdown(content string, width int) (result string) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] renderMarkdown: %v\n", r)
+			snippet := content
+			if len(snippet) > 160 {
+				snippet = snippet[:160] + "…"
+			}
+			snippet = strings.ReplaceAll(snippet, "\n", "\\n")
+			diag.Errorf("tui.renderMarkdown.panic", "%v (width=%d content=%q)", r, width, snippet)
 			result = content
 		}
 	}()

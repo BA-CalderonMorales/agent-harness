@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"os"
 	"strings"
 	"time"
 
@@ -56,7 +54,6 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			diag.Panic("tui.chat_submit", r)
-			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] chat.doSubmit: %v\n", r)
 			model = m
 			cmd = nil
 			m.pasteDetected = false

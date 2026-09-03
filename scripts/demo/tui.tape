@@ -1,9 +1,10 @@
 # agent-harness live demo — the real deal.
 #
-# A real turn against a hosted GLM model (fireworks provider): the
-# agent reads the repository with a tool call and answers with a
-# markdown table. The composer shows the agent mode chip, cycled to
-# auto via /mode — tool calls approve without asking.
+# A real conversation against a hosted GLM model (fireworks provider):
+# the agent reads the repository with a tool call and answers with a
+# markdown table, then a second turn renders styled markdown. The
+# composer shows the agent mode chip, cycled to auto via /mode — tool
+# calls approve without asking.
 #
 # Record from the repository root:
 #   chmod +x scripts/demo/demo-boot-live.sh
@@ -22,12 +23,15 @@ Set Padding 28
 Set Margin 0
 Set Shell bash
 
+# Boot off the record: the GIF opens on the finished Home dashboard.
+Hide
 Require ./scripts/demo/demo-boot-live.sh
 Type@500ms "./scripts/demo/demo-boot-live.sh"
 Enter
 Sleep 4s
-# 1. Boot: the Home dashboard with git context and the storage
-#    footprint line.
+Show
+
+# 1. The Home dashboard with git context and the storage footprint.
 
 Type@100ms "2"
 Sleep 2s
@@ -44,10 +48,15 @@ Sleep 2s
 Type@20ms "Run ls in this repo, then list the top-level directories in a markdown table with one-line descriptions."
 Enter
 Sleep 45s
-# 4. The turn: a real ls tool call, then the markdown table rendered
+# 4. First turn: a real ls tool call, then the markdown table rendered
 #    in the transcript.
+
+Type "Now write a two-sentence haiku about shipping code on a Friday, with a bold title."
+Enter
+Sleep 30s
+# 5. Second turn: a fast response with styled markdown — bold, italics.
 
 Sleep 2s
 Ctrl+C
 Sleep 1s
-# 5. Done.
+# 6. Done.
