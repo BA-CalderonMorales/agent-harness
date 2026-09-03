@@ -83,7 +83,7 @@ func (m *ModelPickerModel) Open(width, height int) {
 	}
 
 	if !m.ready {
-		m.viewport = viewport.New(panelW, vpH)
+		m.viewport = newViewport(panelW, vpH)
 		m.ready = true
 	} else {
 		m.viewport.Width = panelW

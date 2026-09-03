@@ -63,10 +63,21 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	case StatusMsg:
 		a.statusMessage = msg.Text
 		a.statusType = msg.Type
-		// Continue listening for more messages
-		cmds = append(cmds, a.listenForMessages())
+		a.statusGen++
+		// Hints expire: a status is a flash, not a state. The
+		// generation guard keeps a slow tick from clearing a newer
+		// status.
+		cmds = append(cmds, a.statusFlashCmd(), a.listenForMessages())
 		// Return early - status is handled at app level
 		return a, tea.Batch(cmds...)
+
+	case clearStatusMsg:
+		// A newer status superseded this expiry.
+		if msg.generation == a.statusGen {
+			a.statusMessage = ""
+			a.statusType = ""
+		}
+		return a, nil
 
 	// -------------------------------------------------------------------------
 	// User submission - handled synchronously so mutations are captured
@@ -342,3 +353,8 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 }
 
 // View renders the TUI.
+
+// clearStatusMsg expires a transient status flash.
+type clearStatusMsg struct {
+	generation int
+}
