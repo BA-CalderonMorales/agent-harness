@@ -79,7 +79,18 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 		i = next
 	}
 
-	m.viewport.SetContent(content.String())
+	// Only paint when the built transcript actually differs from the
+	// last painted frame: the tick-driven streaming repaints would
+	// otherwise SetContent the identical string four times a second
+	// even when the stream went quiet.
+	painted := content.String()
+	if !forceBottom && painted == m.lastPainted && wasAtBottom == m.lastPaintedAtBottom {
+		return
+	}
+	m.lastPainted = painted
+	m.lastPaintedAtBottom = wasAtBottom
+
+	m.viewport.SetContent(painted)
 	if forceBottom || wasAtBottom {
 		m.viewport.GotoBottom()
 		return

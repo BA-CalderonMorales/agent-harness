@@ -70,6 +70,19 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, cmd, true
 	}
 
+	// When the export picker is open, delegate to it: the modal owns
+	// every key until Enter exports the selection or Esc cancels.
+	if a.exportPicker.visible {
+		next, closed, pick := a.exportPicker.Update(msg)
+		a.exportPicker = next
+		if closed && pick && a.onExportPick != nil {
+			if sel := a.ExportPickerSelection(); sel != nil {
+				a.onExportPick(sel.ID)
+			}
+		}
+		return a, nil, true
+	}
+
 	// When the provider picker is open, delegate to it. A pick closes the
 	// picker and hands the provider to the app, which opens the model
 	// picker — a fast provider switch never asks for the API key again.

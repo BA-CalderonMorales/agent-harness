@@ -69,6 +69,7 @@ type App struct {
 	commandPalette CommandPaletteModel
 	modelPicker    ModelPickerModel
 	providerPicker ProviderPickerModel
+	exportPicker   ExportPickerModel
 	loginDialog    LoginDialogModel
 	tabActivity    [viewCount]bool
 
@@ -112,6 +113,10 @@ type App struct {
 	// cycles the agent mode chip; hosts apply the machinery the mode
 	// implies (approval prompting, plan gating, tool availability).
 	onAgentModeChanged func(mode string)
+
+	// onExportPick is the host hook for the Home export modal: it
+	// receives the picked session ID and runs the export journey.
+	onExportPick func(id string)
 }
 
 // AgentModeChangedMsg is emitted after the composer cycles the agent
@@ -124,6 +129,12 @@ type AgentModeChangedMsg struct {
 // cycles. The handler runs on the message loop, so its mutations persist.
 func (a *App) SetAgentModeChangedHandler(fn func(mode string)) {
 	a.onAgentModeChanged = fn
+}
+
+// SetExportPickHandler registers the host hook for the Home export
+// modal: the picked session ID lands here on Enter.
+func (a *App) SetExportPickHandler(fn func(id string)) {
+	a.onExportPick = fn
 }
 
 // NewApp creates a new TUI application.
@@ -142,6 +153,7 @@ func NewApp() *App {
 		commandPalette: NewCommandPalette(),
 		modelPicker:    NewModelPicker(),
 		providerPicker: NewProviderPicker(),
+		exportPicker:   NewExportPicker(),
 		loginDialog:    NewLoginDialog(),
 		msgChan:        make(chan tea.Msg, 64),
 	}

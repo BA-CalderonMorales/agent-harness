@@ -57,6 +57,9 @@ func TestReasoningPreviewClickExpands(t *testing.T) {
 	m = model.(ChatModel)
 	m.SetThinkingText("I should inspect the repo layout first, then decide which files matter")
 	m.updateOrCreateStreamingMessage("")
+	// Streaming paints batch onto the turn timer's tick; the test
+	// paints explicitly before reading the viewport.
+	m.refreshViewportWithFollow(true)
 
 	// The preview line is the row the index must map. Find it by
 	// content instead of trusting the layout math.

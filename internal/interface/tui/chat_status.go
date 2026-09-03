@@ -108,6 +108,11 @@ func reasoningPreview(text string) string {
 
 // ConsumesTab returns whether this view consumes Tab key.
 // When inline suggestions are showing, Tab is used for auto-completion.
+//
+// No repaint here: chunk-sized updates land dozens of times a second,
+// and each full-transcript render (markdown included) is the streaming
+// flicker. The turn timer's tick repaints everything accumulated — 4
+// frames a second is smooth; a render per token is a strobe.
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
@@ -130,7 +135,6 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 		m.currentStreamingAssistantID = id
 		m.currentStreamingAssistantIdx = len(m.messages) - 1
 	}
-	m.refreshViewport()
 }
 
 // finalizeStreamingMessage finalizes the streaming message for the current turn.

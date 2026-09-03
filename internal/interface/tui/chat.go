@@ -189,6 +189,12 @@ type ChatModel struct {
 	// every refresh.
 	clickIndex []clickRange
 
+	// lastPainted / lastPaintedAtBottom dedupe refreshes: the tick-
+	// driven streaming repaint skips SetContent when the built
+	// transcript is unchanged.
+	lastPainted         string
+	lastPaintedAtBottom bool
+
 	// expandedMessageID is the message whose full record is expanded
 	// inline (click the line, or Enter on the latest; Esc closes). It
 	// covers tool calls and the model's reasoning alike.

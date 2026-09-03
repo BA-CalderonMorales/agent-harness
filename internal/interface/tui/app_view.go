@@ -50,6 +50,9 @@ func (a App) view() string {
 	if a.modelPicker.IsShowing() {
 		return a.modelPicker.View(a.width, a.height)
 	}
+	if a.exportPicker.visible {
+		return a.exportPicker.View(a.width, a.height)
+	}
 
 	// Terminal-native: no painted surface anywhere. Structure comes
 	// from rules, spacing, and color — the terminal's own background is

@@ -118,6 +118,9 @@ func (app *App) run() error {
 	})
 	tuiApp.SetHomeDelegate(&tuiHomeDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetExportPickHandler(func(id string) {
+		(&tuiSessionsDelegate{app: app, tuiApp: tuiApp}).OnSessionExport(id)
+	})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
