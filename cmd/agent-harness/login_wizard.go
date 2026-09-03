@@ -77,21 +77,25 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 		} else {
 			tuiApp.AddMessage("system", sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath()))
 		}
-	} else if app.config.APIKey != "" {
-		// No key typed and one is already configured: retain it. Only
-		// the provider/model in the store are refreshed so a provider
-		// switch survives restarts without re-authenticating. The
-		// message must not echo any key material (not even the masked
-		// hint): chat messages persist to session files and exports.
+	} else if storedKey, ok := app.storedKeyForProvider(provider, config.NewCredentialManager()); ok {
+		// No key typed: use a key that can actually authenticate THIS
+		// provider (env pin, encrypted store, or the config key when it
+		// was already authenticating it). The message must not echo any
+		// key material (not even the masked hint): chat messages
+		// persist to session files and exports.
+		app.config.APIKey = storedKey
 		tuiApp.AddMessage("system", sprintf("Using stored API key. Provider: %s", provider))
 		credManager := config.NewCredentialManager()
-		if secureCfg, err := credManager.LoadSecure(); err == nil {
-			secureCfg.Provider = provider
+		if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.Provider == provider {
 			secureCfg.Model = model
 			_ = credManager.SaveSecure(secureCfg)
 		}
 	} else {
-		tuiApp.AddMessage("system", "No API key entered; provider left misconfigured.")
+		// No usable key for this provider: say so instead of sending a
+		// stale or dummy credential as auth (a local dummy or another
+		// provider's key 401s with "missing authentication header").
+		app.config.APIKey = ""
+		tuiApp.AddMessage("system", sprintf("[!] No stored API key for %s. Run /login and paste the key, or set AH_API_KEY.", provider))
 	}
 
 	if model == "" {

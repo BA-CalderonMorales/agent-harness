@@ -37,8 +37,26 @@ func (app *App) startLogin() error {
 	if app.tuiApp == nil {
 		return errf("login wizard only available in TUI mode")
 	}
-	app.tuiApp.OpenLoginDialog(keyHint(app.config.APIKey))
+	app.tuiApp.OpenLoginDialog(app.loginKeyHint())
 	return nil
+}
+
+// loginKeyHint masks the key the wizard can retain: the encrypted
+// store's key when one exists (completion resolves it per provider),
+// else the config key when it is not a local dummy. The dummy ("local",
+// "ollama") must never render a stored-key hint — treating it as a
+// stored key once sent Bearer local to OpenRouter and 401'd.
+func (app *App) loginKeyHint() string {
+	credManager := config.NewCredentialManager()
+	if credManager.HasSecureCredentials() {
+		if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.APIKey != "" {
+			return keyHint(secureCfg.APIKey)
+		}
+	}
+	if app.config.APIKey != "" && !config.IsLocalProvider(app.config.APIKey) {
+		return keyHint(app.config.APIKey)
+	}
+	return ""
 }
 
 // startProviderPicker opens the provider-switch modal. Picking a

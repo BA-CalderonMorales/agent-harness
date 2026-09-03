@@ -4,7 +4,14 @@ BINARY_NAME := agent-harness
 BUILD_DIR := ./build
 MAIN_PKG := ./cmd/agent-harness
 
-VERSION := $(shell git describe --tags --always --dirty)
+# VERSION comes from the Version constant in main.go — the same line
+# bump-version.yml rewrites — so a build always reports the release line
+# it belongs to. git describe cannot do this job: tags live on main, so
+# develop and release/* builds describe against an older tag and lie
+# about what is running.
+APP_VERSION := $(shell sed -n 's/.*Version[[:space:]]*= "\([^"]*\)".*/\1/p' cmd/agent-harness/main.go)
+DIRTY_SUFFIX := $(shell git diff-index --quiet HEAD 2>/dev/null || printf dirty)
+VERSION := $(APP_VERSION)$(if $(DIRTY_SUFFIX),-$(DIRTY_SUFFIX))
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo none)
 BUILD_TIME := $(shell date -u +%Y-%m-%d_%H:%M:%S)
 GIT_SHA := $(shell git rev-parse --short HEAD)

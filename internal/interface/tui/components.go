@@ -39,6 +39,9 @@ const (
 	StatusWarning
 	StatusDisabled
 	StatusNew
+	// StatusActive marks the session currently in use — present, not
+	// "running": an idle open session is not executing anything.
+	StatusActive
 )
 
 // ---------------------------------------------------------------------------
@@ -99,6 +102,8 @@ func StatusString(s ItemStatus) string {
 		return IndicatorDisabled
 	case StatusNew:
 		return IndicatorNew
+	case StatusActive:
+		return IndicatorActive
 	default:
 		return ""
 	}
@@ -118,6 +123,8 @@ func StatusStyle(s ItemStatus) lipgloss.Style {
 	case StatusDisabled:
 		return BadgeDisabled
 	case StatusNew:
+		return InfoStyle
+	case StatusActive:
 		return InfoStyle
 	default:
 		return StatusLabel

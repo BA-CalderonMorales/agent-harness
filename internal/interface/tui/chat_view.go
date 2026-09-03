@@ -186,8 +186,7 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 		header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
 	}
 	if msg.Thinking {
-		spinner := InfoStyle.Render(thinkingFrameAt(int(m.elapsed.Seconds()) * 4))
-		header += HelpDimStyle.Render(fmt.Sprintf(" (thinking %s)", spinner))
+		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
 	}
 	b.WriteString(header)
 	b.WriteString("\n")

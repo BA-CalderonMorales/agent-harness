@@ -49,6 +49,51 @@ func (app *App) loadCredentials(credManager *config.CredentialManager) error {
 	return nil
 }
 
+// storedKeyForProvider resolves the API key to use when the login
+// wizard finishes without a typed key. Priority: an env-pinned key
+// (explicit for the session, boot already landed it in config), then
+// the encrypted store's key FOR THIS PROVIDER, then a config key that
+// was already authenticating this provider. config.APIKey alone is not
+// trustworthy here: for local providers it holds the dummy provider
+// name, and after a provider switch it can hold a key minted for a
+// different provider — both went out as Bearer garbage and 401'd
+// despite the wizard saying "using stored API key". Local providers
+// never reach this decision (they keep their dummy key by design).
+func (app *App) storedKeyForProvider(provider string, credManager *config.CredentialManager) (string, bool) {
+	if provider == "" || config.IsLocalProvider(provider) {
+		return "", false
+	}
+	if envPinnedKey(provider) {
+		return app.config.APIKey, app.config.APIKey != ""
+	}
+	if credManager.HasSecureCredentials() {
+		if secureCfg, err := credManager.LoadSecure(); err == nil &&
+			secureCfg.Provider == provider && secureCfg.APIKey != "" {
+			return secureCfg.APIKey, true
+		}
+	}
+	if app.config.APIKey != "" && app.config.Provider == provider {
+		return app.config.APIKey, true
+	}
+	return "", false
+}
+
+// envPinnedKey reports whether an environment variable explicitly pins
+// the key for this session. Generic vars apply to any provider;
+// provider-specific vars only to their own.
+func envPinnedKey(provider string) bool {
+	if os.Getenv("AH_API_KEY") != "" || os.Getenv("AGENT_HARNESS_API_KEY") != "" {
+		return true
+	}
+	switch provider {
+	case "openrouter":
+		return os.Getenv("OPENROUTER_API_KEY") != ""
+	case "nvidia":
+		return os.Getenv("NVIDIA_API_KEY") != ""
+	}
+	return false
+}
+
 // applySecureConfig applies secure configuration values.
 // Environment variables take precedence over saved credentials.
 func (app *App) applySecureConfig(secureCfg *config.SecureConfig) {
