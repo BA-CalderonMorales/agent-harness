@@ -65,6 +65,7 @@ type LayeredConfig struct {
 	ServerCommand  string
 	PermissionMode PermissionMode
 	ExecutionMode  string // "interactive" or "yolo"
+	Theme          string // TUI palette name; empty = default
 	AlwaysAllow    []string
 	AlwaysDeny     []string
 	McpServers     map[string]mcp.McpServerConfig

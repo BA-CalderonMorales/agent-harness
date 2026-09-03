@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -35,11 +36,24 @@ func NewLoop(client llm.Client) *Loop {
 
 // Query runs the full agent loop for a single user turn.
 // It yields StreamEvents so the caller can render progress in real time.
+//
+// The loop's goroutine carries its own recover net: a panic anywhere in
+// the turn (a tool executor bug, a race spike, a provider parser blowup)
+// becomes a StreamError the caller renders as a failed turn. Without it
+// the panic reaches bubbletea's goroutine handler and the whole TUI dies.
 func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.StreamEvent, error) {
 	out := make(chan types.StreamEvent, 16)
 
 	go func() {
 		defer close(out)
+		defer func() {
+			if r := recover(); r != nil {
+				diag.Panic("agent.loop.panic", r)
+				out <- types.StreamError{
+					Error: fmt.Errorf("internal error recovered (site: agent.loop.panic). Trace: ~/.agent-harness/logs"),
+				}
+			}
+		}()
 		state := loopState{
 			messages:                     params.Messages,
 			toolUseContext:               params.ToolUseContext,

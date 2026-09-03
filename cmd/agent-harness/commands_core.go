@@ -67,7 +67,7 @@ func (app *App) initCommandsCore() {
 			func() string { return app.session.Model },
 			func(m string) error {
 				app.session.Model = m
-				applyCatalogContext(app.config, m)
+				app.applyModelContext(m)
 				if app.costTracker != nil {
 					app.costTracker.SetModel(m)
 				}
@@ -171,6 +171,46 @@ func (app *App) initCommandsCore() {
 				app.tuiApp.SetAgentMode(string(target))
 			}
 			return agentModeDescription(target), nil
+		})
+
+	app.cmdRegistry.Register("modes", "List agent modes, marking the active one",
+		func(args string) (string, error) {
+			var b strings.Builder
+			for _, m := range []agentMode{AgentModeManual, AgentModeAuto, AgentModePlan, AgentModeChat} {
+				marker := "  "
+				if m == app.agentMode {
+					marker = "→ "
+				}
+				fmt.Fprintf(&b, "%s%s\n", marker, agentModeDescription(m))
+			}
+			return strings.TrimSuffix(b.String(), "\n"), nil
+		})
+
+	app.cmdRegistry.Register("theme", "Show or change the TUI color theme",
+		func(args string) (string, error) {
+			name := strings.TrimSpace(args)
+			if name == "" {
+				current := app.config.Theme
+				if current == "" {
+					current = "default"
+				}
+				var b strings.Builder
+				for _, t := range tui.ThemeNames() {
+					marker := "  "
+					if t == current {
+						marker = "→ "
+					}
+					fmt.Fprintf(&b, "%s%s\n", marker, t)
+				}
+				return strings.TrimSuffix(b.String(), "\n"), nil
+			}
+			if !tui.ApplyTheme(name) {
+				return "", fmt.Errorf("unknown theme %q: try /theme for the list", name)
+			}
+			theme, _ := tui.LookupTheme(name)
+			app.config.Theme = theme.Name
+			app.commitConfigChange()
+			return sprintf("Theme set to %s", theme.Name), nil
 		})
 
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",

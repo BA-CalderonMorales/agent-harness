@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m *ChatModel) filterSuggestions(input string) []string {
@@ -59,6 +61,20 @@ func (m *ChatModel) syncSuggestionOffset() {
 	}
 }
 
+// truncateSuggestionDescription clips a command description so the
+// suggestion line (prefix + two separator columns + description) stays
+// inside the terminal width; an overflowing description is noise.
+func (m ChatModel) truncateSuggestionDescription(prefix, description string) string {
+	max := m.width - lipgloss.Width(prefix) - 2
+	if max < 10 {
+		max = 10
+	}
+	if lipgloss.Width(description) <= max {
+		return description
+	}
+	return description[:max-1] + "…"
+}
+
 // renderSuggestions renders the inline suggestion dropdown.
 func (m ChatModel) renderSuggestions() string {
 	var b strings.Builder
@@ -84,10 +100,11 @@ func (m ChatModel) renderSuggestions() string {
 			indicator = IndicatorSelected + " "
 			style = InfoStyle
 		}
-		b.WriteString(style.Render(indicator + sug))
+		line := style.Render(indicator + sug)
 		if description := m.commandDescriptions[sug]; description != "" {
-			b.WriteString(HelpDimStyle.Render("  " + description))
+			line += HelpDimStyle.Render("  " + m.truncateSuggestionDescription(indicator+sug, description))
 		}
+		b.WriteString(line)
 		if i < end-1 {
 			b.WriteString("\n")
 		}

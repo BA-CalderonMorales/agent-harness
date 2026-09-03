@@ -64,21 +64,33 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	// place), so the completedToolMsgs/currentToolMsg duplicates are
 	// not rendered - they used to double every tool line. Collapsed
 	// runs merge contiguous finalized same-tool messages per turn.
-	m.toolLineIndex = m.toolLineIndex[:0]
+	m.clickIndex = m.clickIndex[:0]
 	line := 0
 	for i := 0; i < len(m.messages); {
-		rendered, next, isTool := m.appendCollapsedMessageTracked(&content, m.messages, i, m.toolsCollapsed)
+		rendered, next, click := m.appendCollapsedMessageTracked(&content, m.messages, i, m.toolsCollapsed)
 		lines := strings.Count(rendered, "\n") + 1
-		if isTool {
-			m.toolLineIndex = append(m.toolLineIndex, toolLineRange{
-				start: line, end: line + lines - 1, msgID: m.messages[i].ID,
+		if click.lines > 0 {
+			m.clickIndex = append(m.clickIndex, clickRange{
+				start: line + click.start, end: line + click.start + click.lines - 1,
+				msgID: m.messages[i].ID,
 			})
 		}
 		line += lines + 2 // the "\n\n" separator between messages
 		i = next
 	}
 
-	m.viewport.SetContent(content.String())
+	// Only paint when the built transcript actually differs from the
+	// last painted frame: the tick-driven streaming repaints would
+	// otherwise SetContent the identical string four times a second
+	// even when the stream went quiet.
+	painted := content.String()
+	if !forceBottom && painted == m.lastPainted && wasAtBottom == m.lastPaintedAtBottom {
+		return
+	}
+	m.lastPainted = painted
+	m.lastPaintedAtBottom = wasAtBottom
+
+	m.viewport.SetContent(painted)
 	if forceBottom || wasAtBottom {
 		m.viewport.GotoBottom()
 		return
@@ -97,10 +109,11 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	m.viewport.SetYOffset(previousOffset)
 }
 
-// toolMessageAtRow returns the tool message ID occupying the viewport
-// content row, or "" when the row belongs to a non-tool message.
-func (m *ChatModel) toolMessageAtRow(row int) string {
-	for _, r := range m.toolLineIndex {
+// expandableMessageAtRow returns the message ID occupying the viewport
+// content row, or "" when the row belongs to a message with no
+// expandable record (plain text, answer bubbles).
+func (m *ChatModel) expandableMessageAtRow(row int) string {
+	for _, r := range m.clickIndex {
 		if row >= r.start && row <= r.end {
 			return r.msgID
 		}

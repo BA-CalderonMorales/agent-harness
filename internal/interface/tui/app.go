@@ -24,12 +24,13 @@ const (
 	viewHome viewID = iota
 	viewChat
 	viewSessions
+	viewLogs
 	viewSettings
 	viewCount
 )
 
 var viewLabels = [viewCount]string{
-	"Home", "Chat", "Sessions", "Settings",
+	"Home", "Chat", "Sessions", "Logs", "Settings",
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ type App struct {
 	homeModel      *HomeModel
 	chatModel      ChatModel
 	sessionsModel  SessionsModel
+	logsModel      LogsModel
 	settingsModel  SettingsModel
 	approvalDialog ApprovalDialogModel
 
@@ -67,6 +69,7 @@ type App struct {
 	commandPalette CommandPaletteModel
 	modelPicker    ModelPickerModel
 	providerPicker ProviderPickerModel
+	exportPicker   ExportPickerModel
 	loginDialog    LoginDialogModel
 	tabActivity    [viewCount]bool
 
@@ -110,6 +113,10 @@ type App struct {
 	// cycles the agent mode chip; hosts apply the machinery the mode
 	// implies (approval prompting, plan gating, tool availability).
 	onAgentModeChanged func(mode string)
+
+	// onExportPick is the host hook for the Home export modal: it
+	// receives the picked session ID and runs the export journey.
+	onExportPick func(id string)
 }
 
 // AgentModeChangedMsg is emitted after the composer cycles the agent
@@ -124,6 +131,12 @@ func (a *App) SetAgentModeChangedHandler(fn func(mode string)) {
 	a.onAgentModeChanged = fn
 }
 
+// SetExportPickHandler registers the host hook for the Home export
+// modal: the picked session ID lands here on Enter.
+func (a *App) SetExportPickHandler(fn func(id string)) {
+	a.onExportPick = fn
+}
+
 // NewApp creates a new TUI application.
 func NewApp() *App {
 	home := NewHomeModel()
@@ -133,12 +146,14 @@ func NewApp() *App {
 		homeModel:      &home,
 		chatModel:      NewChatModel(),
 		sessionsModel:  NewSessionsModel(),
+		logsModel:      NewLogsModel(),
 		settingsModel:  NewSettingsModel(),
 		approvalDialog: NewApprovalDialog(),
 		helpModel:      NewHelp(),
 		commandPalette: NewCommandPalette(),
 		modelPicker:    NewModelPicker(),
 		providerPicker: NewProviderPicker(),
+		exportPicker:   NewExportPicker(),
 		loginDialog:    NewLoginDialog(),
 		msgChan:        make(chan tea.Msg, 64),
 	}

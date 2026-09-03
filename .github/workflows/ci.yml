@@ -52,10 +52,14 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test -v ./...
+        run: go test -v -timeout 15m ./...
+        env:
+          GOMEMLIMIT: 6GiB
 
       - name: Run tests with race detector
-        run: go test -race ./...
+        run: go test -race -timeout 15m ./...
+        env:
+          GOMEMLIMIT: 6GiB
         continue-on-error: true
 
   # Code quality checks

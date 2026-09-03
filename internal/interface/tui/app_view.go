@@ -50,6 +50,9 @@ func (a App) view() string {
 	if a.modelPicker.IsShowing() {
 		return a.modelPicker.View(a.width, a.height)
 	}
+	if a.exportPicker.visible {
+		return a.exportPicker.View(a.width, a.height)
+	}
 
 	// Terminal-native: no painted surface anywhere. Structure comes
 	// from rules, spacing, and color — the terminal's own background is
@@ -108,6 +111,8 @@ func (a App) renderActiveView() string {
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.sessionsModel.View())
+	case viewLogs:
+		return lipgloss.NewStyle().Height(contentHeight).Render(a.logsModel.View())
 	case viewSettings:
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.settingsModel.View())
 	}

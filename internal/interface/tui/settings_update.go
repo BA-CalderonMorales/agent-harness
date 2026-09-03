@@ -54,14 +54,17 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		// Reserve space for header (3 lines) and footer (2 lines)
+		// The pane's height is the app's content area (tab bar and
+		// status bar already subtracted upstream): only the pane's own
+		// header (3 lines) and footer (2 lines) come out of it. The old
+		// math double-reserved and the System Messages region pushed
+		// the pane past the content area, scrolling the tab bar away.
 		vpHeight := msg.Height - 5
 		if vpHeight < 5 {
 			vpHeight = 5
 		}
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight
-		m.sysViewport.Width = msg.Width
 
 	case tea.KeyMsg:
 		if !m.focused {
@@ -74,31 +77,16 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "up", "k":
-			if m.inSystemMessages {
-				// Scroll the System Messages region; exiting back into the
-				// settings list happens at its top edge.
-				m.sysViewport.ScrollUp(1)
-				if m.sysViewport.AtTop() {
-					m.inSystemMessages = false
-				}
-			} else if m.cursor > 0 {
+			if m.cursor > 0 {
 				m.cursor--
 			}
 
 		case "down", "j":
-			if m.inSystemMessages {
-				m.sysViewport.ScrollDown(1)
-			} else if m.cursor < len(m.settings)-1 {
+			if m.cursor < len(m.settings)-1 {
 				m.cursor++
-			} else if len(m.systemMessages) > 0 {
-				// Past the last setting: enter the System Messages region.
-				m.inSystemMessages = true
 			}
 
 		case "enter", " ":
-			if m.inSystemMessages {
-				return m, nil
-			}
 			if m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "bool" {
@@ -121,7 +109,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "left", "h":
-			if !m.inSystemMessages && m.cursor < len(m.settings) {
+			if m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
 					cycleChoice(s, -1)
@@ -132,7 +120,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "right", "l":
-			if !m.inSystemMessages && m.cursor < len(m.settings) {
+			if m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
 					cycleChoice(s, 1)
@@ -143,7 +131,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case "r":
-			if !m.inSystemMessages && m.delegate != nil {
+			if m.delegate != nil {
 				m.delegate.OnSettingReload()
 			}
 		}

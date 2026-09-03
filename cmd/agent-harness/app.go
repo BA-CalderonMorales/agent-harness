@@ -92,6 +92,12 @@ func newApp() (*App, error) {
 	}
 	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
+	// Boot theme: an empty value is the shipped default palette. Stored
+	// under the "theme" settings key via the Settings tab or /theme.
+	if app.config.Theme != "" {
+		tui.ApplyTheme(app.config.Theme)
+	}
+
 	return app, nil
 }
 
@@ -112,6 +118,9 @@ func (app *App) run() error {
 	})
 	tuiApp.SetHomeDelegate(&tuiHomeDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetExportPickHandler(func(id string) {
+		(&tuiSessionsDelegate{app: app, tuiApp: tuiApp}).OnSessionExport(id)
+	})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
@@ -149,6 +158,7 @@ func (app *App) run() error {
 	tuiApp.SetHomeStatus(app.session.Model, app.config.PermissionMode.String(), app.session.Persona, app.session.EstimateTokens())
 	app.refreshTelemetry(tuiApp)
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
+	tuiApp.SetCommandDescriptions(app.cmdRegistry.GetCompletionDescriptions())
 	tuiApp.SetCommands(app.cmdRegistry.GetCommandInfos())
 
 	// Surface boot-time credential/config problems in the TUI (durable

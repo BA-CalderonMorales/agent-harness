@@ -65,6 +65,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 			config.Effort = v
 		}
 	}
+	if v, ok := stringValue(config.merged, "theme"); ok {
+		config.Theme = v
+	}
 	if v, ok := stringValue(config.merged, "session_dir"); ok {
 		config.SessionDir = v
 	}

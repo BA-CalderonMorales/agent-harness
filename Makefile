@@ -2,6 +2,12 @@
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
+
+# Cap Go heap so runs cannot balloon to the WSL VM limit and get OOM-killed
+# (the agent-harness.test OOM loop that ate the host). GOGC stays loose:
+# the limit, not the collector frequency, is what contains the heap.
+export GOMEMLIMIT := 6GiB
+export GOGC := 250
 MAIN_PKG := ./cmd/agent-harness
 
 # VERSION comes from the Version constant in main.go — the same line
@@ -57,7 +63,8 @@ release: check-remote build
 
 test:
 	@printf '==> Running Go tests\n'
-	@go test -v ./... || { \
+	@printf '    GOMEMLIMIT: %s (runaway-heap OOM guard)\n' "$(GOMEMLIMIT)"
+	@go test -v -timeout 15m ./... || { \
 		status=$$?; \
 		printf '\n[fail] Go tests failed with exit status %s. Review the failing package output above.\n' "$$status"; \
 		exit $$status; \

@@ -133,6 +133,15 @@ func getMarkdownRenderer(width int) *glamour.TermRenderer {
 	return renderer
 }
 
+// evictMarkdownRenderer drops the cached renderer for a width so the
+// next render builds a fresh one. Called after a glamour panic: a
+// renderer that panicked mid-render carries dirty internal state.
+func evictMarkdownRenderer(width int) {
+	markdownRenderersMu.Lock()
+	defer markdownRenderersMu.Unlock()
+	delete(markdownRenderers, width)
+}
+
 // blockPrefixRE matches lines that start a markdown block: headings,
 // lists, blockquotes, tables. Soft breaks never cross these.
 var blockPrefixRE = regexp.MustCompile(`^(#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)`)
@@ -172,6 +181,11 @@ func normalizeSoftBreaks(content string) string {
 // A glamour panic on pathological input must never reach stderr: in a
 // TUI, stderr interleaves with the rendered UI. It is logged to diag
 // with a content snippet and the input falls through unstyled.
+//
+// The recovered panic also evicts the cached renderer for this width:
+// a glamour panic mid-render leaves the TermRenderer's internal state
+// dirty, and every later render sharing that instance panics too (the
+// cascading "index out of range" storms in the diagnostics log).
 func renderMarkdown(content string, width int) (result string) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -181,6 +195,7 @@ func renderMarkdown(content string, width int) (result string) {
 			}
 			snippet = strings.ReplaceAll(snippet, "\n", "\\n")
 			diag.Errorf("tui.renderMarkdown.panic", "%v (width=%d content=%q)", r, width, snippet)
+			evictMarkdownRenderer(width)
 			result = content
 		}
 	}()

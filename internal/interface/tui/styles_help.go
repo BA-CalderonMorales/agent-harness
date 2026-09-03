@@ -8,29 +8,38 @@ import (
 // Help overlay
 // ---------------------------------------------------------------------------
 var (
+	HelpTitleStyle lipgloss.Style
+	HelpKeyStyle   lipgloss.Style
+	HelpDescStyle  lipgloss.Style
+	HelpDimStyle   lipgloss.Style
+	HelpSectionSep lipgloss.Style
+	CategoryStyle  lipgloss.Style
+)
+
+func applyHelpStyles() {
 	HelpTitleStyle = lipgloss.NewStyle().
-			Foreground(ColorPrimary).
-			Bold(true).
-			Padding(0, 1)
+		Foreground(ColorPrimary).
+		Bold(true).
+		Padding(0, 1)
 
 	HelpKeyStyle = lipgloss.NewStyle().
-			Foreground(ColorAccent).
-			Bold(true)
+		Foreground(ColorAccent).
+		Bold(true)
 
 	HelpDescStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+		Foreground(ColorText)
 
 	HelpDimStyle = lipgloss.NewStyle().
-			Foreground(ColorTextDim)
+		Foreground(ColorTextDim)
 
 	HelpSectionSep = lipgloss.NewStyle().
-			Foreground(ColorBorder)
+		Foreground(ColorBorder)
 
 	CategoryStyle = lipgloss.NewStyle().
-			Foreground(ColorPrimary).
-			Bold(true).
-			MarginTop(1).
-			MarginBottom(0)
-)
+		Foreground(ColorPrimary).
+		Bold(true).
+		MarginTop(1).
+		MarginBottom(0)
+}
 
 // ---------------------------------------------------------------------------

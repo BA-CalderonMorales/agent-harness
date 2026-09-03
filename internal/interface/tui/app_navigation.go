@@ -13,6 +13,9 @@ func (a *App) switchView(v viewID) tea.Cmd {
 		a.focusActive()
 	} else {
 		a.tabActivity[v] = false
+		// First Chat entry of a session greets with the navigation
+		// guidance block (a system message; scrolls away naturally).
+		a.chatModel.ShowNavigationGuidance()
 	}
 	return a.initActiveView()
 }
@@ -42,6 +45,8 @@ func (a *App) focusActive() {
 		a.chatModel.Focus()
 	case viewSessions:
 		a.sessionsModel.Focus()
+	case viewLogs:
+		a.logsModel.Focus()
 	case viewSettings:
 		a.settingsModel.Focus()
 	}
@@ -55,6 +60,8 @@ func (a *App) blurActive() {
 		a.chatModel.Blur()
 	case viewSessions:
 		a.sessionsModel.Blur()
+	case viewLogs:
+		a.logsModel.Blur()
 	case viewSettings:
 		a.settingsModel.Blur()
 	}
@@ -68,6 +75,8 @@ func (a *App) initActiveView() tea.Cmd {
 		return a.chatModel.Init()
 	case viewSessions:
 		return a.sessionsModel.Init()
+	case viewLogs:
+		return nil
 	case viewSettings:
 		return a.settingsModel.Init()
 	}

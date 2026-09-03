@@ -1216,14 +1216,18 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("coming soon"))
 		})
 
-		It("should exclude flagged commands from main help output", func() {
+		It("should list flagged commands only under the Coming soon banner", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			registry.FeatureFlag("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).ToNot(ContainSubstring("/export"))
-			Expect(result).ToNot(ContainSubstring("/cost"))
+			Expect(result).To(ContainSubstring("Coming soon:"))
+			// The flagged entries live only in the Coming soon section,
+			// never in the dispatch categories above it.
+			body, _, _ := strings.Cut(result, "Coming soon:")
+			Expect(body).ToNot(ContainSubstring("/export"))
+			Expect(body).ToNot(ContainSubstring("/cost"))
 		})
 
 		It("should show feature flag message for specific help query", func() {
@@ -1300,14 +1304,16 @@ var _ = Describe("Slash Commands", func() {
 			Expect(result).To(ContainSubstring("coming soon"))
 		})
 
-		It("should exclude flagged commands from help output", func() {
+		It("should list flagged commands under Coming soon in help output", func() {
 			registry.FeatureFlag("export", "Export conversation to file")
 			registry.FeatureFlag("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
-			Expect(result).ToNot(ContainSubstring("/export"))
-			Expect(result).ToNot(ContainSubstring("/cost"))
+			Expect(result).To(ContainSubstring("Coming soon:"))
+			body, _, _ := strings.Cut(result, "Coming soon:")
+			Expect(body).ToNot(ContainSubstring("/export"))
+			Expect(body).ToNot(ContainSubstring("/cost"))
 		})
 
 		It("should show feature flag message for specific help query", func() {

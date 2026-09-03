@@ -304,8 +304,8 @@ func TestClearChatWithFollowUpMsg(t *testing.T) {
 	model, _ := chat.Update(ClearChatMsg{FollowUpMsg: "Session cleared."})
 	chat = model.(ChatModel)
 
-	if len(chat.messages) != 1 {
-		t.Fatalf("expected 1 message after clear (the follow-up), got %d", len(chat.messages))
+	if len(chat.messages) != 2 {
+		t.Fatalf("expected 2 messages after clear (follow-up + guidance), got %d", len(chat.messages))
 	}
 
 	if chat.messages[0].Role != "system" {
@@ -317,7 +317,8 @@ func TestClearChatWithFollowUpMsg(t *testing.T) {
 	}
 }
 
-// TestClearChatWithoutFollowUpMsg verifies bare clear removes everything.
+// TestClearChatWithoutFollowUpMsg verifies bare clear removes everything
+// and greets with the navigation guidance block.
 func TestClearChatWithoutFollowUpMsg(t *testing.T) {
 	chat := NewChatModel()
 	chat.AddMessage("user", "hello")
@@ -325,8 +326,11 @@ func TestClearChatWithoutFollowUpMsg(t *testing.T) {
 	model, _ := chat.Update(ClearChatMsg{})
 	chat = model.(ChatModel)
 
-	if len(chat.messages) != 0 {
-		t.Errorf("expected 0 messages after bare clear, got %d", len(chat.messages))
+	if len(chat.messages) != 1 {
+		t.Errorf("expected 1 guidance message after bare clear, got %d", len(chat.messages))
+	}
+	if !strings.Contains(chat.messages[0].Content, "Quick keys") {
+		t.Errorf("expected navigation guidance after bare clear, got %q", chat.messages[0].Content)
 	}
 }
 

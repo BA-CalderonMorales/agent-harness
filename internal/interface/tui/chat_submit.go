@@ -29,10 +29,12 @@ func (m *ChatModel) SetThinking(thinking bool, text string) {
 }
 
 // SetThinkingText updates the live reasoning preview without resetting
-// the thinking timer.
+// the thinking timer. No repaint here: reasoning deltas can arrive
+// dozens of times a second, and the streaming repaints batch onto the
+// turn timer's tick (timerTickMsg) — one full-transcript render 4x a
+// second instead of one per delta.
 func (m *ChatModel) SetThinkingText(text string) {
 	m.thinkingText = text
-	m.refreshViewport()
 }
 
 // startTimer returns a command that ticks every 100ms to update elapsed time

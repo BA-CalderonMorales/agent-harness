@@ -3,8 +3,6 @@
 package tui
 
 import (
-	"strings"
-
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -46,22 +44,15 @@ type SettingsModel struct {
 	editErr  string
 	viewport viewport.Model
 
-	// systemMessages holds the durable system log rendered in its own
-	// scrollable region at the bottom of the settings page.
-	systemMessages   []string
-	sysViewport      viewport.Model
-	inSystemMessages bool
-
 	delegate SettingsDelegate
 }
 
 // NewSettingsModel creates a new settings model.
 func NewSettingsModel() SettingsModel {
 	return SettingsModel{
-		settings:    make([]Setting, 0),
-		cursor:      0,
-		viewport:    newViewport(80, 20),
-		sysViewport: newViewport(80, 6),
+		settings: make([]Setting, 0),
+		cursor:   0,
+		viewport: newViewport(80, 20),
 	}
 }
 
@@ -73,35 +64,6 @@ func (m *SettingsModel) SetDelegate(delegate SettingsDelegate) {
 // SetSettings updates the settings list.
 func (m *SettingsModel) SetSettings(settings []Setting) {
 	m.settings = settings
-}
-
-// SetSystemMessages replaces the system-message log rendered in its own
-// scrollable region at the bottom of the settings page.
-func (m *SettingsModel) SetSystemMessages(messages []string) {
-	m.systemMessages = append([]string(nil), messages...)
-	m.syncSystemViewport()
-}
-
-// systemMessagesHeight is the max visible rows of the System Messages
-// region; fewer messages shrink it to fit.
-const systemMessagesHeight = 6
-
-// syncSystemViewport rebuilds the System Messages scroll region's content
-// and height from the current log.
-func (m *SettingsModel) syncSystemViewport() {
-	content := strings.Join(m.systemMessages, "\n")
-	m.sysViewport.SetContent(content)
-	h := len(m.systemMessages)
-	if h > systemMessagesHeight {
-		h = systemMessagesHeight
-	}
-	if h < 1 {
-		h = 1
-	}
-	m.sysViewport.Height = h
-	if m.width > 0 {
-		m.sysViewport.Width = m.width
-	}
 }
 
 // UpdateSettingValue updates a single setting value by key.
@@ -148,14 +110,6 @@ func (m SettingsModel) CapturesAllKeys() bool {
 // Scroll scrolls the list and updates viewport.
 // CRITICAL FIX: Also scrolls the viewport to ensure all settings are visible
 func (m *SettingsModel) Scroll(lines int) {
-	if m.inSystemMessages {
-		if lines > 0 {
-			m.sysViewport.ScrollDown(lines)
-		} else {
-			m.sysViewport.ScrollUp(-lines)
-		}
-		return
-	}
 	oldCursor := m.cursor
 	if lines > 0 {
 		for i := 0; i < lines && m.cursor < len(m.settings)-1; i++ {

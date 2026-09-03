@@ -8,6 +8,10 @@ import (
 
 // getSettings returns current settings for TUI grouped by logical section.
 func (app *App) getSettings() []tui.Setting {
+	theme := app.config.Theme
+	if theme == "" {
+		theme = "default"
+	}
 	return []tui.Setting{
 		// Provider & Connection
 		{Key: "provider", Label: "Provider", Value: app.config.Provider, Category: "Provider & Connection", Description: "API provider (openai, anthropic, openrouter, ollama, flm, fireworks, nvidia, local).", Type: "choice", Options: []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia"}},
@@ -32,6 +36,9 @@ func (app *App) getSettings() []tui.Setting {
 
 		// System & Storage
 		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Category: "System & Storage", Description: "Directory for session log storage (default: the shared data home's sessions directory).", Type: "string"},
+
+		// Appearance
+		{Key: "theme", Label: "Theme", Value: theme, Category: "Appearance", Description: "TUI color palette. See /theme for the catalog.", Type: "choice", Options: tui.ThemeNames()},
 	}
 }
 
