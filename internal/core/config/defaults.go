@@ -16,8 +16,8 @@ const (
 	// Timeout windows. Local providers evaluate the prompt on CPU before the
 	// first token: a tight hosted-API guard would kill a legitimate turn.
 	// DefaultStreamIdleTimeoutFor / DefaultHTTPTimeoutFor scale with provider.
-	DefaultLocalStreamIdleTimeout = 30 * time.Minute
-	DefaultLocalHTTPTimeout       = 45 * time.Minute
+	DefaultLocalStreamIdleTimeout  = 30 * time.Minute
+	DefaultLocalHTTPTimeout        = 45 * time.Minute
 	DefaultRemoteStreamIdleTimeout = 90 * time.Second
 	DefaultRemoteHTTPTimeout       = 120 * time.Second
 )

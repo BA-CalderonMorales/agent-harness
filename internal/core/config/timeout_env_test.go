@@ -14,9 +14,9 @@ func TestLayeredLoader_TimeoutDefaultsScaleToProvider(t *testing.T) {
 	clearConfigEnv(t)
 
 	cases := []struct {
-		provider        string
-		wantIdle        time.Duration
-		wantHTTP        time.Duration
+		provider string
+		wantIdle time.Duration
+		wantHTTP time.Duration
 	}{
 		{"local", 30 * time.Minute, 45 * time.Minute},
 		{"ollama", 30 * time.Minute, 45 * time.Minute},

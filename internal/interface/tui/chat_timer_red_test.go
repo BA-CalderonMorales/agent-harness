@@ -1,8 +1,10 @@
 package tui
+
 import (
 	"testing"
 	"time"
 )
+
 func TestTimerFreezesWhenChatInactiveRed(t *testing.T) {
 	m := ChatModel{timerRunning: true, startTime: time.Now()}
 	next, cmd := m.Update(timerTickMsg{})
