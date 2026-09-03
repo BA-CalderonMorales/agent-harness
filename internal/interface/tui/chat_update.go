@@ -124,6 +124,16 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.thinkingText = fmt.Sprintf("Connecting to %s...", msg.Endpoint)
 		return m, nil
 
+	case AgentThinkingMsg:
+		// Reasoning preview from the agent goroutine: update the badge
+		// text without touching the thinking timer.
+		m.SetThinkingText(msg.Text)
+		return m, nil
+
+	case AgentSystemNoteMsg:
+		m.AddMessage("system", msg.Text)
+		return m, nil
+
 	case AgentChunkMsg:
 		if m.streaming && !m.turnInterrupted {
 			m.streamBuffer += msg.Text
