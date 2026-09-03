@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -65,6 +66,20 @@ func (a *App) ShowStatus(text string, statusType string) {
 	a.statusMessage = text
 	a.statusType = statusType
 	a.statusGen++
+}
+
+// flashCopyStatus reports a 'y' copy: which record went to the
+// clipboard, or that the clipboard was unreachable (no tool and no
+// OSC 52 support — nothing was silently lost).
+func (a *App) flashCopyStatus(label string, ok bool) {
+	switch {
+	case ok && label != "":
+		a.ShowStatus(fmt.Sprintf("Copied %s to clipboard", label), "success")
+	case ok:
+		a.ShowStatus("Copied to clipboard", "success")
+	default:
+		a.ShowStatus("Clipboard unavailable — nothing copied", "error")
+	}
 }
 
 // statusFlashCmd schedules the expiry of the current status: statuses

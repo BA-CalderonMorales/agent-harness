@@ -232,6 +232,20 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 					a.chatModel.ExpandLatestRecord()
 					return a, nil, true
 				}
+			case "y":
+				// Chat: copy the expanded record — or the latest reply
+				// when nothing is expanded — to the clipboard. The TUI
+				// captures the mouse, so selection-based copying fights
+				// the UI; 'y' hands the specific text over instead.
+				if a.activeView == viewChat {
+					if text, label := a.chatModel.CopyRecord(); text != "" {
+						copied := copyToClipboard(text)
+						a.flashCopyStatus(label, copied)
+					} else {
+						a.flashCopyStatus("", false)
+					}
+					return a, nil, true
+				}
 			case "j", "down":
 				a.scrollActiveView(1)
 				return a, nil, true
