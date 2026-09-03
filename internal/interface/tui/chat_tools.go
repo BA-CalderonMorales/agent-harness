@@ -143,8 +143,10 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 	}
 	dur := formatElapsed(elapsed)
 	// Display-width padding: glyph and dot runes are multi-byte, so
-	// len() would over-count and shove the duration off the edge.
-	pad := m.width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 4
+	// len() would over-count and shove the duration off the edge. Two
+	// columns are reserved for the expand caret the render path
+	// prepends (▸ folded / ▾ open) so the line stays exact-width.
+	pad := m.width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
 	if pad < 2 {
 		pad = 2
 	}

@@ -37,8 +37,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		cmds = append(cmds, cmd)
 
 	// -------------------------------------------------------------------------
-	// Mouse: click a tool line to expand its full call record; Esc or a
-	// second click folds it back. Wheel events scroll the transcript.
+	// Mouse: click a tool line or a reasoning preview to expand its full
+	// record; Esc or a second click folds it back. Wheel events scroll
+	// the transcript.
 	// -------------------------------------------------------------------------
 	case tea.MouseMsg:
 		if tea.MouseEvent(msg).IsWheel() {
@@ -49,7 +50,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			// viewportTopOffset: app tab bar (1) + chat header (2) sits
 			// above the message viewport.
-			if id := m.toolMessageAtRow(msg.Y - viewportTopOffset + m.viewport.YOffset); id != "" {
+			if id := m.expandableMessageAtRow(msg.Y - viewportTopOffset + m.viewport.YOffset); id != "" {
 				if m.expandedMessageID == id {
 					m.expandedMessageID = ""
 				} else {
