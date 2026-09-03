@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
 // View renders the chat.
@@ -46,6 +48,7 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 	// entire TUI from crashing.
 	defer func() {
 		if r := recover(); r != nil {
+			diag.Panic("tui.chat_submit", r)
 			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] chat.doSubmit: %v\n", r)
 			model = m
 			cmd = nil

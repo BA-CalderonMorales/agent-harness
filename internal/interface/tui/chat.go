@@ -92,8 +92,16 @@ const (
 const PlaceholderDelay = 1 * time.Second
 
 // SubmitDebounceDuration is the window after Enter during which another
-// keystroke causes the Enter to be treated as a newline (paste continuation).
+// keystroke may still influence how the Enter is interpreted.
 var SubmitDebounceDuration = 80 * time.Millisecond
+
+// PasteBurstThreshold separates machine-speed paste bursts from a fast
+// typist. Keys inside a terminal paste stream arrive microseconds apart;
+// even a hammering typist needs tens of milliseconds per key. A keystroke
+// landing within the threshold of the pending Enter continues a paste
+// (newline insertion); anything later is a human — Enter's contract
+// (submit) wins and the keystroke starts the next message.
+const PasteBurstThreshold = 20 * time.Millisecond
 
 // ---------------------------------------------------------------------------
 // ChatModel is the chat view model
@@ -179,6 +187,7 @@ type ChatModel struct {
 	// Debounce state for distinguishing intentional Enter from pasted newlines
 	pendingSubmit    bool
 	pendingSubmitGen int
+	pendingAt        time.Time // when the pending Enter landed; burst discriminator
 
 	// placeholderPending defers the assistant message (and its thinking
 	// header) until PlaceholderDelay has elapsed since the question.
