@@ -23,7 +23,10 @@ type QueryParams struct {
 	Temperature     float64
 	ReasoningEffort string
 	MaxTurns        int
-	SkipCacheWrite  bool
+	// MaxToolCalls overrides the loop's default tool ceiling for this
+	// query (the session-scoped /limit knob); 0 keeps the default.
+	MaxToolCalls   int
+	SkipCacheWrite bool
 }
 
 // TerminalReason explains why the query loop ended.
@@ -70,6 +73,10 @@ type LoopConfig struct {
 	MaxToolCalls            int
 	MaxIdenticalToolUses    int
 	BlockingTokenLimit      int
+	// StreamIdleTimeout overrides the package-default idle watchdog
+	// (maxStreamIdle). Local providers need multi-minute first-token
+	// windows for CPU prompt eval; 0 keeps the package default.
+	StreamIdleTimeout time.Duration
 }
 
 // DefaultLoopConfig returns sensible defaults.

@@ -179,38 +179,6 @@ func TestGetDefaultModel(t *testing.T) {
 	}
 }
 
-func TestResolveModelInput(t *testing.T) {
-	tests := []struct {
-		input    string
-		provider string
-		want     string
-	}{
-		{"", "openrouter", ""},
-		{"1", "openai", "gpt-4o"},
-		{"2", "openai", "gpt-4o-mini"},
-		{"3", "openai", "gpt-4-turbo"},
-		{"1", "anthropic", "claude-3-5-sonnet-20241022"},
-		{"2", "anthropic", "claude-3-opus-20240229"},
-		{"1", "openrouter", "nvidia/nemotron-3-super-120b-a12b:free"},
-		{"2", "openrouter", "anthropic/claude-3.5-sonnet"},
-		{"3", "openrouter", "openai/gpt-4o"},
-		{"1", "local", "deepreinforce-ai/Ornith-1.0-9B-GGUF"},
-		{"2", "local", "local-model"},
-		{"1", "ollama", "gemma4:2b"},
-		{"2", "ollama", "llama3.2:3b"},
-		{"custom-model", "openrouter", "custom-model"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input+"_"+tt.provider, func(t *testing.T) {
-			got := resolveModelInput(tt.input, tt.provider)
-			if got != tt.want {
-				t.Errorf("resolveModelInput(%q, %q) = %q, want %q", tt.input, tt.provider, got, tt.want)
-			}
-		})
-	}
-}
-
 // =============================================================================
 // Tool classification helpers
 // =============================================================================

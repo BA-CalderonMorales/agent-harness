@@ -37,7 +37,12 @@ var (
 	MessageBubbleUser = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder(), false, false, false, true).
 				BorderForeground(ColorSecondary).
+				Background(ColorSurface).
 				PaddingLeft(1)
+
+	// MessageBubbleAssistant keeps the bare quote block: the user's
+	// raised surface panel vs the agent's open block is the speaker
+	// hierarchy at a glance.
 
 	MessageBubbleAssistant = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder(), false, false, false, true).

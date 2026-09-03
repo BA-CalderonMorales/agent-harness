@@ -139,6 +139,24 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	if config.EndpointURL == "" {
 		config.EndpointURL = DefaultEndpointForProvider(config.Provider)
 	}
+	// Timeout defaults follow the provider unless an env override pinned
+	// them: local providers need multi-minute first-token windows, hosted
+	// APIs get tight guards. applyEnvOverrides runs before this, so the
+	// pinned check reflects the final env state.
+	config.ApplyTimeoutDefaults()
+}
+
+// ApplyTimeoutDefaults sets the provider-derived timeout defaults.
+// Env-pinned timeouts always win and are left untouched. Provider switches
+// call this so a local default does not leak onto a hosted provider (and
+// vice versa) mid-session. The timeout keys have no file source, so the
+// provider default is the only unpinned origin.
+func (c *LayeredConfig) ApplyTimeoutDefaults() {
+	if c.TimeoutPinned {
+		return
+	}
+	c.StreamIdleTimeout = DefaultStreamIdleTimeoutFor(c.Provider)
+	c.HTTPTimeout = DefaultHTTPTimeoutFor(c.Provider)
 }
 
 func parseMcpServerConfig(data map[string]interface{}) mcp.McpServerConfig {

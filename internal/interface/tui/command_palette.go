@@ -32,49 +32,25 @@ type CommandPaletteModel struct {
 	showing     bool
 }
 
-// NewCommandPalette creates a new command palette with all available commands
+// NewCommandPalette creates an empty command palette. The command list is
+// populated exclusively by SetCommands (the app feeds it the live
+// SlashRegistry metadata at boot); a hardcoded seed would drift from the
+// registry and resurrect phantom commands.
 func NewCommandPalette() CommandPaletteModel {
 	m := CommandPaletteModel{
-		commands: getAgentHarnessCommands(),
+		commands: make([]commandInfo, 0),
 		filtered: make([]commandInfo, 0),
 		cursor:   0,
 		showing:  false,
 	}
-	m.filtered = m.commands
 	return m
 }
 
 // SetCommands updates the list of available commands in the palette dynamically.
 func (m *CommandPaletteModel) SetCommands(cmds []CommandInfo) {
-	m.commands = cmds
+	m.commands = append([]CommandInfo(nil), cmds...)
 	m.filtered = m.commands
 	m.cursor = 0
-}
-
-func getAgentHarnessCommands() []commandInfo {
-	return []commandInfo{
-		{Command: "/help", Description: "Show available commands", Category: "Session"},
-		{Command: "/status", Description: "Show session status", Category: "Session"},
-		{Command: "/clear", Description: "Clear chat history", Category: "Session"},
-		{Command: "/compact", Description: "Compact session to reduce tokens", Category: "Session"},
-		{Command: "/export", Args: "[path]", Description: "Export conversation to file", Category: "Session"},
-		{Command: "/session", Args: "[list|load <id>]", Description: "Manage sessions", Category: "Session"},
-		{Command: "/reset", Description: "Reset agent harness (destructive)", Category: "Session"},
-		{Command: "/quit", Description: "Exit application", Category: "Session"},
-
-		{Command: "/model", Args: "[model-id]", Description: "Show or change model", Category: "Model"},
-		{Command: "/current-model", Description: "Show current model", Category: "Model"},
-		{Command: "/cost", Description: "Show token usage and cost", Category: "Output"},
-		{Command: "/diff", Description: "Show git diff", Category: "Output"},
-		{Command: "/version", Description: "Show version", Category: "System"},
-		{Command: "/config", Description: "Show configuration", Category: "System"},
-		{Command: "/permissions", Args: "[mode]", Description: "Show or change permission mode", Category: "System"},
-		{Command: "/workspace", Description: "Show workspace information", Category: "System"},
-		{Command: "/agents", Description: "Show available agents", Category: "Tools"},
-		{Command: "/skills", Description: "Show available skills", Category: "Tools"},
-		{Command: "/persona", Args: "[name]", Description: "Show or change persona", Category: "Tools"},
-		{Command: "/audit", Description: "Show recent tool activity", Category: "System"},
-	}
 }
 
 // Open shows the command palette
@@ -227,7 +203,10 @@ func (m *CommandPaletteModel) applyFilter() {
 		m.filtered = make([]commandInfo, len(m.commands))
 		copy(m.filtered, m.commands)
 	} else {
-		m.filtered = m.filtered[:0]
+		// Fresh backing array: m.filtered must never alias m.commands,
+		// or the first keystroke's appends corrupt the source list
+		// (searching "persona" duplicated the entry into itself).
+		m.filtered = make([]commandInfo, 0, len(m.commands))
 		query := strings.ToLower(m.searchQuery)
 		for _, cmd := range m.commands {
 			if strings.Contains(strings.ToLower(cmd.Command), query) ||
@@ -277,7 +256,7 @@ func (m CommandPaletteModel) buildContent() string {
 	var b strings.Builder
 
 	b.WriteString(HelpTitleStyle.Render("Commands") + "\n")
-	b.WriteString(HelpDimStyle.Render("Type / then search, Enter to select, Esc to cancel") + "\n\n")
+	b.WriteString(HelpDimStyle.Render("Type to filter, Enter to select, Esc to cancel") + "\n\n")
 
 	if m.searchQuery != "" {
 		b.WriteString("Search: " + InfoStyle.Render(m.searchQuery) + "\n\n")
@@ -340,6 +319,33 @@ func (m CommandPaletteModel) renderCommandLine(cmd commandInfo, isSelected bool)
 	return line
 }
 
+// paletteFooterHint returns a footer hint that fits the palette panel's
+// inner width. The panel is viewport.Width wide minus its border and
+// padding; the longest variant that still fits wins, so the footer never
+// clips or wraps at narrow terminal widths.
+func paletteFooterHint(panelWidth int, canScroll bool) string {
+	inner := panelWidth - 4 // border (2) + padding (2)
+	if inner < 10 {
+		inner = 10
+	}
+	scroll := ""
+	if canScroll {
+		scroll = " scroll"
+	}
+	candidates := []string{
+		"Esc:cancel Enter:select",
+		"j/k:nav Enter:select",
+		"j/k:nav Enter:select Tab:auto",
+		"j/k: navigate  Enter: select  Tab: auto-complete",
+	}
+	for _, base := range candidates {
+		if lipgloss.Width(base+scroll) <= inner {
+			return HelpDimStyle.Render(base + scroll)
+		}
+	}
+	return HelpDimStyle.Render(candidates[0])
+}
+
 // View renders the command palette centered
 func (m CommandPaletteModel) View(width, height int) string {
 	if !m.ready || !m.showing {
@@ -348,26 +354,7 @@ func (m CommandPaletteModel) View(width, height int) string {
 
 	body := m.viewport.View()
 
-	pct := m.viewport.ScrollPercent()
-	var scrollHint string
-	if width < 50 {
-		scrollHint = HelpDimStyle.Render("Esc:cancel Enter:select")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Esc:cancel")
-		}
-	} else if width < 70 {
-		scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Tab:auto")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k:nav Enter:select Tab:auto scroll")
-		}
-	} else {
-		scrollHint = HelpDimStyle.Render("j/k: navigate  Enter: select  Tab: auto-complete")
-		if pct < 1.0 {
-			scrollHint = HelpDimStyle.Render("j/k: navigate  Enter: select  Tab: auto-complete  scroll")
-		}
-	}
-
-	content := body + "\n" + scrollHint
+	content := body + "\n" + paletteFooterHint(m.viewport.Width, m.viewport.ScrollPercent() < 1.0)
 
 	panel := lipgloss.NewStyle().
 		Width(m.viewport.Width).

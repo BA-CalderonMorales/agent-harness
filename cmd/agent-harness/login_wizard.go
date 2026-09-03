@@ -1,11 +1,54 @@
 package main
 
 import (
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
+
+// wizardEndpoint returns the endpoint the wizard commits for a provider:
+// an env-pinned AH_ENDPOINT_URL survives the login, anything else follows
+// the provider default. The wizard's live model probe must test exactly
+// this endpoint or its green check would lie about the app's state.
+func (app *App) wizardEndpoint(provider string) string {
+	if app.config.EndpointPinned {
+		return app.config.EndpointURL
+	}
+	return config.DefaultEndpointForProvider(provider)
+}
+
+// wizardModels returns the model list the login wizard's model step
+// shows for a candidate provider+key: a live ListModels() call against
+// the endpoint the login will commit is the verified-connection proof,
+// and the static catalog is the honest fallback when the probe fails
+// (surfaced as an error, never a silent default). The probe is bounded:
+// a dead endpoint must not hold the wizard hostage.
+func (app *App) wizardModels(provider, apiKey string) ([]tui.ModelItem, error) {
+	client := llm.NewHTTPClientWithBaseURL(provider, apiKey, app.wizardEndpoint(provider))
+	client.HTTPClient.Timeout = 3 * time.Second
+
+	ids, err := client.ListModels()
+	if err != nil {
+		return getModelsForProvider(provider, getDefaultModel(provider)), err
+	}
+	if len(ids) == 0 {
+		return getModelsForProvider(provider, getDefaultModel(provider)), nil
+	}
+	defaultID := getDefaultModel(provider)
+	items := make([]tui.ModelItem, 0, len(ids))
+	for _, id := range ids {
+		items = append(items, tui.ModelItem{
+			ID:        id,
+			Name:      id,
+			Provider:  provider,
+			IsDefault: id == defaultID,
+		})
+	}
+	return items, nil
+}
 
 // completeLogin persists the modal login wizard's result: the provider,
 // the (masked-input) API key, and the model. The key goes to the
@@ -16,7 +59,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 		return
 	}
 	app.config.Provider = provider
-	app.config.EndpointURL = config.DefaultEndpointForProvider(provider)
+	app.config.EndpointURL = app.wizardEndpoint(provider)
 
 	if config.IsLocalProvider(provider) {
 		app.config.APIKey = provider
@@ -64,7 +107,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	app.commitConfigChange()
 
 	// Recreate the LLM client and refresh the TUI state.
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
 	tuiApp.SetChatModel(model)
 	tuiApp.SetSettings(app.getSettings())
@@ -75,4 +118,8 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	// Re-probe the new provider.
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// Land the user in chat, ready to type: the first-run happy path
+	// never strands them on the home screen after authenticating.
+	tuiApp.Send(tui.LoginCompletedMsg{})
 }

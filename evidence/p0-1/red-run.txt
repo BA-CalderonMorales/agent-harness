@@ -1,0 +1,27 @@
+# github.com/BA-CalderonMorales/agent-harness/internal/core/config [github.com/BA-CalderonMorales/agent-harness/internal/core/config.test]
+internal/core/config/timeout_env_test.go:33:10: cfg.StreamIdleTimeout undefined (type *LayeredConfig has no field or method StreamIdleTimeout)
+internal/core/config/timeout_env_test.go:34:78: cfg.StreamIdleTimeout undefined (type *LayeredConfig has no field or method StreamIdleTimeout)
+internal/core/config/timeout_env_test.go:36:10: cfg.HTTPTimeout undefined (type *LayeredConfig has no field or method HTTPTimeout)
+internal/core/config/timeout_env_test.go:37:72: cfg.HTTPTimeout undefined (type *LayeredConfig has no field or method HTTPTimeout)
+internal/core/config/timeout_env_test.go:57:9: cfg.StreamIdleTimeout undefined (type *LayeredConfig has no field or method StreamIdleTimeout)
+internal/core/config/timeout_env_test.go:58:51: cfg.StreamIdleTimeout undefined (type *LayeredConfig has no field or method StreamIdleTimeout)
+internal/core/config/timeout_env_test.go:60:9: cfg.HTTPTimeout undefined (type *LayeredConfig has no field or method HTTPTimeout)
+internal/core/config/timeout_env_test.go:61:45: cfg.HTTPTimeout undefined (type *LayeredConfig has no field or method HTTPTimeout)
+internal/core/config/timeout_env_test.go:63:10: cfg.TimeoutPinned undefined (type *LayeredConfig has no field or method TimeoutPinned)
+internal/core/config/timeout_env_test.go:80:9: cfg.StreamIdleTimeout undefined (type *LayeredConfig has no field or method StreamIdleTimeout)
+internal/core/config/timeout_env_test.go:80:9: too many errors
+FAIL	github.com/BA-CalderonMorales/agent-harness/internal/core/config [build failed]
+# github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm [github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm.test]
+internal/runtime/llm/client_timeout_test.go:12:12: undefined: NewHTTPClientWithBaseURLTimeout
+internal/runtime/llm/client_timeout_test.go:22:46: undefined: defaultHTTPTimeout
+internal/runtime/llm/client_timeout_test.go:23:68: undefined: defaultHTTPTimeout
+FAIL	github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm [build failed]
+# github.com/BA-CalderonMorales/agent-harness/internal/agent [github.com/BA-CalderonMorales/agent-harness/internal/agent.test]
+internal/agent/loop_idle_config_test.go:9:2: "github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm" imported and not used
+internal/agent/loop_idle_config_test.go:19:14: loop.Config.StreamIdleTimeout undefined (type LoopConfig has no field or method StreamIdleTimeout)
+FAIL	github.com/BA-CalderonMorales/agent-harness/internal/agent [build failed]
+# github.com/BA-CalderonMorales/agent-harness/internal/interface/tui [github.com/BA-CalderonMorales/agent-harness/internal/interface/tui.test]
+internal/interface/tui/thinking_hint_test.go:13:12: undefined: thinkingHint
+internal/interface/tui/thinking_hint_test.go:16:10: undefined: thinkingHint
+FAIL	github.com/BA-CalderonMorales/agent-harness/internal/interface/tui [build failed]
+FAIL

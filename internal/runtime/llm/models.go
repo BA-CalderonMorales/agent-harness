@@ -22,12 +22,11 @@ var (
 )
 
 // ListModels fetches available models from the provider API.
-// Results are cached for 5 minutes.
+// Results are cached for 5 minutes. Local OpenAI-compatible servers
+// (llama.cpp, ollama, demo mocks) serve /v1/models too, so they are
+// probed like any other provider; a server that is down or lacks the
+// endpoint fails the probe and callers fall back to the static catalog.
 func (c *HTTPClient) ListModels() ([]string, error) {
-	if c.Provider == "ollama" || c.Provider == "local" {
-		return nil, fmt.Errorf("dynamic model listing not supported for %s", c.Provider)
-	}
-
 	modelCacheMu.Lock()
 	cache, ok := modelCaches[c.BaseURL]
 	if ok && time.Since(cache.fetchedAt) < modelCacheTTL {

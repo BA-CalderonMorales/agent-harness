@@ -4,6 +4,8 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"os"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
 // Update processes messages. The receiver is a pointer so the model's
@@ -20,7 +22,12 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// model right after Update returns (a second, confusing crash).
 	defer func() {
 		if r := recover(); r != nil {
+			diag.Panic("tui.app_update", r)
 			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] App.Update: %v\n", r)
+			// Durable + visible: the panic site is in the diagnostics
+			// log, and the transcript says so — a silently-swallowed
+			// panic is a bug report nobody can reproduce.
+			a.chatModel.AddMessage("system", fmt.Sprintf("Internal error recovered (site: tui.app_update). Trace: ~/.agent-harness/logs"))
 			model = a
 			cmd = nil
 		}
@@ -104,6 +111,21 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		// Continue listening for more messages
 		cmds = append(cmds, a.listenForMessages())
 		// Return early - do NOT delegate to active view (would cause duplicates)
+		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
+	// Login completed - land in chat, ready to type
+	// -------------------------------------------------------------------------
+	case LoginCompletedMsg:
+		// switchView resets the mode to normal; the insert-mode
+		// assignments must come after it. The listener chain must be
+		// re-armed or every later Send (agent start, chunks, probe
+		// results) is dropped and the first chat dies silently.
+		cmds = append(cmds, a.switchView(viewChat))
+		a.mode = ModeInsert
+		a.chatModel.SetModeLabel("typing")
+		a.chatModel.Focus()
+		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
@@ -235,6 +257,20 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
+	case timerTickMsg:
+		// P2-5: route timer tick to chat regardless of active view so
+		// the elapsed timer doesn't freeze when Chat tab is not active.
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
 	case ProviderReadinessMsg:
 		// A probe from a previous provider (or an older key) may finish
 		// after a switch started a new probe: only the newest generation
@@ -244,6 +280,9 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		a.providerReadiness = msg.Readiness
 		a.providerReadinessMsg = msg.Message
+		// A misconfigured probe is the setup dead end: the home banner and
+		// the statusbar badge become the fix (l: login), not prose.
+		a.homeModel.SetSetupRequired(msg.Readiness == 4)
 		// Every readiness state is a durable system message: it lands
 		// exactly once at the top of the chat pane and in the Settings
 		// page's System Messages section. Nothing provider-related ever

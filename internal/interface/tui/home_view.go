@@ -20,8 +20,10 @@ func (m *HomeModel) View() string {
 		Subtitle: "Project dashboard",
 	}))
 
-	// Setup required banner
-	if m.model == "" {
+	// Setup required banner: driven by the provider probe's misconfigured
+	// verdict (the model is defaulted at boot, so an empty-model proxy
+	// would never fire and always-[ready] would lie).
+	if m.setupRequired {
 		sections = append(sections, m.renderSetupBanner())
 	}
 
@@ -171,7 +173,7 @@ func (m *HomeModel) renderSetupBanner() string {
 	b.WriteString("\n")
 	b.WriteString(HelpDimStyle.Render("  No API key or model configured."))
 	b.WriteString("\n")
-	b.WriteString(HelpDimStyle.Render("  Run /login to authenticate, or set AH_API_KEY environment variable."))
+	b.WriteString(HelpDimStyle.Render("  Press l to log in, or set the AH_API_KEY environment variable."))
 	b.WriteString("\n\n")
 	return b.String()
 }

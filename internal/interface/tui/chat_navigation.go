@@ -59,26 +59,13 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	previousOffset := m.viewport.YOffset
 	var content strings.Builder
 
-	for _, msg := range m.messages {
-		content.WriteString(m.renderMessage(msg))
-		content.WriteString("\n\n")
-	}
-
-	// Show every completed tool from the current turn so users can see the
-	// full execution chain, not just the most recent one.
-	for i, toolMsg := range m.completedToolMsgs {
-		if i > 0 || content.Len() > 0 {
-			content.WriteString("\n\n")
-		}
-		content.WriteString(m.renderMessage(toolMsg))
-	}
-
-	// Add current tool message for in-place display (replaces previous running tool)
-	if m.currentToolMsg != nil {
-		if len(m.completedToolMsgs) > 0 || content.Len() > 0 {
-			content.WriteString("\n\n")
-		}
-		content.WriteString(m.renderMessage(*m.currentToolMsg))
+	// The transcript (m.messages) is the single render source: tool
+	// messages live there in order (running in place, finalized in
+	// place), so the completedToolMsgs/currentToolMsg duplicates are
+	// not rendered - they used to double every tool line. Collapsed
+	// runs merge contiguous finalized same-tool messages per turn.
+	for i := 0; i < len(m.messages); {
+		i = m.appendCollapsedMessage(&content, m.messages, i, m.toolsCollapsed)
 	}
 
 	m.viewport.SetContent(content.String())

@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
 // resize applies a terminal resize to the chat layout.
@@ -119,21 +122,29 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 			return m, nil, true
 		}
 
-		// If a submit is already pending, this Enter is part of a paste stream.
+		// If a submit is already pending, this Enter is either a pasted
+		// newline (machine-speed burst) or a human double-tap (submit
+		// now). The burst threshold tells them apart.
 		if m.pendingSubmit {
-			m.pasteDetected = true
-			m.textarea.InsertString("\n")
-			m.syncTextareaHeight()
-			return m, m.startSubmitTimer(), true
+			if time.Since(m.pendingAt) < PasteBurstThreshold {
+				m.pasteDetected = true
+				m.textarea.InsertString("\n")
+				m.syncTextareaHeight()
+				return m, m.startSubmitTimer(), true
+			}
+			m.pendingSubmit = false
+			mm, cmd := m.doSubmit()
+			return mm, cmd, true
 		}
 
-		// Debounce: start submit timer. If another key arrives before the
-		// timer fires, the Enter is treated as a pasted newline.
+		// Debounce: start submit timer. Keys arriving inside the window
+		// are classified by burst speed (see PasteBurstThreshold).
 		if SubmitDebounceDuration <= 0 {
 			mm, cmd := m.doSubmit()
 			return mm, cmd, true
 		}
 		m.pendingSubmit = true
+		m.pendingAt = time.Now()
 		return m, m.startSubmitTimer(), true
 
 	case tea.KeyCtrlC:
@@ -159,18 +170,37 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
-	// If another key arrives while a submit is pending, the previous
-	// Enter was part of a paste stream — cancel the submit and insert
-	// the newline that Enter would have represented.
-	// Only do this for character keys (runes/space); control keys like
-	// Backspace or Escape should simply cancel the pending submit.
+	// If another key arrives while a submit is pending, decide by what
+	// the key is and how fast it arrived:
+	//   - printable keystroke from a machine-speed burst: paste
+	//     continuation — the Enter was a pasted newline; cancel the
+	//     submit and keep the paste intact.
+	//   - printable keystroke from a human (slower than the burst
+	//     threshold): a fast typist starting their next message. Enter's
+	//     contract (submit) wins — flush the pending submit now and let
+	//     the keystroke flow into the fresh composer below. The old
+	//     behavior cancelled the submit and inserted a phantom newline,
+	//     eating the keystroke and silently dropping the message.
+	//   - anything else (Esc, Backspace, Ctrl+J): cancel the pending
+	//     submit; the key then does its normal work.
+	var pendingCmd tea.Cmd
 	if m.pendingSubmit {
-		m.pendingSubmit = false
-		m.pendingSubmitGen++
-		if msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace {
+		pasteBurst := time.Since(m.pendingAt) < PasteBurstThreshold
+		switch {
+		case msg.Paste || (pasteBurst && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace)):
+			m.pendingSubmit = false
+			m.pendingSubmitGen++
 			m.textarea.InsertString("\n")
 			m.pasteDetected = true
 			m.syncTextareaHeight()
+		case msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace:
+			mm, submitCmd := m.doSubmit()
+			m = mm
+			m.pendingSubmit = false
+			pendingCmd = submitCmd
+		default:
+			m.pendingSubmit = false
+			m.pendingSubmitGen++
 		}
 	}
 
@@ -181,6 +211,7 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 	func() {
 		defer func() {
 			if r := recover(); r != nil {
+				diag.Panic("tui.textarea", r)
 				fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] textarea.Update: %v\n", r)
 			}
 		}()
@@ -209,5 +240,11 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		}
 	}
 
+	if pendingCmd != nil {
+		if cmd != nil {
+			return m, tea.Batch(pendingCmd, cmd), false
+		}
+		return m, pendingCmd, false
+	}
 	return m, cmd, false
 }

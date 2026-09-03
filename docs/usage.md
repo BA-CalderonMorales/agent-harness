@@ -135,7 +135,7 @@ Cost: 450 input + 890 output tokens (~$0.0032) across 3 turns
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `/clear` | Clear session history (requires `--confirm`) | `/clear --confirm` |
+| `/clear` | Clear session history (clears immediately) | `/clear` |
 | `/compact` | Compact session to reduce token usage | `/compact` |
 | `/session` | List or load saved sessions | `/session`, `/session load abc123` |
 | `/export` | Export conversation to file | `/export`, `/export my-session.json` |
@@ -376,7 +376,11 @@ Actual costs may vary slightly from estimates.
 
 3. **Clear sessions** when starting new tasks:
    ```
-   > /clear --confirm
+   > /clear
+   ```
+   `/reset` is the destructive one and requires confirmation:
+   ```
+   > /reset --confirm
    ```
 
 ---
@@ -429,15 +433,6 @@ Recent commits:
 - **Up/Down**: Navigate command history
 - **Tab**: Complete slash commands
 - **Alt+Enter**: Insert newline in input
-
-### Vim Mode
-
-Enable vim-style editing:
-
-1. Type `/vim` to toggle vim mode
-2. Press `Esc` to enter normal mode
-3. Use `i` to enter insert mode
-4. Use `:` for commands
 
 ### Working with Large Files
 

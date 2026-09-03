@@ -6,6 +6,8 @@ package config
 import (
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/services/mcp"
 	yaml "go.yaml.in/yaml/v3"
 	"os"
@@ -43,11 +45,16 @@ type ConfigEntry struct {
 
 // LayeredConfig holds merged configuration from all sources
 type LayeredConfig struct {
-	merged         map[string]interface{}
-	loadedEntries  []ConfigEntry
-	Provider       string
-	APIKey         string
-	Model          string
+	merged        map[string]interface{}
+	loadedEntries []ConfigEntry
+	Provider      string
+	APIKey        string
+	Model         string
+	// ModelPinned is true when AH_MODEL pinned the model in the
+	// environment: the pin outranks a resumed session's stored model,
+	// exactly like EndpointPinned outranks provider defaults.
+	ModelPinned    bool
+	EndpointPinned bool // endpoint came from AH_ENDPOINT_URL; survives provider switches
 	Runtime        string
 	ModelPath      string
 	EndpointURL    string
@@ -75,6 +82,16 @@ type LayeredConfig struct {
 
 	// Effort is the reasoning effort level used per request (low, medium, high)
 	Effort string
+
+	// StreamIdleTimeout is the stream-idle watchdog window; 0 means the
+	// provider default applies.
+	StreamIdleTimeout time.Duration
+	// HTTPTimeout is the HTTP client timeout; 0 means the provider default
+	// applies.
+	HTTPTimeout time.Duration
+	// TimeoutPinned is true when an environment override pins the timeouts
+	// so provider switches must not recompute them.
+	TimeoutPinned bool
 
 	// SessionDir overrides the default session storage directory
 	SessionDir string

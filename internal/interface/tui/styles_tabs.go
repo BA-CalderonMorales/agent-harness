@@ -14,10 +14,11 @@ var (
 			Foreground(ColorTextDim).
 			Bold(false)
 
-	// SectionHeaderStyle renders section category headers in views
+	// SectionHeaderStyle renders section category headers in views.
+	// Deliberately quiet: a dim label beats a loud banner when the eye
+	// is scanning settings rows, not navigating pages.
 	SectionHeaderStyle = lipgloss.NewStyle().
-				Foreground(ColorPrimary).
-				Bold(true)
+				Foreground(ColorMuted)
 
 	// TabActive is the style for the active tab with visual indicator
 	TabActive = lipgloss.NewStyle().

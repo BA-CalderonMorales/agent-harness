@@ -194,8 +194,14 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
-	// hidden so only the animated header shows.
+	// hidden so only the animated header shows. Once the first token has
+	// been pending long enough to suggest a slow local model, an explanatory
+	// progress line fills the gap.
 	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
+		if hint := thinkingHint(m.elapsed); hint != "" {
+			b.WriteString(HelpDimStyle.Render(hint))
+			b.WriteString("\n")
+		}
 		return b.String()
 	}
 	width := m.width - 4

@@ -22,6 +22,7 @@ func (app *App) initCommandsForTUI(tuiApp *tui.App) {
 	app.cmdRegistry.Register("steer", "Queue a message for current turn",
 		commands.SteerHandler(func(msg string) {
 			if msg != "" {
+				tuiApp.QueueSteer(msg)
 				tuiApp.Send(tui.StatusMsg{Text: sprintf("Queued steer message: %s", msg), Type: "info"})
 			}
 		}))

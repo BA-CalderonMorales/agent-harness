@@ -64,7 +64,13 @@ func (app *App) initSession() error {
 		// The session keeps the model last used in it; adopt it as the
 		// running configuration instead of overwriting it, so a model
 		// picked in a previous session is not forgotten on restart.
-		app.syncModelFields()
+		// An env-pinned model (AH_MODEL) outranks the session, though:
+		// automation and demo boots must get the model they asked for.
+		if app.config.ModelPinned {
+			resumed.Model = app.config.Model
+		} else {
+			app.syncModelFields()
+		}
 		// Apply configured persona if valid and session has no persona set
 		if app.config.Persona != "" && resumed.Persona == "" {
 			if p, err := persona.Parse(app.config.Persona); err == nil {

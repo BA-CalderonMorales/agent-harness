@@ -26,6 +26,9 @@ type Session struct {
 	Version   int             `json:"version"`
 	PlanMode  bool            `json:"plan_mode"`
 	Persona   string          `json:"persona"`
+	// ToolLimit overrides the loop's per-query tool ceiling for this
+	// session (the /limit knob); 0 keeps the loop default.
+	ToolLimit int `json:"tool_limit,omitempty"`
 }
 
 // SessionMetadata contains lightweight session info
@@ -202,7 +205,8 @@ func (s *Session) Compact(config CompactionConfig) *CompactionResult {
 	}
 }
 
-// Clear creates a new empty session with the same ID
+// Clear creates a new empty session with the same ID, preserving
+// the tool-call limit setting.
 func (s *Session) Clear() *Session {
 	return &Session{
 		ID:        s.ID,
@@ -214,6 +218,7 @@ func (s *Session) Clear() *Session {
 		Version:   s.Version + 1,
 		PlanMode:  s.PlanMode,
 		Persona:   s.Persona,
+		ToolLimit: s.ToolLimit,
 	}
 }
 

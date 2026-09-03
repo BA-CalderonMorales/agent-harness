@@ -377,3 +377,65 @@ func min(a, b int) int {
 	}
 	return b
 }
+
+// ---------------------------------------------------------------------------
+// Reject + Suggest mode tests
+// ---------------------------------------------------------------------------
+
+func TestApprovalDialog_SuggestMode(t *testing.T) {
+	req := approval.NewApprovalRequest(approval.CommandInfo{
+		ID:       "test-suggest",
+		ToolName: "bash",
+		Command:  "rm -rf ./tmp",
+	})
+	dialog := NewApprovalDialog()
+	dialog.Show(req)
+
+	// 'R' enters suggest mode instead of an instant reject.
+	updated, _ := dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	dialog = updated
+	if !dialog.suggestMode {
+		t.Fatal("expected suggest mode after 'R'")
+	}
+
+	// Typing captures the suggestion; Esc backs out to the options.
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("use")})
+	dialog = updated
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeySpace})
+	dialog = updated
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("mv")})
+	dialog = updated
+	if dialog.suggestBuf != "use mv" {
+		t.Fatalf("suggest buffer = %q, want %q", dialog.suggestBuf, "use mv")
+	}
+
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	dialog = updated
+	if dialog.suggestMode || dialog.suggestBuf != "" {
+		t.Fatal("Esc should exit suggest mode and clear the buffer")
+	}
+
+	// Re-enter and submit: the decision carries the note on the request.
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+	dialog = updated
+	updated, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("use mv instead")})
+	dialog = updated
+	updated, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	dialog = updated
+
+	if dialog.IsVisible() {
+		t.Fatal("dialog should hide after submitting the suggestion")
+	}
+	if req.Note != "use mv instead" {
+		t.Fatalf("request note = %q, want %q", req.Note, "use mv instead")
+	}
+
+	msg := cmd()
+	approvalMsg, ok := msg.(ApprovalDecisionMsg)
+	if !ok {
+		t.Fatalf("expected ApprovalDecisionMsg, got %T", msg)
+	}
+	if approvalMsg.Decision != approval.DecisionRejectAll {
+		t.Fatalf("decision = %v, want reject-all", approvalMsg.Decision)
+	}
+}

@@ -144,7 +144,7 @@ func (sr *SlashRegistry) GetHelp() string {
 		{"Settings", []string{"permissions", "config", "login", "logout", "settings"}},
 		{"Git", []string{"branch", "pr"}},
 		{"Output", []string{"cost", "export"}},
-		{"Tools", []string{"agents", "skills", "audit", "plan", "improve", "memory"}},
+		{"Tools", []string{"agents", "skills", "audit", "plan", "memory"}},
 	}
 
 	categorized := make(map[string]bool)
@@ -233,7 +233,7 @@ func guessCategory(name string) string {
 		return "Output"
 	case "branch", "pr", "worktree":
 		return "Git"
-	case "agents", "skills", "plan", "improve", "memory", "init":
+	case "agents", "skills", "plan", "memory", "init":
 		return "Tools"
 	case "permissions", "config", "login", "logout", "settings":
 		return "Settings"

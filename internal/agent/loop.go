@@ -10,6 +10,11 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
+// maxToolLimit caps the session /limit knob: the bump is a rescope for a
+// long task, not a runaway jailbreak - the convergence guard
+// (MaxIdenticalToolUses) stays the real backstop regardless.
+const maxToolLimit = 100
+
 // toolCallSignature canonicalizes a tool use for loop detection: name plus
 // the JSON of the input (Go serializes map keys deterministically).
 func toolCallSignature(tu types.ToolUseBlock) string {
@@ -171,11 +176,18 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 		// Enforce total tool call budget per query
 		maxToolCalls := l.Config.MaxToolCalls
+		if params.MaxToolCalls > 0 {
+			maxToolCalls = params.MaxToolCalls
+		}
 		if maxToolCalls <= 0 {
 			maxToolCalls = 15
 		}
 		if state.toolCallCount+len(toolUses) > maxToolCalls {
-			msg := fmt.Sprintf("[Tool call limit reached: %d total tools used. Stopping to prevent runaway exploration.]", state.toolCallCount)
+			suggested := maxToolCalls * 2
+			if suggested > maxToolLimit {
+				suggested = maxToolLimit
+			}
+			msg := fmt.Sprintf("Tool call limit reached (%d tools). Runaway-loop protection stopped this turn. Type /limit %d to continue with a higher limit for this session.", maxToolCalls, suggested)
 			select {
 			case out <- types.StreamMessage{Message: types.Message{
 				Role:    types.RoleSystem,

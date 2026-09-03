@@ -36,7 +36,11 @@ type App struct {
 	mcpManager     *mcp.Manager
 	auditLogger    *audit.Logger
 	planMode       bool
-	steerQueue     []string
+
+	// approvedCommands holds exact commands approved via "Approve All"
+	// this session: the same command never asks again. Session-scoped by
+	// design — trust must die with the process.
+	approvedCommands map[string]bool
 
 	// bootNotice carries a credential/config problem discovered before
 	// the TUI exists; run() surfaces it once the TUI is up.
@@ -50,7 +54,7 @@ func newApp() (*App, error) {
 		return nil, errf("failed to get current directory: %w", err)
 	}
 
-	app := &App{cwd: cwd}
+	app := &App{cwd: cwd, approvedCommands: make(map[string]bool)}
 
 	// Initialize audit logging (non-fatal if it fails)
 	if logger, err := audit.NewLogger(); err == nil {
@@ -70,11 +74,12 @@ func newApp() (*App, error) {
 	app.initTools()
 	app.initCommands()
 
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
 	if app.config.ContextLength > 0 {
 		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
 	}
+	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
 	return app, nil
 }
@@ -101,6 +106,7 @@ func (app *App) run() error {
 	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
 		app.completeLogin(provider, apiKey, model, ta)
 	})
+	tuiApp.SetLoginModelsProvider(app.wizardModels)
 	tuiApp.SetProviderPickHandler(func(provider string, ta *tui.App) {
 		app.pickProvider(provider, ta)
 	})

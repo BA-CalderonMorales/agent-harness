@@ -76,6 +76,9 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.timerRunning = true
 		m.elapsed = 0
 		m.chunkCount = 0
+		// New turn for tool-run grouping: collapsed runs are scoped to
+		// one agent turn and never merge across turns.
+		m.turnCounter++
 		// Defer the assistant section: it materializes after
 		// PlaceholderDelay with whatever has buffered, so the thinking
 		// header lags the question a little instead of popping instantly.
@@ -139,6 +142,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ToolName:        msg.ToolName,
 			ToolDisplayName: displayName,
 			ToolStatus:      ToolStatusRunning,
+			Turn:            m.turnCounter,
 		}
 		m.messages = append(m.messages, toolMsg)
 		m.currentToolMsg = &m.messages[len(m.messages)-1]
@@ -150,20 +154,30 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Finalize the running tool message in place. Tool activity is part of the
-		// transcript while work is happening, so the final assistant message stays last.
+		// Finalize the tool message in the transcript by ID: tools from
+		// earlier in the turn are still in m.messages, and a stale
+		// "Running" status would otherwise stick forever (the collapse
+		// only folds final-status tools, so the transcript must carry
+		// the truth). Tool activity is part of the transcript while work
+		// is happening, so the final assistant message stays last.
+		status := ToolStatusSuccess
+		if !msg.Success {
+			status = ToolStatusError
+		}
+		for i := range m.messages {
+			if m.messages[i].ID == msg.ToolID && m.messages[i].IsTool {
+				command := m.extractCommandFromToolInput(m.messages[i].ToolName, nil)
+				if command == "" && m.toolAnimation != nil && m.currentToolMsg != nil &&
+					m.currentToolMsg.ID == msg.ToolID {
+					command = m.toolAnimation.Command
+				}
+				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, command, status)
+				m.messages[i].ToolStatus = status
+				m.messages[i].Timestamp = time.Now()
+				break
+			}
+		}
 		if m.currentToolMsg != nil && m.currentToolMsg.ID == msg.ToolID {
-			status := ToolStatusSuccess
-			if !msg.Success {
-				status = ToolStatusError
-			}
-			command := m.extractCommandFromToolInput(m.currentToolMsg.ToolName, nil)
-			if command == "" && m.toolAnimation != nil {
-				command = m.toolAnimation.Command
-			}
-			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, status)
-			m.currentToolMsg.ToolStatus = status
-			m.currentToolMsg.Timestamp = time.Now()
 			m.completedToolMsgs = append(m.completedToolMsgs, *m.currentToolMsg)
 			m.currentToolMsg = nil
 		}
@@ -189,9 +203,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Tool-only turns stream no text: the placeholder already holds the
 		// tool display, so settle it in place instead of leaving a stuck
 		// assistant bubble behind.
-		if finalContent == "" && m.currentStreamingAssistantIdx >= 0 &&
-			m.currentStreamingAssistantIdx < len(m.messages) {
-			finalContent = m.messages[m.currentStreamingAssistantIdx].Content
+		if finalContent == "" {
+			if msg := m.streamingAssistant(); msg != nil {
+				finalContent = msg.Content
+			}
 		}
 		if finalContent != "" {
 			m.finalizeStreamingMessage(finalContent)

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -81,6 +82,8 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		MaxOutputTokens: app.config.MaxTokens,
 		Temperature:     app.config.Temperature,
 		ReasoningEffort: app.config.Effort,
+		// The session-scoped /limit knob overrides the loop default.
+		MaxToolCalls: app.session.ToolLimit,
 	}
 
 	stream, err := app.loop.Query(ctx, params)
@@ -119,6 +122,18 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 				tuiApp.Send(tui.StatusMsg{Text: e.Notice, Type: "info"})
 			}
 		case types.StreamMessage:
+			// System-role notices (tool-call limit, loop detection) are
+			// loop announcements, not model speech: they must render as
+			// system messages. Streaming them as AgentChunkMsg made a
+			// fake assistant bubble out of "[Tool loop detected...]".
+			if e.Message.Role == types.RoleSystem {
+				for _, block := range e.Message.Content {
+					if tb, ok := block.(types.TextBlock); ok && tb.Text != "" {
+						tuiApp.AddMessage("system", tb.Text)
+					}
+				}
+				break
+			}
 			for _, block := range e.Message.Content {
 				switch b := block.(type) {
 				case types.TextBlock:
@@ -140,7 +155,9 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			}
 			app.session.AddMessage(e.Message)
 			app.sessionManager.SetCurrent(app.session)
-			_, _ = app.sessionManager.SaveCurrent()
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				diag.Error("session.save.turn", err)
+			}
 		case types.StreamError:
 			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 		}

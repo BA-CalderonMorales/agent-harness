@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"time"
 )
 
 func (ll *LayeredLoader) extractPermissionToggles(config *LayeredConfig, values map[string]interface{}) {
@@ -19,10 +20,22 @@ func (ll *LayeredLoader) extractPermissionToggles(config *LayeredConfig, values 
 func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_PROVIDER", "AGENT_HARNESS_PROVIDER"), &config.Provider)
 	applyEnvString(firstEnv("AH_RUNTIME", "AGENT_HARNESS_RUNTIME"), &config.Runtime)
-	applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
+	if firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL") != "" {
+		applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
+		// The env pin outranks a resumed session's stored model, the
+		// same way EndpointPinned outranks provider defaults.
+		config.ModelPinned = true
+	}
 	applyEnvString(firstEnv("AH_MODEL_PATH", "AGENT_HARNESS_MODEL_PATH"), &config.ModelPath)
-	applyEnvString(firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"), &config.EndpointURL)
-	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY"), &config.APIKey)
+	if endpoint := firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"); endpoint != "" {
+		applyEnvString(endpoint, &config.EndpointURL)
+		// An env-pinned endpoint survives provider switches: runtime
+		// provider mutations must not clobber an explicit endpoint with
+		// the provider default, or the wizard's verified connection
+		// would lie about what the app will actually use.
+		config.EndpointPinned = true
+	}
+	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY"), &config.APIKey)
 	if config.Provider == "nvidia" && config.APIKey == "" {
 		// NVIDIA's hosted API uses its own key convention (nvapi-...).
 		applyEnvString(firstEnv("NVIDIA_API_KEY"), &config.APIKey)
@@ -40,6 +53,14 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvBool(firstEnv("AH_PERM_WRITE", "AGENT_HARNESS_PERM_WRITE"), &config.PermWrite, &config.PermExplicit)
 	applyEnvBool(firstEnv("AH_PERM_DELETE", "AGENT_HARNESS_PERM_DELETE"), &config.PermDelete, &config.PermExplicit)
 	applyEnvBool(firstEnv("AH_PERM_EXECUTE", "AGENT_HARNESS_PERM_EXECUTE"), &config.PermExecute, &config.PermExplicit)
+	// Timeouts: pinned by env so a provider switch must not recompute them.
+	if v := firstEnv("AH_STREAM_IDLE_TIMEOUT", "AGENT_HARNESS_STREAM_IDLE_TIMEOUT"); v != "" {
+		config.StreamIdleTimeout = parseEnvDuration(v)
+	}
+	if v := firstEnv("AH_HTTP_TIMEOUT", "AGENT_HARNESS_HTTP_TIMEOUT"); v != "" {
+		config.HTTPTimeout = parseEnvDuration(v)
+	}
+	config.TimeoutPinned = config.StreamIdleTimeout > 0 || config.HTTPTimeout > 0
 }
 
 func firstEnv(names ...string) string {
@@ -157,4 +178,16 @@ func applyEnvPermissionMode(value string, target *PermissionMode) {
 	if mode, err := ParsePermissionMode(value); err == nil {
 		*target = mode
 	}
+}
+
+// parseEnvDuration accepts Go duration strings ("5m", "1h30m") and falls
+// back to plain-integer seconds for shell-friendliness.
+func parseEnvDuration(value string) time.Duration {
+	if d, err := time.ParseDuration(value); err == nil && d > 0 {
+		return d
+	}
+	if n, err := strconv.Atoi(value); err == nil && n > 0 {
+		return time.Duration(n) * time.Second
+	}
+	return 0
 }
