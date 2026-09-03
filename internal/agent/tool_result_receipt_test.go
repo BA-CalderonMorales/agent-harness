@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
@@ -31,8 +32,7 @@ func TestPersistToolResultReceiptIsBoundedAndPrivate(t *testing.T) {
 	}
 
 	sum := sha256.Sum256([]byte(fullResult))
-	resultDir := filepath.Join(home, ".agent-harness", "tool-results")
-	resultPath := filepath.Join(resultDir, fmt.Sprintf("%x.txt", sum))
+	resultPath := filepath.Join(config.DataToolResults(), fmt.Sprintf("%x.txt", sum))
 	if marker := fmt.Sprintf("[Full result stored at %s]", resultPath); !strings.Contains(receipt, marker) {
 		t.Fatalf("receipt missing retrieval marker %q:\n%s", marker, receipt)
 	}
@@ -45,7 +45,7 @@ func TestPersistToolResultReceiptIsBoundedAndPrivate(t *testing.T) {
 		t.Fatal("persisted result does not exactly match the full tool output")
 	}
 
-	dirInfo, err := os.Stat(resultDir)
+	dirInfo, err := os.Stat(config.DataToolResults())
 	if err != nil {
 		t.Fatalf("stat result directory: %v", err)
 	}

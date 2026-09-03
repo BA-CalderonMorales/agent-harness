@@ -31,7 +31,7 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "perm_execute", Label: "Allow Execute", Value: "", Category: "Workspace & Permissions", Description: "Allow bash/execute tools.", Type: "bool", BoolValue: app.config.PermExecute},
 
 		// System & Storage
-		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Category: "System & Storage", Description: "Directory for session log storage (~/.agent-harness/sessions).", Type: "string"},
+		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Category: "System & Storage", Description: "Directory for session log storage (default: the shared data home's sessions directory).", Type: "string"},
 	}
 }
 

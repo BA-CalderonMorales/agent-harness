@@ -47,7 +47,15 @@ func (app *App) initConfig() error {
 	return nil
 }
 func (app *App) initSession() error {
-	sessionManager, err := state.NewSessionManager()
+	// An explicit SessionDir (config or env) pins the whole root;
+	// otherwise sessions scope themselves to this project.
+	var sessionManager *state.SessionManager
+	var err error
+	if app.config.SessionDir != "" {
+		sessionManager, err = state.NewSessionManagerWithDir(app.config.SessionDir)
+	} else {
+		sessionManager, err = state.NewSessionManagerForProject(app.cwd)
+	}
 	if err != nil {
 		return errf("failed to initialize session manager: %w", err)
 	}
