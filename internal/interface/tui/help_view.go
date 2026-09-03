@@ -46,7 +46,7 @@ func (h Help) renderContent() string {
 	lines = append(lines, CategoryStyle.Render("  Navigation"))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Tab"), HelpDimStyle.Render("Switch to next tab")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Shift+Tab"), HelpDimStyle.Render("Switch to previous tab")))
-	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("1-4"), HelpDimStyle.Render("Jump to tab 1-4")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("1-5"), HelpDimStyle.Render("Jump to tab 1-5 (Home, Chat, Sessions, Logs, Settings)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("h"), HelpDimStyle.Render("Go to Home")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("c"), HelpDimStyle.Render("Go to Chat")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("l"), HelpDimStyle.Render("Next tab (login wizard when setup needed)")))

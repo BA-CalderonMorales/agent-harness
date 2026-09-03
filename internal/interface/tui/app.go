@@ -24,12 +24,13 @@ const (
 	viewHome viewID = iota
 	viewChat
 	viewSessions
+	viewLogs
 	viewSettings
 	viewCount
 )
 
 var viewLabels = [viewCount]string{
-	"Home", "Chat", "Sessions", "Settings",
+	"Home", "Chat", "Sessions", "Logs", "Settings",
 }
 
 // ---------------------------------------------------------------------------
@@ -58,6 +59,7 @@ type App struct {
 	homeModel      *HomeModel
 	chatModel      ChatModel
 	sessionsModel  SessionsModel
+	logsModel      LogsModel
 	settingsModel  SettingsModel
 	approvalDialog ApprovalDialogModel
 
@@ -133,6 +135,7 @@ func NewApp() *App {
 		homeModel:      &home,
 		chatModel:      NewChatModel(),
 		sessionsModel:  NewSessionsModel(),
+		logsModel:      NewLogsModel(),
 		settingsModel:  NewSettingsModel(),
 		approvalDialog: NewApprovalDialog(),
 		helpModel:      NewHelp(),

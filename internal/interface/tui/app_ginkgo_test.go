@@ -144,8 +144,14 @@ var _ = Describe("App", func() {
 				Expect(updated.activeView).To(Equal(viewSessions))
 			})
 
-			It("should switch to Settings with '4'", func() {
+			It("should switch to Logs with '4'", func() {
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+				updated := model.(*App)
+				Expect(updated.activeView).To(Equal(viewLogs))
+			})
+
+			It("should switch to Settings with '5'", func() {
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("5")})
 				updated := model.(*App)
 				Expect(updated.activeView).To(Equal(viewSettings))
 			})

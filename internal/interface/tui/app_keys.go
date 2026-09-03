@@ -204,6 +204,8 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		case "ctrl+3", "3":
 			return a, a.switchView(viewSessions), true
 		case "ctrl+4", "4":
+			return a, a.switchView(viewLogs), true
+		case "ctrl+5", "5":
 			return a, a.switchView(viewSettings), true
 		}
 
@@ -317,6 +319,13 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 		if m, ok := sessionsModel.(SessionsModel); ok {
 			a.sessionsModel = m
 		}
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	if logsModel, cmd := a.logsModel.Update(contentMsg); true {
+		a.logsModel = logsModel
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

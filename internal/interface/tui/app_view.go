@@ -108,6 +108,8 @@ func (a App) renderActiveView() string {
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.sessionsModel.View())
+	case viewLogs:
+		return lipgloss.NewStyle().Height(contentHeight).Render(a.logsModel.View())
 	case viewSettings:
 		return lipgloss.NewStyle().Height(contentHeight).Render(a.settingsModel.View())
 	}

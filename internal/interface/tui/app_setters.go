@@ -154,7 +154,7 @@ func (a *App) logSystemMessage(text string) {
 	if len(a.systemLog) > maxSystemLog {
 		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
 	}
-	a.settingsModel.SetSystemMessages(a.systemLog)
+	a.logsModel.SetMessages(a.systemLog)
 }
 
 // SetChatPersona sets the current persona for contextual UI behavior.
