@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
@@ -14,6 +15,23 @@ type SessionManager struct {
 	sessionsDir string
 	projectRoot string
 	current     *Session
+
+	// appendOffset is how many messages of the current session are
+	// already on disk — tracked in memory so a save appends the delta
+	// instead of re-reading the whole file. sessionMeta caches list
+	// metadata keyed by file stat, so the Sessions tab never re-parses
+	// unchanged files.
+	appendOffset  int
+	journalID     string
+	sessionMetas  map[string]metaStamp
+}
+
+// metaStamp caches a session file's list metadata against the stat that
+// produced it.
+type metaStamp struct {
+	modTime time.Time
+	size    int64
+	meta    SessionMetadata
 }
 
 // NewSessionManager creates a session manager scoped to the current
@@ -90,21 +108,32 @@ func (sm *SessionManager) SaveCurrent() (string, error) {
 		if err := sm.createSessionFile(path); err != nil {
 			return "", err
 		}
+		sm.appendOffset = len(sm.current.Messages)
+		sm.journalID = sm.current.ID
 		return path, nil
+	}
+
+	// A different session than the one journalled: adopt its on-disk
+	// state (one read), then append deltas.
+	if sm.journalID != sm.current.ID {
+		sm.appendOffset = countMessageEvents(path)
+		sm.journalID = sm.current.ID
 	}
 
 	// Compaction (or Clear) shrinks the transcript below what is on
 	// disk: rewrite. Otherwise append only the delta.
-	onDisk := countMessageEvents(path)
+	onDisk := sm.appendOffset
 	if onDisk > len(sm.current.Messages) {
 		if err := sm.createSessionFile(path); err != nil {
 			return "", err
 		}
+		sm.appendOffset = len(sm.current.Messages)
 		return path, nil
 	}
 	if err := sm.appendSessionEventsFrom(path, onDisk); err != nil {
 		return "", err
 	}
+	sm.appendOffset = len(sm.current.Messages)
 	return path, nil
 }
 
@@ -132,20 +161,35 @@ func (sm *SessionManager) ReadSession(id string) (*Session, error) {
 	return loadSessionFile(path)
 }
 
-// ListSessions lists the current project's sessions
+// ListSessions lists the current project's sessions. Metadata is cached
+// per file stat: unchanged files never get re-parsed, so the Sessions
+// tab can refresh as often as it likes.
 func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 	paths, err := sm.listProjectSessionFiles()
 	if err != nil {
 		return nil, err
 	}
+	if sm.sessionMetas == nil {
+		sm.sessionMetas = make(map[string]metaStamp)
+	}
 
 	sessions := make([]SessionMetadata, 0)
 	for _, path := range paths {
+		info, err := os.Stat(path)
+		if err != nil {
+			continue
+		}
+		if cached, ok := sm.sessionMetas[path]; ok && cached.modTime.Equal(info.ModTime()) && cached.size == info.Size() {
+			sessions = append(sessions, cached.meta)
+			continue
+		}
 		session, err := loadSessionFile(path)
 		if err != nil {
 			continue // torn or foreign file: skip, never fail the list
 		}
-		sessions = append(sessions, session.GetMetadata())
+		meta := session.GetMetadata()
+		sm.sessionMetas[path] = metaStamp{modTime: info.ModTime(), size: info.Size(), meta: meta}
+		sessions = append(sessions, meta)
 	}
 
 	return sessions, nil

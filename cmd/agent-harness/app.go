@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
@@ -47,12 +48,17 @@ type App struct {
 	bootNotice string
 }
 
-// newApp creates and initializes a new App instance.
+// newApp creates and initializes a App instance.
 func newApp() (*App, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
 		return nil, errf("failed to get current directory: %w", err)
 	}
+
+	// Legacy storage moves into the XDG homes before anything reads a
+	// path: the config loader, credential store, and session manager
+	// all resolve their locations from here on.
+	storageNotice := config.MigrateLegacyHome()
 
 	app := &App{cwd: cwd, approvedCommands: make(map[string]bool)}
 
@@ -67,6 +73,9 @@ func newApp() (*App, error) {
 
 	if err := app.initSession(); err != nil {
 		return nil, err
+	}
+	if storageNotice != "" {
+		app.bootNotice = strings.TrimSpace(storageNotice + "\n" + app.bootNotice)
 	}
 
 	// Git context is collected after the TUI starts (see run) so a slow
@@ -142,6 +151,9 @@ func (app *App) run() error {
 	}
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// Storage the user can see is storage the user can manage.
+	app.reportStorageFootprint(tuiApp)
 
 	// Collect git context off the boot path; the dashboard and welcome
 	// fill in when the GitContextMsg lands on the event loop.
