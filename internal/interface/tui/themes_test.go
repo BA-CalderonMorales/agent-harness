@@ -87,3 +87,36 @@ func TestThemePalettesComplete(t *testing.T) {
 		}
 	}
 }
+
+// TestThemeBubbleIdentityContrast pins the speaker hierarchy: the You
+// bubble borders with Secondary, the Agent bubble with Primary — the
+// two must never share a color in any theme, or the speakers become
+// indistinguishable.
+func TestThemeBubbleIdentityContrast(t *testing.T) {
+	for _, name := range ThemeNames() {
+		theme, ok := LookupTheme(name)
+		if !ok {
+			t.Fatalf("%s not resolvable", name)
+		}
+		if theme.Palette.Primary == theme.Palette.Secondary {
+			t.Fatalf("%s: Primary and Secondary are identical — the You and Agent bubbles would render as the same color", name)
+		}
+	}
+}
+
+// TestBubbleBordersTrackTheme pins the live-switch contract for the
+// speaker bubbles: after a theme change, the You bubble keeps its
+// Secondary gutter and the Agent bubble its Primary one.
+func TestBubbleBordersTrackTheme(t *testing.T) {
+	if !ApplyTheme("dracula") {
+		t.Fatal("ApplyTheme(dracula) = false")
+	}
+	dracula, _ := LookupTheme("dracula")
+	if MessageBubbleUser.GetBorderTopForeground() != dracula.Palette.Secondary {
+		t.Fatalf("You bubble gutter = %v, want %v", MessageBubbleUser.GetBorderTopForeground(), dracula.Palette.Secondary)
+	}
+	if MessageBubbleAssistant.GetBorderTopForeground() != dracula.Palette.Primary {
+		t.Fatalf("Agent bubble gutter = %v, want %v", MessageBubbleAssistant.GetBorderTopForeground(), dracula.Palette.Primary)
+	}
+	ApplyTheme("default")
+}

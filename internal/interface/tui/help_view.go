@@ -58,6 +58,7 @@ func (h Help) renderContent() string {
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Shift+Tab"), HelpDimStyle.Render("Cycle agent mode: manual → auto → plan → chat (in composer)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Enter"), HelpDimStyle.Render("Expand the latest tool call or reasoning record (chat)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("click"), HelpDimStyle.Render("Expand a specific tool call's full record")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("y"), HelpDimStyle.Render("Copy the expanded record — or the latest reply — to the clipboard")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("i"), HelpDimStyle.Render("Enter insert mode (type)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Esc"), HelpDimStyle.Render("Normal mode (cancels a running turn)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+n"), HelpDimStyle.Render("Normal mode, keep the agent running — scroll while it works")))

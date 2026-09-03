@@ -204,7 +204,15 @@ func (app *App) initCommandsCore() {
 				}
 				return strings.TrimSuffix(b.String(), "\n"), nil
 			}
-			if !tui.ApplyTheme(name) {
+			applied := false
+			if app.tuiApp != nil {
+				applied = app.tuiApp.ApplyTheme(name)
+			} else {
+				// Headless registry (tests, non-TUI hosts): the palette
+				// swap still applies; only the caret repaint is skipped.
+				applied = tui.ApplyTheme(name)
+			}
+			if !applied {
 				return "", fmt.Errorf("unknown theme %q: try /theme for the list", name)
 			}
 			theme, _ := tui.LookupTheme(name)

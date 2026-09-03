@@ -120,6 +120,16 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	toolCallCount := 0
 	var persistenceErr error
 
+	// segmentBreak is the beat inserted between two text segments of
+	// one turn when a tool call ran between them. Models emit
+	// [tool_use, tool_use, "Let me look around"] then more text after
+	// the tools; without the beat the streaming bubble glues those
+	// sentences into one meaningless wall. Display-only: it rides the
+	// chunk channel, never responseText, so the session record and the
+	// next request's context stay clean.
+	const segmentBreak = "\n\n· · ·\n\n"
+	toolsSinceLastText := false
+
 	for event := range stream {
 		// Keep draining after a persistence failure so the producer can close
 		// cleanly, but do not apply or report later events as a successful turn.
@@ -167,6 +177,13 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 			for _, block := range e.Message.Content {
 				switch b := block.(type) {
 				case types.TextBlock:
+					// A beat separates this segment from the previous
+					// one when tools visibly ran in between — never a
+					// leading beat on the turn's first text.
+					if toolsSinceLastText && responseText.Len() > 0 {
+						tuiApp.Send(tui.AgentChunkMsg{Text: segmentBreak})
+					}
+					toolsSinceLastText = false
 					tuiApp.Send(tui.AgentChunkMsg{
 						Text:      b.Text,
 						Timestamp: time.Now(),
@@ -176,6 +193,10 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 					toolCallCount++
 					app.handleToolUseStart(b, tuiApp)
 				case types.ToolResultBlock:
+					// Tool execution happened: any text after this is a
+					// new segment, even when the model packed the next
+					// tool_use and its preamble into the same message.
+					toolsSinceLastText = true
 					tuiApp.Send(tui.AgentToolDoneMsg{
 						ToolID:  b.ToolUseID,
 						Success: !b.IsError,
