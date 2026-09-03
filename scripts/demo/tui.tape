@@ -57,12 +57,15 @@ Sleep 25s
 # 5. Second turn: a short tool call, then the summary.
 
 # 6. The tab tour: leave the composer (Esc → normal mode — digit
-#    hotkeys switch views there), then walk Sessions, Settings, Home.
+#    hotkeys switch views there), then walk Sessions, Logs, Settings,
+#    Home.
 Escape
 Sleep 500ms
 Type@100ms "3"
 Sleep 3s
 Type@100ms "4"
+Sleep 3s
+Type@100ms "5"
 Sleep 3s
 Type@100ms "1"
 Sleep 3s
