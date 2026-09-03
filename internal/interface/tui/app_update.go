@@ -27,7 +27,7 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			// Durable + visible: the panic site is in the diagnostics
 			// log, and the transcript says so — a silently-swallowed
 			// panic is a bug report nobody can reproduce.
-			a.chatModel.AddMessage("system", fmt.Sprintf("Internal error recovered (site: tui.app_update). Trace: ~/.agent-harness/logs"))
+			a.chatModel.AddMessage("system", "Internal error recovered (site: tui.app_update). Trace: ~/.agent-harness/logs")
 			model = a
 			cmd = nil
 		}

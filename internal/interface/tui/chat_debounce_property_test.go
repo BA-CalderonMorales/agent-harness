@@ -16,10 +16,8 @@ import (
 // the real Update loop does, with controllable pendingEnter age so tests
 // can simulate burst (machine) vs human pacing without sleeping.
 type submitDebounceHarness struct {
-	model  ChatModel
-	subs   []string
-	typed  string
-	runeCB func(textarea.Model)
+	model ChatModel
+	subs  []string
 }
 
 func newSubmitDebounceHarness() *submitDebounceHarness {
