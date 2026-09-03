@@ -11,4 +11,16 @@ if [ -n "$BLOCKED" ]; then
     exit 1
 fi
 
+# Gate: gofmt on staged Go files. The CI quality gate fails on any
+# unformatted file, so nothing unformatted leaves the machine either.
+STAGED_GO=$(git diff --cached --name-only --diff-filter=ACMR | grep '\.go$' || true)
+if [ -n "$STAGED_GO" ]; then
+    UNFORMATTED=$(gofmt -l $STAGED_GO 2>/dev/null)
+    if [ -n "$UNFORMATTED" ]; then
+        echo "[!] ERROR: unformatted Go files (fix: gofmt -w):"
+        echo "$UNFORMATTED"
+        exit 1
+    fi
+fi
+
 exit 0
