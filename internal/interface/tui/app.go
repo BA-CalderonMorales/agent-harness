@@ -73,6 +73,7 @@ type App struct {
 	// Status
 	statusMessage string
 	statusType    string // "info", "success", "error", "warning"
+	statusGen     int    // bump per status; expires hints after 3s
 	provider      string
 	effortProfile string
 	workspacePath string
