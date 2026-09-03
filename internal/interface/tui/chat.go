@@ -248,7 +248,11 @@ func NewChatModel() ChatModel {
 	// Terminal-native composer: the textarea paints no background of
 	// its own — the top rule above and the mode line below bound the
 	// typing area, and every cell stays on the terminal's surface.
-	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
+	// bubbles' defaults paint the cursor row black (a partial stripe
+	// behind typed text); clear every row-level background.
+	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
+	ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
+	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorSurface).Background(ColorPrimary)
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
