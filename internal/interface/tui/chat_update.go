@@ -13,6 +13,10 @@ func (m ChatModel) Init() tea.Cmd {
 }
 
 // Update handles messages.
+// viewportTopOffset counts the lines above the message viewport in the
+// chat view: the app tab bar plus the chat view header.
+const viewportTopOffset = 3
+
 func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
@@ -31,6 +35,30 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		cmds = append(cmds, cmd)
+
+	// -------------------------------------------------------------------------
+	// Mouse: click a tool line to expand its full call record; Esc or a
+	// second click folds it back. Wheel events scroll the transcript.
+	// -------------------------------------------------------------------------
+	case tea.MouseMsg:
+		if tea.MouseEvent(msg).IsWheel() {
+			nv, cmd := m.viewport.Update(msg)
+			m.viewport = nv
+			return m, cmd
+		}
+		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
+			// viewportTopOffset: app tab bar (1) + chat header (2) sits
+			// above the message viewport.
+			if id := m.toolMessageAtRow(msg.Y - viewportTopOffset + m.viewport.YOffset); id != "" {
+				if m.expandedMessageID == id {
+					m.expandedMessageID = ""
+				} else {
+					m.expandedMessageID = id
+				}
+				m.refreshViewport()
+			}
+			return m, nil
+		}
 
 	// -------------------------------------------------------------------------
 	// Timer tick for elapsed time display
@@ -140,12 +168,14 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
-			Content:         m.formatToolContent(displayName, command, ToolStatusRunning),
+			Content:         m.formatToolContent(displayName, command, ToolStatusRunning, time.Now(), 0),
 			Timestamp:       time.Now(),
 			IsTool:          true,
 			ToolName:        msg.ToolName,
 			ToolDisplayName: displayName,
 			ToolStatus:      ToolStatusRunning,
+			ToolStartedAt:   time.Now(),
+			ToolDetail:      command,
 			Turn:            m.turnCounter,
 		}
 		m.appendToolMessage(toolMsg)
@@ -182,9 +212,18 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.currentToolMsg.ID == msg.ToolID {
 					command = m.toolAnimation.Command
 				}
-				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, command, status)
+				if m.messages[i].ToolStartedAt.IsZero() {
+					m.messages[i].ToolStartedAt = m.messages[i].Timestamp
+				}
+				detail := command
+				if detail == "" {
+					detail = m.messages[i].ToolDetail
+				} else {
+					m.messages[i].ToolDetail = detail
+				}
+				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
+				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 				m.messages[i].ToolStatus = status
-				m.messages[i].Timestamp = time.Now()
 				break
 			}
 		}
@@ -247,9 +286,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if command == "" && m.toolAnimation != nil {
 				command = m.toolAnimation.Command
 			}
-			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError)
+			started := m.currentToolMsg.ToolStartedAt
+			if started.IsZero() {
+				started = m.currentToolMsg.Timestamp
+			}
+			m.currentToolMsg.ToolElapsed = time.Since(started)
+			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError, started, m.currentToolMsg.ToolElapsed)
 			m.currentToolMsg.ToolStatus = ToolStatusError
-			m.currentToolMsg.Timestamp = time.Now()
 		}
 		m.thinking = false
 		m.streaming = false

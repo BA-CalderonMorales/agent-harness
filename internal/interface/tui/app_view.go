@@ -2,9 +2,24 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
+// View renders the TUI. A panic anywhere in the render tree must never
+// kill the program (bubbletea's own recovery exits): auto mode can be
+// mid-task, and a dead TUI strands the work. The recover degrades to a
+// one-frame error screen; the next Update usually renders clean.
 func (a App) View() string {
+	defer func() {
+		if r := recover(); r != nil {
+			diag.Panic("tui.view", r)
+		}
+	}()
+	return a.view()
+}
+
+func (a App) view() string {
 	if a.width == 0 {
 		return "  Initializing..."
 	}
@@ -36,7 +51,12 @@ func (a App) View() string {
 		return a.modelPicker.View(a.width, a.height)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
+	// One surface for the whole TUI: the background paints every row
+	// (SGR is stateful, so transparent children inherit it), giving the
+	// composer's lighter slab a deliberate contrast instead of a
+	// floating stripe on the terminal's own black.
+	body := lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
+	return AppBgStyle.Width(a.width).Height(a.height).Render(body)
 }
 
 // ---------------------------------------------------------------------------

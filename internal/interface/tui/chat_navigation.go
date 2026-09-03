@@ -64,8 +64,18 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	// place), so the completedToolMsgs/currentToolMsg duplicates are
 	// not rendered - they used to double every tool line. Collapsed
 	// runs merge contiguous finalized same-tool messages per turn.
+	m.toolLineIndex = m.toolLineIndex[:0]
+	line := 0
 	for i := 0; i < len(m.messages); {
-		i = m.appendCollapsedMessage(&content, m.messages, i, m.toolsCollapsed)
+		rendered, next, isTool := m.appendCollapsedMessageTracked(&content, m.messages, i, m.toolsCollapsed)
+		lines := strings.Count(rendered, "\n") + 1
+		if isTool {
+			m.toolLineIndex = append(m.toolLineIndex, toolLineRange{
+				start: line, end: line + lines - 1, msgID: m.messages[i].ID,
+			})
+		}
+		line += lines + 2 // the "\n\n" separator between messages
+		i = next
 	}
 
 	m.viewport.SetContent(content.String())
@@ -73,5 +83,27 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 		m.viewport.GotoBottom()
 		return
 	}
+	// The transcript can shrink (a fold, an expansion closing): a stale
+	// offset past the new end makes the viewport's visibleLines slice
+	// invert and panic. Clamp before restoring.
+	lines := strings.Count(content.String(), "\n") + 1
+	maxOffset := lines - m.viewport.Height
+	if maxOffset < 0 {
+		maxOffset = 0
+	}
+	if previousOffset > maxOffset {
+		previousOffset = maxOffset
+	}
 	m.viewport.SetYOffset(previousOffset)
+}
+
+// toolMessageAtRow returns the tool message ID occupying the viewport
+// content row, or "" when the row belongs to a non-tool message.
+func (m *ChatModel) toolMessageAtRow(row int) string {
+	for _, r := range m.toolLineIndex {
+		if row >= r.start && row <= r.end {
+			return r.msgID
+		}
+	}
+	return ""
 }

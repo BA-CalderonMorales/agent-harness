@@ -58,12 +58,13 @@ func (m ChatModel) View() string {
 	// optional inline suggestions between the editor and the mode line.
 	columnWidth := m.width
 
-	prompt := PromptStyle.Render("◆ ")
+	// No prompt glyph: the composer is the affordance, and the mode
+	// line below states the mode. A prefix symbol is noise.
 	editorWidth := columnWidth - 4
 	if editorWidth < 20 {
 		editorWidth = columnWidth
 	}
-	editorContent := prompt + m.textarea.View()
+	editorContent := m.textarea.View()
 
 	editorPanel := InputEditorStyle.
 		Width(editorWidth).
@@ -209,14 +210,21 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	// been pending long enough to suggest a slow local model, an explanatory
 	// progress line fills the gap. When reasoning deltas are streaming
 	// (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning text
-	// previews under the badge instead — the model's wait state, not
-	// its output.
+	// previews under the badge — unless the record is expanded, which
+	// shows the full reasoning like an expanded tool call.
 	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
 		if hint := thinkingHint(m.elapsed); hint != "" {
 			b.WriteString(HelpDimStyle.Render(hint))
 			b.WriteString("\n")
 		}
-		if preview := reasoningPreview(m.thinkingText); preview != "" {
+		if m.expandedMessageID == msg.ID {
+			if full := strings.TrimSpace(m.thinkingText); full != "" {
+				b.WriteString(HelpDimStyle.Render(full))
+				b.WriteString("\n")
+				b.WriteString(HelpDimStyle.Render("   └─ esc to close"))
+				b.WriteString("\n")
+			}
+		} else if preview := reasoningPreview(m.thinkingText); preview != "" {
 			b.WriteString(HelpDimStyle.Render(preview))
 			b.WriteString("\n")
 		}
@@ -225,6 +233,14 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	width := m.width - 4
 	if width < 1 {
 		width = 1
+	}
+	// Expanded reasoning record: the full model thinking, above the
+	// answer — same interaction as an expanded tool call.
+	if m.expandedMessageID == msg.ID && strings.TrimSpace(msg.ReasoningText) != "" {
+		b.WriteString(ToolTimeStyle.Render("   ┌─ reasoning · esc to close"))
+		b.WriteString("\n")
+		b.WriteString(ToolTimeStyle.Render(msg.ReasoningText))
+		b.WriteString("\n")
 	}
 	// The bubble adds a left border and padding (2 columns) on top of
 	// Width(width): rendering at the full width makes lipgloss re-wrap
@@ -252,7 +268,34 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 	}
 
 	// Content already has status indicator and command preview from formatToolContent
-	return style.Render(msg.Content)
+	body := style.Render(msg.Content)
+
+	// Expanded tool record: the full call beneath the summary line —
+	// exactly what was called, no truncation. Esc (or clicking again)
+	// folds it back.
+	if m.expandedMessageID != "" && m.expandedMessageID == msg.ID {
+		body += "\n" + m.renderToolExpansion(msg)
+	}
+	return body
+}
+
+// renderToolExpansion renders the full call record for an expanded tool
+// message: name, untruncated detail, and the raw input JSON.
+func (m ChatModel) renderToolExpansion(msg ChatMessage) string {
+	var b strings.Builder
+	status := string(msg.ToolStatus)
+	if msg.ToolElapsed > 0 {
+		status += " · " + formatElapsed(msg.ToolElapsed)
+	}
+	b.WriteString(ToolTimeStyle.Render("   ┌─ " + msg.ToolDisplayName + " · " + status))
+	if msg.ToolDetail != "" {
+		b.WriteString("\n" + ToolTimeStyle.Render("   │  detail: ") + msg.ToolDetail)
+	}
+	if msg.ToolInputJSON != "" {
+		b.WriteString("\n" + ToolTimeStyle.Render("   │  input:  ") + msg.ToolInputJSON)
+	}
+	b.WriteString("\n" + ToolTimeStyle.Render("   └─ esc to close"))
+	return b.String()
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {

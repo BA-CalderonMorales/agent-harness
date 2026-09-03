@@ -1727,8 +1727,10 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the command preview was truncated")
 				Expect(chat.currentToolMsg).ToNot(BeNil())
-				// Width 40 - "Shell" (5) - indicator/spaces (8) = ~27 chars max
-				Expect(len(chat.currentToolMsg.Content)).To(BeNumerically("<", 50))
+				// Structured log line: timestamp (8) + glyph + padded
+				// name (8) + a detail column truncated to fit width 40,
+				// plus the running marker.
+				Expect(len(chat.currentToolMsg.Content)).To(BeNumerically("<", 60))
 				Expect(chat.currentToolMsg.Content).To(ContainSubstring("..."))
 			})
 		})

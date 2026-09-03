@@ -50,6 +50,11 @@ type ChatMessage struct {
 	ToolName        string
 	ToolDisplayName string        // User-friendly display name for the tool
 	ToolStatus      ToolStatus    // pending, running, success, error
+	ToolStartedAt   time.Time     // When the tool call began (drives the log timestamp)
+	ToolElapsed     time.Duration // Run-to-settle duration, filled on the terminal status
+	ToolDetail      string        // Target of the call (command, path, pattern) for the detail column
+	ToolInputJSON   string        // Full tool input as JSON, for the expandable detail view
+	ReasoningText   string        // Model reasoning for this message (in-memory only, never persisted)
 	ResponseTime    time.Duration // Time taken to generate this response
 	StreamedChunks  int           // Token chunks streamed for this response
 	Thinking        bool          // In-progress response (drives the live spinner header)
@@ -66,6 +71,13 @@ const (
 	ToolStatusError    ToolStatus = "error"
 	ToolStatusComplete ToolStatus = "complete" // Generic completion (no success/error distinction)
 )
+
+// toolLineRange records which viewport rows a tool message occupies,
+// so a mouse click resolves back to the message that rendered there.
+type toolLineRange struct {
+	start, end int // inclusive viewport content rows
+	msgID      string
+}
 
 // Paste detection thresholds.
 const (
@@ -124,7 +136,6 @@ type ChatModel struct {
 	effort    string
 	modeLabel string // "typing" / "navigate" when persona is empty
 	agentMode string // composer agent mode chip; "" hides it
-
 	// Streaming state
 	streaming       bool
 	streamBuffer    string
@@ -167,6 +178,15 @@ type ChatModel struct {
 	// toolsCollapsed renders consecutive same-tool runs as one count line
 	// (t toggles); errors, approvals, and running tools never collapse.
 	toolsCollapsed bool
+
+	// toolLineIndex maps viewport rows to tool messages, rebuilt on
+	// every refresh: a click on a tool's row resolves to the message.
+	toolLineIndex []toolLineRange
+
+	// expandedMessageID is the message whose full record is expanded
+	// inline (click the line, or Enter on the latest; Esc closes). It
+	// covers tool calls and the model's reasoning alike.
+	expandedMessageID string
 
 	// Delegate
 	delegate ChatDelegate

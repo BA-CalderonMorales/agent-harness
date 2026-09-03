@@ -40,8 +40,7 @@ var (
 			Bold(true)
 
 	PromptStyle = lipgloss.NewStyle().
-			Foreground(ColorPrimary).
-			Bold(true)
+			Foreground(ColorPrimary)
 
 	InputHintStyle = lipgloss.NewStyle().
 			Foreground(ColorMuted)

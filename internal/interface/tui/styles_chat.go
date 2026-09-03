@@ -71,6 +71,11 @@ var (
 	ToolErrorStyle = lipgloss.NewStyle().
 			Foreground(ColorError)
 
+	// ToolTimeStyle - the dim timestamp and duration column of the
+	// structured tool line (Splunk-shaped records).
+	ToolTimeStyle = lipgloss.NewStyle().
+			Foreground(ColorMuted)
+
 	SpinnerStyle = lipgloss.NewStyle().
 			Foreground(ColorInfo)
 
