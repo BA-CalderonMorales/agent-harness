@@ -26,6 +26,26 @@ func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
 	m.refreshViewport()
 }
 
+// appendToolMessage adds a tool message to the transcript. While a turn
+// streams, the assistant bubble is pinned to the bottom of the message
+// list: tool calls that arrive after it materialized (multi-step tool
+// chains) insert BEFORE it — chronologically the work happened first,
+// and appending below rendered trailing tool calls after the final
+// response.
+func (m *ChatModel) appendToolMessage(msg ChatMessage) {
+	assistantIdx := -1
+	if m.streamingAssistant() != nil {
+		assistantIdx = m.currentStreamingAssistantIdx
+	}
+	if assistantIdx < 0 {
+		m.messages = append(m.messages, msg)
+		return
+	}
+	m.messages = append(m.messages, ChatMessage{})
+	copy(m.messages[assistantIdx+1:], m.messages[assistantIdx:])
+	m.messages[assistantIdx] = msg
+}
+
 // AddOrUpdateToolMessage adds a tool message or updates existing one by ID.
 // This prevents duplicate tool messages - instead updates in place.
 func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, command string, status ToolStatus) {
@@ -59,7 +79,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 		ToolDisplayName: toolDisplayName,
 		ToolStatus:      status,
 	}
-	m.messages = append(m.messages, msg)
+	m.appendToolMessage(msg)
 	m.refreshViewport()
 }
 
