@@ -588,20 +588,21 @@ var _ = Describe("App", func() {
 
 	Describe("Clear Chat", func() {
 		Context("Given ClearChatMsg", func() {
-			It("should clear chat messages", func() {
+			It("should clear chat messages, leaving the guidance block", func() {
 				app.AddMessage("user", "hello")
-				Expect(app.chatModel.messages).To(HaveLen(1))
+				Expect(app.chatModel.messages).ToNot(BeEmpty())
 
 				model, _ := app.Update(ClearChatMsg{})
 				updated := model.(*App)
-				Expect(updated.chatModel.messages).To(BeEmpty())
+				Expect(updated.chatModel.messages).To(HaveLen(1))
+				Expect(updated.chatModel.messages[0].Content).To(ContainSubstring("Quick keys"))
 			})
 
 			It("should add follow-up message when provided", func() {
 				app.AddMessage("user", "hello")
 				model, _ := app.Update(ClearChatMsg{FollowUpMsg: "Cleared."})
 				updated := model.(*App)
-				Expect(updated.chatModel.messages).To(HaveLen(1))
+				Expect(updated.chatModel.messages).To(HaveLen(2))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Cleared."))
 			})
 		})
@@ -942,10 +943,12 @@ var _ = Describe("App", func() {
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
 				Expect(updated.chatModel.persona).To(Equal("developer"))
 				// The session notice prepends as the first chat message
-				// instead of cluttering the footer.
-				Expect(updated.chatModel.messages).To(HaveLen(2))
+				// instead of cluttering the footer; the first-entry
+				// navigation guidance lands after the transcript.
+				Expect(updated.chatModel.messages).To(HaveLen(3))
 				Expect(updated.chatModel.messages[0].Role).To(Equal("system"))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Loaded session sess-aaa"))
+				Expect(updated.chatModel.messages[2].Content).To(ContainSubstring("Quick keys"))
 				Expect(updated.activeView).To(Equal(viewChat))
 				Expect(updated.statusMessage).To(Equal(""))
 				Expect(updated.statusType).To(Equal(""))

@@ -13,6 +13,9 @@ func (a *App) switchView(v viewID) tea.Cmd {
 		a.focusActive()
 	} else {
 		a.tabActivity[v] = false
+		// First Chat entry of a session greets with the navigation
+		// guidance block (a system message; scrolls away naturally).
+		a.chatModel.ShowNavigationGuidance()
 	}
 	return a.initActiveView()
 }

@@ -392,9 +392,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.completedToolMsgs = nil
 		m.toolAnimation = nil
 		m.currentTool = nil
+		// A wiped pane is a fresh first run: the clear's follow-up
+		// notice lands first, then the navigation guidance rides with it.
 		if msg.FollowUpMsg != "" {
 			m.AddMessage("system", msg.FollowUpMsg)
 		}
+		m.ResetNavigationGuidance()
+		m.ShowNavigationGuidance()
 		m.refreshViewport()
 		return m, nil
 	}
