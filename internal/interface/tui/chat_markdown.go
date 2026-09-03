@@ -89,6 +89,13 @@ func transparentMarkdownStyle() ansi.StyleConfig {
 	style.BlockQuote.Prefix = strings.Repeat(" ", 0) + "│ "
 	style.BlockQuote.Color = &dim
 
+	// Paragraphs breathe: one blank line between them. The margins were
+	// stripped with every other block margin, but paragraph separation
+	// is structure, not decoration — without it, multi-paragraph
+	// responses run together into one wall of text.
+	margin := uint(1)
+	style.Paragraph.Margin = &margin
+
 	return style
 }
 
@@ -112,6 +119,41 @@ func getMarkdownRenderer(width int) *glamour.TermRenderer {
 	}
 	markdownRenderers[width] = renderer
 	return renderer
+}
+
+// blockPrefixRE matches lines that start a markdown block: headings,
+// lists, blockquotes, tables. Soft breaks never cross these.
+var blockPrefixRE = regexp.MustCompile(`^(#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)`)
+
+// normalizeSoftBreaks collapses single newlines inside paragraphs into
+// spaces, per markdown soft-break semantics. Models hard-wrap prose at
+// arbitrary columns; glamour then renders each literal break as a line
+// break, leaving ragged half-lines. Fenced code, tables, lists,
+// headings, and quotes are structural and keep their newlines.
+func normalizeSoftBreaks(content string) string {
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	inFence := false
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			out = append(out, line)
+			continue
+		}
+		if inFence || blockPrefixRE.MatchString(line) || strings.TrimSpace(line) == "" {
+			out = append(out, line)
+			continue
+		}
+		// Plain prose: join to the previous line when that line was also
+		// plain prose (a soft break inside the same paragraph).
+		if n := len(out); n > 0 && out[n-1] != "" && !blockPrefixRE.MatchString(out[n-1]) &&
+			!strings.HasPrefix(strings.TrimSpace(out[n-1]), "```") {
+			out[n-1] += " " + strings.TrimSpace(line)
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
 }
 
 // renderMarkdown converts markdown text to ANSI-styled text.
@@ -153,7 +195,7 @@ func renderMarkdown(content string, width int) (result string) {
 	}
 
 	// Render markdown to ANSI
-	rendered, err := renderer.Render(content)
+	rendered, err := renderer.Render(normalizeSoftBreaks(content))
 	if err != nil {
 		return content
 	}

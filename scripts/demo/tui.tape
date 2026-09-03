@@ -2,8 +2,10 @@
 #
 # A real conversation against a hosted GLM model (fireworks provider):
 # a fast first response, then a short tool call reading AGENTS.md to
-# say what the repo is about. The composer shows the agent mode chip,
-# set to auto via /mode — tool calls approve without asking.
+# say what the repo is about. Closes with the tab tour — Sessions,
+# Settings, Home — showing the conversation landed in the session
+# store. The composer shows the agent mode chip, set to auto via
+# /mode — tool calls approve without asking.
 #
 # Record from the repository root:
 #   chmod +x scripts/demo/demo-boot-live.sh
@@ -46,13 +48,23 @@ Sleep 2s
 
 Type@20ms "Write a two-sentence haiku about shipping code on a Friday, with a bold title."
 Enter
-Sleep 40s
+Sleep 22s
 # 4. First turn: a fast response with styled markdown — bold, italics.
 
 Type "Read AGENTS.md and tell me in two sentences what this repo is about."
 Enter
-Sleep 50s
+Sleep 25s
 # 5. Second turn: a short tool call, then the summary.
 
-Sleep 2s
-# 6. The tape ends on the TUI — no exit, no shell.
+# 6. The tab tour: leave the composer (Esc → normal mode — digit
+#    hotkeys switch views there), then walk Sessions, Settings, Home.
+Escape
+Sleep 500ms
+Type@100ms "3"
+Sleep 3s
+Type@100ms "4"
+Sleep 3s
+Type@100ms "1"
+Sleep 3s
+# 7. Home tab — the tour ends where it started. The tape ends on the
+#    TUI: no exit, no shell.

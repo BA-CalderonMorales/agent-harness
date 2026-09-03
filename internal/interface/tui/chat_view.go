@@ -226,7 +226,11 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if width < 1 {
 		width = 1
 	}
-	renderedContent := renderMarkdown(msg.Content, width)
+	// The bubble adds a left border and padding (2 columns) on top of
+	// Width(width): rendering at the full width makes lipgloss re-wrap
+	// glamour's output and orphan words onto flush-left lines. Render
+	// at the true inner column instead.
+	renderedContent := renderMarkdown(msg.Content, width-2)
 	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
 	b.WriteString(content)
 
