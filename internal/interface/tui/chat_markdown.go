@@ -1,19 +1,22 @@
 package tui
 
 import (
-	"fmt"
-	"github.com/charmbracelet/glamour"
 	"os"
 	"regexp"
 	"strings"
 	"sync"
+
+	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/ansi"
+	"github.com/charmbracelet/glamour/styles"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
 var (
-	markdownRenderer     *glamour.TermRenderer
-	markdownRendererOnce sync.Once
-	markdownRendererErr  error
-	isTermux             = detectTermux()
+	markdownRenderersMu sync.Mutex
+	markdownRenderers   = map[int]*glamour.TermRenderer{}
+	isTermux            = detectTermux()
 )
 
 // detectTermux checks if we're running in Termux environment
@@ -22,28 +25,150 @@ func detectTermux() bool {
 		strings.Contains(os.Getenv("HOME"), "com.termux")
 }
 
-// getMarkdownRenderer returns a shared glamour renderer instance
-func getMarkdownRenderer() (*glamour.TermRenderer, error) {
-	markdownRendererOnce.Do(func() {
-		// WithAutoStyle queries the terminal for its background color on
-		// the first render (termenv.HasDarkBackground), which can stall
-		// the boot for termenv's OSCTimeout when the reply races. The
-		// app's palette is hardcoded dark (themeinit pins it), so the
-		// dark style is the deterministic choice.
-		markdownRenderer, markdownRendererErr = glamour.NewTermRenderer(
-			glamour.WithStandardStyle("dark"),
-			glamour.WithWordWrap(0), // We'll handle wrapping separately
-		)
-	})
-	return markdownRenderer, markdownRendererErr
+// transparentMarkdownStyle derives the app's glamour style from the
+// dark base with one governing principle: the chat renders on the
+// user's own terminal background, so the style may never paint one.
+// Background fills, block margins, and chroma theme underlays are
+// stripped; structure comes from color, weight, and gutters.
+func transparentMarkdownStyle() ansi.StyleConfig {
+	style := styles.DarkStyleConfig
+
+	// Kill every background fill the dark base sets.
+	transparent := func(p ansi.StylePrimitive) ansi.StylePrimitive {
+		p.BackgroundColor = nil
+		return p
+	}
+	stripBlock := func(b ansi.StyleBlock) ansi.StyleBlock {
+		b.StylePrimitive = transparent(b.StylePrimitive)
+		b.Margin = nil
+		return b
+	}
+	style.Document = stripBlock(style.Document)
+	style.Paragraph = stripBlock(style.Paragraph)
+	style.Text = transparent(style.Text)
+	style.Strong = transparent(style.Strong)
+	style.Emph = transparent(style.Emph)
+	style.Link = transparent(style.Link)
+	style.LinkText = transparent(style.LinkText)
+	style.Code = stripBlock(style.Code)
+	style.BlockQuote = stripBlock(style.BlockQuote)
+	style.Heading = stripBlock(style.Heading)
+	style.H1 = stripBlock(style.H1)
+	style.H2 = stripBlock(style.H2)
+	style.H3 = stripBlock(style.H3)
+	style.H4 = stripBlock(style.H4)
+	style.H5 = stripBlock(style.H5)
+	style.H6 = stripBlock(style.H6)
+	style.List.StyleBlock = stripBlock(style.List.StyleBlock)
+	style.Item = transparent(style.Item)
+	style.Enumeration = transparent(style.Enumeration)
+
+	// No block margins: the transcript's own bubble borders provide the
+	// framing. Chroma theme "none" keeps syntax structure without a
+	// code-block underlay.
+	style.CodeBlock = ansi.StyleCodeBlock{
+		StyleBlock: stripBlock(style.CodeBlock.StyleBlock),
+		Theme:      "none",
+	}
+
+	// Palette-tuned structure.
+	primary := string(ColorPrimary)
+	text := string(ColorText)
+	dim := string(ColorMuted)
+	style.H1.Color = &primary
+	style.H1.Bold = boolPtr(true)
+	style.H2.Color = &primary
+	style.H2.Bold = boolPtr(true)
+	style.H3.Color = &text
+	style.H3.Bold = boolPtr(true)
+	style.Strong.Bold = boolPtr(true)
+	style.Link.Color = &dim
+	style.Link.Underline = boolPtr(true)
+	style.LinkText.Color = &text
+	style.Code.Color = &text
+	style.BlockQuote.Prefix = strings.Repeat(" ", 0) + "│ "
+	style.BlockQuote.Color = &dim
+
+	// Paragraphs breathe: one blank line between them. The margins were
+	// stripped with every other block margin, but paragraph separation
+	// is structure, not decoration — without it, multi-paragraph
+	// responses run together into one wall of text.
+	margin := uint(1)
+	style.Paragraph.Margin = &margin
+
+	return style
 }
 
-// renderMarkdown converts markdown text to ANSI-styled text
-// In Termux, this returns plain text to avoid performance issues
+func boolPtr(b bool) *bool { return &b }
+
+// getMarkdownRenderer returns a glamour renderer for a terminal width.
+// Renderers cache per width: the style folds the wrap width in at
+// construction, and resizes are rare.
+func getMarkdownRenderer(width int) *glamour.TermRenderer {
+	markdownRenderersMu.Lock()
+	defer markdownRenderersMu.Unlock()
+	if renderer, ok := markdownRenderers[width]; ok {
+		return renderer
+	}
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(transparentMarkdownStyle()),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		return nil
+	}
+	markdownRenderers[width] = renderer
+	return renderer
+}
+
+// blockPrefixRE matches lines that start a markdown block: headings,
+// lists, blockquotes, tables. Soft breaks never cross these.
+var blockPrefixRE = regexp.MustCompile(`^(#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)`)
+
+// normalizeSoftBreaks collapses single newlines inside paragraphs into
+// spaces, per markdown soft-break semantics. Models hard-wrap prose at
+// arbitrary columns; glamour then renders each literal break as a line
+// break, leaving ragged half-lines. Fenced code, tables, lists,
+// headings, and quotes are structural and keep their newlines.
+func normalizeSoftBreaks(content string) string {
+	lines := strings.Split(content, "\n")
+	out := make([]string, 0, len(lines))
+	inFence := false
+	for _, line := range lines {
+		if strings.HasPrefix(strings.TrimSpace(line), "```") {
+			inFence = !inFence
+			out = append(out, line)
+			continue
+		}
+		if inFence || blockPrefixRE.MatchString(line) || strings.TrimSpace(line) == "" {
+			out = append(out, line)
+			continue
+		}
+		// Plain prose: join to the previous line when that line was also
+		// plain prose (a soft break inside the same paragraph).
+		if n := len(out); n > 0 && out[n-1] != "" && !blockPrefixRE.MatchString(out[n-1]) &&
+			!strings.HasPrefix(strings.TrimSpace(out[n-1]), "```") {
+			out[n-1] += " " + strings.TrimSpace(line)
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(out, "\n")
+}
+
+// renderMarkdown converts markdown text to ANSI-styled text.
+// A glamour panic on pathological input must never reach stderr: in a
+// TUI, stderr interleaves with the rendered UI. It is logged to diag
+// with a content snippet and the input falls through unstyled.
 func renderMarkdown(content string, width int) (result string) {
 	defer func() {
 		if r := recover(); r != nil {
-			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] renderMarkdown: %v\n", r)
+			snippet := content
+			if len(snippet) > 160 {
+				snippet = snippet[:160] + "…"
+			}
+			snippet = strings.ReplaceAll(snippet, "\n", "\\n")
+			diag.Errorf("tui.renderMarkdown.panic", "%v (width=%d content=%q)", r, width, snippet)
 			result = content
 		}
 	}()
@@ -58,14 +183,19 @@ func renderMarkdown(content string, width int) (result string) {
 		return renderTermuxMarkdown(content)
 	}
 
-	renderer, err := getMarkdownRenderer()
-	if err != nil {
+	// Wrap at the bubble width: glamour indents and wraps per block, so
+	// the width must be known at render time, not after.
+	if width < 20 {
+		width = 20
+	}
+	renderer := getMarkdownRenderer(width)
+	if renderer == nil {
 		// Fallback to plain text if renderer fails
 		return content
 	}
 
 	// Render markdown to ANSI
-	rendered, err := renderer.Render(content)
+	rendered, err := renderer.Render(normalizeSoftBreaks(content))
 	if err != nil {
 		return content
 	}

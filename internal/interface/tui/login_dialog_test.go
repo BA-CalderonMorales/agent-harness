@@ -13,7 +13,7 @@ func newTestLoginDialog(t *testing.T, models LoginModelsProvider) *LoginDialogMo
 	t.Helper()
 	d := NewLoginDialog()
 	d.SetModelsProvider(models)
-	d.Open(120, 40, "")
+	d.Open(120, 40, StoredCredentials{})
 	return &d
 }
 

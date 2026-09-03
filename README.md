@@ -15,7 +15,7 @@
 [![Docs](https://img.shields.io/badge/docs-latest-blue.svg?style=flat-square)](https://github.com/BA-CalderonMorales/agent-harness/blob/main/docs/index.md)
 [![CI](https://img.shields.io/github/actions/workflow/status/BA-CalderonMorales/agent-harness/ci.yml?style=flat-square)](https://github.com/BA-CalderonMorales/agent-harness/actions/workflows/ci.yml)
 
-<img src="docs/demo-tui.gif" alt="Agent Harness tab tour" width="100%">
+<img src="docs/demo-tui.gif" alt="Agent Harness live turn: agent mode, tool call, markdown answer" width="100%">
 
 </div>
 

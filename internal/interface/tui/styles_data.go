@@ -15,8 +15,7 @@ var (
 			Foreground(ColorText)
 
 	DataMono = lipgloss.NewStyle().
-			Foreground(ColorText).
-			Background(ColorHighlight)
+			Foreground(ColorAccent)
 )
 
 // ---------------------------------------------------------------------------

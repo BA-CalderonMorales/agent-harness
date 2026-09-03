@@ -1,17 +1,19 @@
-# agent-harness interactive demo -- a tour of every tab.
-# Boot the TUI (bypassing the setup wizard) and walk Home > Chat >
-# Sessions > Settings, then leave. No agent turn: the tab tour is the
-# showcase, and the mock LLM still powers the green readiness status.
+# agent-harness live demo — the real deal.
 #
-# Record from the repository root with the mock server running and an
-# empty session store:
-#   rm -rf ~/.agent-harness/sessions  (terminal 1, before recording)
-#   python3 scripts/demo/mock-llm.py  (terminal 1)
-#   vhs scripts/demo/tui.tape         (terminal 2)
+# A real conversation against a hosted GLM model (fireworks provider):
+# a fast first response, then a short tool call reading AGENTS.md to
+# say what the repo is about. Closes with the tab tour — Sessions,
+# Settings, Home — showing the conversation landed in the session
+# store. The composer shows the agent mode chip, set to auto via
+# /mode — tool calls approve without asking.
 #
-# Note: views switch via the digit hotkeys (2=Chat, 3=Sessions,
-# 4=Settings, 1=Home) - they arrive as clean single keypresses under
-# the recorder; send Tab at your own risk, it mangles typed input.
+# Record from the repository root:
+#   chmod +x scripts/demo/demo-boot-live.sh
+#   vhs scripts/demo/tui.tape
+#
+# The fireworks API key must be configured once via /login (stored in
+# the encrypted credential store); the boot wrapper isolates session
+# data so every recording starts fresh.
 
 Output docs/demo-tui.gif
 Set FontSize 18
@@ -22,34 +24,47 @@ Set Padding 28
 Set Margin 0
 Set Shell bash
 
-Type "./scripts/demo/demo-boot.sh"
+# Boot off the record: the GIF opens on the finished Home dashboard.
+Hide
+Require ./scripts/demo/demo-boot-live.sh
+Type@500ms "./scripts/demo/demo-boot-live.sh"
 Enter
-Sleep 7s
-# 1. boot via the demo wrapper: env pins provider=local, so the setup
-#    wizard is skipped and the TUI lands straight on the Home tab
-#    with the mock LLM ready
-
-Type "2"
 Sleep 4s
-# 2. Chat tab: welcome message (Agent Harness, mode, git)
-#    under the Provider ready status
+Show
 
-Type "3"
-Sleep 4s
-# 3. Sessions tab: session store and resume list
+# 1. The Home dashboard with git context and the storage footprint.
 
-Type "4"
-Sleep 3s
-# 4. Settings tab: provider, model, mode, effort
-
-Type "j"
+Type@100ms "2"
 Sleep 2s
-Type "1"
-Sleep 4s
-# 5. Home tab: project dashboard and quick actions
+# 2. Chat tab: the welcome message.
 
-Type "2"
-Sleep 3s
-Ctrl+C
+Type@100ms "i"
+Sleep 500ms
+Type "/mode auto"
+Enter
 Sleep 2s
-# 6. done
+# 3. The agent mode chip flips to auto with a status flash: tool
+#    calls approve without asking.
+
+Type@20ms "Write a two-sentence haiku about shipping code on a Friday, with a bold title."
+Enter
+Sleep 22s
+# 4. First turn: a fast response with styled markdown — bold, italics.
+
+Type "Read AGENTS.md and tell me in two sentences what this repo is about."
+Enter
+Sleep 25s
+# 5. Second turn: a short tool call, then the summary.
+
+# 6. The tab tour: leave the composer (Esc → normal mode — digit
+#    hotkeys switch views there), then walk Sessions, Settings, Home.
+Escape
+Sleep 500ms
+Type@100ms "3"
+Sleep 3s
+Type@100ms "4"
+Sleep 3s
+Type@100ms "1"
+Sleep 3s
+# 7. Home tab — the tour ends where it started. The tape ends on the
+#    TUI: no exit, no shell.

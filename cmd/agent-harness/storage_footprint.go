@@ -1,12 +1,12 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/format"
 )
 
 // reportStorageFootprint logs the on-disk footprint of the data home
@@ -25,13 +25,13 @@ func (app *App) reportStorageFootprint(tuiApp *tui.App) {
 	total := sessions.bytes + audit.bytes + logs.bytes + toolResults.bytes
 	tuiApp.AddMessage("system", sprintf(
 		"Storage: %s under %s (sessions %d files / %s · audit %s · logs %s · tool results %s)",
-		humanBytes(total),
+		format.HumanBytes(total),
 		config.DataHome(),
 		sessions.files,
-		humanBytes(sessions.bytes),
-		humanBytes(audit.bytes),
-		humanBytes(logs.bytes),
-		humanBytes(toolResults.bytes),
+		format.HumanBytes(sessions.bytes),
+		format.HumanBytes(audit.bytes),
+		format.HumanBytes(logs.bytes),
+		format.HumanBytes(toolResults.bytes),
 	))
 }
 
@@ -57,21 +57,4 @@ func dirFootprint(dir string) dirUsage {
 		return dirUsage{}
 	}
 	return usage
-}
-
-// humanBytes renders a byte count as the largest clean unit.
-func humanBytes(n int64) string {
-	const unit = 1024
-	if n < unit {
-		return fmt.Sprintf("%dB", n)
-	}
-	value := float64(n)
-	units := []string{"K", "M", "G", "T"}
-	for _, suffix := range units {
-		value /= unit
-		if value < unit {
-			return fmt.Sprintf("%.1f%s", value, suffix)
-		}
-	}
-	return fmt.Sprintf("%.1fP", value)
 }

@@ -4,6 +4,24 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// agentModeCycle is the Shift+Tab ring shown in the composer chip. The
+// host maps these display names onto execution machinery.
+var agentModeCycle = []string{"manual", "auto", "plan", "chat"}
+
+// nextDisplayMode returns the mode that follows cur in the ring.
+func nextDisplayMode(cur string) string {
+	for i, m := range agentModeCycle {
+		if m == cur {
+			return agentModeCycle[(i+1)%len(agentModeCycle)]
+		}
+	}
+	return agentModeCycle[0]
+}
+
+// NextDisplayMode exposes the Shift+Tab ring to hosts so /mode cycles
+// identically.
+func NextDisplayMode(cur string) string { return nextDisplayMode(cur) }
+
 // handleKeys processes global keys before view dispatch. It returns
 // the possibly-mutated App, the accumulated command, and whether the
 // key was fully consumed (false means normal message processing
@@ -119,6 +137,16 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		}
 
 	case tea.KeyShiftTab:
+		// Inside the composer, Shift+Tab cycles the agent mode chip
+		// (manual → auto → plan → chat) without leaving the keyboard.
+		// The host learns about it via AgentModeChangedMsg: handleKeys
+		// runs on a value copy, so the machinery sync must ride the
+		// message loop, not a captured pointer.
+		if a.activeView == viewChat && a.mode == ModeInsert {
+			next := nextDisplayMode(a.chatModel.agentMode)
+			a.chatModel.agentMode = next
+			return a, func() tea.Msg { return AgentModeChangedMsg{Mode: next} }, true
+		}
 		if !a.activeViewConsumesTab() {
 			return a, a.switchView((a.activeView - 1 + viewCount) % viewCount), true
 		}

@@ -30,33 +30,35 @@ func (app *App) logout() error {
 
 // startLogin opens the modal login wizard. The dialog captures the
 // provider, a masked API key (typed or pasted), and the model; the
-// completion handler persists the key to the encrypted store. A stored
-// key is retained: the dialog shows a masked hint and lets the user
-// finish without re-entering it.
+// completion handler persists the key to the encrypted store. Stored
+// per-provider keys are retained: the dialog shows a masked hint and
+// finishes without re-entry when the store already holds a key for the
+// chosen provider.
 func (app *App) startLogin() error {
 	if app.tuiApp == nil {
 		return errf("login wizard only available in TUI mode")
 	}
-	app.tuiApp.OpenLoginDialog(app.loginKeyHint())
+	app.tuiApp.OpenLoginDialog(app.storedCredentialsSnapshot())
 	return nil
 }
 
-// loginKeyHint masks the key the wizard can retain: the encrypted
-// store's key when one exists (completion resolves it per provider),
-// else the config key when it is not a local dummy. The dummy ("local",
-// "ollama") must never render a stored-key hint — treating it as a
-// stored key once sent Bearer local to OpenRouter and 401'd.
-func (app *App) loginKeyHint() string {
+// storedCredentialsSnapshot reads the encrypted store's per-provider
+// key set for the login wizard. The fallback covers a config/env key
+// that was authenticating the current provider but never saved to the
+// store.
+func (app *App) storedCredentialsSnapshot() tui.StoredCredentials {
+	keys := map[string]string{}
+	primary := ""
 	credManager := config.NewCredentialManager()
-	if credManager.HasSecureCredentials() {
-		if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.APIKey != "" {
-			return keyHint(secureCfg.APIKey)
+	if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg != nil {
+		for provider, key := range secureCfg.ProviderKeys {
+			keys[provider] = key
 		}
+		primary = secureCfg.APIKey
+	} else if app.config.APIKey != "" && !config.IsLocalProvider(app.config.APIKey) {
+		primary = app.config.APIKey
 	}
-	if app.config.APIKey != "" && !config.IsLocalProvider(app.config.APIKey) {
-		return keyHint(app.config.APIKey)
-	}
-	return ""
+	return tui.NewStoredCredentials(keys, primary)
 }
 
 // startProviderPicker opens the provider-switch modal. Picking a

@@ -105,6 +105,23 @@ type App struct {
 
 	// Agent cancellation context
 	agentCancelFunc context.CancelFunc
+
+	// onAgentModeChanged is the host hook fired after the composer
+	// cycles the agent mode chip; hosts apply the machinery the mode
+	// implies (approval prompting, plan gating, tool availability).
+	onAgentModeChanged func(mode string)
+}
+
+// AgentModeChangedMsg is emitted after the composer cycles the agent
+// mode chip. Mode is one of: manual, auto, plan, chat.
+type AgentModeChangedMsg struct {
+	Mode string
+}
+
+// SetAgentModeChangedHandler registers the host hook for agent mode
+// cycles. The handler runs on the message loop, so its mutations persist.
+func (a *App) SetAgentModeChangedHandler(fn func(mode string)) {
+	a.onAgentModeChanged = fn
 }
 
 // NewApp creates a new TUI application.
@@ -175,11 +192,11 @@ func (a *App) SetLoginModelsProvider(provider LoginModelsProvider) {
 	a.loginDialog.SetModelsProvider(provider)
 }
 
-// OpenLoginDialog opens the modal login wizard. storedKeyHint is a masked
-// hint of an already-stored key (empty when none exists); the dialog then
-// lets the user finish without re-entering the key.
-func (a *App) OpenLoginDialog(storedKeyHint string) {
-	a.loginDialog.Open(a.width, a.height, storedKeyHint)
+// OpenLoginDialog opens the modal login wizard with the encrypted
+// store's per-provider key set; the dialog finishes without re-entry
+// when the store already holds a key for the chosen provider.
+func (a *App) OpenLoginDialog(stored StoredCredentials) {
+	a.loginDialog.Open(a.width, a.height, stored)
 }
 
 // SetProviderPickHandler sets the handler that receives the provider
@@ -296,26 +313,17 @@ func ShortenModelName(model string) string {
 
 	parts := strings.SplitN(model, "/", 2)
 	if len(parts) == 2 {
-		provider := parts[0]
-		rest := parts[1]
-		segments := strings.Split(rest, "-")
-
-		short := ""
-		for i := len(segments) - 1; i >= 0; i-- {
-			s := segments[i]
-			if strings.ContainsAny(s, "0123456789") {
-				// Prefer segments that end with 'b' (like "120b" for billion parameters)
-				// and are longer than current short (indicating more specific version)
-				if len(s) > len(short) || (len(s) == len(short) && strings.HasSuffix(s, "b")) {
-					short = s
-				}
-			}
+		// Registry paths (accounts/fireworks/models/glm-5p3-flash) bury
+		// the identity in boilerplate: show the last path segment and
+		// front-truncate with an ellipsis when it still overflows.
+		tail := parts[1]
+		if idx := strings.LastIndex(tail, "/"); idx != -1 {
+			tail = tail[idx+1:]
 		}
-		if short == "" {
-			short = segments[len(segments)-1]
+		result := tail
+		if len(tail) > 24 {
+			result = "…" + tail[len(tail)-23:]
 		}
-
-		result := provider + "..." + short
 		if tag != "" {
 			result += "(" + tag + ")"
 		}

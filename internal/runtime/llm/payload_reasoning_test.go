@@ -7,10 +7,14 @@ import (
 
 // decodePayload builds and unmarshals a payload for the given provider.
 func decodePayload(t *testing.T, provider string, effort string) map[string]any {
+	return decodePayloadWithModel(t, provider, effort, "test-model")
+}
+
+func decodePayloadWithModel(t *testing.T, provider string, effort string, model string) map[string]any {
 	t.Helper()
 	client := NewHTTPClientWithBaseURL(provider, "test-key", "https://example.test/v1")
 	payload, err := client.buildPayload(Request{
-		Model:           "test-model",
+		Model:           model,
 		ReasoningEffort: effort,
 	})
 	if err != nil {
@@ -28,7 +32,7 @@ func decodePayload(t *testing.T, provider string, effort string) map[string]any 
 // extra_body key with 400 "Unsupported parameter(s)"; the thinking
 // params must be top-level, exactly as NVIDIA's own docs show.
 func TestNvidiaPayloadUsesTopLevelThinkingParams(t *testing.T) {
-	result := decodePayload(t, "nvidia", "medium")
+	result := decodePayloadWithModel(t, "nvidia", "medium", "nvidia/nemotron-3-super")
 
 	if _, ok := result["extra_body"]; ok {
 		t.Fatalf("nvidia payload must not carry a raw extra_body key: %v", result)
@@ -59,9 +63,23 @@ func TestNvidiaPayloadSkipsThinkingWhenEffortOff(t *testing.T) {
 
 func TestNvidiaPayloadBudgetMapping(t *testing.T) {
 	for effort, want := range map[string]float64{"low": 1024, "medium": 4096, "high": 16384} {
-		result := decodePayload(t, "nvidia", effort)
+		result := decodePayloadWithModel(t, "nvidia", effort, "nvidia/nemotron-3-super")
 		if got := result["reasoning_budget"]; got != want {
 			t.Fatalf("nvidia reasoning_budget for %q = %v, want %v", effort, got, want)
+		}
+	}
+}
+
+// Non-Nemotron models on NVIDIA validate strictly: reasoning_budget is
+// absent (the deepseek 400), while the template knob stays.
+func TestNvidiaPayloadSkipsBudgetForNonNemotronModels(t *testing.T) {
+	for _, model := range []string{"deepseek-ai/deepseek-v4-flash-0731", "meta/llama-3.3-70b-instruct", "qwen/qwen2.5-coder-32b"} {
+		result := decodePayloadWithModel(t, "nvidia", "medium", model)
+		if _, ok := result["reasoning_budget"]; ok {
+			t.Fatalf("%s: reasoning_budget must be absent (strict validation 400s on it): %v", model, result)
+		}
+		if kwargs, ok := result["chat_template_kwargs"].(map[string]any); !ok || kwargs["enable_thinking"] != true {
+			t.Fatalf("%s: chat_template_kwargs.enable_thinking must stay: %v", model, result)
 		}
 	}
 }
@@ -72,23 +90,25 @@ func TestReasoningParamsProviderMatrix(t *testing.T) {
 	// Provider -> the keys its payload must carry (or must not).
 	cases := []struct {
 		provider   string
+		model      string
 		wantKeys   []string
 		absentKeys []string
 	}{
-		{"openai", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
-		{"openrouter", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
-		{"nvidia", []string{"reasoning_budget", "chat_template_kwargs"}, []string{"reasoning_effort", "thinking"}},
-		{"anthropic", []string{"thinking"}, []string{"reasoning_effort", "reasoning_budget"}},
+		{"openai", "test-model", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"openrouter", "test-model", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"nvidia", "nvidia/nemotron-3-super", []string{"reasoning_budget", "chat_template_kwargs"}, []string{"reasoning_effort", "thinking"}},
+		{"nvidia", "deepseek-ai/deepseek-v4-flash", []string{"chat_template_kwargs"}, []string{"reasoning_effort", "reasoning_budget"}},
+		{"anthropic", "test-model", []string{"thinking"}, []string{"reasoning_effort", "reasoning_budget"}},
 		// Undocumented knobs: local gateways, ollama, and fireworks get
 		// no reasoning parameter at all - an undocumented parameter is
 		// how the nvidia extra_body 400 shipped.
-		{"local", nil, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
-		{"ollama", nil, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
-		{"fireworks", nil, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"local", "test-model", []string{}, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"ollama", "test-model", []string{}, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"fireworks", "test-model", []string{}, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
 	}
 
 	for _, tc := range cases {
-		result := decodePayload(t, tc.provider, "medium")
+		result := decodePayloadWithModel(t, tc.provider, "medium", tc.model)
 		for _, key := range tc.wantKeys {
 			if _, ok := result[key]; !ok {
 				t.Fatalf("%s payload missing %q: %v", tc.provider, key, result)

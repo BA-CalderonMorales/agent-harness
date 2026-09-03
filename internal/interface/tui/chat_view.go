@@ -80,8 +80,17 @@ func (m ChatModel) View() string {
 		blockParts = append(blockParts, m.renderSuggestions())
 	}
 
+	// The composer's top border is the mode affordance: bright while
+	// you can type (insert), dim while you read (navigate) — the
+	// boundary is visible where the eyes already are, on the terminal's
+	// own background.
+	composerBorder := ColorBorder
+	if m.modeLabel == "typing" || m.focused {
+		composerBorder = ColorPrimary
+	}
 	blockPanel := InputContainerStyle.
 		Width(columnWidth).
+		BorderForeground(composerBorder).
 		PaddingTop(ComposerTopPadding).
 		PaddingBottom(ComposerBottomPadding).
 		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
@@ -114,6 +123,9 @@ func (m ChatModel) renderModeLine() string {
 	}
 	if m.provider != "" {
 		parts = append(parts, m.provider)
+	}
+	if m.agentMode != "" {
+		parts = append(parts, ModePromptStyle.Render(m.agentMode))
 	}
 	effort := m.effort
 	if effort == "" {
@@ -195,10 +207,17 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	// italic, etc.). While thinking (before the first chunk) the bubble is
 	// hidden so only the animated header shows. Once the first token has
 	// been pending long enough to suggest a slow local model, an explanatory
-	// progress line fills the gap.
+	// progress line fills the gap. When reasoning deltas are streaming
+	// (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning text
+	// previews under the badge instead — the model's wait state, not
+	// its output.
 	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
 		if hint := thinkingHint(m.elapsed); hint != "" {
 			b.WriteString(HelpDimStyle.Render(hint))
+			b.WriteString("\n")
+		}
+		if preview := reasoningPreview(m.thinkingText); preview != "" {
+			b.WriteString(HelpDimStyle.Render(preview))
 			b.WriteString("\n")
 		}
 		return b.String()
@@ -207,7 +226,11 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if width < 1 {
 		width = 1
 	}
-	renderedContent := renderMarkdown(msg.Content, width)
+	// The bubble adds a left border and padding (2 columns) on top of
+	// Width(width): rendering at the full width makes lipgloss re-wrap
+	// glamour's output and orphan words onto flush-left lines. Render
+	// at the true inner column instead.
+	renderedContent := renderMarkdown(msg.Content, width-2)
 	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
 	b.WriteString(content)
 

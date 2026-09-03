@@ -1,10 +1,12 @@
 package tui
 
 import (
-	"reflect"
+	"fmt"
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // TestSettingsRowsAlignValues: every settings row pads its label to the
@@ -62,15 +64,21 @@ func TestChatSpeakerHierarchy(t *testing.T) {
 	m.width = 120
 	m.height = 40
 
-	// The style definitions are the hierarchy: the user bubble carries
-	// the surface background, the assistant keeps the bare quote block.
-	// (Colors render as plain text in non-TTY tests, so assert on the
-	// style attributes, not the ANSI output.)
-	if reflect.ValueOf(MessageBubbleUser.GetBackground()).IsZero() {
-		t.Fatal("user bubble lacks the surface panel")
+	// The style definitions are the hierarchy: speaker identity lives in
+	// the gutter border (secondary = user, primary = agent), and neither
+	// bubble paints a background — the transcript renders on the user's
+	// own terminal background. Unset background = NoColor (lipgloss doc).
+	if _, transparent := MessageBubbleUser.GetBackground().(lipgloss.NoColor); !transparent {
+		t.Fatal("user bubble paints a background; bubbles stay transparent")
 	}
-	if !reflect.ValueOf(MessageBubbleAssistant.GetBackground()).IsZero() {
-		t.Fatal("assistant bubble shares the user surface")
+	if _, transparent := MessageBubbleAssistant.GetBackground().(lipgloss.NoColor); !transparent {
+		t.Fatal("assistant bubble paints a background; bubbles stay transparent")
+	}
+	if got := fmt.Sprint(MessageBubbleUser.GetBorderLeftForeground()); got != fmt.Sprint(ColorSecondary) {
+		t.Fatalf("user gutter = %s, want secondary", got)
+	}
+	if got := fmt.Sprint(MessageBubbleAssistant.GetBorderLeftForeground()); got != fmt.Sprint(ColorPrimary) {
+		t.Fatalf("assistant gutter = %s, want primary", got)
 	}
 }
 

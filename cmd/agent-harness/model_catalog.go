@@ -15,6 +15,18 @@ func (app *App) getModelItems() []tui.ModelItem {
 	return getModelsForProvider(provider, app.session.Model)
 }
 
+// applyCatalogContext syncs config.ContextLength with the catalog budget for
+// the selected model, so the context bar and loop limits match the model's
+// real window. Models unknown to the catalog keep the current setting.
+func applyCatalogContext(cfg *config.LayeredConfig, model string) {
+	for _, item := range getModelsForProvider(cfg.Provider, model) {
+		if item.ID == model && item.ContextLen > 0 {
+			cfg.ContextLength = item.ContextLen
+			return
+		}
+	}
+}
+
 // getModelsForProvider returns models appropriate for the provider.
 func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 	switch provider {
@@ -47,6 +59,8 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 		}
 	case "fireworks":
 		return []tui.ModelItem{
+			{ID: "accounts/fireworks/models/glm-5p3-flash", Name: "GLM 5.3 Flash", Provider: "fireworks", ContextLen: 131072, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3-flash"},
+			{ID: "accounts/fireworks/models/glm-5p3", Name: "GLM 5.3", Provider: "fireworks", ContextLen: 131072, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3"},
 			{ID: "accounts/fireworks/models/llama-v3p3-70b-instruct", Name: "Llama 3.3 70B Instruct", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/llama-v3p3-70b-instruct"},
 			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
 			{ID: "accounts/fireworks/models/mixtral-8x22b-instruct", Name: "Mixtral 8x22B Instruct", Provider: "fireworks", ContextLen: 65536, IsDefault: currentModel == "accounts/fireworks/models/mixtral-8x22b-instruct"},

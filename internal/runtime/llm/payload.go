@@ -64,8 +64,15 @@ func (c *HTTPClient) applyReasoningParams(payload map[string]any, req Request) {
 		// reasoning_effort; thinking is budgeted by top-level
 		// reasoning_budget plus chat_template_kwargs.enable_thinking.
 		// extra_body is an OpenAI-SDK convention, never a raw body key.
+		// reasoning_budget is a Nemotron-family knob — NVIDIA's other
+		// models (deepseek, llama, qwen) validate strictly and 400 on
+		// it ("Unsupported parameter(s)"), so it is gated by model
+		// family. chat_template_kwargs is a vLLM template variable the
+		// hosted models accept.
 		if req.ReasoningEffort != "" && req.ReasoningEffort != "off" {
-			payload["reasoning_budget"] = nvidiaReasoningBudget(req.ReasoningEffort)
+			if strings.Contains(strings.ToLower(req.Model), "nemotron") {
+				payload["reasoning_budget"] = nvidiaReasoningBudget(req.ReasoningEffort)
+			}
 			payload["chat_template_kwargs"] = map[string]any{"enable_thinking": true}
 		}
 	case "anthropic":

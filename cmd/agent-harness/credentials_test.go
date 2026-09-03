@@ -113,12 +113,12 @@ func TestLoginKeyHint_HidesLocalDummy(t *testing.T) {
 	newCredentialTestEnv(t)
 
 	app := &App{config: &config.LayeredConfig{Provider: "local", APIKey: "local"}}
-	if hint := app.loginKeyHint(); hint != "" {
-		t.Fatalf("local dummy rendered a stored-key hint %q", hint)
+	if hint := app.storedCredentialsSnapshot(); hint.Primary() != "" {
+		t.Fatalf("local dummy rendered a stored-key hint %q", hint.Primary())
 	}
 
 	app = &App{config: &config.LayeredConfig{Provider: "openai", APIKey: "sk-config"}}
-	if hint := app.loginKeyHint(); !strings.Contains(hint, "sk") && !strings.Contains(hint, "…") {
-		t.Fatalf("hosted config key hint = %q, want a masked hint", hint)
+	if hint := app.storedCredentialsSnapshot(); !strings.Contains(hint.Primary(), "sk") && !strings.Contains(hint.Primary(), "…") {
+		t.Fatalf("hosted config key hint = %q, want a masked hint", hint.Primary())
 	}
 }

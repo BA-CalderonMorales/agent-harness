@@ -34,6 +34,7 @@ type App struct {
 	cwd            string
 	tuiApp         *tui.App
 	executionMode  approval.ExecutionMode
+	agentMode      agentMode
 	mcpManager     *mcp.Manager
 	auditLogger    *audit.Logger
 	planMode       bool
@@ -85,6 +86,7 @@ func newApp() (*App, error) {
 
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
+	applyCatalogContext(app.config, app.session.Model)
 	if app.config.ContextLength > 0 {
 		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
 	}
@@ -135,6 +137,11 @@ func (app *App) run() error {
 	tuiApp.SetChatModel(app.session.Model)
 	tuiApp.SetChatPersona(app.session.Persona)
 	tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
+	tuiApp.SetAgentMode(string(app.agentMode))
+	tuiApp.SetAgentModeChangedHandler(func(mode string) {
+		app.applyAgentMode(agentMode(mode))
+		tuiApp.ShowStatus(agentModeDescription(agentMode(mode)), "info")
+	})
 	if app.config.Effort == "" {
 		app.config.Effort = config.DefaultEffort
 	}
