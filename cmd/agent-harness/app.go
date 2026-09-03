@@ -92,6 +92,12 @@ func newApp() (*App, error) {
 	}
 	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
+	// Boot theme: an empty value is the shipped default palette. Stored
+	// under the "theme" settings key via the Settings tab or /theme.
+	if app.config.Theme != "" {
+		tui.ApplyTheme(app.config.Theme)
+	}
+
 	return app, nil
 }
 

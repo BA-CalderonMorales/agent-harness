@@ -90,6 +90,9 @@ func (ll *LayeredLoader) Save(source ConfigSource, config *LayeredConfig) error 
 	if config.ServerCommand != "" {
 		data["local_server_command"] = config.ServerCommand
 	}
+	if config.Theme != "" {
+		data["theme"] = config.Theme
+	}
 
 	if len(config.AlwaysAllow) > 0 {
 		data["always_allow"] = config.AlwaysAllow

@@ -186,6 +186,33 @@ func (app *App) initCommandsCore() {
 			return strings.TrimSuffix(b.String(), "\n"), nil
 		})
 
+	app.cmdRegistry.Register("theme", "Show or change the TUI color theme",
+		func(args string) (string, error) {
+			name := strings.TrimSpace(args)
+			if name == "" {
+				current := app.config.Theme
+				if current == "" {
+					current = "default"
+				}
+				var b strings.Builder
+				for _, t := range tui.ThemeNames() {
+					marker := "  "
+					if t == current {
+						marker = "→ "
+					}
+					fmt.Fprintf(&b, "%s%s\n", marker, t)
+				}
+				return strings.TrimSuffix(b.String(), "\n"), nil
+			}
+			if !tui.ApplyTheme(name) {
+				return "", fmt.Errorf("unknown theme %q: try /theme for the list", name)
+			}
+			theme, _ := tui.LookupTheme(name)
+			app.config.Theme = theme.Name
+			app.commitConfigChange()
+			return sprintf("Theme set to %s", theme.Name), nil
+		})
+
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()
