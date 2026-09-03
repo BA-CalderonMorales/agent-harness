@@ -60,8 +60,8 @@ func NewSettingsModel() SettingsModel {
 	return SettingsModel{
 		settings:    make([]Setting, 0),
 		cursor:      0,
-		viewport:    viewport.New(80, 20),
-		sysViewport: viewport.New(80, 6),
+		viewport:    newViewport(80, 20),
+		sysViewport: newViewport(80, 6),
 	}
 }
 

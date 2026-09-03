@@ -64,7 +64,7 @@ func NewSessionsModel() SessionsModel {
 	return SessionsModel{
 		sessions: make([]SessionInfo, 0),
 		cursor:   0,
-		viewport: viewport.New(80, 20),
+		viewport: newViewport(80, 20),
 	}
 }
 

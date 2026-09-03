@@ -9,7 +9,6 @@ package tui
 import (
 	"strings"
 
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -118,7 +117,7 @@ func (m *LoginDialogModel) loadModels() {
 		if vpH > 12 {
 			vpH = 12
 		}
-		m.picker.viewport = viewport.New(vpW, vpH)
+		m.picker.viewport = newViewport(vpW, vpH)
 		m.picker.SetTitle("Models - " + m.provider())
 		m.picker.SetModels(models)
 	}

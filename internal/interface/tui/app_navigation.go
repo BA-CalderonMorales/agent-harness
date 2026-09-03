@@ -137,6 +137,16 @@ func (a *App) scrollActiveView(lines int) {
 	}
 }
 
+// halfPageLines is the Ctrl+u/Ctrl+d scroll step: half the viewport
+// height, at least one line.
+func (a *App) halfPageLines() int {
+	lines := a.height / 2
+	if lines < 1 {
+		lines = 1
+	}
+	return lines
+}
+
 func (a *App) gotoActiveViewTop() {
 	switch a.activeView {
 	case viewHome:

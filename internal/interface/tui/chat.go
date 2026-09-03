@@ -231,7 +231,7 @@ func NewChatModel() ChatModel {
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorText)
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorTextDim)
 
-	vp := viewport.New(80, 20)
+	vp := newViewport(80, 20)
 
 	return ChatModel{
 		textarea: ta,

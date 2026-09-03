@@ -1,9 +1,11 @@
 package tui
 
 import (
+	"path/filepath"
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	tea "github.com/charmbracelet/bubbletea"
-	"path/filepath"
 )
 
 func (a *App) AddMessage(role, content string) {
@@ -56,6 +58,16 @@ func (a *App) SetThinking(thinking bool, text string) {
 func (a *App) ShowStatus(text string, statusType string) {
 	a.statusMessage = text
 	a.statusType = statusType
+	a.statusGen++
+}
+
+// statusFlashCmd schedules the expiry of the current status: statuses
+// are hints, not state — they clear after 3s unless replaced.
+func (a App) statusFlashCmd() tea.Cmd {
+	gen := a.statusGen
+	return tea.Tick(3*time.Second, func(time.Time) tea.Msg {
+		return clearStatusMsg{generation: gen}
+	})
 }
 
 // RefreshSessions refreshes the sessions list.
