@@ -1,17 +1,17 @@
-# agent-harness interactive demo -- a tour of every tab.
-# Boot the TUI (bypassing the setup wizard) and walk Home > Chat >
-# Sessions > Settings, then leave. No agent turn: the tab tour is the
-# showcase, and the mock LLM still powers the green readiness status.
+# agent-harness live demo — the real deal.
 #
-# Record from the repository root with the mock server running and an
-# empty session store:
-#   rm -rf ~/.agent-harness/sessions  (terminal 1, before recording)
-#   python3 scripts/demo/mock-llm.py  (terminal 1)
-#   vhs scripts/demo/tui.tape         (terminal 2)
+# A real turn against a hosted GLM model (fireworks provider): the
+# agent reads the repository with a tool call and answers with a
+# markdown table. The composer shows the agent mode chip, cycled to
+# auto via /mode — tool calls approve without asking.
 #
-# Note: views switch via the digit hotkeys (2=Chat, 3=Sessions,
-# 4=Settings, 1=Home) - they arrive as clean single keypresses under
-# the recorder; send Tab at your own risk, it mangles typed input.
+# Record from the repository root:
+#   chmod +x scripts/demo/demo-boot-live.sh
+#   vhs scripts/demo/tui.tape
+#
+# The fireworks API key must be configured once via /login (stored in
+# the encrypted credential store); the boot wrapper isolates session
+# data so every recording starts fresh.
 
 Output docs/demo-tui.gif
 Set FontSize 18
@@ -22,34 +22,32 @@ Set Padding 28
 Set Margin 0
 Set Shell bash
 
-Type "./scripts/demo/demo-boot.sh"
+Require ./scripts/demo/demo-boot-live.sh
+Type@500ms "./scripts/demo/demo-boot-live.sh"
 Enter
-Sleep 7s
-# 1. boot via the demo wrapper: env pins provider=local, so the setup
-#    wizard is skipped and the TUI lands straight on the Home tab
-#    with the mock LLM ready
-
-Type "2"
 Sleep 4s
-# 2. Chat tab: welcome message (Agent Harness, mode, git)
-#    under the Provider ready status
+# 1. Boot: the Home dashboard with git context and the storage
+#    footprint line.
 
-Type "3"
-Sleep 4s
-# 3. Sessions tab: session store and resume list
-
-Type "4"
-Sleep 3s
-# 4. Settings tab: provider, model, mode, effort
-
-Type "j"
+Type@100ms "2"
 Sleep 2s
-Type "1"
-Sleep 4s
-# 5. Home tab: project dashboard and quick actions
+# 2. Chat tab: the welcome message.
 
-Type "2"
-Sleep 3s
+Type@100ms "i"
+Sleep 500ms
+Type "/mode auto"
+Enter
+Sleep 2s
+# 3. The agent mode chip flips to auto with a status flash: tool
+#    calls approve without asking.
+
+Type@20ms "Run ls in this repo, then list the top-level directories in a markdown table with one-line descriptions."
+Enter
+Sleep 45s
+# 4. The turn: a real ls tool call, then the markdown table rendered
+#    in the transcript.
+
+Sleep 2s
 Ctrl+C
-Sleep 2s
-# 6. done
+Sleep 1s
+# 5. Done.

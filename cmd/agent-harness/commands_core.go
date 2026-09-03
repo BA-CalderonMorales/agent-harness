@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -147,6 +148,30 @@ func (app *App) initCommandsCore() {
 				return "Plan mode disabled. Agent will execute directly."
 			},
 		))
+
+	app.cmdRegistry.Register("mode", "Set or cycle the agent mode (manual/auto/plan/chat)",
+		func(args string) (string, error) {
+			var target agentMode
+			switch strings.TrimSpace(args) {
+			case "":
+				target = agentMode(tui.NextDisplayMode(string(app.agentMode)))
+			case "manual":
+				target = AgentModeManual
+			case "auto":
+				target = AgentModeAuto
+			case "plan":
+				target = AgentModePlan
+			case "chat":
+				target = AgentModeChat
+			default:
+				return "", fmt.Errorf("unknown mode %q: want manual, auto, plan, or chat", args)
+			}
+			app.applyAgentMode(target)
+			if app.tuiApp != nil {
+				app.tuiApp.SetAgentMode(string(target))
+			}
+			return agentModeDescription(target), nil
+		})
 
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {

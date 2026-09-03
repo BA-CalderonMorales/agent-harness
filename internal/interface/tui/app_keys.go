@@ -18,6 +18,10 @@ func nextDisplayMode(cur string) string {
 	return agentModeCycle[0]
 }
 
+// NextDisplayMode exposes the Shift+Tab ring to hosts so /mode cycles
+// identically.
+func NextDisplayMode(cur string) string { return nextDisplayMode(cur) }
+
 // handleKeys processes global keys before view dispatch. It returns
 // the possibly-mutated App, the accumulated command, and whether the
 // key was fully consumed (false means normal message processing
