@@ -256,7 +256,7 @@ func (m CommandPaletteModel) buildContent() string {
 	var b strings.Builder
 
 	b.WriteString(HelpTitleStyle.Render("Commands") + "\n")
-	b.WriteString(HelpDimStyle.Render("Type / then search, Enter to select, Esc to cancel") + "\n\n")
+	b.WriteString(HelpDimStyle.Render("Type to filter, Enter to select, Esc to cancel") + "\n\n")
 
 	if m.searchQuery != "" {
 		b.WriteString("Search: " + InfoStyle.Render(m.searchQuery) + "\n\n")

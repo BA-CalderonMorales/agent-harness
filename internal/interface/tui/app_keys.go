@@ -192,16 +192,21 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 					return a, a.switchView(viewChat), true
 				}
 			case "l":
-				// The setup dead-end handle: the statusbar badge and the
-				// home banner advertise (l: login) - one keypress opens
-				// the wizard. In insert mode 'l' types into the composer.
-				// Routed as a UserCommandMsg (not a direct handler call):
-				// handleKeys works on a copy, and a synchronous handler
-				// mutation (startLogin opens the dialog) would be
-				// clobbered when *a = next copies the pre-call state
+				// Vim-right: the next tab, matching h for Home. The
+				// setup dead-end keeps its advertised handle — the
+				// statusbar badge and home banner say "(l: login)" only
+				// when the provider is not ready, so 'l' opens the
+				// wizard exactly when the affordance is on screen.
+				// Routed as a UserCommandMsg (not a direct handler
+				// call): handleKeys works on a copy, and a synchronous
+				// handler mutation (startLogin opens the dialog) would
+				// be clobbered when *a = next copies the pre-call state
 				// back. The msg path runs on the live app, exactly like
 				// a typed /login.
-				return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
+				if a.providerReadiness != 1 {
+					return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
+				}
+				return a, a.switchView((a.activeView + 1) % viewCount), true
 			case "t":
 				// Toggle tool-run collapsing: the long-horizon trace
 				// reads as count lines by default; 't' expands or
