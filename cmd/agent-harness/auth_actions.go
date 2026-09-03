@@ -113,13 +113,26 @@ func (app *App) startModelPicker() error {
 
 // modelsForProvider returns the full model list for the current client,
 // falling back to the static catalog when the provider has no dynamic
-// listing (local/ollama) or the API call fails.
+// listing (local/ollama) or the API call fails. Live entries carry the
+// provider-advertised context length; models the endpoint does not
+// describe inherit the catalog value so the budget bar stays honest.
 func (app *App) modelsForProvider(provider string) []tui.ModelItem {
 	if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
-		if ids, err := c.ListModels(); err == nil && len(ids) > 0 {
-			items := make([]tui.ModelItem, 0, len(ids))
-			for _, id := range ids {
-				items = append(items, tui.ModelItem{ID: id, Name: id, Provider: provider})
+		if infos, err := c.ListModelsDetailed(); err == nil && len(infos) > 0 {
+			catalog := getModelsForProvider(provider, app.session.Model)
+			catalogCtx := make(map[string]int, len(catalog))
+			for _, item := range catalog {
+				catalogCtx[item.ID] = item.ContextLen
+			}
+			items := make([]tui.ModelItem, 0, len(infos))
+			for _, info := range infos {
+				item := tui.ModelItem{ID: info.ID, Name: info.ID, Provider: provider}
+				if info.ContextLength > 0 {
+					item.ContextLen = info.ContextLength
+				} else {
+					item.ContextLen = catalogCtx[info.ID]
+				}
+				items = append(items, item)
 			}
 			return items
 		}

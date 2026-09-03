@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
 
 // getModelItems returns available models for TUI.
@@ -25,6 +26,26 @@ func applyCatalogContext(cfg *config.LayeredConfig, model string) {
 			return
 		}
 	}
+}
+
+// applyModelContext sets config.ContextLength from the provider's own
+// advertised context_length for the model, falling back to the static
+// catalog when the live list is unreachable or silent. The catalog is
+// the honest offline default; the live value wins whenever the endpoint
+// states one, so the context bar never shows a smaller window than the
+// model actually has.
+func (app *App) applyModelContext(model string) {
+	if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
+		if infos, err := c.ListModelsDetailed(); err == nil {
+			for _, info := range infos {
+				if info.ID == model && info.ContextLength > 0 {
+					app.config.ContextLength = info.ContextLength
+					return
+				}
+			}
+		}
+	}
+	applyCatalogContext(app.config, model)
 }
 
 // getModelsForProvider returns models appropriate for the provider.
@@ -65,12 +86,16 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "local-model", Name: "OpenAI-compatible local model", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == "local-model"},
 		}
 	case "fireworks":
+		// Context values audited against the live /v1/models response
+		// (2026-09): glm-5p3-flash and glm-5p3 advertise context_length
+		// 1048576 — the old 131072 entries understated the window 8x
+		// and starved the context bar. llama-v3p3-70b-instruct and
+		// mixtral-8x22b-instruct no longer appear in the live serving
+		// list; dead entries that 404 on selection were dropped.
 		return []tui.ModelItem{
-			{ID: "accounts/fireworks/models/glm-5p3-flash", Name: "GLM 5.3 Flash", Provider: "fireworks", ContextLen: 131072, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3-flash"},
-			{ID: "accounts/fireworks/models/glm-5p3", Name: "GLM 5.3", Provider: "fireworks", ContextLen: 131072, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3"},
-			{ID: "accounts/fireworks/models/llama-v3p3-70b-instruct", Name: "Llama 3.3 70B Instruct", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/llama-v3p3-70b-instruct"},
-			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
-			{ID: "accounts/fireworks/models/mixtral-8x22b-instruct", Name: "Mixtral 8x22B Instruct", Provider: "fireworks", ContextLen: 65536, IsDefault: currentModel == "accounts/fireworks/models/mixtral-8x22b-instruct"},
+			{ID: "accounts/fireworks/models/glm-5p3-flash", Name: "GLM 5.3 Flash", Provider: "fireworks", ContextLen: 1048576, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3-flash"},
+			{ID: "accounts/fireworks/models/glm-5p3", Name: "GLM 5.3", Provider: "fireworks", ContextLen: 1048576, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3"},
+			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 1048576, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
 		}
 	default:
 		return []tui.ModelItem{

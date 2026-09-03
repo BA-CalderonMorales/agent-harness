@@ -176,6 +176,46 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	return b.String()
 }
 
+// expandCaret is the visible affordance marking an expandable record:
+// ▸ folds (click/Enter opens it), ▾ is open (click/Esc closes it).
+func expandCaret(expanded bool) string {
+	if expanded {
+		return "▾"
+	}
+	return "▸"
+}
+
+// assistantReasoningRows reports the block-relative rows that carry the
+// model's reasoning for an assistant message — the live preview line
+// while thinking, or the expanded reasoning frame — so a click on those
+// rows resolves back to the message. ok is false when the block exposes
+// no reasoning rows. The row math must mirror renderAssistantMessage.
+func (m ChatModel) assistantReasoningRows(msg ChatMessage) (start, lines int, ok bool) {
+	const headerRows = 1
+	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
+		hintRows := 0
+		if thinkingHint(m.elapsed) != "" {
+			hintRows = 1
+		}
+		if m.expandedMessageID == msg.ID {
+			if full := strings.TrimSpace(m.thinkingText); full != "" {
+				// Full reasoning plus the "esc to close" footer.
+				return headerRows + hintRows, strings.Count(full, "\n") + 2, true
+			}
+			return 0, 0, false
+		}
+		if reasoningPreview(m.thinkingText) != "" {
+			return headerRows + hintRows, 1, true
+		}
+		return 0, 0, false
+	}
+	if m.expandedMessageID == msg.ID && strings.TrimSpace(msg.ReasoningText) != "" {
+		// Frame header + reasoning + "esc to close" footer.
+		return headerRows, strings.Count(msg.ReasoningText, "\n") + 3, true
+	}
+	return 0, 0, false
+}
+
 func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	var b strings.Builder
 
@@ -225,7 +265,9 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 				b.WriteString("\n")
 			}
 		} else if preview := reasoningPreview(m.thinkingText); preview != "" {
-			b.WriteString(HelpDimStyle.Render(preview))
+			// The caret advertises the click: the preview line opens
+			// the full reasoning record.
+			b.WriteString(HelpDimStyle.Render(expandCaret(false) + " " + preview))
 			b.WriteString("\n")
 		}
 		return b.String()
@@ -267,13 +309,16 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 		style = ToolCallStyle
 	}
 
-	// Content already has status indicator and command preview from formatToolContent
-	body := style.Render(msg.Content)
+	// The expand caret advertises the click: ▸ folded (click opens),
+	// ▾ open (click folds). formatToolContent reserves the two caret
+	// columns so the right-aligned duration stays put.
+	expanded := m.expandedMessageID != "" && m.expandedMessageID == msg.ID
+	body := style.Render(expandCaret(expanded) + " " + msg.Content)
 
 	// Expanded tool record: the full call beneath the summary line —
 	// exactly what was called, no truncation. Esc (or clicking again)
 	// folds it back.
-	if m.expandedMessageID != "" && m.expandedMessageID == msg.ID {
+	if expanded {
 		body += "\n" + m.renderToolExpansion(msg)
 	}
 	return body

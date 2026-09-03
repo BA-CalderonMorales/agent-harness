@@ -118,8 +118,10 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 				return false
 			}
 
-			// 2. Feature-flagged command MUST be absent from all user-facing discovery surfaces
-			flaggedPresentInHelp := helpLists(flagName)
+			// 2. Feature-flagged commands stay out of the dispatch
+			// surfaces (completions, descriptions, infos) but are listed
+			// in /help under the Coming soon banner (the FeatureFlag
+			// documented contract).
 			flaggedPresentInComps := false
 			for _, c := range comps {
 				if c == "/"+flagName {
@@ -136,7 +138,21 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 				}
 			}
 
-			return !flaggedPresentInHelp && !flaggedPresentInComps && !flaggedPresentInDescs && !flaggedPresentInInfos
+			flaggedInComingSoon := false
+			inComingSoon := false
+			for _, line := range strings.Split(help, "\n") {
+				trimmed := strings.TrimSpace(line)
+				if strings.HasPrefix(trimmed, "Coming soon") {
+					inComingSoon = true
+					continue
+				}
+				if inComingSoon && (trimmed == "/"+flagName || strings.HasPrefix(trimmed, "/"+flagName+" ")) {
+					flaggedInComingSoon = true
+					break
+				}
+			}
+
+			return !flaggedPresentInComps && !flaggedPresentInDescs && !flaggedPresentInInfos && flaggedInComingSoon
 		},
 		gen.AlphaString(),
 		gen.AlphaString(),

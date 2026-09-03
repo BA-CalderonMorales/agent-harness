@@ -154,7 +154,7 @@ func (a *App) logSystemMessage(text string) {
 	if len(a.systemLog) > maxSystemLog {
 		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
 	}
-	a.settingsModel.SetSystemMessages(a.systemLog)
+	a.logsModel.SetMessages(a.systemLog)
 }
 
 // SetChatPersona sets the current persona for contextual UI behavior.
@@ -175,6 +175,12 @@ func (a *App) SetHomeStatus(model, permissionMode, persona string, estimatedToke
 // SetCommandCompletions sets available slash commands for inline autocomplete.
 func (a *App) SetCommandCompletions(commands []string) {
 	a.chatModel.SetCommandCompletions(commands)
+}
+
+// SetCommandDescriptions feeds the inline suggestion dropdown the same
+// description source /help uses.
+func (a *App) SetCommandDescriptions(descriptions map[string]string) {
+	a.chatModel.SetCommandDescriptions(descriptions)
 }
 
 // SetCommands sets available slash commands for the command palette.

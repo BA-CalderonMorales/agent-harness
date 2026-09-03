@@ -7,49 +7,59 @@ import (
 
 // Data display styles
 var (
+	DataLabel     lipgloss.Style
+	DataValue     lipgloss.Style
+	DataMono      lipgloss.Style
+	BadgeEnabled  lipgloss.Style
+	BadgeDisabled lipgloss.Style
+	BadgeRunning  lipgloss.Style
+	BadgeWarning  lipgloss.Style
+	ErrorStyle    lipgloss.Style
+	SuccessStyle  lipgloss.Style
+	WarningStyle  lipgloss.Style
+	InfoStyle     lipgloss.Style
+)
+
+func applyDataStyles() {
 	DataLabel = lipgloss.NewStyle().
-			Foreground(ColorTextDim).
-			Width(12)
+		Foreground(ColorTextDim).
+		Width(12)
 
 	DataValue = lipgloss.NewStyle().
-			Foreground(ColorText)
+		Foreground(ColorText)
 
 	DataMono = lipgloss.NewStyle().
-			Foreground(ColorAccent)
-)
+		Foreground(ColorAccent)
 
-// ---------------------------------------------------------------------------
-// Badges / indicators (text-based, no emojis)
-// ---------------------------------------------------------------------------
-var (
+	// Badges / indicators (text-based, no emojis)
 	BadgeEnabled = lipgloss.NewStyle().
-			Foreground(ColorSuccess).
-			Bold(true)
+		Foreground(ColorSuccess).
+		Bold(true)
 
 	BadgeDisabled = lipgloss.NewStyle().
-			Foreground(ColorTextDim)
+		Foreground(ColorTextDim)
 
 	BadgeRunning = lipgloss.NewStyle().
-			Foreground(ColorInfo).
-			Bold(true)
+		Foreground(ColorInfo).
+		Bold(true)
 
 	BadgeWarning = lipgloss.NewStyle().
-			Foreground(ColorWarning).
-			Bold(true)
+		Foreground(ColorWarning).
+		Bold(true)
 
 	ErrorStyle = lipgloss.NewStyle().
-			Foreground(ColorError).
-			Bold(true)
+		Foreground(ColorError).
+		Bold(true)
 
 	SuccessStyle = lipgloss.NewStyle().
-			Foreground(ColorSuccess)
+		Foreground(ColorSuccess)
 
 	WarningStyle = lipgloss.NewStyle().
-			Foreground(ColorWarning)
+		Foreground(ColorWarning)
 
 	InfoStyle = lipgloss.NewStyle().
-			Foreground(ColorInfo)
-)
+		Foreground(ColorInfo)
+}
 
 // ---------------------------------------------------------------------------
 // Text indicators (replacing emoji for minimalism)

@@ -2,7 +2,6 @@ package main
 
 import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
-	"path/filepath"
 )
 
 // tuiHomeDelegate connects TUI home dashboard to the app.
@@ -49,16 +48,10 @@ func (d *tuiHomeDelegate) OnNewChat() {
 }
 
 func (d *tuiHomeDelegate) OnExportSession() {
-	path, err := exportSession(d.app.session, "", d.app.config.APIKey)
-	if err != nil {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Export failed: %v", err), Type: "error"})
-		return
-	}
-	absPath, absErr := filepath.Abs(path)
-	if absErr != nil {
-		absPath = path
-	}
-	d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Exported to %s", absPath), Type: "success"})
+	// The export journey: the modal lists the sessions (the same source
+	// the Sessions tab uses), the pick runs the existing export, and the
+	// bottom notification confirms with the file path. Esc cancels.
+	d.tuiApp.OpenExportPicker(d.app.getSessionInfos())
 }
 
 func (d *tuiHomeDelegate) OnLoadSession(id string) {

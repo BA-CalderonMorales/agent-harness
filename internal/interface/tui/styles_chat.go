@@ -8,92 +8,116 @@ import (
 // Chat conversation
 // ---------------------------------------------------------------------------
 var (
+	UserPromptStyle         lipgloss.Style
+	AssistantStyle          lipgloss.Style
+	MessageStyle            lipgloss.Style
+	MarkdownBoldStyle       lipgloss.Style
+	MarkdownItalicStyle     lipgloss.Style
+	CodeInlineStyle         lipgloss.Style
+	CodeBlockStyle          lipgloss.Style
+	MessageBubbleUser       lipgloss.Style
+	MessageBubbleAssistant  lipgloss.Style
+	ToolCallStyle           lipgloss.Style
+	ToolCommandPreviewStyle lipgloss.Style
+	ToolRunningStyle        lipgloss.Style
+	ToolThinkingStyle       lipgloss.Style
+	ToolDoneStyle           lipgloss.Style
+	ToolErrorStyle          lipgloss.Style
+	ToolTimeStyle           lipgloss.Style
+	SpinnerStyle            lipgloss.Style
+	TimestampStyle          lipgloss.Style
+	SystemMessageStyle      lipgloss.Style
+	SeparatorStyle          lipgloss.Style
+	ScrollHintStyle         lipgloss.Style
+)
+
+func applyChatStyles() {
 	UserPromptStyle = lipgloss.NewStyle().
-			Foreground(ColorSecondary).
-			Bold(true)
+		Foreground(ColorSecondary).
+		Bold(true)
 
 	AssistantStyle = lipgloss.NewStyle().
-			Foreground(ColorPrimary).
-			Bold(true)
+		Foreground(ColorPrimary).
+		Bold(true)
 
 	MessageStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+		Foreground(ColorText)
 
 	MarkdownBoldStyle = lipgloss.NewStyle().
-				Foreground(ColorText).
-				Bold(true)
+		Foreground(ColorText).
+		Bold(true)
 
 	MarkdownItalicStyle = lipgloss.NewStyle().
-				Foreground(ColorTextDim).
-				Italic(true)
+		Foreground(ColorTextDim).
+		Italic(true)
 
 	CodeInlineStyle = lipgloss.NewStyle().
-			Foreground(ColorAccent)
+		Foreground(ColorAccent)
 
 	CodeBlockStyle = lipgloss.NewStyle().
-			Foreground(ColorText)
+		Foreground(ColorText)
 
 	// Message bubbles keep the speaker gutter (left border) and no
 	// background fill: the transcript renders on the user's own
 	// terminal background, where paint slabs clash and hurt contrast.
 	MessageBubbleUser = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(ColorSecondary).
-				PaddingLeft(1)
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(ColorSecondary).
+		PaddingLeft(1)
 
 	// MessageBubbleAssistant keeps the bare quote block: the user's
 	// raised surface panel vs the agent's open block is the speaker
 	// hierarchy at a glance.
 
 	MessageBubbleAssistant = lipgloss.NewStyle().
-				Border(lipgloss.NormalBorder(), false, false, false, true).
-				BorderForeground(ColorPrimary).
-				PaddingLeft(1)
+		Border(lipgloss.NormalBorder(), false, false, false, true).
+		BorderForeground(ColorPrimary).
+		PaddingLeft(1)
 
 	ToolCallStyle = lipgloss.NewStyle().
-			Foreground(ColorAccent)
+		Foreground(ColorAccent)
 
 	// ToolCommandPreviewStyle - grey preview of actual command being executed
 	// Used for human-readable command preview (like Kimi does)
 	ToolCommandPreviewStyle = lipgloss.NewStyle().
-				Foreground(ColorTextDim).
-				Italic(true)
+		Foreground(ColorTextDim).
+		Italic(true)
 
 	ToolRunningStyle = lipgloss.NewStyle().
-				Foreground(ColorInfo)
+		Foreground(ColorInfo)
 
 	ToolThinkingStyle = lipgloss.NewStyle().
-				Foreground(ColorWarning)
+		Foreground(ColorWarning)
 
 	ToolDoneStyle = lipgloss.NewStyle().
-			Foreground(ColorSuccess)
+		Foreground(ColorSuccess)
 
 	ToolErrorStyle = lipgloss.NewStyle().
-			Foreground(ColorError)
+		Foreground(ColorError)
 
 	// ToolTimeStyle - the dim timestamp and duration column of the
 	// structured tool line (Splunk-shaped records).
 	ToolTimeStyle = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
 	SpinnerStyle = lipgloss.NewStyle().
-			Foreground(ColorInfo)
+		Foreground(ColorInfo)
 
 	TimestampStyle = lipgloss.NewStyle().
-			Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
 	// SystemMessageStyle - command results and system notes render as quiet
 	// in-flow messages, not alert banners: dim foreground, no italic, no
 	// separators.
 	SystemMessageStyle = lipgloss.NewStyle().
-				Foreground(ColorMuted)
+		Foreground(ColorMuted)
 
 	SeparatorStyle = lipgloss.NewStyle().
-			Foreground(ColorBorder)
+		Foreground(ColorBorder)
 
 	ScrollHintStyle = lipgloss.NewStyle().
-			Foreground(ColorAccent).
-			Bold(true)
-)
+		Foreground(ColorAccent).
+		Bold(true)
+}
 
 // ---------------------------------------------------------------------------

@@ -5,7 +5,9 @@ import (
 )
 
 // ---------------------------------------------------------------------------
-// Color palette — soft, luminous tones (matching lumina-bot aesthetic)
+// Color palette — soft, luminous tones (matching lumina-bot aesthetic).
+// The defaults below are the default theme; applyTheme swaps them and
+// rebuilds every derived style.
 // ---------------------------------------------------------------------------
 var (
 	ColorPrimary   = lipgloss.Color("#B388FF")
@@ -22,5 +24,25 @@ var (
 	ColorMuted     = lipgloss.Color("#5A5A6A")
 	ColorHighlight = lipgloss.Color("#2A2A3E")
 )
+
+// buildStyles re-derives every style var from the color vars. Called
+// once at init and again on every theme switch — styles capture colors
+// at construction, so a palette change must rebuild them.
+func buildStyles() {
+	applyChatStyles()
+	applyCodeStyles()
+	applyContentStyles()
+	applyDataStyles()
+	applyHelpStyles()
+	applyInputStyles()
+	applyListStyles()
+	applyPanelStyles()
+	applyStatusStyles()
+	applyTabStyles()
+}
+
+func init() {
+	buildStyles()
+}
 
 // ---------------------------------------------------------------------------

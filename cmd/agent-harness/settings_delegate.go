@@ -72,6 +72,15 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
+	case "theme":
+		if tui.ApplyTheme(value) {
+			theme, _ := tui.LookupTheme(value)
+			d.app.config.Theme = theme.Name
+			d.app.commitConfigChange()
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Theme: %s", theme.Name), Type: "success"})
+		} else {
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Unknown theme %q; try /theme for the catalog.", value), Type: "error"})
+		}
 	case "execution_mode":
 		d.handleExecutionModeChange(value)
 	case "perm_read":

@@ -103,8 +103,28 @@ func TestHomeExportSessionWritesCurrentSession(t *testing.T) {
 		Content:   []types.ContentBlock{types.TextBlock{Text: "export me"}},
 	})
 
-	delegate := &tuiHomeDelegate{app: app, tuiApp: tui.NewApp()}
+	tuiApp := tui.NewApp()
+	delegate := &tuiHomeDelegate{app: app, tuiApp: tuiApp}
+
+	// The export journey: the Home action opens the session picker
+	// instead of dumping the active session sight unseen.
 	delegate.OnExportSession()
+	if !tuiApp.ExportPickerShowing() {
+		t.Fatal("OnExportSession did not open the session picker")
+	}
+	sel := tuiApp.ExportPickerSelection()
+	if sel == nil {
+		t.Fatal("picker has no sessions listed")
+	}
+
+	// The pick runs the same export the Sessions tab uses. The export
+	// reads from disk, so persist the session first (the live app saves
+	// every turn; this test does it inline).
+	sm.SetCurrent(app.session)
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+	(&tuiSessionsDelegate{app: app, tuiApp: tuiApp}).OnSessionExport(sel.ID)
 
 	matches, err := filepath.Glob(filepath.Join(exportDir, "session-*.txt"))
 	if err != nil {

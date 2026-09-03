@@ -14,7 +14,31 @@ import (
 )
 
 // handleAgentLoopAsync runs the full agent loop asynchronously.
+//
+// The turn runs on its own goroutine — outside the TUI's Update/View
+// recover nets — so a panic here kills the whole program (bubbletea
+// catches goroutine panics and exits). A turn that panics must cost
+// the turn, not the session: the recover degrades the panic to an
+// error message in the transcript and a diagnostics entry.
 func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
+	defer func() {
+		if r := recover(); r != nil {
+			diag.Panic("agent.turn.panic", r)
+			tuiApp.Send(tui.AgentErrorMsg{
+				Error:     fmt.Errorf("internal error recovered (site: agent.turn.panic). Trace: ~/.agent-harness/logs"),
+				Timestamp: time.Now(),
+			})
+			tuiApp.Send(tui.AgentDoneMsg{
+				FullResponse: "",
+				ToolCalls:    0,
+				Timestamp:    time.Now(),
+			})
+		}
+	}()
+	app.runAgentTurn(input, tuiApp)
+}
+
+func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	// PRE-FLIGHT: Check common config issues before calling LLM
 	if err := app.validateConfig(); err != nil {
 		tuiApp.Send(tui.AgentErrorMsg{Error: err, Timestamp: time.Now()})
@@ -124,8 +148,9 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 		case types.StreamThinking:
 			// Reasoning preview: update the badge text without touching
 			// the thinking timer (SetThinking would reset the clock on
-			// every reasoning delta).
-			tuiApp.SetThinkingText(e.Text)
+			// every reasoning delta). Rides the channel: the chat model
+			// must only be touched on the event loop.
+			tuiApp.Send(tui.AgentThinkingMsg{Text: e.Text})
 		case types.StreamMessage:
 			// System-role notices (tool-call limit, loop detection) are
 			// loop announcements, not model speech: they must render as
@@ -134,7 +159,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			if e.Message.Role == types.RoleSystem {
 				for _, block := range e.Message.Content {
 					if tb, ok := block.(types.TextBlock); ok && tb.Text != "" {
-						tuiApp.AddMessage("system", tb.Text)
+						tuiApp.Send(tui.AgentSystemNoteMsg{Text: tb.Text})
 					}
 				}
 				break

@@ -13,6 +13,14 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
 cd "$PROJECT_ROOT"
 
+# Memory guard: Go's runtime grows the heap greedily unless capped, and
+# the test suite (session replays, transcript fixtures) once ballooned to
+# the WSL VM limit and got OOM-killed in a loop — taking the host's
+# session with it. Cap the heap for every test run this script makes;
+# a caller-set GOMEMLIMIT wins.
+export GOMEMLIMIT="${GOMEMLIMIT:-6GiB}"
+export GOGC="${GOGC:-250}"
+
 QUICK_MODE=false
 
 # Parse arguments
@@ -86,17 +94,17 @@ if [ "$QUICK_MODE" = true ]; then
 else
     echo "[STEP 3/4] Test Verification"
     echo "-----------------------------"
-    if go test ./...; then
+    if go test -timeout 15m ./...; then
         echo "[PASS] All tests passed"
         echo ""
     else
         echo "[WARN] Some tests failed - review before committing"
         FAILED=1
     fi
-    
+
     # Race detector (only in full mode, can be slow)
     echo "[INFO] Running race detector..."
-    if go test -race ./... 2>/dev/null; then
+    if go test -race -timeout 15m ./... 2>/dev/null; then
         echo "[PASS] Race detector"
     else
         echo "[WARN] Race conditions detected or test failure"

@@ -70,6 +70,19 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, cmd, true
 	}
 
+	// When the export picker is open, delegate to it: the modal owns
+	// every key until Enter exports the selection or Esc cancels.
+	if a.exportPicker.visible {
+		next, closed, pick := a.exportPicker.Update(msg)
+		a.exportPicker = next
+		if closed && pick && a.onExportPick != nil {
+			if sel := a.ExportPickerSelection(); sel != nil {
+				a.onExportPick(sel.ID)
+			}
+		}
+		return a, nil, true
+	}
+
 	// When the provider picker is open, delegate to it. A pick closes the
 	// picker and hands the provider to the app, which opens the model
 	// picker — a fast provider switch never asks for the API key again.
@@ -204,6 +217,8 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		case "ctrl+3", "3":
 			return a, a.switchView(viewSessions), true
 		case "ctrl+4", "4":
+			return a, a.switchView(viewLogs), true
+		case "ctrl+5", "5":
 			return a, a.switchView(viewSettings), true
 		}
 
@@ -317,6 +332,13 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 		if m, ok := sessionsModel.(SessionsModel); ok {
 			a.sessionsModel = m
 		}
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	if logsModel, cmd := a.logsModel.Update(contentMsg); true {
+		a.logsModel = logsModel
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

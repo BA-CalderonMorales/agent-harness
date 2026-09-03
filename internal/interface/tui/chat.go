@@ -72,9 +72,10 @@ const (
 	ToolStatusComplete ToolStatus = "complete" // Generic completion (no success/error distinction)
 )
 
-// toolLineRange records which viewport rows a tool message occupies,
-// so a mouse click resolves back to the message that rendered there.
-type toolLineRange struct {
+// clickRange records which viewport rows of a rendered block resolve a
+// mouse click back to the message that rendered there. Tool blocks map
+// their whole block; assistant blocks map only their reasoning rows.
+type clickRange struct {
 	start, end int // inclusive viewport content rows
 	msgID      string
 }
@@ -179,9 +180,20 @@ type ChatModel struct {
 	// (t toggles); errors, approvals, and running tools never collapse.
 	toolsCollapsed bool
 
-	// toolLineIndex maps viewport rows to tool messages, rebuilt on
-	// every refresh: a click on a tool's row resolves to the message.
-	toolLineIndex []toolLineRange
+	// guidanceShown gates the first-run navigation block: shown on the
+	// first Chat entry of a session and again after /clear only.
+	guidanceShown bool
+
+	// clickIndex maps viewport rows to the messages a click resolves
+	// to — tool blocks and reasoning preview/frame rows — rebuilt on
+	// every refresh.
+	clickIndex []clickRange
+
+	// lastPainted / lastPaintedAtBottom dedupe refreshes: the tick-
+	// driven streaming repaint skips SetContent when the built
+	// transcript is unchanged.
+	lastPainted         string
+	lastPaintedAtBottom bool
 
 	// expandedMessageID is the message whose full record is expanded
 	// inline (click the line, or Enter on the latest; Esc closes). It

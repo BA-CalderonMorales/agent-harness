@@ -138,6 +138,7 @@ func (sr *SlashRegistry) GetHelp() string {
 		name string
 		cmds []string
 	}{
+		{"Modes", []string{"mode", "modes"}},
 		{"Core", []string{"help", "clear", "compact", "version", "quit", "workspace", "init", "current-model"}},
 		{"Session", []string{"status", "session", "steer"}},
 		{"Model", []string{"model", "models", "provider"}},
@@ -178,6 +179,20 @@ func (sr *SlashRegistry) GetHelp() string {
 			}
 		}
 		lines = append(lines, "")
+	}
+
+	// Feature-flagged commands are invisible in /help otherwise: list
+	// them under a coming-soon banner so the plan is public knowledge.
+	var flagged []string
+	for name := range sr.featureFlags {
+		flagged = append(flagged, name)
+	}
+	sort.Strings(flagged)
+	if len(flagged) > 0 {
+		lines = append(lines, "Coming soon:")
+		for _, cmd := range flagged {
+			lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, sr.featureFlags[cmd]))
+		}
 	}
 
 	return strings.Join(lines, "\n")

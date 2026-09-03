@@ -119,6 +119,21 @@ type AgentToolDoneMsg struct {
 	Output  string
 }
 
+// AgentThinkingMsg carries the reasoning preview text from the agent
+// goroutine. It must ride the message channel: SetThinkingText mutates
+// the chat model, and mutating the model from the agent goroutine races
+// the event loop's render (the pre-fix crash source).
+type AgentThinkingMsg struct {
+	Text string
+}
+
+// AgentSystemNoteMsg carries a system-role notice from the agent
+// goroutine (loop announcements) through the channel, for the same
+// race reasons as AgentThinkingMsg.
+type AgentSystemNoteMsg struct {
+	Text string
+}
+
 // ---------------------------------------------------------------------------
 // AgentQueryCmd creates a Bubble Tea command for async agent queries
 // ---------------------------------------------------------------------------
