@@ -122,10 +122,11 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 
 	line := style.Render(prefix + label)
 
-	// Status indicator
+	// Status indicator. The active session gets the active marker, not
+	// "[running]" — an idle open session is not executing anything.
 	status := StatusNeutral
 	if session.IsActive {
-		status = StatusRunning
+		status = StatusActive
 	}
 	statusStr := RenderStatusBadge(status)
 	if statusStr != "" {
