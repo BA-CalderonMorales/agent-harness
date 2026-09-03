@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
 
 // SessionManager handles session lifecycle
@@ -20,18 +22,14 @@ func NewSessionManager() (*SessionManager, error) {
 
 // NewSessionManagerWithDir creates a session manager with a custom directory.
 // If dir is empty, falls back to AGENT_HARNESS_SESSION_DIR env var, then to
-// ~/.agent-harness/sessions.
+// the shared data home's sessions directory.
 func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
 	sessionsDir := dir
 	if sessionsDir == "" {
 		sessionsDir = os.Getenv("AGENT_HARNESS_SESSION_DIR")
 	}
 	if sessionsDir == "" {
-		home, err := os.UserHomeDir()
-		if err != nil {
-			return nil, fmt.Errorf("failed to get home directory: %w", err)
-		}
-		sessionsDir = filepath.Join(home, ".agent-harness", "sessions")
+		sessionsDir = config.DataSessions()
 	}
 
 	if err := os.MkdirAll(sessionsDir, 0700); err != nil {

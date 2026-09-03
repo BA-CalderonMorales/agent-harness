@@ -42,6 +42,14 @@ func ConfigHome() string {
 	return filepath.Join(home, ".config", "agent-harness")
 }
 
+// The data tree's well-known locations. These accessors are the single
+// authority for where things live — no other file should spell the
+// subdirectory names as literals, or renames drift across call sites.
+func DataSessions() string    { return filepath.Join(DataHome(), "sessions") }
+func DataAudit() string       { return filepath.Join(DataHome(), "audit") }
+func DataLogs() string        { return filepath.Join(DataHome(), "logs") }
+func DataToolResults() string { return filepath.Join(DataHome(), "tool-results") }
+
 // legacyHome is the pre-XDG flat directory. New installs never create
 // it; existing installs are migrated once at boot.
 func legacyHome() string {
@@ -50,6 +58,16 @@ func legacyHome() string {
 		home = "."
 	}
 	return filepath.Join(home, ".agent-harness")
+}
+
+// legacyLayout maps legacy child names to their XDG-home destination.
+// The migration only touches what it owns — unknown entries stay.
+var legacyLayout = map[string]func() string{
+	"sessions":     DataSessions,
+	"audit":        DataAudit,
+	"logs":         DataLogs,
+	"tool-results": DataToolResults,
+	"settings.json": func() string { return filepath.Join(ConfigHome(), "settings.json") },
 }
 
 // MigrateLegacyHome moves data from the legacy flat ~/.agent-harness
@@ -114,12 +132,9 @@ func MigrateLegacyHome() string {
 // legacyDestination maps a legacy child name to its XDG-home location.
 // Unknown names return false — the migration only touches what it owns.
 func legacyDestination(name string) (string, bool) {
-	switch name {
-	case "sessions", "audit", "logs", "tool-results":
-		return filepath.Join(DataHome(), name), true
-	case "settings.json":
-		return filepath.Join(ConfigHome(), name), true
-	default:
+	dst, known := legacyLayout[name]
+	if !known {
 		return "", false
 	}
+	return dst(), true
 }

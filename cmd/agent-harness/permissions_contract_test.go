@@ -279,13 +279,12 @@ func TestProductionAuditContractReadLifecycle(t *testing.T) {
 		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			app, tuiApp := newProductionPermissionContractApp(t, config.PermissionReadOnly)
-			auditHome := os.Getenv("HOME")
 			operation := tc.operation(t, app)
 			run := startProductionPermissionContractRun(t, app, tuiApp, operation, true)
 			outcome := waitForPermissionContractOutcome(t, run.done)
 
 			assertPermissionContractResult(t, outcome.events, tc.wantError, operation.successToken)
-			entries, err := readPermissionContractAuditEntries(auditHome)
+			entries, err := readPermissionContractAuditEntries()
 			if err != nil {
 				t.Fatalf("read raw audit JSONL: %v", err)
 			}
@@ -298,13 +297,12 @@ func TestProductionAuditContractDeniedAndPendingNeverStartEarly(t *testing.T) {
 	t.Run("denied", func(t *testing.T) {
 		app, tuiApp := newProductionPermissionContractApp(t, config.PermissionDangerFullAccess)
 		app.config.PermRead = false
-		auditHome := os.Getenv("HOME")
 
 		operation := newPermissionContractOperation(t, app, "read")
 		run := startProductionPermissionContractRun(t, app, tuiApp, operation, true)
 		_ = waitForPermissionContractOutcome(t, run.done)
 
-		entries, err := readPermissionContractAuditEntries(auditHome)
+		entries, err := readPermissionContractAuditEntries()
 		if err != nil {
 			t.Fatalf("read denied audit JSONL: %v", err)
 		}
@@ -313,7 +311,6 @@ func TestProductionAuditContractDeniedAndPendingNeverStartEarly(t *testing.T) {
 
 	t.Run("approval-pending", func(t *testing.T) {
 		app, tuiApp := newProductionPermissionContractApp(t, config.PermissionWorkspaceWrite)
-		auditHome := os.Getenv("HOME")
 
 		operation := newPermissionContractOperation(t, app, "write")
 		run := startProductionPermissionContractRun(t, app, tuiApp, operation, true)
@@ -327,7 +324,7 @@ func TestProductionAuditContractDeniedAndPendingNeverStartEarly(t *testing.T) {
 			return
 		}
 
-		pendingEntries, err := readPermissionContractAuditEntries(auditHome)
+		pendingEntries, err := readPermissionContractAuditEntries()
 		if err != nil {
 			t.Errorf("read approval-pending audit JSONL: %v", err)
 		} else {
@@ -339,7 +336,7 @@ func TestProductionAuditContractDeniedAndPendingNeverStartEarly(t *testing.T) {
 		req.Respond(approval.DecisionReject)
 		_ = waitForPermissionContractOutcome(t, run.done)
 
-		rejectedEntries, err := readPermissionContractAuditEntries(auditHome)
+		rejectedEntries, err := readPermissionContractAuditEntries()
 		if err != nil {
 			t.Fatalf("read rejected audit JSONL: %v", err)
 		}
@@ -655,13 +652,13 @@ func assertPermissionContractResult(t *testing.T, events []types.StreamEvent, wa
 	}
 }
 
-func readPermissionContractAuditEntries(home string) ([]map[string]any, error) {
-	paths, err := filepath.Glob(filepath.Join(home, ".agent-harness", "audit", "*.log"))
+func readPermissionContractAuditEntries() ([]map[string]any, error) {
+	paths, err := filepath.Glob(filepath.Join(config.DataAudit(), "*.log"))
 	if err != nil {
 		return nil, err
 	}
 	if len(paths) == 0 {
-		return nil, fmt.Errorf("no audit log found under %s", home)
+		return nil, fmt.Errorf("no audit log found under %s", config.DataAudit())
 	}
 	sort.Strings(paths)
 
@@ -696,7 +693,7 @@ func readPermissionContractAuditEntries(home string) ([]map[string]any, error) {
 		}
 	}
 	if len(entries) == 0 {
-		return nil, fmt.Errorf("audit log under %s contained no entries", home)
+		return nil, fmt.Errorf("audit log under %s contained no entries", config.DataAudit())
 	}
 	return entries, nil
 }

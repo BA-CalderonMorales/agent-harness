@@ -6,17 +6,14 @@ import (
 	"os"
 	"path/filepath"
 	"unicode/utf8"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
 
 const toolResultReceiptSeparator = "\n...\n"
 
 func persistToolResultReceipt(result string, maxReceiptChars int) (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("resolve home directory for full tool result: %w", err)
-	}
-
-	resultDir, err := filepath.Abs(filepath.Join(home, ".agent-harness", "tool-results"))
+	resultDir, err := filepath.Abs(config.DataToolResults())
 	if err != nil {
 		return "", fmt.Errorf("resolve full tool result directory: %w", err)
 	}
