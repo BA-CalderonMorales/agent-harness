@@ -39,14 +39,6 @@ func (m ChatModel) ToolsCollapsed() bool {
 	return m.toolsCollapsed
 }
 
-// appendCollapsedMessage renders one message, merging a contiguous run
-// of finalized same-tool messages (same turn) into a single count line.
-// It advances over the consumed messages and returns the new index.
-func (m ChatModel) appendCollapsedMessage(content *strings.Builder, msgs []ChatMessage, i int, collapsed bool) int {
-	_, next, _ := m.appendCollapsedMessageTracked(content, msgs, i, collapsed)
-	return next
-}
-
 // blockClick locates the rows of a rendered block that resolve a mouse
 // click back to the message, relative to the block's first row. Tools
 // map their whole block; the assistant maps only its reasoning rows

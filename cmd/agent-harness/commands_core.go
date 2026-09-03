@@ -173,6 +173,19 @@ func (app *App) initCommandsCore() {
 			return agentModeDescription(target), nil
 		})
 
+	app.cmdRegistry.Register("modes", "List agent modes, marking the active one",
+		func(args string) (string, error) {
+			var b strings.Builder
+			for _, m := range []agentMode{AgentModeManual, AgentModeAuto, AgentModePlan, AgentModeChat} {
+				marker := "  "
+				if m == app.agentMode {
+					marker = "→ "
+				}
+				fmt.Fprintf(&b, "%s%s\n", marker, agentModeDescription(m))
+			}
+			return strings.TrimSuffix(b.String(), "\n"), nil
+		})
+
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()

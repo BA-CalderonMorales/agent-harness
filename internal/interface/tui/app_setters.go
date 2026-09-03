@@ -177,6 +177,12 @@ func (a *App) SetCommandCompletions(commands []string) {
 	a.chatModel.SetCommandCompletions(commands)
 }
 
+// SetCommandDescriptions feeds the inline suggestion dropdown the same
+// description source /help uses.
+func (a *App) SetCommandDescriptions(descriptions map[string]string) {
+	a.chatModel.SetCommandDescriptions(descriptions)
+}
+
 // SetCommands sets available slash commands for the command palette.
 func (a *App) SetCommands(commands []CommandInfo) {
 	a.commandPalette.SetCommands(commands)

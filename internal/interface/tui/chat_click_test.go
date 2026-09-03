@@ -24,7 +24,6 @@ func newClickTestModel(t *testing.T) ChatModel {
 // given viewport content row.
 func mouseClickAt(m ChatModel, row int) ChatModel {
 	msg := tea.MouseMsg{
-		Type:   tea.MouseLeft,
 		X:      10,
 		Y:      row + viewportTopOffset,
 		Action: tea.MouseActionPress,
