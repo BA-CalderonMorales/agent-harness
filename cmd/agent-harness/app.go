@@ -37,6 +37,11 @@ type App struct {
 	auditLogger    *audit.Logger
 	planMode       bool
 
+	// approvedCommands holds exact commands approved via "Approve All"
+	// this session: the same command never asks again. Session-scoped by
+	// design — trust must die with the process.
+	approvedCommands map[string]bool
+
 	// bootNotice carries a credential/config problem discovered before
 	// the TUI exists; run() surfaces it once the TUI is up.
 	bootNotice string
@@ -49,7 +54,7 @@ func newApp() (*App, error) {
 		return nil, errf("failed to get current directory: %w", err)
 	}
 
-	app := &App{cwd: cwd}
+	app := &App{cwd: cwd, approvedCommands: make(map[string]bool)}
 
 	// Initialize audit logging (non-fatal if it fails)
 	if logger, err := audit.NewLogger(); err == nil {

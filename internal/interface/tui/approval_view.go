@@ -34,13 +34,23 @@ func (m ApprovalDialogModel) View() string {
 	cmdDisplay := m.renderCommandDisplay(cmd)
 	sections = append(sections, cmdDisplay)
 
-	// Options
-	optionsDisplay := m.renderOptions()
-	sections = append(sections, optionsDisplay)
+	if m.suggestMode {
+		// Reject + Suggest input: the text goes to the agent as the deny
+		// reason, so it can adapt instead of retrying blind.
+		prompt := InfoStyle.Render("Message to agent (what to do instead):")
+		input := ListSelectedStyle.Render(m.suggestBuf + "▏")
+		sections = append(sections, prompt, input)
+		help := HelpDimStyle.Render("Enter: send rejection + message · Esc: back to options")
+		sections = append(sections, help)
+	} else {
+		// Options
+		optionsDisplay := m.renderOptions()
+		sections = append(sections, optionsDisplay)
 
-	// Help text
-	help := HelpDimStyle.Render("Use arrow keys to navigate, Enter to confirm, ESC to reject")
-	sections = append(sections, help)
+		// Help text
+		help := HelpDimStyle.Render("Number/letter keys act instantly · Arrows + Enter also work · ESC rejects")
+		sections = append(sections, help)
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 

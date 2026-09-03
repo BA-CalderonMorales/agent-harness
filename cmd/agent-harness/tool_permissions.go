@@ -27,7 +27,7 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			}
 
 			if app.executionMode == approval.ModeInteractive {
-				decision, err := app.requestCommandApproval(toolName, cmd, toolInput)
+				decision, note, err := app.requestCommandApproval(toolName, cmd, toolInput)
 				if err != nil {
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
@@ -35,9 +35,15 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 					}, nil
 				}
 				if !decision.IsApproved() {
+					// A user note ("Reject + Suggest") becomes the deny
+					// reason the agent sees, so it can change course.
+					message := "Command rejected by user"
+					if note != "" {
+						message = sprintf("Rejected by user: %s", note)
+					}
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
-						Message:  "Command rejected by user",
+						Message:  message,
 					}, nil
 				}
 			}
