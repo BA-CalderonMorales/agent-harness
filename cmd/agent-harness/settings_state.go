@@ -10,7 +10,7 @@ import (
 func (app *App) getSettings() []tui.Setting {
 	return []tui.Setting{
 		// Provider & Connection
-		{Key: "provider", Label: "Provider", Value: app.config.Provider, Category: "Provider & Connection", Description: "API provider (openai, anthropic, openrouter, ollama, fireworks, nvidia, local).", Type: "choice", Options: []string{"local", "openai", "anthropic", "openrouter", "ollama", "fireworks", "nvidia"}},
+		{Key: "provider", Label: "Provider", Value: app.config.Provider, Category: "Provider & Connection", Description: "API provider (openai, anthropic, openrouter, ollama, flm, fireworks, nvidia, local).", Type: "choice", Options: []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia"}},
 		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Category: "Provider & Connection", Description: "OpenAI-compatible API base URL (e.g. http://localhost:8080/v1 or https://openrouter.ai/api/v1).", Type: "string"},
 		{Key: "runtime", Label: "Runtime", Value: app.config.Runtime, Category: "Provider & Connection", Description: "Local runtime such as llama.cpp or ollama.", Type: "string"},
 
