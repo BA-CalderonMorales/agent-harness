@@ -12,7 +12,14 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
+
+// auditRetentionDays is how many daily audit files survive; older ones
+// are pruned when the logger initializes.
+const auditRetentionDays = 14
 
 // Entry represents a single audited event.
 type Entry struct {
@@ -37,17 +44,14 @@ type Logger struct {
 
 // NewLogger creates a new audit logger.
 func NewLogger() (*Logger, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get home directory: %w", err)
-	}
-	dir := filepath.Join(home, ".agent-harness", "audit")
+	dir := config.DataAudit()
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create audit directory: %w", err)
 	}
 	if err := os.Chmod(dir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to secure audit directory permissions: %w", err)
 	}
+	diag.PruneDailyFiles(dir, auditRetentionDays)
 	return &Logger{dir: dir}, nil
 }
 

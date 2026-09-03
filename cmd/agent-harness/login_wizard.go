@@ -60,43 +60,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	}
 	app.config.Provider = provider
 	app.config.EndpointURL = app.wizardEndpoint(provider)
-
-	if config.IsLocalProvider(provider) {
-		app.config.APIKey = provider
-		tuiApp.AddMessage("system", sprintf("Local provider configured. Model: %s", model))
-	} else if apiKey != "" {
-		app.config.APIKey = apiKey
-		credManager := config.NewCredentialManager()
-		secureCfg := &config.SecureConfig{
-			Provider: provider,
-			APIKey:   apiKey,
-			Model:    model,
-		}
-		if err := credManager.SaveSecure(secureCfg); err != nil {
-			tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
-		} else {
-			tuiApp.AddMessage("system", sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath()))
-		}
-	} else if storedKey, ok := app.storedKeyForProvider(provider, config.NewCredentialManager()); ok {
-		// No key typed: use a key that can actually authenticate THIS
-		// provider (env pin, encrypted store, or the config key when it
-		// was already authenticating it). The message must not echo any
-		// key material (not even the masked hint): chat messages
-		// persist to session files and exports.
-		app.config.APIKey = storedKey
-		tuiApp.AddMessage("system", sprintf("Using stored API key. Provider: %s", provider))
-		credManager := config.NewCredentialManager()
-		if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.Provider == provider {
-			secureCfg.Model = model
-			_ = credManager.SaveSecure(secureCfg)
-		}
-	} else {
-		// No usable key for this provider: say so instead of sending a
-		// stale or dummy credential as auth (a local dummy or another
-		// provider's key 401s with "missing authentication header").
-		app.config.APIKey = ""
-		tuiApp.AddMessage("system", sprintf("[!] No stored API key for %s. Run /login and paste the key, or set AH_API_KEY.", provider))
-	}
+	app.applyLoginCredentials(provider, apiKey, model, tuiApp)
 
 	if model == "" {
 		model = getDefaultModel(provider)
@@ -126,4 +90,67 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	// Land the user in chat, ready to type: the first-run happy path
 	// never strands them on the home screen after authenticating.
 	tuiApp.Send(tui.LoginCompletedMsg{})
+}
+
+// applyLoginCredentials resolves the API key for the login result —
+// typed key, local dummy, stored key, or an honest "none" — and
+// persists it. One policy per early return, in priority order.
+func (app *App) applyLoginCredentials(provider, apiKey, model string, tuiApp *tui.App) {
+	if config.IsLocalProvider(provider) {
+		app.config.APIKey = provider
+		tuiApp.AddMessage("system", sprintf("Local provider configured. Model: %s", model))
+		return
+	}
+
+	if apiKey != "" {
+		app.config.APIKey = apiKey
+		app.saveTypedCredentials(provider, apiKey, model, tuiApp)
+		return
+	}
+
+	storedKey, ok := app.storedKeyForProvider(provider, config.NewCredentialManager())
+	if ok {
+		// No key typed: use a key that can actually authenticate THIS
+		// provider (env pin, encrypted store, or the config key when it
+		// was already authenticating it). The message must not echo any
+		// key material (not even the masked hint): chat messages
+		// persist to session files and exports.
+		app.config.APIKey = storedKey
+		tuiApp.AddMessage("system", sprintf("Using stored API key. Provider: %s", provider))
+		app.refreshStoredModel(provider, model)
+		return
+	}
+
+	// No usable key for this provider: say so instead of sending a
+	// stale or dummy credential as auth (a local dummy or another
+	// provider's key 401s with "missing authentication header").
+	app.config.APIKey = ""
+	tuiApp.AddMessage("system", sprintf("[!] No stored API key for %s. Run /login and paste the key, or set AH_API_KEY.", provider))
+}
+
+// saveTypedCredentials stores a freshly typed key in the encrypted
+// credential store.
+func (app *App) saveTypedCredentials(provider, apiKey, model string, tuiApp *tui.App) {
+	credManager := config.NewCredentialManager()
+	secureCfg := &config.SecureConfig{
+		Provider: provider,
+		APIKey:   apiKey,
+		Model:    model,
+	}
+	if err := credManager.SaveSecure(secureCfg); err != nil {
+		tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
+		return
+	}
+	tuiApp.AddMessage("system", sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath()))
+}
+
+// refreshStoredModel updates the stored model for an unchanged stored
+// provider key so a provider switch survives restarts without
+// re-authenticating.
+func (app *App) refreshStoredModel(provider, model string) {
+	credManager := config.NewCredentialManager()
+	if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.Provider == provider {
+		secureCfg.Model = model
+		_ = credManager.SaveSecure(secureCfg)
+	}
 }

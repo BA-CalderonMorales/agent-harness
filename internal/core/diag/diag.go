@@ -12,8 +12,40 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
+
+// RetentionDays is how many daily log files survive: older dated files
+// are pruned when the logger initializes. Log accumulation is the only
+// unbounded growth a harness like this has — cap it.
+const RetentionDays = 14
+
+// PruneDailyFiles removes dated .log files older than keep days from
+// dir. Best effort: removal failures are ignored (a diagnostics helper
+// must not create new failure surfaces).
+func PruneDailyFiles(dir string, keep int) {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return
+	}
+	cutoff := time.Now().AddDate(0, 0, -keep)
+	for _, entry := range entries {
+		name := entry.Name()
+		if !strings.HasSuffix(name, ".log") {
+			continue
+		}
+		stamp, err := time.Parse("2006-01-02", strings.TrimSuffix(name, ".log"))
+		if err != nil {
+			continue
+		}
+		if stamp.Before(cutoff) {
+			_ = os.Remove(filepath.Join(dir, name))
+		}
+	}
+}
 
 // Entry is one diagnostics record.
 type Entry struct {
@@ -29,12 +61,8 @@ type Entry struct {
 var logDir string
 
 func init() {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		logDir = ""
-		return
-	}
-	logDir = filepath.Join(home, ".agent-harness", "logs")
+	logDir = config.DataLogs()
+	PruneDailyFiles(logDir, RetentionDays)
 }
 
 // SetDir overrides the log directory (used by tests).

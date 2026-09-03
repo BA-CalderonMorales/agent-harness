@@ -163,13 +163,7 @@ func NewLayeredLoader(cwd string) *LayeredLoader {
 
 // defaultConfigHome returns the default config home directory
 func defaultConfigHome() string {
-	if env := os.Getenv("AGENT_HARNESS_CONFIG_HOME"); env != "" {
-		return env
-	}
-	if home, err := os.UserHomeDir(); err == nil {
-		return filepath.Join(home, ".agent-harness")
-	}
-	return ".agent-harness"
+	return ConfigHome()
 }
 
 // Discover returns all configuration file entries in precedence order.

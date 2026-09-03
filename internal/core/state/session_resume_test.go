@@ -3,6 +3,7 @@ package state
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -14,8 +15,8 @@ func TestResumeLatestSessionEmptyLocalHarness(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewSessionManager() error = %v", err)
 	}
-	if manager.GetSessionsDir() != sessionsDir {
-		t.Fatalf("sessions dir = %q, want %q", manager.GetSessionsDir(), sessionsDir)
+	if !strings.HasPrefix(manager.GetSessionsDir(), sessionsDir) {
+		t.Fatalf("sessions dir = %q, want a project directory under %q", manager.GetSessionsDir(), sessionsDir)
 	}
 
 	resumed, ok := manager.ResumeLatestSession()

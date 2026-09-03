@@ -53,7 +53,7 @@ func TestHomeNewChatCreatesDistinctSession(t *testing.T) {
 		t.Fatalf("session manager current = %s, app session = %s", sm.GetCurrent().ID, app.session.ID)
 	}
 
-	oldSession, err := state.LoadSession(filepath.Join(sessionDir, oldID+".json"))
+	oldSession, err := sm.ReadSession(oldID)
 	if err != nil {
 		t.Fatalf("old session was not retained: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestHomeNewChatCreatesDistinctSession(t *testing.T) {
 		t.Fatalf("old session message count = %d, want 1", len(oldSession.Messages))
 	}
 
-	if _, err := os.Stat(filepath.Join(sessionDir, app.session.ID+".json")); err != nil {
+	if _, err := os.Stat(sm.GetDefaultSessionPath()); err != nil {
 		t.Fatalf("new empty session should be persisted immediately, stat err = %v", err)
 	}
 }
