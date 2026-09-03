@@ -96,7 +96,7 @@ func TestLKeyOpensLogin(t *testing.T) {
 	// Feeding the message back must open the wizard on the live app.
 	var got string
 	app.onUserCommand = func(c string, _ *App) { got = c }
-	model, _ = model.(*App).Update(uc)
+	_, _ = model.(*App).Update(uc)
 	if got != "/login" {
 		t.Fatalf("message routed %q, want /login", got)
 	}
