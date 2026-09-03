@@ -15,7 +15,7 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 	switch key {
 	case "provider":
 		if value == "" {
-			return "", fmt.Errorf("usage: /config provider <local|openai|anthropic|openrouter|ollama>")
+			return "", fmt.Errorf("usage: /config provider <local|openai|anthropic|openrouter|ollama|flm>")
 		}
 		app.config.Provider = value
 		app.config.EndpointURL = config.DefaultEndpointForProvider(value)

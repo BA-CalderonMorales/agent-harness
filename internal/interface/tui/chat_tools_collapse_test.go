@@ -17,6 +17,7 @@ func driveBurst(t *testing.T, pairs []struct {
 	t.Helper()
 	m := NewChatModel()
 	m.width = 120
+	m.viewport.Width = 120
 	m.height = 40
 	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
 	m = model.(ChatModel)
@@ -61,7 +62,7 @@ func TestToolRunCollapseThreeBashCallsToOneLine(t *testing.T) {
 	if len(lines) != 1 {
 		t.Fatalf("3 bash calls rendered %d lines, want 1 collapsed line:\n%s", len(lines), content)
 	}
-	if !strings.Contains(lines[0], "bash (3)") {
+	if !strings.Contains(lines[0], "bash ×3") {
 		t.Fatalf("collapsed line missing count: %q", lines[0])
 	}
 }
@@ -100,7 +101,7 @@ func TestToolRunMixedBurstCollapsesRuns(t *testing.T) {
 		t.Fatalf("mixed burst rendered %d lines, want 3 (bash(2) read(3) grep(1)):\n%s", len(lines), content)
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"bash (2)", "read (3)", "grep"} {
+	for _, want := range []string{"bash ×2", "read ×3", "grep"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in:\n%s", want, joined)
 		}
@@ -131,6 +132,7 @@ func TestToolRunApprovalPendingNeverCollapsed(t *testing.T) {
 	// directly, because the DoneMsg path would finalize the status.
 	m := NewChatModel()
 	m.width = 120
+	m.viewport.Width = 120
 	m.height = 40
 	m.messages = []ChatMessage{
 		{Role: "tool", ToolName: "bash", ToolDisplayName: "bash", ToolStatus: ToolStatusSuccess, Turn: 1, Content: "✓ bash"},
@@ -186,6 +188,7 @@ func TestToolRunTwentyBashCallsCollapseToOneLine(t *testing.T) {
 func TestToolRunCollapseToggles(t *testing.T) {
 	m := NewChatModel()
 	m.width = 120
+	m.viewport.Width = 120
 	m.height = 40
 	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
 	m = model.(ChatModel)
@@ -223,6 +226,7 @@ func TestToolRunCollapseToggles(t *testing.T) {
 func TestToolRunNeverMergesAcrossTurns(t *testing.T) {
 	m := NewChatModel()
 	m.width = 120
+	m.viewport.Width = 120
 	m.height = 40
 	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
 	m = model.(ChatModel)
@@ -251,7 +255,7 @@ func TestToolRunNeverMergesAcrossTurns(t *testing.T) {
 	if strings.Contains(joined, "bash (4)") {
 		t.Fatalf("runs merged across turns: %q", joined)
 	}
-	if !strings.Contains(joined, "bash (2)") {
+	if !strings.Contains(joined, "bash ×2") {
 		t.Fatalf("per-turn runs missing: %q", joined)
 	}
 }
@@ -261,6 +265,7 @@ func TestToolRunNeverMergesAcrossTurns(t *testing.T) {
 func TestToolRunElapsedShownForLongRuns(t *testing.T) {
 	m := NewChatModel()
 	m.width = 120
+	m.viewport.Width = 120
 	m.height = 40
 	start := time.Now().Add(-5 * time.Second)
 	m.messages = []ChatMessage{

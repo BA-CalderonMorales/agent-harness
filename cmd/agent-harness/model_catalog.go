@@ -46,6 +46,13 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "gemma4:2b", Name: "Gemma 4 E2B (Fast)", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "gemma4:2b"},
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "llama3.2:3b"},
 		}
+	case "flm":
+		return []tui.ModelItem{
+			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "llama3.2:3b"},
+			{ID: "qwen3.5:4b", Name: "Qwen 3.5 4B", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "qwen3.5:4b"},
+			{ID: "gpt-oss:20b", Name: "GPT-OSS 20B", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "gpt-oss:20b"},
+			{ID: "gemma3:4b", Name: "Gemma 3 4B (Vision)", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "gemma3:4b"},
+		}
 	case "nvidia":
 		return []tui.ModelItem{
 			{ID: "nvidia/nemotron-3.5-lightning-30b-a3b", Name: "Nemotron 3.5 Lightning 30B (thinking)", Provider: "nvidia", ContextLen: 128000, IsDefault: currentModel == "nvidia/nemotron-3.5-lightning-30b-a3b"},

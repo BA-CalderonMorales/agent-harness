@@ -353,6 +353,7 @@ type StatusMsg struct {
 func Run(app *App) error {
 	// Use AltScreen for proper TUI experience (like lumina-bot)
 	p := tea.NewProgram(app, tea.WithAltScreen(),
+		tea.WithMouseCellMotion(),
 		tea.WithInput(newOSCStrippingReader(os.Stdin)))
 	_, err := p.Run()
 	return err

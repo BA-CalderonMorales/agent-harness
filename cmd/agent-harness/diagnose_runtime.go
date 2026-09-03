@@ -32,6 +32,8 @@ func localRuntimeChecks(ctx context.Context, cwd string, cfg *config.LayeredConf
 		}
 	case "ollama":
 		return []runtimeCheck{checkOllamaEndpoint(ctx)}
+	case "flm":
+		return []runtimeCheck{checkFLMEndpoint(ctx)}
 	default:
 		return nil
 	}
@@ -68,6 +70,16 @@ func checkOllamaEndpoint(ctx context.Context) runtimeCheck {
 		host = "http://localhost:11434"
 	}
 	return checkHTTPEndpoint(ctx, strings.TrimRight(host, "/")+"/api/tags")
+}
+
+// checkFLMEndpoint probes the FastFlowLM server. The FLM API needs no
+// auth, so /v1/models answers without headers.
+func checkFLMEndpoint(ctx context.Context) runtimeCheck {
+	url := "http://127.0.0.1:52625/v1/models"
+	if env := os.Getenv("AH_ENDPOINT_URL"); env != "" {
+		url = strings.TrimRight(env, "/") + "/models"
+	}
+	return checkHTTPEndpoint(ctx, url)
 }
 
 func checkHTTPEndpoint(ctx context.Context, url string) runtimeCheck {

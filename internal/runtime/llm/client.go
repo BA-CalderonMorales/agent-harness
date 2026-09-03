@@ -58,6 +58,8 @@ func defaultBaseURL(provider string) string {
 		baseURL = "https://api.anthropic.com/v1"
 	case "ollama":
 		baseURL = "http://localhost:11434/v1"
+	case "flm":
+		baseURL = "http://127.0.0.1:52625/v1"
 	case "local":
 		baseURL = "http://127.0.0.1:8080/v1"
 	case "fireworks":
@@ -80,8 +82,8 @@ func (c *HTTPClient) Stream(ctx context.Context, req Request) (<-chan types.LLME
 		return nil, err
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
-	// Ollama doesn't require an API key
-	if c.Provider != "ollama" && c.Provider != "local" {
+	// Local runtimes don't require an API key
+	if c.Provider != "ollama" && c.Provider != "local" && c.Provider != "flm" {
 		httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
 	if c.Provider == "openrouter" {
