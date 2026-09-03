@@ -47,7 +47,16 @@ func (m SessionsModel) View() string {
 
 	// Render list
 	var listB strings.Builder
-	listB.WriteString(ListTitleStyle.Render("  All Sessions") + "\n\n")
+	listB.WriteString(ListTitleStyle.Render("  All Sessions") + "\n")
+
+	if m.notice != "" {
+		noticeStyle := InfoStyle
+		if m.noticeType == "error" {
+			noticeStyle = ErrorStyle
+		}
+		listB.WriteString(noticeStyle.Render("  "+m.notice) + "\n")
+	}
+	listB.WriteString("\n")
 
 	for i, session := range m.sessions {
 		item := m.renderSessionItem(session, i == m.cursor, listW)
@@ -77,7 +86,7 @@ func (m SessionsModel) View() string {
 			{Key: "n/Esc", Desc: "Cancel"},
 		}
 	}
-	listB.WriteString(RenderCompactFooter(footerHints))
+	listB.WriteString(RenderCompactFooterWrapped(footerHints, listW))
 
 	listContent := lipgloss.NewStyle().Width(listW).Height(contentHeight - 2).Render(listB.String())
 

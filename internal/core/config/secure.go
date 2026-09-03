@@ -87,6 +87,44 @@ func (cm *CredentialManager) HasLegacyCredentials() bool {
 	return err == nil
 }
 
+// MachineKeyPath returns the machine-local master key path (0600,
+// auto-generated on first use).
+func MachineKeyPath() string {
+	return machineKeyPath()
+}
+
+// machineKeyPath returns the machine-local master key path. The key is
+// generated on first use (0600) so credential flows never need a console
+// password prompt; the store itself stays AES-GCM-encrypted at rest.
+func machineKeyPath() string {
+	return filepath.Join(filepath.Dir(SecureConfigPath()), "master.key")
+}
+
+// machineKey returns the raw machine-local master key (32 bytes),
+// creating the key file on first use. It is never cached: every
+// operation derives its AES key with the salt of the store it is
+// operating on, so a manager may LoadSecure then SaveSecure without
+// reusing a stale derived key under a fresh salt (which made stores
+// undecryptable on the next boot).
+func (cm *CredentialManager) machineKey() ([]byte, error) {
+	path := machineKeyPath()
+	data, err := os.ReadFile(path)
+	if err == nil && len(data) >= 32 {
+		return data, nil
+	}
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		return nil, fmt.Errorf("failed to generate machine key: %w", err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), secureDirPerms); err != nil {
+		return nil, fmt.Errorf("failed to create config directory: %w", err)
+	}
+	if err := writeFileSecure(path, key, secureFilePerms); err != nil {
+		return nil, fmt.Errorf("failed to write machine key: %w", err)
+	}
+	return key, nil
+}
+
 // LoadSecure loads credentials from encrypted storage
 func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 	data, err := os.ReadFile(cm.configPath)
@@ -118,17 +156,16 @@ func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 		return nil, fmt.Errorf("corrupted credentials: invalid nonce length (%d, expected 12)", len(store.Nonce))
 	}
 
-	// Get master password if not already set
+	// Master key: the machine-local key file (auto-generated, 0600) is
+	// used without prompts so credential flows stay smooth in the TUI.
+	// The AES key is derived from the raw machine key with this store's
+	// salt; it is cached only for this decrypt.
 	if cm.masterKey == nil {
-		password, err := PromptPassword("Enter master password: ")
+		machineKey, err := cm.machineKey()
 		if err != nil {
-			return nil, fmt.Errorf("failed to read password: %w", err)
+			return nil, err
 		}
-		// Validate password isn't empty
-		if password == "" {
-			return nil, fmt.Errorf("password cannot be empty")
-		}
-		cm.masterKey = deriveKey(password, store.Salt)
+		cm.masterKey = deriveKey(string(machineKey), store.Salt)
 	}
 
 	// Decrypt
@@ -154,14 +191,17 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 		return fmt.Errorf("failed to generate salt: %w", err)
 	}
 
-	// Prompt for master password if not set
-	if cm.masterKey == nil {
-		password, err := PromptNewPassword()
-		if err != nil {
-			return fmt.Errorf("failed to read password: %w", err)
-		}
-		cm.masterKey = deriveKey(password, salt)
+	// Master key: machine-local key file, created on first use without
+	// prompting (smooth settings-tab and /login key entry). Always
+	// re-derived from the raw file with the fresh salt: reusing a
+	// previously cached (derived) key here would encrypt under the old
+	// salt while the store advertises the new one, and the next boot
+	// could never decrypt it.
+	machineKey, err := cm.machineKey()
+	if err != nil {
+		return err
 	}
+	cm.masterKey = deriveKey(string(machineKey), salt)
 
 	// Generate nonce
 	nonce := make([]byte, 12)

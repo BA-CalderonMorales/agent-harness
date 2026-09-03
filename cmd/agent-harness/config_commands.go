@@ -50,10 +50,21 @@ func (app *App) updateConfiguration(key, value string) (string, error) {
 		return sprintf("Model updated to '%s'\n  Status: Re-probing connection...", app.config.Model), nil
 
 	case "key", "api_key":
-		app.config.APIKey = value
-		app.persistAPIKey()
+		// Literal keys are rejected on purpose: the command text lands in
+		// the chat pane and the session file, so a literal would leak the
+		// key into history and session exports. Literals go through /login
+		// (input hidden); /config key only accepts secret references,
+		// which stay safe to display.
+		resolved, err := config.ResolveSecret(value)
+		if err != nil {
+			return "", err
+		}
+		if resolved == value {
+			return "", fmt.Errorf("literal keys are not accepted via /config (they would land in chat history). Use /login for a literal key, or set api_key to a secret://env|file|cmd reference")
+		}
+		app.config.APIKey = resolved
 		app.rebuildLLMClient()
-		return "API key updated\n  Status: Re-probing connection...", nil
+		return "API key updated from secret reference (session-only; keep the reference in your config file for persistence)\n  Status: Re-probing connection...", nil
 
 	case "effort", "reasoning_effort":
 		if value == "" {

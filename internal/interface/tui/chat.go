@@ -53,6 +53,7 @@ type ChatMessage struct {
 	ResponseTime    time.Duration // Time taken to generate this response
 	StreamedChunks  int           // Token chunks streamed for this response
 	Thinking        bool          // In-progress response (drives the live spinner header)
+	Turn            int           // Agent turn that produced this message (tool-run grouping key)
 }
 
 // ToolStatus represents the execution state of a tool
@@ -91,8 +92,16 @@ const (
 const PlaceholderDelay = 1 * time.Second
 
 // SubmitDebounceDuration is the window after Enter during which another
-// keystroke causes the Enter to be treated as a newline (paste continuation).
+// keystroke may still influence how the Enter is interpreted.
 var SubmitDebounceDuration = 80 * time.Millisecond
+
+// PasteBurstThreshold separates machine-speed paste bursts from a fast
+// typist. Keys inside a terminal paste stream arrive microseconds apart;
+// even a hammering typist needs tens of milliseconds per key. A keystroke
+// landing within the threshold of the pending Enter continues a paste
+// (newline insertion); anything later is a human — Enter's contract
+// (submit) wins and the keystroke starts the next message.
+const PasteBurstThreshold = 20 * time.Millisecond
 
 // ---------------------------------------------------------------------------
 // ChatModel is the chat view model
@@ -123,8 +132,13 @@ type ChatModel struct {
 
 	// Index of the assistant message currently being streamed. Tracked so that
 	// mid-stream system/user messages do not break the update target, while
-	// ensuring a new user turn always gets a fresh assistant message.
+	// ensuring a new user turn always gets a fresh assistant message. The
+	// index DRIFTS when a mid-turn PrependSystemNote (provider probe,
+	// auto-save notice) inserts at position 0 - message lookup goes by
+	// currentStreamingAssistantID, and the index is maintained alongside
+	// for readers.
 	currentStreamingAssistantIdx int
+	currentStreamingAssistantID  string
 
 	// Timer state for response tracking
 	startTime    time.Time
@@ -140,8 +154,18 @@ type ChatModel struct {
 
 	// completedToolMsgs tracks all finalized tool messages for the current turn.
 	// Previously this was a single pointer for single-line replacement, but users
-	// want to see every tool call that happens during a conversation turn.
+	// want to see every tool call that happens during a conversation turn. The
+	// render path reads the transcript (m.messages) instead of these copies -
+	// they exist for state inspection and are cleared per turn.
 	completedToolMsgs []ChatMessage
+
+	// turnCounter stamps tool messages with their agent turn so collapsed
+	// tool runs never merge across turn boundaries.
+	turnCounter int
+
+	// toolsCollapsed renders consecutive same-tool runs as one count line
+	// (t toggles); errors, approvals, and running tools never collapse.
+	toolsCollapsed bool
 
 	// Delegate
 	delegate ChatDelegate
@@ -163,6 +187,7 @@ type ChatModel struct {
 	// Debounce state for distinguishing intentional Enter from pasted newlines
 	pendingSubmit    bool
 	pendingSubmitGen int
+	pendingAt        time.Time // when the pending Enter landed; burst discriminator
 
 	// placeholderPending defers the assistant message (and its thinking
 	// header) until PlaceholderDelay has elapsed since the question.
@@ -215,6 +240,9 @@ func NewChatModel() ChatModel {
 		// The chat model is typing-ready by construction; the App blurs
 		// the composer at boot so navigate mode owns the keyboard.
 		focused: true,
+		// Tool runs render collapsed by default: the wall of identical
+		// tool lines is the long-horizon reading pain, not the collapse.
+		toolsCollapsed: true,
 	}
 }
 
@@ -302,18 +330,31 @@ func (m ChatModel) inputAreaHeight() int {
 	return height
 }
 
-// Init initializes the chat model.
+// Focus focuses the chat input and returns it to the typing affordance.
 func (m *ChatModel) Focus() {
 	m.focused = true
 	m.textarea.Focus()
+	m.togglePlaceholder()
 }
 
-// Blur blurs the chat input.
+// Blur blurs the chat input and turns the composer into a vim-style
+// navigate affordance: the placeholder teaches the 'i' key.
 func (m *ChatModel) Blur() {
 	m.focused = false
 	m.textarea.Blur()
 	m.pendingSubmit = false
 	m.pendingSubmitGen++
+	m.togglePlaceholder()
+}
+
+// togglePlaceholder keeps the composer honest about its mode: in navigate
+// mode the placeholder says what to press; in typing mode it invites text.
+func (m *ChatModel) togglePlaceholder() {
+	if m.focused {
+		m.textarea.Placeholder = "Type a message..."
+	} else {
+		m.textarea.Placeholder = "Press i to type a message"
+	}
 }
 func (m *ChatModel) SetInput(text string) {
 	m.textarea.SetValue(text)

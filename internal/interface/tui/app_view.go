@@ -23,6 +23,12 @@ func (a App) View() string {
 	statusBar := a.renderStatusBar()
 
 	// Render overlays on top (they fill the screen via lipgloss.Place)
+	if a.loginDialog.IsShowing() {
+		return a.loginDialog.View()
+	}
+	if a.providerPicker.IsShowing() {
+		return a.providerPicker.View()
+	}
 	if a.commandPalette.IsShowing() {
 		return a.commandPalette.View(a.width, a.height)
 	}

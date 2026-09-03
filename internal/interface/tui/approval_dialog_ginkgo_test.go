@@ -123,14 +123,19 @@ var _ = Describe("ApprovalDialogModel", func() {
 		})
 
 		Context("Given number key navigation", func() {
-			It("should select option 2 with '2' key", func() {
-				dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-				Expect(dialog.selected).To(Equal(1))
+			It("should confirm option 2 immediately with '2' key", func() {
+				dialog, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
+				Expect(dialog.IsVisible()).To(BeFalse())
+
+				msg := cmd()
+				approvalMsg := msg.(ApprovalDecisionMsg)
+				Expect(approvalMsg.Decision).To(Equal(approval.DecisionApproveAll))
 			})
 
-			It("should select option 4 with '4' key", func() {
-				dialog, _ = dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
-				Expect(dialog.selected).To(Equal(3))
+			It("should open suggest mode with '4' key", func() {
+				dialog, _ := dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+				Expect(dialog.IsVisible()).To(BeTrue())
+				Expect(dialog.suggestMode).To(BeTrue())
 			})
 		})
 	})
@@ -190,13 +195,10 @@ var _ = Describe("ApprovalDialogModel", func() {
 				Expect(approvalMsg.Decision).To(Equal(approval.DecisionReject))
 			})
 
-			It("should reject-all with 'R' key", func() {
-				dialog, cmd := dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
-				Expect(dialog.IsVisible()).To(BeFalse())
-
-				msg := cmd()
-				approvalMsg := msg.(ApprovalDecisionMsg)
-				Expect(approvalMsg.Decision).To(Equal(approval.DecisionRejectAll))
+			It("should open suggest mode with 'R' key", func() {
+				dialog, _ := dialog.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("R")})
+				Expect(dialog.IsVisible()).To(BeTrue())
+				Expect(dialog.suggestMode).To(BeTrue())
 			})
 		})
 

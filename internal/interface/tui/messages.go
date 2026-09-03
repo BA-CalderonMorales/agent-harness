@@ -5,6 +5,7 @@ package tui
 
 import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -52,8 +53,16 @@ type QuitMsg struct{}
 // openCommandPaletteMsg signals the command palette should open
 type openCommandPaletteMsg struct{}
 
+// LoginCompletedMsg lands after the login wizard finishes: the app
+// switches to chat in insert mode, ready to type - the first-run happy
+// path never strands the user on the home screen.
+type LoginCompletedMsg struct{}
+
 // openModelPickerMsg signals the model picker should open
 type openModelPickerMsg struct{}
+
+// openProviderPickerMsg signals the provider-switch modal should open
+type openProviderPickerMsg struct{}
 
 // ClearChatMsg signals the chat should be cleared.
 // If FollowUpMsg is set, it is added after clearing (atomically, avoiding races).
@@ -82,6 +91,10 @@ type ProviderReadinessMsg struct {
 	Message   string
 	Model     string
 	Endpoint  string
+	// Gen is the probe generation the result belongs to; results from a
+	// generation older than the current one are stale and discarded
+	// (0 = no generation, always applied, e.g. boot notices).
+	Gen int
 }
 
 type SessionActivatedMsg struct {
@@ -106,4 +119,11 @@ type SessionsRefreshedMsg struct {
 // SwitchViewMsg requests switching the active tab view (0=Home, 1=Chat, 2=Sessions, 3=Settings)
 type SwitchViewMsg struct {
 	View viewID
+}
+
+// GitContextMsg delivers the collected git context after boot; the
+// dashboard and welcome populate when it lands instead of blocking the
+// TUI start.
+type GitContextMsg struct {
+	Context *git.Context
 }

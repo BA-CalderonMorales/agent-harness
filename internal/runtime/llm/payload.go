@@ -45,18 +45,74 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 	if len(toolsPayload) > 0 {
 		payload["tools"] = toolsPayload
 	}
-	// Anthropic-style thinking via extra_body on OpenRouter
-	if req.ThinkingBudget > 0 && c.Provider == "anthropic" {
-		payload["thinking"] = map[string]any{"type": "enabled", "budget_tokens": req.ThinkingBudget}
-	}
-	// OpenAI-compatible reasoning effort (OpenRouter passthrough, OpenAI,
-	// and local gateways that support it). Ignored when unset or off.
-	switch req.ReasoningEffort {
-	case "low", "medium", "high":
-		payload["reasoning_effort"] = req.ReasoningEffort
-	}
+	c.applyReasoningParams(payload, req)
 
 	return json.Marshal(payload)
+}
+
+// applyReasoningParams expresses the harness reasoning-effort profile in
+// each provider's own documented vocabulary. The rule: a parameter is
+// sent only where the provider's API documents it, and exactly one
+// mechanism per provider. Providers without a documented knob (local
+// gateways, ollama, fireworks) get nothing - an undocumented parameter
+// is how the nvidia extra_body 400 shipped, and a lenient server gains
+// nothing from a parameter it does not understand.
+func (c *HTTPClient) applyReasoningParams(payload map[string]any, req Request) {
+	switch c.Provider {
+	case "nvidia":
+		// NVIDIA's hosted API (additionalProperties: false) has no
+		// reasoning_effort; thinking is budgeted by top-level
+		// reasoning_budget plus chat_template_kwargs.enable_thinking.
+		// extra_body is an OpenAI-SDK convention, never a raw body key.
+		if req.ReasoningEffort != "" && req.ReasoningEffort != "off" {
+			payload["reasoning_budget"] = nvidiaReasoningBudget(req.ReasoningEffort)
+			payload["chat_template_kwargs"] = map[string]any{"enable_thinking": true}
+		}
+	case "anthropic":
+		// Anthropic's messages API enables extended thinking via the
+		// top-level thinking block; budget_tokens is the effort knob.
+		if req.ReasoningEffort != "" && req.ReasoningEffort != "off" {
+			payload["thinking"] = map[string]any{
+				"type":          "enabled",
+				"budget_tokens": anthropicReasoningBudget(req.ReasoningEffort),
+			}
+		}
+	case "openai", "openrouter":
+		// OpenAI-documented reasoning_effort (o-series and reasoning
+		// models); OpenRouter passes it through to models that support
+		// it. Ignored when unset or off.
+		switch req.ReasoningEffort {
+		case "low", "medium", "high":
+			payload["reasoning_effort"] = req.ReasoningEffort
+		}
+	}
+}
+
+// nvidiaReasoningBudget maps the harness effort profiles to NVIDIA's
+// reasoning_budget tokens (the free tier caps at 16384; the API accepts
+// -1..32768).
+func nvidiaReasoningBudget(effort string) int {
+	switch effort {
+	case "low":
+		return 1024
+	case "high":
+		return 16384
+	default:
+		return 4096
+	}
+}
+
+// anthropicReasoningBudget maps the harness effort profiles to Anthropic
+// thinking budget_tokens (the API requires >= 1024).
+func anthropicReasoningBudget(effort string) int {
+	switch effort {
+	case "low":
+		return 2048
+	case "high":
+		return 16384
+	default:
+		return 4096
+	}
 }
 
 func (c *HTTPClient) convertMessage(m types.Message) map[string]any {

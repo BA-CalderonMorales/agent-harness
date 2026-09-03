@@ -28,6 +28,36 @@ environment override details.
 
 ---
 
+## NVIDIA
+
+NVIDIA's hosted API (`https://integrate.api.nvidia.com/v1`) offers a
+generous free tier for learning and demo work. Set the provider to
+`nvidia` and authenticate with an `nvapi-...` key via
+`NVIDIA_API_KEY` (or `/login` / the setup wizard).
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `nvidia/nemotron-3.5-lightning-30b-a3b` | ✅ Default | Thinking-capable, great tool use, free tier |
+| `nvidia/nemotron-3-super-120b-a12b` | ✅ Supported | Strong reasoning |
+| `nvidia/llama-3.1-nemotron-ultra-253b-v1` | ✅ Supported | Largest hosted Nemotron |
+
+Reasoning effort profiles (`/effort`) map to NVIDIA's top-level
+`reasoning_budget` plus `chat_template_kwargs.enable_thinking` (the
+hosted API rejects unknown body keys, so `extra_body` is never sent);
+the harness ignores `reasoning_content` deltas in the stream.
+
+### Demo
+
+`scripts/demo/demo-boot-nvidia.sh` boots straight into the TUI against
+the hosted API when `NVIDIA_API_KEY` is set, and falls back to the
+offline mock (`scripts/demo/mock-llm.py`) when it is not - the free tier
+makes the hosted path ideal for recording the first-run wizard and the
+tool-burst collapse (see [demo](demo.md)).
+
+---
+
 ## OpenRouter
 
 OpenRouter provides access to multiple hosted model providers through a single
@@ -104,6 +134,56 @@ export OPENAI_API_KEY="your-key"
 export AGENT_HARNESS_PROVIDER="openai"
 export AGENT_HARNESS_MODEL="gpt-4o"
 ```
+
+---
+
+## Fireworks AI
+
+OpenAI-compatible serverless inference for open-source models, via
+`https://api.fireworks.ai/inference/v1` (Bearer key). Model IDs use the
+`accounts/fireworks/models/<name>` form; `/models` lists the full catalog
+in the model picker.
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `accounts/fireworks/models/llama-v3p3-70b-instruct` | ✅ Default | Solid all-round tool use |
+| `accounts/fireworks/models/deepseek-v4-flash-0731` | ✅ Supported | Fast reasoning-capable flash model |
+| `accounts/fireworks/models/mixtral-8x22b-instruct` | ✅ Supported | High-throughput mixture of experts |
+
+### Configuration
+
+```bash
+export AGENT_HARNESS_PROVIDER="fireworks"
+export AGENT_HARNESS_MODEL="accounts/fireworks/models/llama-v3p3-70b-instruct"
+```
+
+Or run `/login` and pick Fireworks (the key is stored encrypted).
+
+---
+
+## NVIDIA
+
+NVIDIA NIM build.nvidia.com endpoint, OpenAI-compatible at
+`https://integrate.api.nvidia.com/v1` (Bearer key). Nemotron models include
+a free tier (rate-limited).
+
+### Recommended Models
+
+| Model | Status | Notes |
+|-------|--------|-------|
+| `nvidia/nemotron-3.5-lightning` | ✅ Default | Fast, good tool use |
+| `nvidia/nemotron-3.5-lightning:free` | ⚠️ Free tier | Rate-limited |
+
+### Configuration
+
+```bash
+export AGENT_HARNESS_PROVIDER="nvidia"
+export AGENT_HARNESS_MODEL="nvidia/nemotron-3.5-lightning"
+```
+
+Or run `/login` and pick NVIDIA (the key is stored encrypted).
 
 ---
 

@@ -1,15 +1,18 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
-	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
 	"os"
-	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
 
 // loadCredentials handles secure credential loading and migration.
+//
+// Boot must never die on credentials: a locked store, a wrong master
+// password, or a missing key leaves the TUI reachable with the provider
+// marked misconfigured and a pointer to /login, which reconfigures the
+// store from inside the app.
 func (app *App) loadCredentials(credManager *config.CredentialManager) error {
 	if config.IsLocalProvider(app.config.Provider) {
 		if app.config.APIKey == "" {
@@ -23,9 +26,14 @@ func (app *App) loadCredentials(credManager *config.CredentialManager) error {
 	}
 
 	if credManager.HasSecureCredentials() {
+		// The store unlocks with the machine-local key (auto-generated,
+		// 0600) — no console prompt, no exit path. Only a store from an
+		// older password-based release fails here, and it degrades
+		// gracefully to a /login pointer.
 		secureCfg, err := credManager.LoadSecure()
 		if err != nil {
-			return app.handleCredentialError(credManager, err)
+			app.bootNotice = sprintf("Credential store (%s) could not be unlocked: %v. Run /login to reconfigure.", config.SecureConfigPath(), err)
+			return nil
 		}
 		app.applySecureConfig(secureCfg)
 	}
@@ -35,37 +43,9 @@ func (app *App) loadCredentials(credManager *config.CredentialManager) error {
 	}
 
 	if app.config.APIKey == "" {
-		if err := app.interactiveSetup(credManager); err != nil {
-			return errf("setup failed: %w", err)
-		}
+		app.bootNotice = sprintf("No API key configured for provider %q. Run /login or set it in Settings (keys are stored encrypted at %s).", app.config.Provider, config.SecureConfigPath())
 	}
 
-	return nil
-}
-
-// handleCredentialError handles decryption failures gracefully.
-func (app *App) handleCredentialError(credManager *config.CredentialManager, err error) error {
-	fmt.Fprintf(os.Stderr, "\n%s\n", ui.ErrorStyle.Render("Failed to load credentials"))
-	fmt.Fprintf(os.Stderr, "Error: %v\n\n", err)
-
-	fmt.Println("Would you like to:")
-	fmt.Println("  1) Try again")
-	fmt.Println("  2) Reset credentials and set up again")
-	fmt.Print("\nChoice [1-2] [1]: ")
-
-	reader := bufio.NewReader(os.Stdin)
-	choice, _ := reader.ReadString('\n')
-	choice = strings.TrimSpace(choice)
-
-	if choice == "2" {
-		if clearErr := credManager.ClearSecureConfig(); clearErr != nil {
-			fmt.Fprintf(os.Stderr, "Warning: failed to clear credentials: %v\n", clearErr)
-		} else {
-			fmt.Println(ui.RenderSuccess("Credentials cleared. Starting fresh..."))
-		}
-	} else {
-		return errf("credential decryption failed: %w", err)
-	}
 	return nil
 }
 

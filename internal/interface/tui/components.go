@@ -193,6 +193,29 @@ func RenderCompactFooter(actions []ActionHint) string {
 	return "\n" + HelpDimStyle.Render("  "+strings.Join(parts, "  "))
 }
 
+// RenderCompactFooterWrapped renders the action hints wrapped to a target
+// width, so narrow panes (the sessions list) never overflow their column
+// into a neighbor panel.
+func RenderCompactFooterWrapped(actions []ActionHint, width int) string {
+	if len(actions) == 0 {
+		return ""
+	}
+
+	var b strings.Builder
+	line := "  "
+	for _, a := range actions {
+		hint := a.Key + ": " + a.Desc
+		if line != "  " && lipgloss.Width(line)+lipgloss.Width("  "+hint) > width {
+			b.WriteString(HelpDimStyle.Render(line) + "\n")
+			line = "  "
+		}
+		line += hint + "  "
+	}
+	b.WriteString(HelpDimStyle.Render(line))
+
+	return "\n" + b.String()
+}
+
 // ---------------------------------------------------------------------------
 // Empty state rendering
 // ---------------------------------------------------------------------------

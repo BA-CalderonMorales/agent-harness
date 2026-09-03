@@ -34,10 +34,22 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "gemma4:2b", Name: "Gemma 4 E2B (Fast)", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "gemma4:2b"},
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "llama3.2:3b"},
 		}
+	case "nvidia":
+		return []tui.ModelItem{
+			{ID: "nvidia/nemotron-3.5-lightning-30b-a3b", Name: "Nemotron 3.5 Lightning 30B (thinking)", Provider: "nvidia", ContextLen: 128000, IsDefault: currentModel == "nvidia/nemotron-3.5-lightning-30b-a3b"},
+			{ID: "nvidia/nemotron-3-super-120b-a12b", Name: "Nemotron 3 Super 120B", Provider: "nvidia", ContextLen: 128000, IsDefault: currentModel == "nvidia/nemotron-3-super-120b-a12b"},
+			{ID: "nvidia/llama-3.1-nemotron-ultra-253b-v1", Name: "Llama Nemotron Ultra 253B", Provider: "nvidia", ContextLen: 128000, IsDefault: currentModel == "nvidia/llama-3.1-nemotron-ultra-253b-v1"},
+		}
 	case "local":
 		return []tui.ModelItem{
 			{ID: config.DefaultModel, Name: "Ornith 1.0 9B GGUF", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultModel},
 			{ID: "local-model", Name: "OpenAI-compatible local model", Provider: "local", ContextLen: config.DefaultContextLength, IsDefault: currentModel == "local-model"},
+		}
+	case "fireworks":
+		return []tui.ModelItem{
+			{ID: "accounts/fireworks/models/llama-v3p3-70b-instruct", Name: "Llama 3.3 70B Instruct", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/llama-v3p3-70b-instruct"},
+			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 128000, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
+			{ID: "accounts/fireworks/models/mixtral-8x22b-instruct", Name: "Mixtral 8x22B Instruct", Provider: "fireworks", ContextLen: 65536, IsDefault: currentModel == "accounts/fireworks/models/mixtral-8x22b-instruct"},
 		}
 	default:
 		return []tui.ModelItem{

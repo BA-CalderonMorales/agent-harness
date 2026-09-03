@@ -4,13 +4,32 @@ import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 	"os"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
 
-func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Defensive: recover from any panic during update to prevent total app crash
+// Update processes messages. The receiver is a pointer so the model's
+// identity survives every update: cmd-side handlers (wizard, delegates)
+// hold *App references and mutate them expecting the changes to render.
+// With a value receiver those mutations landed on the pre-update copy
+// and vanished — the /login wizard's messages never appeared. Value
+// sub-models that return fresh copies (handleKeys, resize) are copied
+// back into the live model with *a = next.
+func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	// Defensive: recover from any panic during update to prevent total app
+	// crash. The named returns are the point: a recovered panic otherwise
+	// leaves the zero values behind, and bubbletea then dereferences a nil
+	// model right after Update returns (a second, confusing crash).
 	defer func() {
 		if r := recover(); r != nil {
+			diag.Panic("tui.app_update", r)
 			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] App.Update: %v\n", r)
+			// Durable + visible: the panic site is in the diagnostics
+			// log, and the transcript says so — a silently-swallowed
+			// panic is a bug report nobody can reproduce.
+			a.chatModel.AddMessage("system", fmt.Sprintf("Internal error recovered (site: tui.app_update). Trace: ~/.agent-harness/logs"))
+			model = a
+			cmd = nil
 		}
 	}()
 
@@ -23,7 +42,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.KeyMsg:
 		var cmd tea.Cmd
 		var handled bool
-		a, cmd, handled = a.handleKeys(msg)
+		next, cmd, handled := a.handleKeys(msg)
+		*a = next
 		if handled {
 			return a, cmd
 		}
@@ -33,7 +53,9 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Window resize (propagated in app_keys.go)
 	// -------------------------------------------------------------------------
 	case tea.WindowSizeMsg:
-		return a.resize(msg.Width, msg.Height)
+		next, cmd := a.resize(msg.Width, msg.Height)
+		*a = next
+		return a, cmd
 
 	// -------------------------------------------------------------------------
 	// Status messages
@@ -51,7 +73,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case UserSubmitMsg:
 		if a.onUserSubmit != nil {
-			a.onUserSubmit(msg.Text, &a)
+			a.onUserSubmit(msg.Text, a)
 		}
 
 	// -------------------------------------------------------------------------
@@ -69,7 +91,7 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			a.chatModel.AddMessage("system", "Switched to Settings tab.")
 		}
 		if a.onUserCommand != nil {
-			a.onUserCommand(msg.Command, &a)
+			a.onUserCommand(msg.Command, a)
 		}
 
 	// -------------------------------------------------------------------------
@@ -92,6 +114,21 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
+	// Login completed - land in chat, ready to type
+	// -------------------------------------------------------------------------
+	case LoginCompletedMsg:
+		// switchView resets the mode to normal; the insert-mode
+		// assignments must come after it. The listener chain must be
+		// re-armed or every later Send (agent start, chunks, probe
+		// results) is dropped and the first chat dies silently.
+		cmds = append(cmds, a.switchView(viewChat))
+		a.mode = ModeInsert
+		a.chatModel.SetModeLabel("typing")
+		a.chatModel.Focus()
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
 	// Command palette open request
 	// -------------------------------------------------------------------------
 	case openCommandPaletteMsg:
@@ -104,6 +141,24 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case openModelPickerMsg:
 		a.modelPicker.Open(a.width, a.height)
 		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Provider picker open request
+	// -------------------------------------------------------------------------
+	case openProviderPickerMsg:
+		a.providerPicker.Open(a.width, a.height)
+		return a, nil
+
+	// -------------------------------------------------------------------------
+	// Git context collected after boot - the dashboard and welcome fill
+	// in when it lands instead of blocking the TUI start.
+	// -------------------------------------------------------------------------
+	case GitContextMsg:
+		if a.onGitContext != nil {
+			a.onGitContext(msg.Context, a)
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
 	// Quit request
@@ -142,7 +197,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case ApprovalRequestMsg:
 		a.approvalDialog.Show(msg.Request)
-		return a, nil
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
 	// Tool executing notification - show in chat
@@ -151,7 +207,8 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Add or update tool message with running status
 		a.chatModel.AddOrUpdateToolMessage(msg.ToolID, msg.ToolName, getToolDisplayName(msg.ToolName),
 			msg.Command, ToolStatusRunning)
-		return a, nil
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
 	// Agent cancellation - handle cancel signal
@@ -192,15 +249,40 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		a.homeModel.SetSessions(msg.Sessions)
 		a.sessionsModel.SetSessions(msg.Sessions)
 		if msg.Notice != "" {
-			// Same as above: durable system message, not footer clutter.
+			// Durable system message (chat + settings log) plus a
+			// transient notice on the sessions page the user is on.
+			a.sessionsModel.SetNotice(msg.Notice, msg.NoticeType)
 			a.logSystemMessage(msg.Notice)
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
+	case timerTickMsg:
+		// P2-5: route timer tick to chat regardless of active view so
+		// the elapsed timer doesn't freeze when Chat tab is not active.
+		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
+			if m, ok := chatModel.(ChatModel); ok {
+				a.chatModel = m
+			}
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
 	case ProviderReadinessMsg:
+		// A probe from a previous provider (or an older key) may finish
+		// after a switch started a new probe: only the newest generation
+		// may update readiness, or stale verdicts clobber the live one.
+		if msg.Gen != 0 && msg.Gen < a.providerReadinessGen {
+			return a, nil
+		}
 		a.providerReadiness = msg.Readiness
 		a.providerReadinessMsg = msg.Message
+		// A misconfigured probe is the setup dead end: the home banner and
+		// the statusbar badge become the fix (l: login), not prose.
+		a.homeModel.SetSetupRequired(msg.Readiness == 4)
 		// Every readiness state is a durable system message: it lands
 		// exactly once at the top of the chat pane and in the Settings
 		// page's System Messages section. Nothing provider-related ever
@@ -222,38 +304,38 @@ func (a App) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	// Delegate to active view (non-streaming messages only)
 	// -------------------------------------------------------------------------
-	var cmd tea.Cmd
+	var cmd2 tea.Cmd
 	switch a.activeView {
 	case viewHome:
 		model, c := a.homeModel.Update(msg)
 		if m, ok := model.(*HomeModel); ok {
 			a.homeModel = m
 		}
-		cmd = c
+		cmd2 = c
 	case viewChat:
 		if model, c := a.chatModel.Update(msg); model != nil {
 			if m, ok := model.(ChatModel); ok {
 				a.chatModel = m
 			}
-			cmd = c
+			cmd2 = c
 		}
 	case viewSessions:
 		if model, c := a.sessionsModel.Update(msg); model != nil {
 			if m, ok := model.(SessionsModel); ok {
 				a.sessionsModel = m
 			}
-			cmd = c
+			cmd2 = c
 		}
 	case viewSettings:
 		if model, c := a.settingsModel.Update(msg); model != nil {
 			if m, ok := model.(SettingsModel); ok {
 				a.settingsModel = m
 			}
-			cmd = c
+			cmd2 = c
 		}
 	}
-	if cmd != nil {
-		cmds = append(cmds, cmd)
+	if cmd2 != nil {
+		cmds = append(cmds, cmd2)
 	}
 
 	return a, tea.Batch(cmds...)

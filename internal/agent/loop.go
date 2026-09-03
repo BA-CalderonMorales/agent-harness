@@ -2,12 +2,28 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+// maxToolLimit caps the session /limit knob: the bump is a rescope for a
+// long task, not a runaway jailbreak - the convergence guard
+// (MaxIdenticalToolUses) stays the real backstop regardless.
+const maxToolLimit = 100
+
+// toolCallSignature canonicalizes a tool use for loop detection: name plus
+// the JSON of the input (Go serializes map keys deterministically).
+func toolCallSignature(tu types.ToolUseBlock) string {
+	in, err := json.Marshal(tu.Input)
+	if err != nil {
+		in = []byte(fmt.Sprintf("%v", tu.Input))
+	}
+	return tu.Name + "|" + string(in)
+}
 
 // NewLoop creates an agent loop with the given LLM client.
 func NewLoop(client llm.Client) *Loop {
@@ -30,6 +46,7 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 			maxOutputTokensOverride:      params.MaxOutputTokens,
 			maxOutputTokensRecoveryCount: 0,
 			turnCount:                    1,
+			executedTools:                make(map[string]int),
 		}
 
 		terminal := l.queryLoop(ctx, params, &state, out)
@@ -45,6 +62,9 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 
 // queryLoop is the while-true agent loop.
 func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopState, out chan<- types.StreamEvent) Terminal {
+	if state.executedTools == nil {
+		state.executedTools = make(map[string]int)
+	}
 	if params.MaxOutputTokens > 0 && state.maxOutputTokensOverride == 0 {
 		state.maxOutputTokensOverride = params.MaxOutputTokens
 	}
@@ -156,11 +176,18 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 		// Enforce total tool call budget per query
 		maxToolCalls := l.Config.MaxToolCalls
+		if params.MaxToolCalls > 0 {
+			maxToolCalls = params.MaxToolCalls
+		}
 		if maxToolCalls <= 0 {
 			maxToolCalls = 15
 		}
 		if state.toolCallCount+len(toolUses) > maxToolCalls {
-			msg := fmt.Sprintf("[Tool call limit reached: %d total tools used. Stopping to prevent runaway exploration.]", state.toolCallCount)
+			suggested := maxToolCalls * 2
+			if suggested > maxToolLimit {
+				suggested = maxToolLimit
+			}
+			msg := fmt.Sprintf("Tool call limit reached (%d tools). Runaway-loop protection stopped this turn. Type /limit %d to continue with a higher limit for this session.", maxToolCalls, suggested)
 			select {
 			case out <- types.StreamMessage{Message: types.Message{
 				Role:    types.RoleSystem,
@@ -173,6 +200,33 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg}
 		}
 		state.toolCallCount += len(toolUses)
+
+		// Convergence guard: re-running the same tool with the same
+		// canonical input inside one turn is the signature of a looping
+		// model, not a workflow - the second call aborts the turn instead
+		// of cloning another row into the transcript.
+		maxIdentical := l.Config.MaxIdenticalToolUses
+		if maxIdentical <= 0 {
+			maxIdentical = 1
+		}
+		for _, tu := range toolUses {
+			key := toolCallSignature(tu)
+			state.executedTools[key]++
+			if state.executedTools[key] > maxIdentical {
+				msg := fmt.Sprintf("[Tool loop detected: %s was called %d times with identical input. Stopping to prevent runaway exploration.]",
+					tu.Name, state.executedTools[key])
+				select {
+				case out <- types.StreamMessage{Message: types.Message{
+					Role:    types.RoleSystem,
+					Content: []types.ContentBlock{types.TextBlock{Text: msg}},
+				}}:
+				case <-ctx.Done():
+					out <- types.StreamError{Error: ctx.Err()}
+					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
+				}
+				return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg}
+			}
+		}
 
 		// Execute tools
 		if l.Config.StreamingToolExecution {

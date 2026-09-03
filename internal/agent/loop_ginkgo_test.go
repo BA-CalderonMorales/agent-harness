@@ -34,6 +34,7 @@ var _ = Describe("Agent Loop Limits", func() {
 				mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", "ls")}
 				loop = NewLoop(mock)
 				loop.Config.MaxToolCalls = 3
+				loop.Config.MaxIdenticalToolUses = 10 // budget spec: identical calls allowed
 				loop.Config.DefaultMaxTurns = 10
 
 				params := QueryParams{

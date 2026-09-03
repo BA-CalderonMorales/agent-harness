@@ -18,16 +18,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 )
 
-// LoginState tracks which step of the login wizard is active.
-type LoginState int
-
-const (
-	loginIdle LoginState = iota
-	loginProvider
-	loginAPIKey
-	loginModel
-)
-
 // App holds the application state and coordinates all components.
 type App struct {
 	config         *config.LayeredConfig
@@ -46,12 +36,15 @@ type App struct {
 	mcpManager     *mcp.Manager
 	auditLogger    *audit.Logger
 	planMode       bool
-	steerQueue     []string
 
-	// Login wizard state
-	loginState       LoginState
-	loginProviderTmp string
-	loginModelTmp    string
+	// approvedCommands holds exact commands approved via "Approve All"
+	// this session: the same command never asks again. Session-scoped by
+	// design — trust must die with the process.
+	approvedCommands map[string]bool
+
+	// bootNotice carries a credential/config problem discovered before
+	// the TUI exists; run() surfaces it once the TUI is up.
+	bootNotice string
 }
 
 // newApp creates and initializes a new App instance.
@@ -61,7 +54,7 @@ func newApp() (*App, error) {
 		return nil, errf("failed to get current directory: %w", err)
 	}
 
-	app := &App{cwd: cwd}
+	app := &App{cwd: cwd, approvedCommands: make(map[string]bool)}
 
 	// Initialize audit logging (non-fatal if it fails)
 	if logger, err := audit.NewLogger(); err == nil {
@@ -76,15 +69,17 @@ func newApp() (*App, error) {
 		return nil, err
 	}
 
-	app.gitContext, _ = git.GetContext()
+	// Git context is collected after the TUI starts (see run) so a slow
+	// filesystem never blocks the first paint.
 	app.initTools()
 	app.initCommands()
 
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
 	if app.config.ContextLength > 0 {
 		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
 	}
+	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
 	return app, nil
 }
@@ -108,6 +103,18 @@ func (app *App) run() error {
 	tuiApp.SetSessionsDelegate(&tuiSessionsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetSettingsDelegate(&tuiSettingsDelegate{app: app, tuiApp: tuiApp})
 	tuiApp.SetChatDelegate(&tuiChatDelegate{app: app, tuiApp: tuiApp})
+	tuiApp.SetLoginHandler(func(provider, apiKey, model string, ta *tui.App) {
+		app.completeLogin(provider, apiKey, model, ta)
+	})
+	tuiApp.SetLoginModelsProvider(app.wizardModels)
+	tuiApp.SetProviderPickHandler(func(provider string, ta *tui.App) {
+		app.pickProvider(provider, ta)
+	})
+	tuiApp.SetGitContextHandler(func(ctx *git.Context, ta *tui.App) {
+		app.gitContext = ctx
+		ta.SetProjectInfo(app.getProjectInfo())
+		ta.ReplaceWelcomeMessage(app.buildWelcomeMessage())
+	})
 
 	// Initial data
 	tuiApp.SetChatMessages(app.session.Messages)
@@ -128,9 +135,20 @@ func (app *App) run() error {
 	tuiApp.SetCommandCompletions(app.cmdRegistry.GetCompletions())
 	tuiApp.SetCommands(app.cmdRegistry.GetCommandInfos())
 
-	// Start provider readiness probe
+	// Surface boot-time credential/config problems in the TUI (durable
+	// system message + misconfigured readiness), then start the probe.
+	if app.bootNotice != "" {
+		tuiApp.Send(tui.ProviderReadinessMsg{Readiness: 4, Message: app.bootNotice})
+	}
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// Collect git context off the boot path; the dashboard and welcome
+	// fill in when the GitContextMsg lands on the event loop.
+	go func() {
+		ctx, _ := git.GetContext()
+		tuiApp.Send(tui.GitContextMsg{Context: ctx})
+	}()
 
 	return tui.Run(tuiApp)
 }

@@ -2,7 +2,10 @@ package main
 
 import (
 	"fmt"
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
@@ -25,7 +28,9 @@ func (app *App) initCommandsCore() {
 		commands.ClearHandler(func() error {
 			app.session = app.session.Clear()
 			app.sessionManager.SetCurrent(app.session)
-			_, _ = app.sessionManager.SaveCurrent()
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				diag.Error("session.save.clear", err)
+			}
 			app.refreshTelemetry(app.tuiApp)
 			return nil
 		}, nil))
@@ -66,7 +71,9 @@ func (app *App) initCommandsCore() {
 				}
 				app.commitConfigChange()
 				app.sessionManager.SetCurrent(app.session)
-				_, _ = app.sessionManager.SaveCurrent()
+				if _, err := app.sessionManager.SaveCurrent(); err != nil {
+					diag.Error("session.save.model", err)
+				}
 				app.refreshTelemetry(app.tuiApp)
 				return nil
 			},
@@ -105,7 +112,7 @@ func (app *App) initCommandsCore() {
 
 	app.cmdRegistry.Register("export", "Export conversation to file",
 		commands.ExportHandler(func(args string) (string, error) {
-			return exportSession(app.session, args)
+			return exportSession(app.session, args, app.config.APIKey)
 		}))
 
 	app.cmdRegistry.Register("session", "Manage sessions",
@@ -140,15 +147,28 @@ func (app *App) initCommandsCore() {
 			},
 		))
 
-	app.cmdRegistry.Register("improve", "Run self-improvement workflow",
-		commands.ImproveHandler(func() (string, error) {
-			return "Self-improvement workflow complete: workspace health verified, build & tests passing.", nil
-		}))
-
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()
 		}))
+
+	app.cmdRegistry.Register("limit", "Show or set the session tool-call limit",
+		commands.LimitHandler(
+			func() int {
+				if app.session != nil {
+					return app.session.ToolLimit
+				}
+				return 0
+			},
+			func(n int) error {
+				app.session.ToolLimit = n
+				app.session.UpdatedAt = time.Now()
+				app.session.Version++
+				app.sessionManager.SetCurrent(app.session)
+				_, err := app.sessionManager.SaveCurrent()
+				return err
+			},
+		))
 
 	app.cmdRegistry.Register("init", "Initialize project with standard files",
 		commands.InitHandler(func(projectType string) (string, error) {

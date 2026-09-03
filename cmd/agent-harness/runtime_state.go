@@ -8,9 +8,10 @@ import (
 
 // rebuildLLMClient reconstructs client, updates models, and re-probes provider readiness.
 func (app *App) rebuildLLMClient() {
-	app.client = llm.NewHTTPClientWithBaseURL(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	if app.loop != nil {
 		app.loop.Client = app.client
+		app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 	}
 	if app.tuiApp != nil {
 		app.tuiApp.SetModels(app.getModelItems())
@@ -76,29 +77,6 @@ func (app *App) persistUserSettings() {
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {
 		msg := sprintf("Warning: failed to save settings: %v", err)
-		if app.tuiApp != nil {
-			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
-		}
-	}
-}
-
-// persistAPIKey updates the API key in the encrypted credential store so a
-// mid-session key change survives restarts without touching plaintext config.
-func (app *App) persistAPIKey() {
-	credManager := config.NewCredentialManager()
-	if !credManager.HasSecureCredentials() {
-		return
-	}
-	secureCfg, err := credManager.LoadSecure()
-	if err != nil {
-		return
-	}
-	secureCfg.APIKey = app.config.APIKey
-	if secureCfg.Provider == "" {
-		secureCfg.Provider = app.config.Provider
-	}
-	if err := credManager.SaveSecure(secureCfg); err != nil {
-		msg := sprintf("Warning: failed to save API key: %v", err)
 		if app.tuiApp != nil {
 			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
 		}

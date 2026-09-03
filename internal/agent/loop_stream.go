@@ -11,6 +11,23 @@ import (
 
 // consumeStream reads LLM events and builds an assistant message + tool uses.
 // Handles max_output_tokens recovery with error withholding.
+//
+// maxStreamIdle guards against a provider that goes silent mid-turn: with
+// no events for this long, the turn fails cleanly instead of hanging and
+// leaving the UI stuck on a running/thinking state. LoopConfig.StreamIdleTimeout
+// overrides this per loop (local providers need multi-minute first-token
+// windows; the package default stays tight for hosted APIs).
+var maxStreamIdle = 90 * time.Second
+
+// idleWindow returns the configured idle watchdog for the loop, falling
+// back to the package default when the loop carries no override.
+func (l *Loop) idleWindow() time.Duration {
+	if l != nil && l.Config.StreamIdleTimeout > 0 {
+		return l.Config.StreamIdleTimeout
+	}
+	return maxStreamIdle
+}
+
 func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, out chan<- types.StreamEvent) (*types.Message, []types.ToolUseBlock, error) {
 	var msg types.Message
 	msg.UUID = uuid.New().String()
@@ -22,9 +39,17 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 	var toolInputBuffer string
 	var toolUses []types.ToolUseBlock
 
+	idle := time.NewTimer(l.idleWindow())
+	defer idle.Stop()
+
 	for {
 		select {
+		case <-ctx.Done():
+			return nil, nil, ctx.Err()
+		case <-idle.C:
+			return nil, nil, fmt.Errorf("LLM stream went idle for %s; the provider stopped sending events", l.idleWindow())
 		case ev, ok := <-events:
+			_ = idle.Reset(l.idleWindow())
 			if !ok {
 				if pendingToolUse != nil {
 					if toolInputBuffer != "" {

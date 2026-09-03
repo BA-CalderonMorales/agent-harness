@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // View renders the settings.
@@ -105,6 +107,12 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		valueStyle = ListSelectedStyle
 	}
 
+	// Fixed label column: every row pads its label to the same width so
+	// values line up vertically instead of ragged after labels of
+	// different lengths (owner M1).
+	const labelCol = 18
+	label := style.Render(lipgloss.NewStyle().Width(labelCol).Render(prefix + setting.Label))
+
 	// For boolean settings, show checkbox
 	if setting.Type == "bool" {
 		checkbox := "[ ]"
@@ -114,8 +122,8 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		if selected {
 			checkbox = PromptStyle.Render(checkbox)
 		}
-		label := style.Render(prefix + checkbox + " " + setting.Label)
 		b.WriteString(label)
+		b.WriteString(style.Render(checkbox))
 
 		// Description for boolean
 		if selected {
@@ -125,8 +133,6 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		return b.String()
 	}
 
-	// Label and value
-	label := style.Render(prefix + setting.Label)
 	b.WriteString(label)
 
 	// Show edit indicator if editing
@@ -142,7 +148,6 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 		if value == "" {
 			value = "(empty)"
 		}
-		b.WriteString(" ")
 		b.WriteString(valueStyle.Render(value))
 		if setting.Type == "choice" && len(setting.Options) > 0 {
 			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  [%s]", strings.Join(setting.Options, "/"))))

@@ -281,7 +281,7 @@ func TestModelChangedMsgUpdatesStatusBar(t *testing.T) {
 
 	// Simulate model change message (as sent by /model command or settings tab)
 	model, _ := app.Update(ModelChangedMsg{Model: "nvidia/nemotron-3-super-120b-a12b:free"})
-	updatedApp := model.(App)
+	updatedApp := model.(*App)
 
 	if updatedApp.chatModel.GetModel() != "nvidia/nemotron-3-super-120b-a12b:free" {
 		t.Errorf("expected model 'nvidia/nemotron-3-super-120b-a12b:free', got %q", updatedApp.chatModel.GetModel())
@@ -515,7 +515,7 @@ func TestModelChangedMsgSyncsSettings(t *testing.T) {
 	})
 
 	updated, _ := app.Update(ModelChangedMsg{Model: "new-model"})
-	updatedApp := updated.(App)
+	updatedApp := updated.(*App)
 
 	if updatedApp.chatModel.GetModel() != "new-model" {
 		t.Errorf("chat model not updated, got %q", updatedApp.chatModel.GetModel())
@@ -560,7 +560,7 @@ func TestClearChatListenerContinues(t *testing.T) {
 
 	// Send ClearChatMsg
 	updated, cmd := app.Update(ClearChatMsg{FollowUpMsg: "Cleared."})
-	_ = updated.(App)
+	_ = updated.(*App)
 
 	// Verify listenForMessages is in the command batch
 	if cmd == nil {
@@ -628,7 +628,7 @@ func TestModelChangedMsgEmptyModel(t *testing.T) {
 	app.SetChatModel("")
 
 	updated, _ := app.Update(ModelChangedMsg{Model: ""})
-	updatedApp := updated.(App)
+	updatedApp := updated.(*App)
 
 	if updatedApp.chatModel.GetModel() != "" {
 		t.Errorf("expected empty model, got %q", updatedApp.chatModel.GetModel())
@@ -698,5 +698,25 @@ func TestFuzzySearchReturnsAllOnSlash(t *testing.T) {
 	results := chat.filterSuggestions("/")
 	if len(results) != 3 {
 		t.Errorf("expected 3 results for '/', got %d", len(results))
+	}
+}
+
+// TestReplaceWelcomeMessage verifies the late git context path: the boot
+// welcome is replaced in place (same position), not duplicated.
+func TestReplaceWelcomeMessage(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("system", "Agent Harness v0.3.8\n  Dir: /tmp")
+	chat.AddMessage("user", "hello")
+
+	chat.ReplaceWelcomeMessage("Agent Harness v0.3.8\n  Git: agent-harness (release/v0.3.8)\n  Status: clean")
+
+	if len(chat.messages) != 2 {
+		t.Fatalf("expected 2 messages, got %d", len(chat.messages))
+	}
+	if got := chat.messages[0].Content; !strings.Contains(got, "Git: agent-harness") {
+		t.Fatalf("welcome not replaced: %q", got)
+	}
+	if got := chat.messages[1].Content; got != "hello" {
+		t.Fatalf("user message disturbed: %q", got)
 	}
 }

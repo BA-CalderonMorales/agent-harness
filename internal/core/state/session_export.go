@@ -33,7 +33,7 @@ func (s *Session) SaveExportToFile(path, format string) error {
 	}
 
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0700); err != nil {
 		return fmt.Errorf("failed to create export directory: %w", err)
 	}
 	if len(data) == 0 || data[len(data)-1] != '\n' {
@@ -218,8 +218,23 @@ var exportRedactions = []struct {
 	{regexp.MustCompile(`/root(?:/[^\s` + "`" + `"')\]}>,]*)*`), `<user-home>`},
 }
 
+// exportRedactSecret is the active API key, injected before export so
+// exact key material is scrubbed in addition to the pattern redactions.
+// Pattern lists can never know every provider key format; the exact key
+// always can.
+var exportRedactSecret string
+
+// SetExportRedactSecret registers the active API key for exact redaction
+// in session exports. An empty value clears it.
+func SetExportRedactSecret(secret string) {
+	exportRedactSecret = secret
+}
+
 func redactExportString(value string) string {
 	out := value
+	if exportRedactSecret != "" {
+		out = strings.ReplaceAll(out, exportRedactSecret, "<redacted>")
+	}
 	for _, redaction := range exportRedactions {
 		out = redaction.re.ReplaceAllString(out, redaction.repl)
 	}

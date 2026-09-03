@@ -102,6 +102,11 @@ type ApprovalRequest struct {
 	Command  CommandInfo
 	Response chan Decision
 	Context  context.Context
+
+	// Note carries the free-text annotation sent with the last response
+	// (e.g. the suggestion from "Reject + Suggest"). The requester reads
+	// it after the decision arrives off the channel.
+	Note string
 }
 
 // NewApprovalRequest creates a new approval request
@@ -119,6 +124,14 @@ func (r *ApprovalRequest) Respond(d Decision) {
 	case r.Response <- d:
 	default:
 	}
+}
+
+// RespondSuggest sends a decision with a free-text note (the
+// "Reject + Suggest" path). The note is stored before the decision is
+// delivered so the requester reading the channel always sees it.
+func (r *ApprovalRequest) RespondSuggest(d Decision, note string) {
+	r.Note = note
+	r.Respond(d)
 }
 
 // Manager handles command approval flow

@@ -114,7 +114,10 @@ func (a *App) activeViewCapturesAllKeys() bool {
 	// Insert mode
 	switch a.activeView {
 	case viewChat:
-		return a.chatModel.CapturesAllKeys()
+		// Insert mode owns the keyboard structurally: even if the chat's
+		// focused flag ever diverges, a j/k must never leak to the
+		// normal-mode scroll handler while the mode says "typing".
+		return a.mode == ModeInsert || a.chatModel.CapturesAllKeys()
 	case viewSettings:
 		return a.settingsModel.CapturesAllKeys()
 	}

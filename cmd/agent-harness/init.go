@@ -26,6 +26,19 @@ func (app *App) initConfig() error {
 	app.cwd = workspacePath
 	app.syncGranularPermissions()
 
+	// Resolve secret references (secret://env|file|cmd:...) before the
+	// credential flows run, so env vars, the config file, and the secure
+	// store all see the concrete key. A broken reference must not leak a
+	// literal into a request: fail the resolution loudly and boot
+	// misconfigured with a pointer to /login.
+	resolvedKey, err := config.ResolveSecret(app.config.APIKey)
+	if err != nil {
+		app.bootNotice = sprintf("Failed to resolve api_key secret reference: %v. Fix agent-harness.yml or run /login.", err)
+		app.config.APIKey = ""
+	} else {
+		app.config.APIKey = resolvedKey
+	}
+
 	credManager := config.NewCredentialManager()
 	if err := app.loadCredentials(credManager); err != nil {
 		return err
@@ -51,7 +64,13 @@ func (app *App) initSession() error {
 		// The session keeps the model last used in it; adopt it as the
 		// running configuration instead of overwriting it, so a model
 		// picked in a previous session is not forgotten on restart.
-		app.syncModelFields()
+		// An env-pinned model (AH_MODEL) outranks the session, though:
+		// automation and demo boots must get the model they asked for.
+		if app.config.ModelPinned {
+			resumed.Model = app.config.Model
+		} else {
+			app.syncModelFields()
+		}
 		// Apply configured persona if valid and session has no persona set
 		if app.config.Persona != "" && resumed.Persona == "" {
 			if p, err := persona.Parse(app.config.Persona); err == nil {

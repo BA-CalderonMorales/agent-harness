@@ -52,6 +52,34 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, cmd, true
 	}
 
+	// When the provider picker is open, delegate to it. A pick closes the
+	// picker and hands the provider to the app, which opens the model
+	// picker — a fast provider switch never asks for the API key again.
+	if a.providerPicker.IsShowing() {
+		done, cancelled, provider := a.providerPicker.Update(msg)
+		if done || cancelled {
+			a.providerPicker.Close()
+			if done && a.onProviderPick != nil {
+				a.onProviderPick(provider, &a)
+			}
+		}
+		return a, nil, true
+	}
+
+	// When the login dialog is open, delegate to it. It renders its own
+	// masked input, so every key (including pastes) stays inside the
+	// modal and never reaches the composer.
+	if a.loginDialog.IsShowing() {
+		done, cancelled, provider, apiKey, model := a.loginDialog.Update(msg)
+		if done || cancelled {
+			a.loginDialog.Close()
+			if done && a.onLogin != nil {
+				a.onLogin(provider, apiKey, model, &a)
+			}
+		}
+		return a, nil, true
+	}
+
 	// When approval dialog is open, delegate to it
 	if a.approvalDialog.IsVisible() {
 		dialog, cmd := a.approvalDialog.Update(msg)
@@ -63,6 +91,12 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 	switch msg.String() {
 	case "ctrl+p":
 		return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
+	case ":":
+		// k9s-style: ':' opens the command palette from any normal-mode
+		// view. In insert mode ':' types into the composer untouched.
+		if a.mode == ModeNormal {
+			return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
+		}
 	case "ctrl+r":
 		if a.onUserCommand != nil {
 			a.onUserCommand("/effort", &a)
@@ -157,6 +191,29 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				if a.activeView != viewSessions {
 					return a, a.switchView(viewChat), true
 				}
+			case "l":
+				// Vim-right: the next tab, matching h for Home. The
+				// setup dead-end keeps its advertised handle — the
+				// statusbar badge and home banner say "(l: login)" only
+				// when the provider is not ready, so 'l' opens the
+				// wizard exactly when the affordance is on screen.
+				// Routed as a UserCommandMsg (not a direct handler
+				// call): handleKeys works on a copy, and a synchronous
+				// handler mutation (startLogin opens the dialog) would
+				// be clobbered when *a = next copies the pre-call state
+				// back. The msg path runs on the live app, exactly like
+				// a typed /login.
+				if a.providerReadiness != 1 {
+					return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
+				}
+				return a, a.switchView((a.activeView + 1) % viewCount), true
+			case "t":
+				// Toggle tool-run collapsing: the long-horizon trace
+				// reads as count lines by default; 't' expands or
+				// collapses the detail. Errors and running tools are
+				// never hidden by either state.
+				a.chatModel.ToggleToolsCollapsed()
+				return a, nil, true
 			}
 		}
 	}

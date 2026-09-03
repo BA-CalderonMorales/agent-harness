@@ -23,7 +23,10 @@ type QueryParams struct {
 	Temperature     float64
 	ReasoningEffort string
 	MaxTurns        int
-	SkipCacheWrite  bool
+	// MaxToolCalls overrides the loop's default tool ceiling for this
+	// query (the session-scoped /limit knob); 0 keeps the default.
+	MaxToolCalls   int
+	SkipCacheWrite bool
 }
 
 // TerminalReason explains why the query loop ended.
@@ -68,7 +71,12 @@ type LoopConfig struct {
 	MaxOutputTokensRecovery int
 	DefaultMaxTurns         int
 	MaxToolCalls            int
+	MaxIdenticalToolUses    int
 	BlockingTokenLimit      int
+	// StreamIdleTimeout overrides the package-default idle watchdog
+	// (maxStreamIdle). Local providers need multi-minute first-token
+	// windows for CPU prompt eval; 0 keeps the package default.
+	StreamIdleTimeout time.Duration
 }
 
 // DefaultLoopConfig returns sensible defaults.
@@ -79,6 +87,7 @@ func DefaultLoopConfig() LoopConfig {
 		MaxOutputTokensRecovery: 3,
 		DefaultMaxTurns:         10,
 		MaxToolCalls:            15,
+		MaxIdenticalToolUses:    1,
 		BlockingTokenLimit:      180000,
 	}
 }
@@ -98,6 +107,10 @@ type loopState struct {
 	maxOutputTokensOverride      int
 	turnCount                    int
 	toolCallCount                int
+	// executedTools counts how many times each (tool, canonical-input)
+	// signature has run in this query, so an identical repeat can be
+	// detected and the repeating cycle aborted.
+	executedTools map[string]int
 }
 
 // Prominent token thresholds.
