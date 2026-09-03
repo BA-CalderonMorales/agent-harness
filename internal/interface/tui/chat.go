@@ -246,6 +246,19 @@ type ToolUseBlock struct {
 	Name string
 }
 
+// cursorStyle is the composer caret: terminal surface under a primary
+// block. It re-derives from the live palette so a theme switch moves
+// the cursor with it — the style was captured once at construction and
+// used to keep the boot theme's colors forever.
+func cursorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(ColorSurface).Background(ColorPrimary)
+}
+
+// refreshCursorStyle re-applies the caret colors after a theme switch.
+func (m *ChatModel) refreshCursorStyle() {
+	m.textarea.Cursor.Style = cursorStyle()
+}
+
 // markdownRenderer is a lazy-initialized glamour renderer for markdown
 func NewChatModel() ChatModel {
 	ta := textarea.New()
@@ -264,7 +277,7 @@ func NewChatModel() ChatModel {
 	// behind typed text); clear every row-level background.
 	ta.FocusedStyle.CursorLine = lipgloss.NewStyle()
 	ta.BlurredStyle.CursorLine = lipgloss.NewStyle()
-	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorSurface).Background(ColorPrimary)
+	ta.Cursor.Style = cursorStyle()
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
