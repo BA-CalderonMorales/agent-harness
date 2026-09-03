@@ -54,10 +54,14 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Max tokens updated to: %d", n), Type: "success"})
 		}
 	case "temperature":
-		if n, err := strconv.ParseFloat(value, 64); err == nil {
+		if n, err := strconv.ParseFloat(value, 64); err == nil && n >= 0 && n <= 2 {
 			d.app.config.Temperature = n
 			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
+		} else {
+			// The value was rejected: say so instead of silently keeping
+			// the old temperature while the row shows the rejected text.
+			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature must be a number between 0.0 and 2.0; got %q.", value), Type: "error"})
 		}
 	case "reasoning_effort":
 		if slices.Contains(config.EffortLevels, value) {

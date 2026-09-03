@@ -1,8 +1,52 @@
 package tui
 
 import (
+	"strconv"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
+
+// cycleChoice moves a choice setting to the next (dir=1) or previous
+// (dir=-1) option. The cycle walks distinct values: duplicate options
+// collapse to their first occurrence, so a repeated entry can never
+// trap the rotation between its indices. A stored value missing from
+// the options list snaps deterministically: forward lands on the first
+// option, backward on the last. One helper, one fallback — the old
+// three-way split (Enter defaulted to -1, arrows to 0) made Enter and
+// the arrows disagree about where an unknown value lands.
+func cycleChoice(s *Setting, dir int) {
+	n := len(s.Options)
+	if n == 0 {
+		return
+	}
+	seen := make(map[string]bool, n)
+	options := make([]string, 0, n)
+	for _, o := range s.Options {
+		if !seen[o] {
+			seen[o] = true
+			options = append(options, o)
+		}
+	}
+	n = len(options)
+
+	idx := -1
+	for i, o := range options {
+		if o == s.Value {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		if dir >= 0 {
+			s.Value = options[0]
+		} else {
+			s.Value = options[n-1]
+		}
+		return
+	}
+	idx = (idx + dir + n) % n
+	s.Value = options[idx]
+}
 
 // Update handles messages.
 func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -67,15 +111,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						m.delegate.OnSettingChange(s.Key, value)
 					}
 				} else if s.Type == "choice" && len(s.Options) > 0 {
-					idx := -1
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx + 1) % len(s.Options)
-					s.Value = s.Options[idx]
+					cycleChoice(s, 1)
 					if m.delegate != nil {
 						m.delegate.OnSettingChange(s.Key, s.Value)
 					}
@@ -88,15 +124,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.inSystemMessages && m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
-					idx := 0
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx - 1 + len(s.Options)) % len(s.Options)
-					s.Value = s.Options[idx]
+					cycleChoice(s, -1)
 					if m.delegate != nil {
 						m.delegate.OnSettingChange(s.Key, s.Value)
 					}
@@ -107,15 +135,7 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if !m.inSystemMessages && m.cursor < len(m.settings) {
 				s := &m.settings[m.cursor]
 				if s.Type == "choice" && len(s.Options) > 0 {
-					idx := 0
-					for i, o := range s.Options {
-						if o == s.Value {
-							idx = i
-							break
-						}
-					}
-					idx = (idx + 1) % len(s.Options)
-					s.Value = s.Options[idx]
+					cycleChoice(s, 1)
 					if m.delegate != nil {
 						m.delegate.OnSettingChange(s.Key, s.Value)
 					}
@@ -185,6 +205,13 @@ func (m *SettingsModel) validateSetting(s *Setting, value string) string {
 	case "temperature":
 		if value == "" {
 			return "value required"
+		}
+		f, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return "must be a number (0.0-2.0)"
+		}
+		if f < 0 || f > 2 {
+			return "must be between 0.0 and 2.0"
 		}
 	case "persona":
 		valid := []string{"developer", "designer", "pm", "scientist", "explorer"}
