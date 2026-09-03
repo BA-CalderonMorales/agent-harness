@@ -92,12 +92,6 @@ func newApp() (*App, error) {
 	}
 	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
 
-	// Boot theme: an empty value is the shipped default palette. Stored
-	// under the "theme" settings key via the Settings tab or /theme.
-	if app.config.Theme != "" {
-		tui.ApplyTheme(app.config.Theme)
-	}
-
 	return app, nil
 }
 
@@ -105,6 +99,12 @@ func newApp() (*App, error) {
 func (app *App) run() error {
 	tuiApp := tui.NewApp()
 	app.tuiApp = tuiApp
+
+	// Boot theme: an empty value is the shipped default palette. Stored
+	// under the "theme" settings key via the Settings tab or /theme.
+	if app.config.Theme != "" {
+		tuiApp.ApplyTheme(app.config.Theme)
+	}
 
 	// Re-register slash commands that need TUI integration
 	app.initCommandsForTUI(tuiApp)

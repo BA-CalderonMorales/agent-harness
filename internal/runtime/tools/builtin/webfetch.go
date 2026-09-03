@@ -63,4 +63,10 @@ var WebFetchTool = tools.NewTool(tools.Tool{
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
 	},
 	UserFacingName: func(map[string]any) string { return "web_fetch" },
+	GetActivityDescription: func(input map[string]any) string {
+		if u, ok := input["url"].(string); ok && u != "" {
+			return "Fetching " + u
+		}
+		return "Fetching URL"
+	},
 })

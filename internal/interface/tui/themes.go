@@ -199,6 +199,10 @@ func ThemeNames() []string {
 // LookupTheme resolves a theme name (case-insensitive, hyphen/underscore
 // agnostic) with ok=false when unknown.
 func LookupTheme(name string) (Theme, bool) {
+	return lookupTheme(name)
+}
+
+func lookupTheme(name string) (Theme, bool) {
 	norm := normalizeThemeName(name)
 	for themeName, palette := range themes {
 		if normalizeThemeName(themeName) == norm {
@@ -229,7 +233,7 @@ func lowerRune(r rune) rune {
 // ApplyTheme swaps the palette and rebuilds every derived style. The
 // default theme restores the shipped palette exactly.
 func ApplyTheme(name string) bool {
-	theme, ok := LookupTheme(name)
+	theme, ok := lookupTheme(name)
 	if !ok {
 		return false
 	}
@@ -240,4 +244,16 @@ func ApplyTheme(name string) bool {
 	ColorSurface, ColorBorder, ColorMuted, ColorHighlight = p.Surface, p.Border, p.Muted, p.Highlight
 	buildStyles()
 	return true
+}
+
+// ApplyTheme applies the theme to the whole running app: the palette
+// and styles, plus instance-captured colors the styles files can't
+// reach (the composer caret). The package-level ApplyTheme only covers
+// the vars.
+func (a *App) ApplyTheme(name string) bool {
+	ok := ApplyTheme(name)
+	if ok {
+		a.chatModel.refreshCursorStyle()
+	}
+	return ok
 }

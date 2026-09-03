@@ -73,7 +73,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "permissions":
 		d.handlePermissionModeChange(value)
 	case "theme":
-		if tui.ApplyTheme(value) {
+		if d.tuiApp.ApplyTheme(value) {
 			theme, _ := tui.LookupTheme(value)
 			d.app.config.Theme = theme.Name
 			d.app.commitConfigChange()
