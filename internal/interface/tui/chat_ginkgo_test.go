@@ -5,6 +5,7 @@ import (
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/lipgloss"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -259,12 +260,12 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given input area styles", func() {
-			It("should render one solid surface for the composer block", func() {
-				// The container and editor share the same background so the
-				// typing area reads as one consistent block; the metadata
-				// line rides inside it.
-				Expect(InputContainerStyle.GetBackground()).To(Equal(ColorSurface))
-				Expect(InputEditorStyle.GetBackground()).To(Equal(ColorSurface))
+			It("should paint no background in the composer", func() {
+				// Terminal-native: the composer carries no paint slab —
+				// the top rule and mode line bound the typing area, and
+				// the terminal's own background carries it.
+				Expect(InputContainerStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
+				Expect(InputEditorStyle.GetBackground()).To(Equal(lipgloss.NoColor{}))
 			})
 		})
 
