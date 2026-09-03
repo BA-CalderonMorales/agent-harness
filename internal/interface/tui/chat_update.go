@@ -45,6 +45,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.placeholderPending = false
 				m.updateOrCreateStreamingMessage(m.streamBuffer)
 			}
+			// The thinking badge animates on this clock — without a
+			// repaint per tick the ✦ twinkle and rotating quip freeze
+			// until the next chunk happens to trigger a refresh.
+			m.refreshViewport()
 			return m, m.startTimer()
 		}
 		return m, nil
@@ -144,8 +148,15 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			ToolStatus:      ToolStatusRunning,
 			Turn:            m.turnCounter,
 		}
-		m.messages = append(m.messages, toolMsg)
-		m.currentToolMsg = &m.messages[len(m.messages)-1]
+		m.appendToolMessage(toolMsg)
+		// Re-find by ID: the insertion shifts slice positions, so a
+		// cached pointer could alias the wrong slot.
+		for i := range m.messages {
+			if m.messages[i].ID == msg.ToolID && m.messages[i].IsTool {
+				m.currentToolMsg = &m.messages[i]
+				break
+			}
+		}
 		m.refreshViewport()
 		return m, nil
 
