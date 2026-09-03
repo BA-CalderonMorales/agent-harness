@@ -152,6 +152,11 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		}
 
 	case tea.KeyEsc:
+		// An expanded tool record folds first — Esc means "back out of
+		// what I opened" before it means anything else.
+		if a.activeView == viewChat && a.chatModel.CollapseRecordExpansion() {
+			return a, nil, true
+		}
 		// If agent is running, cancel it first — and land in normal
 		// mode: Esc signaled "stop, let me look", so the next j/k must
 		// scroll instead of typing into a composer the user believes
@@ -205,6 +210,13 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		// Navigation in normal mode
 		if a.mode == ModeNormal {
 			switch msg.String() {
+			case "enter":
+				// Chat: expand the most recent tool call's full record
+				// (Esc folds it back).
+				if a.activeView == viewChat {
+					a.chatModel.ExpandLatestRecord()
+					return a, nil, true
+				}
 			case "j", "down":
 				a.scrollActiveView(1)
 				return a, nil, true

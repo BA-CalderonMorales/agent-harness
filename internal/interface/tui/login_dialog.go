@@ -23,7 +23,7 @@ const (
 )
 
 // loginProviders are the selectable providers in the modal.
-var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "fireworks", "nvidia"}
+var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia"}
 
 // providerBlurbs give each provider a one-line "what is this / pick when"
 // so the first-run user never faces a bare list (requirement #3).
@@ -33,6 +33,7 @@ var providerBlurbs = map[string]string{
 	"anthropic":  "Anthropic Claude models - needs an API key",
 	"openrouter": "One key for many models across vendors",
 	"ollama":     "Ollama on this machine - no API key needed",
+	"flm":        "FastFlowLM on AMD Ryzen AI NPUs - no API key needed",
 	"fireworks":  "Fireworks fast hosted inference - needs an API key",
 	"nvidia":     "NVIDIA NIM hosted models (nemotron family)",
 }

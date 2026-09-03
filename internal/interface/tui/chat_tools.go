@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
@@ -53,60 +55,127 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 		toolDisplayName = toolName
 	}
 
-	// Build content with status indicator
-	content := m.formatToolContent(toolDisplayName, command, status)
-
 	// Look for existing message with same ID
 	for i := range m.messages {
 		if m.messages[i].ID == id && m.messages[i].IsTool {
-			// Update existing message
-			m.messages[i].Content = content
+			// Update existing message in place: the start time set at
+			// creation is the log timestamp; the terminal status fills
+			// in the elapsed time. The detail column keeps the original
+			// target when the update carries none.
+			detail := command
+			if detail == "" {
+				detail = m.messages[i].ToolDetail
+			} else {
+				m.messages[i].ToolDetail = detail
+			}
+			if m.messages[i].ToolStatus == ToolStatusRunning && status != ToolStatusRunning {
+				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
+			}
 			m.messages[i].ToolStatus = status
-			m.messages[i].Timestamp = time.Now()
+			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 			m.refreshViewport()
 			return
 		}
 	}
 
 	// Add new message
+	started := time.Now()
 	msg := ChatMessage{
 		ID:              id,
 		Role:            "tool",
-		Content:         content,
-		Timestamp:       time.Now(),
+		Content:         m.formatToolContent(toolDisplayName, command, status, started, 0),
+		Timestamp:       started,
 		IsTool:          true,
 		ToolName:        toolName,
 		ToolDisplayName: toolDisplayName,
 		ToolStatus:      status,
+		ToolStartedAt:   started,
+		ToolDetail:      command,
 	}
 	m.appendToolMessage(msg)
 	m.refreshViewport()
 }
 
-// formatToolContent formats tool message content based on status.
-// Command previews are truncated dynamically to fit the terminal width so
-// phone users (Termux) can still see the tool name and status even when
-// the command itself is very long.
-func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus) string {
-	var statusIndicator string
+// toolNameColumn is the fixed width of the tool-name column in the
+// structured tool line, so the detail column aligns down a turn.
+const toolNameColumn = 8
+
+// formatToolContent renders one tool event as a structured log record,
+// Splunk-shaped but readable at a glance:
+//
+//	01:20:03 ✓ bash     git log --oneline -8                          0.4s
+//	01:20:05 ✓ read     pkg/format/format.go                          0.1s
+//	01:20:07 → grep     "ToolStatus" in internal/                        …
+//
+// Time · status glyph · tool name (padded) · target detail · right-
+// aligned duration (live calls show a running ellipsis instead).
+func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	var glyph string
 	switch status {
 	case ToolStatusRunning:
-		statusIndicator = "→"
-	case ToolStatusSuccess:
-		statusIndicator = "✓"
+		glyph = "→"
 	case ToolStatusError:
-		statusIndicator = "✗"
-	case ToolStatusComplete:
-		statusIndicator = "✓"
+		glyph = "✗"
 	default:
-		statusIndicator = "→"
+		glyph = "✓"
 	}
 
-	if command != "" {
-		command = m.truncateCommandForWidth(toolDisplayName, command)
-		return fmt.Sprintf("%s %s %s", statusIndicator, toolDisplayName, ToolCommandPreviewStyle.Render(command))
+	detail := command
+	if detail != "" {
+		detail = m.truncateCommandForWidth(toolDisplayName, detail)
 	}
-	return fmt.Sprintf("%s %s", statusIndicator, toolDisplayName)
+
+	timeStr := started.Format("15:04:05")
+	name := toolDisplayName
+	if pad := toolNameColumn - len(name); pad > 0 {
+		name += strings.Repeat(" ", pad)
+	}
+
+	glyphAndName := glyph + " " + name
+	line := fmt.Sprintf("%s %s %s",
+		ToolTimeStyle.Render(timeStr),
+		glyph+" "+name,
+		detail,
+	)
+
+	if status == ToolStatusRunning {
+		return line + ToolTimeStyle.Render("  …")
+	}
+	dur := formatElapsed(elapsed)
+	// Display-width padding: glyph and dot runes are multi-byte, so
+	// len() would over-count and shove the duration off the edge.
+	pad := m.width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 4
+	if pad < 2 {
+		pad = 2
+	}
+	return line + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
+}
+
+// ExpandLatestRecord expands the most recent expandable record — a
+// tool call or the model's reasoning (keyboard path). It reports
+// whether anything was expanded.
+func (m *ChatModel) ExpandLatestRecord() bool {
+	for i := len(m.messages) - 1; i >= 0; i-- {
+		msg := m.messages[i]
+		if msg.IsTool || (msg.Role == "assistant" && strings.TrimSpace(msg.ReasoningText) != "") {
+			m.expandedMessageID = msg.ID
+			m.refreshViewport()
+			return true
+		}
+	}
+	return false
+}
+
+// CollapseRecordExpansion folds an expanded record back to its summary
+// line. It reports whether something was collapsed, so Esc can fall
+// through to other behavior when nothing is open.
+func (m *ChatModel) CollapseRecordExpansion() bool {
+	if m.expandedMessageID == "" {
+		return false
+	}
+	m.expandedMessageID = ""
+	m.refreshViewport()
+	return true
 }
 
 // AddToolMessageWithPreview adds a tool message with command preview.

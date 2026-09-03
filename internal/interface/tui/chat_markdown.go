@@ -75,10 +75,16 @@ func transparentMarkdownStyle() ansi.StyleConfig {
 	primary := string(ColorPrimary)
 	text := string(ColorText)
 	dim := string(ColorMuted)
+	// Headers carry weight by decoration, not just hue: H2 underlined,
+	// H3 prefixed — the hierarchy survives greyscale themes and eye
+	// fatigue alike.
 	style.H1.Color = &primary
 	style.H1.Bold = boolPtr(true)
+	h1Prefix := "▎"
+	style.H1.BlockPrefix = h1Prefix
 	style.H2.Color = &primary
 	style.H2.Bold = boolPtr(true)
+	style.H2.Underline = boolPtr(true)
 	style.H3.Color = &text
 	style.H3.Bold = boolPtr(true)
 	style.Strong.Bold = boolPtr(true)
@@ -88,6 +94,12 @@ func transparentMarkdownStyle() ansi.StyleConfig {
 	style.Code.Color = &text
 	style.BlockQuote.Prefix = strings.Repeat(" ", 0) + "│ "
 	style.BlockQuote.Color = &dim
+
+	// Tables read as tables: explicit rules between rows and columns.
+	center, column, row := "┼", "│", "─"
+	style.Table.CenterSeparator = &center
+	style.Table.ColumnSeparator = &column
+	style.Table.RowSeparator = &row
 
 	// Paragraphs breathe: one blank line between them. The margins were
 	// stripped with every other block margin, but paragraph separation

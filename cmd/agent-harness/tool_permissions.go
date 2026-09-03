@@ -28,12 +28,9 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 		}
 		checkpoint := func() (tools.PermissionDecision, error) {
 			cmd := app.extractCommandForDisplay(toolName, toolInput)
-			if tuiApp != nil {
-				tuiApp.Send(tui.ToolExecutingMsg{
-					ToolName: toolName,
-					Command:  cmd,
-				})
-			}
+			// No transcript line here: the tool-use block already
+			// created one (handleToolUseStart). A second line keyed
+			// without the block ID would duplicate every call.
 
 			if app.executionMode == approval.ModeInteractive {
 				decision, note, err := app.requestCommandApproval(toolName, cmd, toolInput)

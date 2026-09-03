@@ -42,7 +42,7 @@ func DefaultHTTPTimeoutFor(provider string) time.Duration {
 var EffortLevels = []string{"low", "medium", "high"}
 
 func IsLocalProvider(provider string) bool {
-	return provider == "local" || provider == "ollama"
+	return provider == "local" || provider == "ollama" || provider == "flm"
 }
 
 func DefaultModelForProvider(provider string) string {
@@ -53,6 +53,8 @@ func DefaultModelForProvider(provider string) string {
 		return "claude-3-5-sonnet-20241022"
 	case "ollama":
 		return "gemma4:2b"
+	case "flm":
+		return "llama3.2:3b"
 	case "local":
 		return DefaultModel
 	case "fireworks":
@@ -78,6 +80,8 @@ func DefaultEndpointForProvider(provider string) string {
 		return "https://integrate.api.nvidia.com/v1"
 	case "ollama":
 		return "http://127.0.0.1:11434/v1"
+	case "flm":
+		return "http://127.0.0.1:52625/v1"
 	case "local":
 		return DefaultEndpointURL
 	default:
