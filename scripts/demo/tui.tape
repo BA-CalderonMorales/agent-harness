@@ -1,10 +1,9 @@
 # agent-harness live demo — the real deal.
 #
 # A real conversation against a hosted GLM model (fireworks provider):
-# the agent reads the repository with a tool call and answers with a
-# markdown table, then a second turn renders styled markdown. The
-# composer shows the agent mode chip, cycled to auto via /mode — tool
-# calls approve without asking.
+# a fast first response, then a short tool call reading AGENTS.md to
+# say what the repo is about. The composer shows the agent mode chip,
+# set to auto via /mode — tool calls approve without asking.
 #
 # Record from the repository root:
 #   chmod +x scripts/demo/demo-boot-live.sh
@@ -45,18 +44,15 @@ Sleep 2s
 # 3. The agent mode chip flips to auto with a status flash: tool
 #    calls approve without asking.
 
-Type@20ms "Run ls in this repo, then list the top-level directories in a markdown table with one-line descriptions."
+Type@20ms "Write a two-sentence haiku about shipping code on a Friday, with a bold title."
 Enter
-Sleep 45s
-# 4. First turn: a real ls tool call, then the markdown table rendered
-#    in the transcript.
+Sleep 40s
+# 4. First turn: a fast response with styled markdown — bold, italics.
 
-Type "Now write a two-sentence haiku about shipping code on a Friday, with a bold title."
+Type "Read AGENTS.md and tell me in two sentences what this repo is about."
 Enter
-Sleep 30s
-# 5. Second turn: a fast response with styled markdown — bold, italics.
+Sleep 50s
+# 5. Second turn: a short tool call, then the summary.
 
 Sleep 2s
-Ctrl+C
-Sleep 1s
-# 6. Done.
+# 6. The tape ends on the TUI — no exit, no shell.
