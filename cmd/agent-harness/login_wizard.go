@@ -129,13 +129,24 @@ func (app *App) applyLoginCredentials(provider, apiKey, model string, tuiApp *tu
 }
 
 // saveTypedCredentials stores a freshly typed key in the encrypted
-// credential store.
+// credential store, MERGING into the per-provider key set: saving the
+// nvidia key must not clobber the openrouter key (the single-slot
+// store used to lose them on every provider switch).
 func (app *App) saveTypedCredentials(provider, apiKey, model string, tuiApp *tui.App) {
 	credManager := config.NewCredentialManager()
+	keys := map[string]string{}
+	if existing, err := credManager.LoadSecure(); err == nil && existing != nil {
+		for p, k := range existing.ProviderKeys {
+			keys[p] = k
+		}
+	}
+	keys[provider] = apiKey
+
 	secureCfg := &config.SecureConfig{
-		Provider: provider,
-		APIKey:   apiKey,
-		Model:    model,
+		Provider:     provider,
+		APIKey:       apiKey,
+		Model:        model,
+		ProviderKeys: keys,
 	}
 	if err := credManager.SaveSecure(secureCfg); err != nil {
 		tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))

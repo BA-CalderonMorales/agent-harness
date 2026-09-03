@@ -58,4 +58,3 @@ func dirFootprint(dir string) dirUsage {
 	}
 	return usage
 }
-

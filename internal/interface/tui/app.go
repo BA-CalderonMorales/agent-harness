@@ -175,11 +175,11 @@ func (a *App) SetLoginModelsProvider(provider LoginModelsProvider) {
 	a.loginDialog.SetModelsProvider(provider)
 }
 
-// OpenLoginDialog opens the modal login wizard. storedKeyHint is a masked
-// hint of an already-stored key (empty when none exists); the dialog then
-// lets the user finish without re-entering the key.
-func (a *App) OpenLoginDialog(storedKeyHint string) {
-	a.loginDialog.Open(a.width, a.height, storedKeyHint)
+// OpenLoginDialog opens the modal login wizard with the encrypted
+// store's per-provider key set; the dialog finishes without re-entry
+// when the store already holds a key for the chosen provider.
+func (a *App) OpenLoginDialog(stored StoredCredentials) {
+	a.loginDialog.Open(a.width, a.height, stored)
 }
 
 // SetProviderPickHandler sets the handler that receives the provider

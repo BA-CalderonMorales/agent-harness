@@ -80,8 +80,17 @@ func (m ChatModel) View() string {
 		blockParts = append(blockParts, m.renderSuggestions())
 	}
 
+	// The composer's top border is the mode affordance: bright while
+	// you can type (insert), dim while you read (navigate) — the
+	// boundary is visible where the eyes already are, on the terminal's
+	// own background.
+	composerBorder := ColorBorder
+	if m.modeLabel == "typing" || m.focused {
+		composerBorder = ColorPrimary
+	}
 	blockPanel := InputContainerStyle.
 		Width(columnWidth).
+		BorderForeground(composerBorder).
 		PaddingTop(ComposerTopPadding).
 		PaddingBottom(ComposerBottomPadding).
 		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))

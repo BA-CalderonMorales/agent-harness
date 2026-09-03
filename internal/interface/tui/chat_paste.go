@@ -58,4 +58,3 @@ func (m *ChatModel) pasteFeedback(token, content string) tea.Cmd {
 		}
 	}
 }
-

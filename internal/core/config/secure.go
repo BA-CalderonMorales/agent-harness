@@ -42,6 +42,12 @@ type SecureConfig struct {
 	Provider string
 	APIKey   string
 	Model    string
+
+	// ProviderKeys holds every provider key entered this machine's
+	// lifetime, keyed by provider: switching providers must never lose
+	// the keys already entered (the single-slot store used to clobber
+	// them). APIKey is the active key for Provider.
+	ProviderKeys map[string]string
 }
 
 // CredentialManager handles secure credential operations
@@ -176,11 +182,28 @@ func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 		return nil, fmt.Errorf("failed to decrypt credentials (wrong password?): %w", err)
 	}
 
-	return &SecureConfig{
+	// The plaintext is either a credential-set envelope (current) or a
+	// legacy raw API key string. Envelope detection: valid JSON with a
+	// "keys" object.
+	cfg := &SecureConfig{
 		Provider: store.Provider,
 		APIKey:   string(plaintext),
 		Model:    store.Model,
-	}, nil
+	}
+	var envelope struct {
+		Keys map[string]string `json:"keys"`
+	}
+	if err := json.Unmarshal(plaintext, &envelope); err == nil && envelope.Keys != nil {
+		cfg.ProviderKeys = envelope.Keys
+		if key, ok := envelope.Keys[store.Provider]; ok {
+			cfg.APIKey = key
+		}
+	}
+	if cfg.ProviderKeys == nil && cfg.APIKey != "" {
+		// Legacy single-key store: seed the per-provider set.
+		cfg.ProviderKeys = map[string]string{store.Provider: cfg.APIKey}
+	}
+	return cfg, nil
 }
 
 // SaveSecure saves credentials to encrypted storage
@@ -209,8 +232,21 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 		return fmt.Errorf("failed to generate nonce: %w", err)
 	}
 
-	// Encrypt
-	ciphertext, err := cm.encrypt([]byte(cfg.APIKey), nonce)
+	// Encrypt the credential set: every provider key survives provider
+	// switches (the legacy single-key payload clobbered them).
+	keys := cfg.ProviderKeys
+	if keys == nil {
+		keys = map[string]string{}
+	}
+	keys[cfg.Provider] = cfg.APIKey
+	envelope, err := json.Marshal(struct {
+		Keys map[string]string `json:"keys"`
+	}{Keys: keys})
+	if err != nil {
+		return fmt.Errorf("failed to marshal credential set: %w", err)
+	}
+
+	ciphertext, err := cm.encrypt(envelope, nonce)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}

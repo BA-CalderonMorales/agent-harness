@@ -6,31 +6,36 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-// TestLoginDialogRetainsStoredKey pins the retention UX: when a stored
-// key hint is present, finishing the key step with an empty buffer keeps
-// the existing secret (empty apiKey is returned); without a hint the
-// dialog refuses to continue.
-func TestLoginDialogRetainsStoredKey(t *testing.T) {
+// TestLoginDialogStoredKeysPerProvider pins the per-provider retention:
+// a stored key skips the key step for ITS provider and completes with
+// that key; a provider without a stored key requires one (empty submit
+// is rejected) — the single-slot store used to 401 both ways.
+func TestLoginDialogStoredKeysPerProvider(t *testing.T) {
 	d := NewLoginDialog()
 
-	// No stored key: empty submit is rejected.
-	d.Open(80, 24, "")
+	// No stored keys: picking a hosted provider (openai) lands on the
+	// key step, and an empty submit is rejected.
+	d.Open(80, 24, NewStoredCredentials(nil, ""))
+	d.Update(tea.KeyMsg{Type: tea.KeyDown}) // local -> openai
 	done, cancelled, _, apiKey, _ := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if done || cancelled || apiKey != "" {
-		t.Fatalf("no-hint empty submit: done=%v cancelled=%v apiKey=%q, want rejection", done, cancelled, apiKey)
+		t.Fatalf("no-key empty submit: done=%v cancelled=%v apiKey=%q, want the key step", done, cancelled, apiKey)
 	}
 
-	// Stored key hint: empty submit advances (model step), then the
-	// second Enter completes the wizard with an empty key — the stored
-	// secret is retained.
-	d.Open(80, 24, "sk-or-…7f75")
-	done, cancelled, _, apiKey, _ = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if cancelled || done || apiKey != "" {
-		t.Fatalf("retain key-step submit: done=%v cancelled=%v apiKey=%q, want advance to model step", done, cancelled, apiKey)
+	// A stored openrouter key: picking openrouter skips the key step and
+	// completes with the stored key.
+	d = NewLoginDialog()
+	d.Open(80, 24, NewStoredCredentials(map[string]string{"openrouter": "sk-or-real"}, "sk-or-real"))
+	for i := 0; i < 3; i++ { // local -> openai -> anthropic -> openrouter
+		d.Update(tea.KeyMsg{Type: tea.KeyDown})
 	}
-	done, cancelled, _, apiKey, _ = d.Update(tea.KeyMsg{Type: tea.KeyEnter})
-	if !done || cancelled || apiKey != "" {
-		t.Fatalf("retain flow did not complete: done=%v cancelled=%v apiKey=%q, want empty retained key", done, cancelled, apiKey)
+	d.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	done, cancelled, _, apiKey, _ = d.Update(tea.KeyMsg{Type: tea.KeyEnter}) // complete
+	if !done || cancelled {
+		t.Fatalf("stored-key flow did not complete: done=%v cancelled=%v", done, cancelled)
+	}
+	if apiKey != "sk-or-real" {
+		t.Fatalf("completed apiKey = %q, want the stored openrouter key", apiKey)
 	}
 }
 

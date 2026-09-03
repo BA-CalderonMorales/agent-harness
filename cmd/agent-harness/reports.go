@@ -67,25 +67,6 @@ func keySource(key string) string {
 	return "env var / config file / secrets backend (resolved at boot)"
 }
 
-// keyHint renders a masked hint of the stored key for the login modal
-// (e.g. "sk-or-…7f75"). Only the provider prefix and the last four
-// characters are shown — never enough key material to reconstruct or
-// use the secret — so the hint is safe to render on screen.
-func keyHint(key string) string {
-	if key == "" {
-		return ""
-	}
-	const tailLen = 4
-	if len(key) <= tailLen+1 {
-		return "…" + key
-	}
-	prefix := key
-	if len(prefix) > 6 {
-		prefix = prefix[:6]
-	}
-	return prefix + "…" + key[len(key)-tailLen:]
-}
-
 // updateConfiguration updates configuration options dynamically via /config and re-probes.
 
 // getPermissionsReport formats active permissions and modes.
