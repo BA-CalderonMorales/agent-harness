@@ -45,7 +45,7 @@ var themes = map[string]Palette{
 		Highlight: c("#2A2A3E"),
 	},
 	"midnight": {
-		Primary: c("#7C9EFF"), Secondary: c("#5FD4C4"), Accent: c("#F2C94C"),
+		Primary: c("#7C9EFF"), Secondary: c("#E08FB8"), Accent: c("#F2C94C"),
 		Success: c("#6FCF97"), Error: c("#EB5757"), Warning: c("#F2994A"),
 		Info: c("#56CCF2"), Text: c("#DDE3F0"), TextDim: c("#8B93A7"),
 		Surface: c("#12141F"), Border: c("#2A2F45"), Muted: c("#4A5164"),
@@ -59,21 +59,21 @@ var themes = map[string]Palette{
 		Highlight: c("#1E3125"),
 	},
 	"solarized": {
-		Primary: c("#268BD2"), Secondary: c("#2AA198"), Accent: c("#B58900"),
+		Primary: c("#268BD2"), Secondary: c("#D33682"), Accent: c("#B58900"),
 		Success: c("#859900"), Error: c("#DC322F"), Warning: c("#CB4B16"),
 		Info: c("#6C71C4"), Text: c("#EEE8D5"), TextDim: c("#93A1A1"),
 		Surface: c("#002B36"), Border: c("#073642"), Muted: c("#586E75"),
 		Highlight: c("#073642"),
 	},
 	"gruvbox": {
-		Primary: c("#83A598"), Secondary: c("#8EC07C"), Accent: c("#FABD2F"),
+		Primary: c("#83A598"), Secondary: c("#D3869B"), Accent: c("#FABD2F"),
 		Success: c("#B8BB26"), Error: c("#FB4934"), Warning: c("#FE8019"),
 		Info: c("#83A598"), Text: c("#EBDBB2"), TextDim: c("#928374"),
 		Surface: c("#282828"), Border: c("#504945"), Muted: c("#665C54"),
 		Highlight: c("#3C3836"),
 	},
 	"nord": {
-		Primary: c("#88C0D0"), Secondary: c("#8FBCBB"), Accent: c("#EBCB8B"),
+		Primary: c("#88C0D0"), Secondary: c("#B48EAD"), Accent: c("#EBCB8B"),
 		Success: c("#A3BE8C"), Error: c("#BF616A"), Warning: c("#D08770"),
 		Info: c("#81A1C1"), Text: c("#ECEFF4"), TextDim: c("#7B88A1"),
 		Surface: c("#2E3440"), Border: c("#434C5E"), Muted: c("#4C566A"),
@@ -115,7 +115,7 @@ var themes = map[string]Palette{
 		Highlight: c("#1F1D2E"),
 	},
 	"everforest": {
-		Primary: c("#A7C080"), Secondary: c("#83C092"), Accent: c("#DBBC7F"),
+		Primary: c("#A7C080"), Secondary: c("#5C6B57"), Accent: c("#DBBC7F"),
 		Success: c("#83C092"), Error: c("#E67E80"), Warning: c("#D699B6"),
 		Info: c("#7FBBB3"), Text: c("#D3C6AA"), TextDim: c("#859289"),
 		Surface: c("#2D353B"), Border: c("#475258"), Muted: c("#5C6370"),
@@ -129,7 +129,7 @@ var themes = map[string]Palette{
 		Highlight: c("#363646"),
 	},
 	"one-dark": {
-		Primary: c("#61AFEF"), Secondary: c("#56B6C2"), Accent: c("#E5C07B"),
+		Primary: c("#61AFEF"), Secondary: c("#C678DD"), Accent: c("#E5C07B"),
 		Success: c("#98C379"), Error: c("#E06C75"), Warning: c("#D19A66"),
 		Info: c("#56B6C2"), Text: c("#ABB2BF"), TextDim: c("#5C6370"),
 		Surface: c("#282C34"), Border: c("#3E4451"), Muted: c("#5C6370"),
@@ -150,7 +150,7 @@ var themes = map[string]Palette{
 		Highlight: c("#14295A"),
 	},
 	"paper": {
-		Primary: c("#4A6FA5"), Secondary: c("#5B8770"), Accent: c("#B08947"),
+		Primary: c("#4A6FA5"), Secondary: c("#8A5A44"), Accent: c("#B08947"),
 		Success: c("#5B8770"), Error: c("#A54444"), Warning: c("#B08947"),
 		Info: c("#4A6FA5"), Text: c("#2B2B28"), TextDim: c("#8A8578"),
 		Surface: c("#F5F2EA"), Border: c("#D4CFC1"), Muted: c("#A9A292"),
@@ -164,14 +164,14 @@ var themes = map[string]Palette{
 		Highlight: c("#2E362C"),
 	},
 	"ember": {
-		Primary: c("#E8985E"), Secondary: c("#C4826B"), Accent: c("#EBC06D"),
+		Primary: c("#E8985E"), Secondary: c("#F0DCC0"), Accent: c("#EBC06D"),
 		Success: c("#96A85B"), Error: c("#D6524B"), Warning: c("#EBC06D"),
 		Info: c("#7F9DBA"), Text: c("#E7DFD6"), TextDim: c("#948A80"),
 		Surface: c("#241C1A"), Border: c("#40332F"), Muted: c("#6B5B54"),
 		Highlight: c("#322622"),
 	},
 	"ice": {
-		Primary: c("#6FB7D9"), Secondary: c("#87CEEB"), Accent: c("#A8DADC"),
+		Primary: c("#6FB7D9"), Secondary: c("#C7E5F0"), Accent: c("#A8DADC"),
 		Success: c("#7FC8A9"), Error: c("#D98282"), Warning: c("#E5B769"),
 		Info: c("#6FB7D9"), Text: c("#E8F1F4"), TextDim: c("#8FA6B0"),
 		Surface: c("#1B2733"), Border: c("#31404F"), Muted: c("#556B7A"),

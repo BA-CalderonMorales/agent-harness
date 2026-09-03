@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"math"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/charmbracelet/lipgloss"
@@ -104,6 +107,63 @@ func TestThemeBubbleIdentityContrast(t *testing.T) {
 	}
 }
 
+// TestThemeBubbleIdentityPerceptualContrast pins the perceived
+// hierarchy, not just byte equality. A one-character gutter reads as
+// the same color when the two tokens sit in the same hue family at
+// similar lightness — ice (ΔHue 2°, ΔL 0.08), ember (10°, 0.05),
+// everforest (51°, 0.01), gruvbox (53°, 0.04), and midnight (53°, 0.14)
+// all shipped that way and read as one color on screen. Distinctness is
+// a big hue gap OR a big lightness step (forest passes on lightness
+// alone: same green, much paler).
+func TestThemeBubbleIdentityPerceptualContrast(t *testing.T) {
+	const minHueGap = 70.0
+	const minLightStep = 0.14
+	for _, name := range ThemeNames() {
+		theme, _ := LookupTheme(name)
+		ph, _, pl := hexToHSL(theme.Palette.Primary)
+		sh, _, sl := hexToHSL(theme.Palette.Secondary)
+		dHue := hueDistance(ph, sh)
+		dLight := absFloat(pl - sl)
+		if dHue < minHueGap && dLight < minLightStep {
+			t.Fatalf("%s: Primary/Secondary too close to distinguish (ΔHue %.0f°, ΔL %.2f)", name, dHue, dLight)
+		}
+	}
+}
+
+func hexToHSL(hexs lipgloss.Color) (hue, sat, light float64) {
+	r, g, b := hexRGB(hexs)
+	h, l, s := rgbToHLS(r, g, b)
+	return h * 360, s, l
+}
+
+func hexRGB(hexs lipgloss.Color) (float64, float64, float64) {
+	hex := string(hexs)
+	hex = strings.TrimPrefix(hex, "#")
+	if len(hex) != 6 {
+		return 0, 0, 0
+	}
+	parse := func(s string) float64 {
+		v, _ := strconv.ParseInt(s, 16, 32)
+		return float64(v) / 255
+	}
+	return parse(hex[0:2]), parse(hex[2:4]), parse(hex[4:6])
+}
+
+func hueDistance(a, b float64) float64 {
+	d := math.Abs(a-b) - math.Floor(math.Abs(a-b)/360)*360
+	if d > 180 {
+		d = 360 - d
+	}
+	return d
+}
+
+func absFloat(v float64) float64 {
+	if v < 0 {
+		return -v
+	}
+	return v
+}
+
 // TestBubbleBordersTrackTheme pins the live-switch contract for the
 // speaker bubbles: after a theme change, the You bubble keeps its
 // Secondary gutter and the Agent bubble its Primary one.
@@ -119,4 +179,32 @@ func TestBubbleBordersTrackTheme(t *testing.T) {
 		t.Fatalf("Agent bubble gutter = %v, want %v", MessageBubbleAssistant.GetBorderTopForeground(), dracula.Palette.Primary)
 	}
 	ApplyTheme("default")
+}
+
+// rgbToHLS converts 0..1 RGB to hue (0..1), lightness, saturation.
+func rgbToHLS(r, g, b float64) (h, l, s float64) {
+	max := math.Max(r, math.Max(g, b))
+	min := math.Min(r, math.Min(g, b))
+	l = (max + min) / 2
+	if max == min {
+		return 0, l, 0
+	}
+	d := max - min
+	if l > 0.5 {
+		s = d / (2 - max - min)
+	} else {
+		s = d / (max + min)
+	}
+	switch max {
+	case r:
+		h = (g - b) / d
+		if g < b {
+			h += 6
+		}
+	case g:
+		h = (b-r)/d + 2
+	default:
+		h = (r-g)/d + 4
+	}
+	return h / 6, l, s
 }
