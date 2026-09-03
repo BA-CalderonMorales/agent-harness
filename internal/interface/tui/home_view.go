@@ -14,10 +14,12 @@ func (m *HomeModel) View() string {
 
 	var sections []string
 
-	// Header
+	// Header. Count stays -1: the zero value would render a meaningless
+	// "(0)" on a view with no countable collection.
 	sections = append(sections, RenderHeader(HeaderConfig{
 		Title:    "Home",
 		Subtitle: "Project dashboard",
+		Count:    -1,
 	}))
 
 	// Setup required banner: driven by the provider probe's misconfigured
@@ -109,10 +111,10 @@ func (m *HomeModel) renderQuickActions() string {
 	b.WriteString("\n\n")
 
 	for i, action := range m.actions {
-		prefix := "  "
+		prefix := IndicatorUnselected
 		style := ListItemStyle
 		if i == m.actionCursor {
-			prefix = IndicatorSelected + " "
+			prefix = IndicatorSelected
 			style = ListSelectedStyle
 		}
 		label := action.Label
@@ -122,7 +124,9 @@ func (m *HomeModel) renderQuickActions() string {
 		line := fmt.Sprintf("%s%s", prefix, label)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
-		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("     %s", action.Description)))
+		// Descriptions align with the label column: both list styles pad
+		// 2 on the left and the indicator slot is 2 wide.
+		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("    %s", action.Description)))
 		b.WriteString("\n")
 	}
 
@@ -148,14 +152,14 @@ func (m *HomeModel) renderRecentSessions() string {
 		if label == "" {
 			label = fmt.Sprintf("Session %s", s.ID[:8])
 		}
-		marker := "  "
+		marker := IndicatorUnselected
 		style := ListItemStyle
 		if s.IsActive {
-			marker = IndicatorSelected + " "
+			marker = IndicatorSelected
 			style = ListSelectedStyle
 		}
 		if m.cursorSessionIndex() == i {
-			marker = IndicatorSelected + " "
+			marker = IndicatorSelected
 			style = ListSelectedStyle
 		}
 		line := fmt.Sprintf("%s%s · %d msgs · %d turns", marker, label, s.MessageCount, s.Turns)
