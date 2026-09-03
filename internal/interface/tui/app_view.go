@@ -51,12 +51,11 @@ func (a App) view() string {
 		return a.modelPicker.View(a.width, a.height)
 	}
 
-	// One surface for the whole TUI: the background paints every row
-	// (SGR is stateful, so transparent children inherit it), giving the
-	// composer's lighter slab a deliberate contrast instead of a
-	// floating stripe on the terminal's own black.
-	body := lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
-	return AppBgStyle.Width(a.width).Height(a.height).Render(body)
+	// Terminal-native: no painted surface anywhere. Structure comes
+	// from rules, spacing, and color — the terminal's own background is
+	// the app's background, which is the leanest, easiest-on-the-eyes
+	// surface there is.
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
 }
 
 // ---------------------------------------------------------------------------

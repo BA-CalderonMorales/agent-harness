@@ -245,13 +245,12 @@ func NewChatModel() ChatModel {
 	ta.Focus()
 
 	// Style the textarea to match our design system. The base carries the
-	// same surface as the editor panel: every cell the textarea emits -
-	// text, placeholder, and its own filler spaces - stays black, so the
-	// solid block spans the full row instead of stopping right after the
-	// text.
+	// Terminal-native composer: the textarea paints no background of
+	// its own — the top rule above and the mode line below bound the
+	// typing area, and every cell stays on the terminal's surface.
 	ta.Cursor.Style = lipgloss.NewStyle().Foreground(ColorPrimary)
-	ta.FocusedStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorText)
-	ta.BlurredStyle.Base = lipgloss.NewStyle().Background(ColorSurface).Foreground(ColorTextDim)
+	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
+	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
 	vp := newViewport(80, 20)
 
