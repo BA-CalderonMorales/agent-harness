@@ -21,9 +21,9 @@ type SessionManager struct {
 	// instead of re-reading the whole file. sessionMeta caches list
 	// metadata keyed by file stat, so the Sessions tab never re-parses
 	// unchanged files.
-	appendOffset  int
-	journalID     string
-	sessionMetas  map[string]metaStamp
+	appendOffset int
+	journalID    string
+	sessionMetas map[string]metaStamp
 }
 
 // metaStamp caches a session file's list metadata against the stat that
