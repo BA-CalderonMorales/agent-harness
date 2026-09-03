@@ -1,9 +1,7 @@
 package tui
 
 import (
-	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"os"
 	"strings"
 	"time"
 
@@ -30,6 +28,13 @@ func (m *ChatModel) SetThinking(thinking bool, text string) {
 	}
 }
 
+// SetThinkingText updates the live reasoning preview without resetting
+// the thinking timer.
+func (m *ChatModel) SetThinkingText(text string) {
+	m.thinkingText = text
+	m.refreshViewport()
+}
+
 // startTimer returns a command that ticks every 100ms to update elapsed time
 func (m *ChatModel) startTimer() tea.Cmd {
 	return tea.Tick(100*time.Millisecond, func(t time.Time) tea.Msg {
@@ -49,7 +54,6 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 	defer func() {
 		if r := recover(); r != nil {
 			diag.Panic("tui.chat_submit", r)
-			fmt.Fprintf(os.Stderr, "[PANIC RECOVERED] chat.doSubmit: %v\n", r)
 			model = m
 			cmd = nil
 			m.pasteDetected = false
@@ -62,6 +66,12 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		model = m
 		return
 	}
+
+	// Collapsed pastes expand back to their full content here, after
+	// display formatting: the transcript shows the collapsed form, the
+	// model receives the material.
+	input = m.expandPasteTokens(input)
+	m.clearPendingPastes()
 
 	// Handle slash commands
 	trimmed := strings.TrimSpace(input)
@@ -80,16 +90,12 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		}
 		return
 	} else {
-		// Regular message: collapse pasted text in display when it is
-		// multiline or exceeds the character threshold.
+		// Regular message: pastes keep a bounded preview in the
+		// transcript — the head identifies the content, the marker is
+		// honest about the remainder.
 		displayText := input
 		if m.pasteDetected {
-			lineCount := strings.Count(input, "\n") + 1
-			if lineCount > 1 {
-				displayText = fmt.Sprintf("[Pasted text, %d lines, %d characters]", lineCount, len(input))
-			} else if len(input) > PasteDisplayThreshold {
-				displayText = fmt.Sprintf("[Pasted text, %d characters]", len(input))
-			}
+			displayText = pastePreview(input)
 		}
 		m.AddMessage("user", displayText)
 		if m.delegate != nil {
@@ -105,6 +111,7 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 
 	m.pasteDetected = false
 	m.textarea.SetValue("")
+	m.clearPendingPastes()
 	m.syncTextareaHeight()
 	m.refreshViewportFollow()
 	model = m

@@ -54,6 +54,12 @@ func (a *App) SetThinking(thinking bool, text string) {
 	a.chatModel.SetThinking(thinking, text)
 }
 
+// SetThinkingText updates the live reasoning preview without resetting
+// the thinking timer.
+func (a *App) SetThinkingText(text string) {
+	a.chatModel.SetThinkingText(text)
+}
+
 // ShowStatus shows a status message.
 func (a *App) ShowStatus(text string, statusType string) {
 	a.statusMessage = text
@@ -89,6 +95,11 @@ func (a *App) SetModels(models []ModelItem) {
 // SetChatModel sets the current model name for display in the status bar.
 func (a *App) SetChatModel(model string) {
 	a.chatModel.SetModel(model)
+}
+
+// SetAgentMode forwards the agent mode chip to the chat composer.
+func (a *App) SetAgentMode(mode string) {
+	a.chatModel.SetAgentMode(mode)
 }
 
 // SetRuntimeContext sets compact runtime metadata for the bottom status line.

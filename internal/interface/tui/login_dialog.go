@@ -62,9 +62,9 @@ type LoginDialogModel struct {
 	picker         ModelPickerModel
 	probeErr       string
 
-	// storedKeyHint is the masked hint of an already-stored key
-	// (e.g. "sk-or-…7f75"). When set, the dialog lets the user finish
-	// without re-entering the key, keeping the stored secret.
+	// stored is the per-provider key set snapshotted from the encrypted
+	// store: keys the wizard may reuse without re-entry. In-memory only.
+	stored        StoredCredentials
 	storedKeyHint string
 }
 
@@ -75,13 +75,37 @@ func NewLoginDialog() LoginDialogModel {
 
 // SetModelsProvider wires the live model probe into the wizard's model
 // step (the app feeds it at boot, mirroring SetLoginHandler).
+// StoredCredentials is the encrypted store's per-provider key set,
+// snapshotted for the wizard. In-memory only — it never persists to the
+// transcript. primaryKey is the most recently used provider's key, for
+// the masked hint.
+type StoredCredentials struct {
+	keys       map[string]string
+	primaryKey string
+}
+
+// NewStoredCredentials builds the wizard's stored-key snapshot from the
+// encrypted store's per-provider keys and the active provider's key.
+func NewStoredCredentials(keys map[string]string, primaryKey string) StoredCredentials {
+	if keys == nil {
+		keys = map[string]string{}
+	}
+	return StoredCredentials{keys: keys, primaryKey: primaryKey}
+}
+
 func (m *LoginDialogModel) SetModelsProvider(provider LoginModelsProvider) {
 	m.modelsProvider = provider
 }
 
-// Open resets and shows the dialog. storedKeyHint is a masked hint of an
-// existing stored key; an empty value means no key is stored yet.
-func (m *LoginDialogModel) Open(width, height int, storedKeyHint string) {
+// primaryKey returns the most recently used provider's key, for the
+// masked hint.
+func (s StoredCredentials) Primary() string { return s.primaryKey }
+
+// Open resets and shows the dialog. stored carries the per-provider
+// keys from the encrypted store: a stored key skips the key step only
+// for its own provider, and the live model probe uses it instead of an
+// empty key.
+func (m *LoginDialogModel) Open(width, height int, stored StoredCredentials) {
 	m.width = width
 	m.height = height
 	m.showing = true
@@ -91,7 +115,42 @@ func (m *LoginDialogModel) Open(width, height int, storedKeyHint string) {
 	m.errorMsg = ""
 	m.probeErr = ""
 	m.picker = NewModelPicker()
-	m.storedKeyHint = storedKeyHint
+	m.stored = stored
+	m.storedKeyHint = maskKey(stored.primaryKey)
+}
+
+// keyHint masks a key for display.
+func maskKey(key string) string {
+	if key == "" {
+		return ""
+	}
+	const tailLen = 4
+	if len(key) <= tailLen+1 {
+		return "…" + key
+	}
+	prefix := key
+	if len(prefix) > 6 {
+		prefix = prefix[:6]
+	}
+	return prefix + "…" + key[len(key)-tailLen:]
+}
+
+// probeKey resolves the key the model-step probe should use: a typed
+// key wins, then the stored key for THIS provider (per-provider key
+// set — switching providers never loses the keys you already entered).
+func (m *LoginDialogModel) probeKey() string {
+	if strings.TrimSpace(m.apiKeyBuf) != "" {
+		return strings.TrimSpace(m.apiKeyBuf)
+	}
+	if key, ok := m.stored.keys[m.provider()]; ok {
+		return key
+	}
+	return ""
+}
+
+// finishKey resolves the key the login completes with.
+func (m *LoginDialogModel) finishKey() string {
+	return m.probeKey()
 }
 
 // loadModels fetches the live model list for the candidate provider+key
@@ -102,14 +161,17 @@ func (m *LoginDialogModel) loadModels() {
 	if m.modelsProvider == nil {
 		return
 	}
-	models, err := m.modelsProvider(m.provider(), strings.TrimSpace(m.apiKeyBuf))
+	models, err := m.modelsProvider(m.provider(), m.probeKey())
 	if err != nil {
 		m.probeErr = err.Error()
 	}
 	if len(models) > 0 {
 		// Size the picker viewport for the dialog panel: Width drives the
 		// name truncation, Height the scroll window and cursor sync.
-		vpW := 44
+		vpW := m.width - 12
+		if vpW < 30 {
+			vpW = 30
+		}
 		vpH := m.height - 14
 		if vpH < 5 {
 			vpH = 5
@@ -155,7 +217,11 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 			}
 		case "enter", " ":
 			p := m.provider()
-			if p == "local" || m.storedKeyHint != "" {
+			// The key step is skipped only when local needs none or the
+			// stored key belongs to THIS provider — a key minted for
+			// another provider probed with 401s and dead-ended the
+			// login.
+			if p == "local" || m.hasStoredKey(p) {
 				m.step = LoginStepModel
 				m.loadModels()
 			} else {
@@ -171,7 +237,7 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 		case "esc":
 			return false, true, "", "", ""
 		case "enter":
-			if strings.TrimSpace(m.apiKeyBuf) == "" && m.storedKeyHint == "" {
+			if strings.TrimSpace(m.apiKeyBuf) == "" {
 				m.errorMsg = "API key cannot be empty."
 				return false, false, "", "", ""
 			}
@@ -195,12 +261,12 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 		// (the picker itself needs a selection to close, so an empty
 		// list is completed here).
 		if msg.String() == "enter" && len(m.picker.filtered) == 0 {
-			return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), ""
+			return true, false, m.provider(), m.finishKey(), ""
 		}
 		closed, _ := m.picker.Update(msg)
 		if closed {
 			if selected := m.picker.SelectedModel(); selected != nil {
-				return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), selected.ID
+				return true, false, m.provider(), m.finishKey(), selected.ID
 			}
 			if msg.String() == "esc" || msg.String() == "q" {
 				return false, true, "", "", ""
@@ -234,9 +300,6 @@ func (m LoginDialogModel) View() string {
 	case LoginStepAPIKey:
 		body.WriteString(HelpTitleStyle.Render("Login - API key") + "\n\n")
 		body.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n\n")
-		if m.storedKeyHint != "" {
-			body.WriteString(SuccessStyle.Render("Stored key: "+m.storedKeyHint+" (leave empty to keep it)") + "\n\n")
-		}
 		body.WriteString(HelpDimStyle.Render("Enter API key (masked; safe to paste):") + "\n")
 		body.WriteString("  " + PromptStyle.Render(strings.Repeat("*", len(m.apiKeyBuf))+"█") + "\n")
 		if m.errorMsg != "" {
@@ -263,7 +326,12 @@ func (m LoginDialogModel) View() string {
 	if m.step == LoginStepAPIKey {
 		panelWidth = 48
 	} else if m.step == LoginStepModel {
-		panelWidth = 54
+		// Full-width panel: live model ids (accounts/fireworks/models/...)
+		// are far longer than a fixed 54-col panel can show.
+		panelWidth = m.width - 4
+		if panelWidth < 54 {
+			panelWidth = 54
+		}
 	}
 
 	panel := lipgloss.NewStyle().
@@ -273,4 +341,10 @@ func (m LoginDialogModel) View() string {
 		Padding(1, 2)
 
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel.Render(body.String()))
+}
+
+// hasStoredKey reports whether the store holds a key for this provider.
+func (m *LoginDialogModel) hasStoredKey(provider string) bool {
+	_, ok := m.stored.keys[provider]
+	return ok && m.stored.keys[provider] != ""
 }

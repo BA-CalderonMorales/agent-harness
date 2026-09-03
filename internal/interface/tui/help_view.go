@@ -55,6 +55,7 @@ func (h Help) renderContent() string {
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+u/d"), HelpDimStyle.Render("Half page up / down")))
 	lines = append(lines, "")
 	lines = append(lines, CategoryStyle.Render("  Modes"))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Shift+Tab"), HelpDimStyle.Render("Cycle agent mode: manual → auto → plan → chat (in composer)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("i"), HelpDimStyle.Render("Enter insert mode (type)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Esc"), HelpDimStyle.Render("Normal mode (cancels a running turn)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+n"), HelpDimStyle.Render("Normal mode, keep the agent running — scroll while it works")))

@@ -14,6 +14,15 @@ import (
 // createToolPermissionFunc creates the permission checking function for tools.
 func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 	return func(toolName string, toolInput map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
+		// Plan mode is read-only by construction: write-class tools are
+		// denied up front so the agent plans instead of mutating, even if
+		// it ignores the prompt guidance.
+		if app.agentMode == AgentModePlan && !isReadOnlyTool(toolName) {
+			return tools.PermissionDecision{
+				Behavior: tools.Deny,
+				Message:  fmt.Sprintf("plan mode is read-only: %s is not available (Shift+Tab to cycle modes)", toolName),
+			}, nil
+		}
 		auditEvent := func(event tools.ToolAuditEvent) error {
 			return app.logAudit(event)
 		}

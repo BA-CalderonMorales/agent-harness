@@ -121,7 +121,7 @@ func TestLKeyOpensWizardOnLiveApp(t *testing.T) {
 	app.height = 24
 	app.onUserCommand = func(cmd string, a *App) {
 		if cmd == "/login" {
-			a.loginDialog.Open(a.width, a.height, "")
+			a.loginDialog.Open(a.width, a.height, StoredCredentials{})
 		}
 	}
 

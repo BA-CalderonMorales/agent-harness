@@ -67,9 +67,15 @@ func (app *App) storedKeyForProvider(provider string, credManager *config.Creden
 		return app.config.APIKey, app.config.APIKey != ""
 	}
 	if credManager.HasSecureCredentials() {
-		if secureCfg, err := credManager.LoadSecure(); err == nil &&
-			secureCfg.Provider == provider && secureCfg.APIKey != "" {
-			return secureCfg.APIKey, true
+		if secureCfg, err := credManager.LoadSecure(); err == nil {
+			if key, ok := secureCfg.ProviderKeys[provider]; ok && key != "" {
+				return key, true
+			}
+			// Legacy single-key store: the stored key counts only for
+			// the provider it was minted for.
+			if secureCfg.Provider == provider && secureCfg.APIKey != "" {
+				return secureCfg.APIKey, true
+			}
 		}
 	}
 	if app.config.APIKey != "" && app.config.Provider == provider {

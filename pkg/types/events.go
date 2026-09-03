@@ -19,6 +19,15 @@ type StreamMessage struct {
 
 func (StreamMessage) isStreamEvent() {}
 
+// StreamThinking carries the live reasoning preview for the wait state.
+// The text is transient: it renders under the thinking badge and is
+// never persisted.
+type StreamThinking struct {
+	Text string
+}
+
+func (StreamThinking) isStreamEvent() {}
+
 // StreamContextCompacted replaces the caller's persisted conversation with the
 // exact bounded context that subsequent model requests will use.
 type StreamContextCompacted struct {
@@ -73,6 +82,16 @@ type LLMTextDelta struct {
 }
 
 func (LLMTextDelta) isLLMEvent() {}
+
+// LLMReasoningDelta carries a fragment of model reasoning
+// (reasoning_content on OpenAI-compatible wires: GLM, DeepSeek,
+// Nemotron thinking). It is UI-only — reasoning is not part of the
+// durable transcript.
+type LLMReasoningDelta struct {
+	Delta string
+}
+
+func (LLMReasoningDelta) isLLMEvent() {}
 
 // LLMToolUseDelta carries a fragment of tool use input JSON.
 type LLMToolUseDelta struct {

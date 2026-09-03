@@ -31,13 +31,14 @@ var (
 			Foreground(ColorAccent)
 
 	CodeBlockStyle = lipgloss.NewStyle().
-			Foreground(ColorText).
-			Background(ColorHighlight)
+			Foreground(ColorText)
 
+	// Message bubbles keep the speaker gutter (left border) and no
+	// background fill: the transcript renders on the user's own
+	// terminal background, where paint slabs clash and hurt contrast.
 	MessageBubbleUser = lipgloss.NewStyle().
 				Border(lipgloss.NormalBorder(), false, false, false, true).
 				BorderForeground(ColorSecondary).
-				Background(ColorSurface).
 				PaddingLeft(1)
 
 	// MessageBubbleAssistant keeps the bare quote block: the user's

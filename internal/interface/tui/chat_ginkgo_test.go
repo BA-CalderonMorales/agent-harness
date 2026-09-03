@@ -493,9 +493,10 @@ var _ = Describe("ChatModel", func() {
 				model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyEnter})
 				chat = model.(ChatModel)
 
-				By("verifying the collapsed placeholder is displayed")
+				By("verifying the paste renders as a bounded preview")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 201 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("…"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("201 characters total"))
 			})
 
 			It("should still send the full text to the delegate", func() {
@@ -557,7 +558,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the collapsed placeholder is displayed")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 213 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("213 characters total"))
 			})
 		})
 
@@ -647,7 +648,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the collapsed placeholder is still displayed")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("…"))
 			})
 		})
 
@@ -750,7 +751,7 @@ var _ = Describe("ChatModel", func() {
 				By("verifying the collapsed placeholder shows line count")
 				Expect(chat.messages).To(HaveLen(1))
 				Expect(chat.messages[0].Role).To(Equal("user"))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 3 lines, 28 characters]"))
+				Expect(chat.messages[0].Content).To(Equal(pasted))
 				Expect(delegate.submittedText).To(Equal(pasted))
 			})
 		})
@@ -772,7 +773,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the collapsed placeholder shows line count and chars")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 2 lines, 211 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("211 characters total"))
 			})
 		})
 
@@ -841,7 +842,7 @@ var _ = Describe("ChatModel", func() {
 				By("verifying a single message was submitted with newlines preserved")
 				Expect(chat.messages).To(HaveLen(1))
 				Expect(delegate.submittedText).To(Equal("go " + strings.Repeat("x", 25) + "\nsecond line"))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("second line"))
 			})
 		})
 	})
@@ -1029,7 +1030,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying exactly one collapsed message")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("Line 1"))
 				Expect(delegate.submittedText).To(ContainSubstring("Line 1"))
 				Expect(delegate.submittedText).To(ContainSubstring("Line 5"))
 			})
@@ -1071,7 +1072,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the display is collapsed")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(Equal("hi\nbye"))
 				Expect(delegate.submittedText).To(Equal("hi\nbye"))
 			})
 		})
@@ -1113,7 +1114,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 201 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("201 characters total"))
 			})
 		})
 
@@ -1131,7 +1132,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 204 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("204 characters total"))
 				Expect(delegate.submittedText).To(Equal(pasted))
 			})
 		})
@@ -1150,7 +1151,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 10000 characters]"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("10000 characters total"))
 			})
 		})
 
@@ -1168,7 +1169,7 @@ var _ = Describe("ChatModel", func() {
 				chat = model.(ChatModel)
 
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(Equal("[Pasted text, 4 lines, 3 characters]"))
+				Expect(chat.messages[0].Content).To(Equal("\n\n\n"))
 			})
 		})
 
@@ -1198,8 +1199,8 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying both messages are collapsed")
 				Expect(chat.messages).To(HaveLen(2))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
-				Expect(chat.messages[1].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("210 characters total"))
+				Expect(chat.messages[1].Content).To(ContainSubstring("220 characters total"))
 			})
 		})
 
@@ -1419,7 +1420,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the display is collapsed")
 				Expect(chat.messages).To(HaveLen(1))
-				Expect(chat.messages[0].Content).To(ContainSubstring("[Pasted text,"))
+				Expect(chat.messages[0].Content).To(ContainSubstring("…"))
 			})
 		})
 	})
