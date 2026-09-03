@@ -9,21 +9,28 @@ import (
 // JSON / code display
 // ---------------------------------------------------------------------------
 var (
+	JSONCodeBlockStyle lipgloss.Style
+	CodeKeyStyle       lipgloss.Style
+	CodeStringStyle    lipgloss.Style
+	CodeNumberStyle    lipgloss.Style
+)
+
+func applyCodeStyles() {
 	JSONCodeBlockStyle = lipgloss.NewStyle().
-				BorderStyle(lipgloss.RoundedBorder()).
-				BorderForeground(ColorBorder).
-				Foreground(ColorText).
-				Padding(0, 1)
+		BorderStyle(lipgloss.RoundedBorder()).
+		BorderForeground(ColorBorder).
+		Foreground(ColorText).
+		Padding(0, 1)
 
 	CodeKeyStyle = lipgloss.NewStyle().
-			Foreground(ColorSecondary)
+		Foreground(ColorSecondary)
 
 	CodeStringStyle = lipgloss.NewStyle().
-			Foreground(ColorSuccess)
+		Foreground(ColorSuccess)
 
 	CodeNumberStyle = lipgloss.NewStyle().
-			Foreground(ColorAccent)
-)
+		Foreground(ColorAccent)
+}
 
 // viewPadded centers content within the given width and height.
 func viewPadded(width, height int, content string) string {
