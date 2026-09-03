@@ -4,41 +4,55 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 )
 
-// SessionManager handles session lifecycle
+// SessionManager handles session lifecycle. Sessions are stored
+// append-only per project (see session_store.go).
 type SessionManager struct {
 	sessionsDir string
+	projectRoot string
 	current     *Session
 }
 
-// NewSessionManager creates a new session manager
+// NewSessionManager creates a session manager scoped to the current
+// working directory's project.
 func NewSessionManager() (*SessionManager, error) {
-	return NewSessionManagerWithDir("")
+	cwd, err := os.Getwd()
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve working directory: %w", err)
+	}
+	return NewSessionManagerForProject(cwd)
 }
 
-// NewSessionManagerWithDir creates a session manager with a custom directory.
-// If dir is empty, falls back to AGENT_HARNESS_SESSION_DIR env var, then to
-// the shared data home's sessions directory.
-func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
-	sessionsDir := dir
-	if sessionsDir == "" {
-		sessionsDir = os.Getenv("AGENT_HARNESS_SESSION_DIR")
-	}
-	if sessionsDir == "" {
-		sessionsDir = config.DataSessions()
+// NewSessionManagerForProject creates a session manager scoped to a
+// project root: only that project's sessions list, resume, and load.
+func NewSessionManagerForProject(root string) (*SessionManager, error) {
+	sm := &SessionManager{projectRoot: root}
+	sm.sessionsDir = os.Getenv("AGENT_HARNESS_SESSION_DIR")
+	if sm.sessionsDir == "" {
+		sm.sessionsDir = config.DataSessions()
 	}
 
-	if err := os.MkdirAll(sessionsDir, 0700); err != nil {
+	if err := os.MkdirAll(sm.sessionsDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
 	}
+	sm.migrateLegacySessionFiles()
+	return sm, nil
+}
 
-	return &SessionManager{
-		sessionsDir: sessionsDir,
-	}, nil
+// NewSessionManagerWithDir creates a session manager pinned to an
+// explicit directory (the SessionDir settings override).
+func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
+	if dir == "" {
+		return NewSessionManager()
+	}
+	sm := &SessionManager{sessionsDir: dir, projectRoot: dir}
+	if err := os.MkdirAll(sm.sessionsDir, 0700); err != nil {
+		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
+	}
+	return sm, nil
 }
 
 // CreateSession creates a new session
@@ -57,24 +71,50 @@ func (sm *SessionManager) SetCurrent(session *Session) {
 	sm.current = session
 }
 
-// SaveCurrent saves the current session
+// SaveCurrent persists the current session by appending whatever is new
+// to its JSONL file. Compaction shrinks the transcript below what is on
+// disk, which triggers a full rewrite of the (rare) kind.
 func (sm *SessionManager) SaveCurrent() (string, error) {
 	if sm.current == nil {
 		return "", fmt.Errorf("no active session")
 	}
 
-	path := filepath.Join(sm.sessionsDir, sm.current.ID+".json")
-	if err := sm.current.SaveToFile(path); err != nil {
+	path := sm.sessionPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return "", err
 	}
 
+	// A file that does not exist yet starts with its header + all
+	// in-memory messages.
+	if _, err := os.Stat(path); os.IsNotExist(err) {
+		if err := sm.createSessionFile(path); err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+
+	// Compaction (or Clear) shrinks the transcript below what is on
+	// disk: rewrite. Otherwise append only the delta.
+	onDisk := countMessageEvents(path)
+	if onDisk > len(sm.current.Messages) {
+		if err := sm.createSessionFile(path); err != nil {
+			return "", err
+		}
+		return path, nil
+	}
+	if err := sm.appendSessionEventsFrom(path, onDisk); err != nil {
+		return "", err
+	}
 	return path, nil
 }
 
 // LoadSession loads a session by ID
 func (sm *SessionManager) LoadSession(id string) (*Session, error) {
-	path := filepath.Join(sm.sessionsDir, id+".json")
-	session, err := LoadSession(path)
+	path, err := sm.findSessionFile(id)
+	if err != nil {
+		return nil, err
+	}
+	session, err := loadSessionFile(path)
 	if err != nil {
 		return nil, err
 	}
@@ -85,29 +125,26 @@ func (sm *SessionManager) LoadSession(id string) (*Session, error) {
 
 // ReadSession loads a session by ID without changing the active session.
 func (sm *SessionManager) ReadSession(id string) (*Session, error) {
-	path := filepath.Join(sm.sessionsDir, id+".json")
-	return LoadSession(path)
+	path, err := sm.findSessionFile(id)
+	if err != nil {
+		return nil, err
+	}
+	return loadSessionFile(path)
 }
 
-// ListSessions lists all available sessions
+// ListSessions lists the current project's sessions
 func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
-	entries, err := os.ReadDir(sm.sessionsDir)
+	paths, err := sm.listProjectSessionFiles()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read sessions directory: %w", err)
+		return nil, err
 	}
 
 	sessions := make([]SessionMetadata, 0)
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-
-		path := filepath.Join(sm.sessionsDir, entry.Name())
-		session, err := LoadSession(path)
+	for _, path := range paths {
+		session, err := loadSessionFile(path)
 		if err != nil {
-			continue
+			continue // torn or foreign file: skip, never fail the list
 		}
-
 		sessions = append(sessions, session.GetMetadata())
 	}
 
@@ -116,7 +153,7 @@ func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 
 // GetSessionsDir returns the sessions directory
 func (sm *SessionManager) GetSessionsDir() string {
-	return sm.sessionsDir
+	return sm.projectSessionsDir()
 }
 
 // DeleteSession deletes a session by ID
@@ -126,11 +163,11 @@ func (sm *SessionManager) DeleteSession(id string) error {
 		return fmt.Errorf("cannot delete the active session")
 	}
 
-	path := filepath.Join(sm.sessionsDir, id+".json")
+	path, err := sm.findSessionFile(id)
+	if err != nil {
+		return err
+	}
 	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return fmt.Errorf("session not found")
-		}
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
 	return nil
@@ -138,41 +175,19 @@ func (sm *SessionManager) DeleteSession(id string) error {
 
 // GetDefaultSessionPath returns the path for auto-save sessions
 func (sm *SessionManager) GetDefaultSessionPath() string {
-	if sm.current == nil {
-		return ""
-	}
-	return filepath.Join(sm.sessionsDir, sm.current.ID+".json")
+	return sm.sessionPath()
 }
 
 // ResumeLatestSession loads the most recently updated session if one exists.
 // Returns the session and true if resumed, nil and false if no sessions found.
 func (sm *SessionManager) ResumeLatestSession() (*Session, bool) {
-	entries, err := os.ReadDir(sm.sessionsDir)
-	if err != nil {
+	paths, err := sm.listProjectSessionFiles()
+	if err != nil || len(paths) == 0 {
 		return nil, false
 	}
 
-	var latestPath string
-	var latestTime time.Time
-	for _, entry := range entries {
-		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
-			continue
-		}
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(latestTime) {
-			latestTime = info.ModTime()
-			latestPath = filepath.Join(sm.sessionsDir, entry.Name())
-		}
-	}
-
-	if latestPath == "" {
-		return nil, false
-	}
-
-	session, err := LoadSession(latestPath)
+	// Filenames sort by start time; the newest is last.
+	session, err := loadSessionFile(paths[len(paths)-1])
 	if err != nil {
 		return nil, false
 	}

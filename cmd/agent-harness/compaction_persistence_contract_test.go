@@ -13,7 +13,6 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -107,9 +106,9 @@ func TestAutomaticCompactionPersistsTheContextUsedByTheModel(t *testing.T) {
 	}
 
 	persistedPath := app.sessionManager.GetDefaultSessionPath()
-	persisted, err := state.LoadSession(persistedPath)
+	persisted, err := app.sessionManager.ReadSession(app.session.ID)
 	if err != nil {
-		t.Fatalf("LoadSession(%q) error = %v", persistedPath, err)
+		t.Fatalf("ReadSession(%q) error = %v", persistedPath, err)
 	}
 	if len(persisted.Messages) != len(app.session.Messages) {
 		t.Fatalf("persisted message count = %d, active count = %d", len(persisted.Messages), len(app.session.Messages))
@@ -163,7 +162,7 @@ func TestReactiveCompactionPersistsTheRetryContext(t *testing.T) {
 		t.Fatalf("retry message count = %d, want fewer than initial %d", len(mainRequests[1].Messages), len(mainRequests[0].Messages))
 	}
 
-	persisted, err := state.LoadSession(app.sessionManager.GetDefaultSessionPath())
+	persisted, err := app.sessionManager.ReadSession(app.session.ID)
 	if err != nil {
 		t.Fatalf("LoadSession() error = %v", err)
 	}
@@ -196,12 +195,14 @@ func TestCompactionPersistenceFailureDoesNotReportSuccess(t *testing.T) {
 	app.loop.Config.BlockingTokenLimit = 100
 	app.loop.Config.DefaultMaxTurns = 1
 
-	sessionDir := filepath.Dir(app.sessionManager.GetDefaultSessionPath())
-	if err := os.Remove(sessionDir); err != nil {
-		t.Fatalf("remove empty temporary session directory: %v", err)
+	// Block persistence at the project directory level: replace it with
+	// a file so MkdirAll/OpenFile cannot create the session store.
+	projectDir := filepath.Dir(app.sessionManager.GetDefaultSessionPath())
+	if err := os.RemoveAll(projectDir); err != nil {
+		t.Fatalf("remove temporary project sessions directory: %v", err)
 	}
-	if err := os.WriteFile(sessionDir, []byte("blocks session persistence"), 0o600); err != nil {
-		t.Fatalf("replace temporary session directory with file: %v", err)
+	if err := os.WriteFile(projectDir, []byte("blocks session persistence"), 0o600); err != nil {
+		t.Fatalf("replace temporary project directory with file: %v", err)
 	}
 
 	tuiApp := tui.NewApp()

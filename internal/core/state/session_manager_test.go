@@ -2,7 +2,6 @@ package state
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -74,8 +73,8 @@ func TestSessionManagerPersistsListsReadsAndResumesSessions(t *testing.T) {
 	if err := manager.DeleteSession("first-session"); err != nil {
 		t.Fatalf("DeleteSession(first) error = %v", err)
 	}
-	if _, err := os.Stat(filepath.Join(sessionsDir, "first-session.json")); !os.IsNotExist(err) {
-		t.Fatalf("deleted session still exists or stat failed unexpectedly: %v", err)
+	if _, err := manager.ReadSession("first-session"); err == nil {
+		t.Fatal("deleted session still loads")
 	}
 }
 
