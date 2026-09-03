@@ -23,3 +23,10 @@ Before: t.Skip when cmd == nil (weak — skips rather than asserts timer updates
 After: must assert timerRunning stays true or timer updates. Strengthened below.
 === COMMITTING UNSTAGED (D): P1-1 (commands_tui.go QueueSteer, app.go dead steer deleted) + P2-5 (app_update.go timer routed regardless of view, stops AgentDone/AgentError) ===
 Note: SHIP-REVIEW.md corrected; NVIDIA gap documented permanently; P2-5 red test strengthened (asserted timer state instead of Skip); P2-12 false claim corrected.
+A) SHIP-REVIEW.md: P2-12 false claim corrected (Thinking/Signature only); P2-1..7 noted unimplemented/glossed.
+B) NVIDIA gap: permanently documented (NVIDIA_E2E_COMPLETE=FALSE); payload + fixture + SSE parser verified; mapping gap noted (not fixed — needs user decision to fix or leave).
+C) P2-5 assertion: strengthened (asserts timer state instead of Skip).
+D) Commit b72ca42: unstaged P1-1 + P2-5 + SHIP-REVIEW.md + NVIDIA gap doc + evidence files.
+E) make verify: passed (structure OK, all tests pass — tui package 0.930s).
+=== BLOCKED AWAITING USER (prior user instruction: confirm next direction before proceeding) ===
+Next options: (1) implement NVIDIA reasoning mapping (SSE reasoning_content delta -> ThinkingBlock.Thinking); (2) finalize P2-5 red test stronger assertion; (3) apply P2-3 / P2-6 / P2-7 production edits (currently glossed); (4) finalize VHS .tape -> durable .gif; (5) other.
