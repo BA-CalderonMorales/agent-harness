@@ -168,7 +168,10 @@ func (m *LoginDialogModel) loadModels() {
 	if len(models) > 0 {
 		// Size the picker viewport for the dialog panel: Width drives the
 		// name truncation, Height the scroll window and cursor sync.
-		vpW := 44
+		vpW := m.width - 12
+		if vpW < 30 {
+			vpW = 30
+		}
 		vpH := m.height - 14
 		if vpH < 5 {
 			vpH = 5
@@ -323,7 +326,12 @@ func (m LoginDialogModel) View() string {
 	if m.step == LoginStepAPIKey {
 		panelWidth = 48
 	} else if m.step == LoginStepModel {
-		panelWidth = 54
+		// Full-width panel: live model ids (accounts/fireworks/models/...)
+		// are far longer than a fixed 54-col panel can show.
+		panelWidth = m.width - 4
+		if panelWidth < 54 {
+			panelWidth = 54
+		}
 	}
 
 	panel := lipgloss.NewStyle().
