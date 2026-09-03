@@ -124,9 +124,15 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		}
 
 	case tea.KeyEsc:
-		// If agent is running, cancel it first
+		// If agent is running, cancel it first — and land in normal
+		// mode: Esc signaled "stop, let me look", so the next j/k must
+		// scroll instead of typing into a composer the user believes
+		// they left.
 		if a.agentCancelFunc != nil {
 			a.CancelAgent()
+			a.mode = ModeNormal
+			a.chatModel.SetModeLabel("navigate")
+			a.blurActive()
 			return a, func() tea.Msg {
 				return AgentCancelMsg{}
 			}, true
@@ -214,6 +220,15 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				// never hidden by either state.
 				a.chatModel.ToggleToolsCollapsed()
 				return a, nil, true
+			}
+
+			// Navigate-mode affordance: an unmatched printable key in
+			// normal mode is almost always someone starting to type.
+			// Flash the mode instead of silently doing nothing (or
+			// worse, having an earlier binding fire).
+			if a.activeView == viewChat && (msg.Type == tea.KeyRunes || msg.Type == tea.KeySpace) {
+				a.ShowStatus("Navigate mode — press i to type", "info")
+				return a, a.statusFlashCmd(), true
 			}
 		}
 	}
