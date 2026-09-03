@@ -64,27 +64,27 @@ var _ = Describe("ChatModel", func() {
 
 			By("showing the thinking placeholder and the running tool")
 			Expect(chat.messages).To(HaveLen(2))
-			Expect(chat.messages[0].Role).To(Equal("assistant"))
-			Expect(chat.messages[0].Thinking).To(BeTrue())
-			Expect(chat.messages[0].Content).To(Equal(""))
-			Expect(chat.messages[1].Role).To(Equal("tool"))
-			Expect(chat.messages[1].ToolStatus).To(Equal(ToolStatusRunning))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusRunning))
+			Expect(chat.messages[1].Role).To(Equal("assistant"))
+			Expect(chat.messages[1].Thinking).To(BeTrue())
+			Expect(chat.messages[1].Content).To(Equal(""))
 
 			By("finishing the tool before the agent response")
 			model, _ = chat.Update(AgentToolDoneMsg{ToolID: "tool-1", Success: true})
 			chat = model.(ChatModel)
 			Expect(chat.messages).To(HaveLen(2))
-			Expect(chat.messages[1].Role).To(Equal("tool"))
-			Expect(chat.messages[1].ToolStatus).To(Equal(ToolStatusSuccess))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[0].ToolStatus).To(Equal(ToolStatusSuccess))
 
 			By("finalizing the assistant response after tool activity")
 			model, _ = chat.Update(AgentDoneMsg{FullResponse: "tests passed"})
 			chat = model.(ChatModel)
 			Expect(chat.messages).To(HaveLen(2))
-			Expect(chat.messages[0].Role).To(Equal("assistant"))
-			Expect(chat.messages[0].Thinking).To(BeFalse())
-			Expect(chat.messages[0].Content).To(Equal("tests passed"))
-			Expect(chat.messages[1].Role).To(Equal("tool"))
+			Expect(chat.messages[0].Role).To(Equal("tool"))
+			Expect(chat.messages[1].Role).To(Equal("assistant"))
+			Expect(chat.messages[1].Thinking).To(BeFalse())
+			Expect(chat.messages[1].Content).To(Equal("tests passed"))
 		})
 
 		It("should ignore stale chunks, tool completions, and final responses after cancellation", func() {
@@ -136,15 +136,15 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the section stays hidden during the placeholder delay")
 				view := chat.View()
-				Expect(view).ToNot(ContainSubstring("(thinking"))
+				Expect(view).ToNot(ContainSubstring("thinking"))
 
-				By("letting the placeholder delay elapse and confirming the spinner appears")
-				chat.startTime = time.Now().Add(-2 * time.Second)
+				By("letting the placeholder delay elapse and confirming the badge appears")
+				chat.startTime = time.Now().Add(-1500 * time.Millisecond)
 				model, _ = chat.Update(timerTickMsg{})
 				chat = model.(ChatModel)
 				view = chat.View()
-				Expect(view).To(ContainSubstring("(thinking"))
-				Expect(view).To(ContainSubstring("⬖")) // spinning-diamond frame 0
+				Expect(view).To(ContainSubstring("✦"))       // twinkle frame 0
+				Expect(view).To(ContainSubstring("thinking")) // quip rotates on a 2s clock
 
 				By("finishing the turn")
 				model, _ = chat.Update(AgentDoneMsg{Timestamp: time.Now()})

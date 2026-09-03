@@ -76,20 +76,6 @@ const (
 // messages.
 var spinnerDots = []string{"⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"}
 
-// thinkingSpinner is the spinning-diamond animation used by the live
-// thinking indicator in assistant headers. The half-diamond frames rotate
-// through their four corners, reading as a genuine ◆ spinning in place:
-// ⬖ (top-left) → ⬗ (top-right) → ⬘ (bottom-right) → ⬙ (bottom-left).
-var thinkingSpinner = []string{"⬖", "⬗", "⬘", "⬙"}
-
-// thinkingFrameAt returns the spinning-diamond glyph for a tick counter.
-func thinkingFrameAt(tick int) string {
-	if len(thinkingSpinner) == 0 {
-		return "◆"
-	}
-	return thinkingSpinner[tick%len(thinkingSpinner)]
-}
-
 // SpinnerRender returns a loading message with a spinner.
 func SpinnerRender(msg string) string {
 	idx := int(time.Now().UnixMilli()/80) % len(spinnerDots)
