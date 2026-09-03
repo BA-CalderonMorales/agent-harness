@@ -63,10 +63,10 @@ func legacyHome() string {
 // legacyLayout maps legacy child names to their XDG-home destination.
 // The migration only touches what it owns — unknown entries stay.
 var legacyLayout = map[string]func() string{
-	"sessions":     DataSessions,
-	"audit":        DataAudit,
-	"logs":         DataLogs,
-	"tool-results": DataToolResults,
+	"sessions":      DataSessions,
+	"audit":         DataAudit,
+	"logs":          DataLogs,
+	"tool-results":  DataToolResults,
 	"settings.json": func() string { return filepath.Join(ConfigHome(), "settings.json") },
 }
 
