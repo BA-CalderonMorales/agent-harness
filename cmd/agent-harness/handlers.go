@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/ui"
@@ -26,7 +27,11 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 	}
 	app.session.AddMessage(userMsg)
 	app.sessionManager.SetCurrent(app.session)
-	_, _ = app.sessionManager.SaveCurrent()
+	if _, err := app.sessionManager.SaveCurrent(); err != nil {
+		// Persistence must never block chatting, but the failure is
+		// recorded: a turn lost to a full disk should be traceable.
+		diag.Error("session.save.submit", err)
+	}
 
 	app.handleAgentLoopAsync(normalizedInput, tuiApp)
 }
@@ -38,6 +43,12 @@ func (app *App) handleUserCommand(command string, tuiApp *tui.App) {
 		}
 		if commands.IsQuit(result) {
 			tuiApp.Send(tui.QuitMsg{})
+			return
+		}
+		// The /settings sentinel means "the TUI already switched tabs"
+		// (the literal command is intercepted in App.Update). The token
+		// itself must never reach the transcript as a second message.
+		if commands.IsSettings(result) {
 			return
 		}
 		if result != "" {
