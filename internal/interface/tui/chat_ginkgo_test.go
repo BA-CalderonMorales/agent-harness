@@ -143,7 +143,7 @@ var _ = Describe("ChatModel", func() {
 				model, _ = chat.Update(timerTickMsg{})
 				chat = model.(ChatModel)
 				view = chat.View()
-				Expect(view).To(ContainSubstring("✦"))       // twinkle frame 0
+				Expect(view).To(ContainSubstring("✦"))        // twinkle frame 0
 				Expect(view).To(ContainSubstring("thinking")) // quip rotates on a 2s clock
 
 				By("finishing the turn")
