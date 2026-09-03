@@ -66,6 +66,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 		model = getDefaultModel(provider)
 	}
 	app.config.Model = model
+	applyCatalogContext(app.config, model)
 	if app.session != nil {
 		app.session.Model = model
 	}

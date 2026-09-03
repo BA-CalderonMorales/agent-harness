@@ -85,6 +85,7 @@ func newApp() (*App, error) {
 
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
+	applyCatalogContext(app.config, app.session.Model)
 	if app.config.ContextLength > 0 {
 		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
 	}
