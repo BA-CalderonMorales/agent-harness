@@ -216,9 +216,18 @@ func (app *App) handleToolUseStart(b types.ToolUseBlock, tuiApp *tui.App) {
 	tool, ok := app.toolRegistry.FindToolByName(b.Name)
 	displayName := b.Name
 	activityDesc := ""
+	// UserFacingName and GetActivityDescription are optional: several
+	// builtin tools (web_fetch, ask, plan, todo, …) define neither, and
+	// calling the nil func field panicked the whole turn (recovered at
+	// agent.turn.panic in session 4d06abe0 — the tool display name fell
+	// back to the raw name, which is exactly right).
 	if ok {
-		displayName = tool.UserFacingName(b.Input)
-		activityDesc = tool.GetActivityDescription(b.Input)
+		if tool.UserFacingName != nil {
+			displayName = tool.UserFacingName(b.Input)
+		}
+		if tool.GetActivityDescription != nil {
+			activityDesc = tool.GetActivityDescription(b.Input)
+		}
 	}
 
 	tuiApp.Send(tui.AgentToolStartMsg{
