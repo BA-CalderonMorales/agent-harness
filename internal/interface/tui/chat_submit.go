@@ -63,6 +63,12 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		return
 	}
 
+	// Collapsed pastes expand back to their full content here, after
+	// display formatting: the transcript shows the collapsed form, the
+	// model receives the material.
+	input = m.expandPasteTokens(input)
+	m.clearPendingPastes()
+
 	// Handle slash commands
 	trimmed := strings.TrimSpace(input)
 	if strings.HasPrefix(trimmed, "/") {
@@ -105,6 +111,7 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 
 	m.pasteDetected = false
 	m.textarea.SetValue("")
+	m.clearPendingPastes()
 	m.syncTextareaHeight()
 	m.refreshViewportFollow()
 	model = m

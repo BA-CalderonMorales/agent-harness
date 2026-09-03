@@ -52,6 +52,16 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		m.pasteDetected = true
 	}
 
+	// Bracketed paste carrying a large blob: collapse it to a
+	// placeholder token in the composer (OpenCode-style) and keep the
+	// full text for expansion on submit. Small pastes insert verbatim.
+	if msg.Paste && msg.Type == tea.KeyRunes && len(msg.Runes) > PasteCollapseThreshold {
+		token, content := m.stashPaste(string(msg.Runes))
+		m.textarea.InsertString(token)
+		m.syncTextareaHeight()
+		return m, m.pasteFeedback(token, content), true
+	}
+
 	// Inline suggestion navigation
 	if m.showSuggestions {
 		switch msg.String() {
@@ -153,6 +163,7 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 			m.pasteDetected = false
 			m.pendingSubmit = false
 			m.pendingSubmitGen++
+			m.clearPendingPastes()
 			m.syncTextareaHeight()
 		}
 		return m, nil, true

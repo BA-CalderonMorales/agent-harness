@@ -183,6 +183,7 @@ type ChatModel struct {
 
 	// Paste detection state
 	pasteDetected bool // true if current input was detected as a paste
+	pendingPastes map[string]string // collapsed paste tokens -> full content
 
 	// Debounce state for distinguishing intentional Enter from pasted newlines
 	pendingSubmit    bool
