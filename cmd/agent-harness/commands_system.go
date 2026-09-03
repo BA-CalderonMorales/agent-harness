@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -97,7 +98,9 @@ func (app *App) initCommandsSystem() {
 				}
 				app.session.Persona = parsed.String()
 				app.sessionManager.SetCurrent(app.session)
-				_, _ = app.sessionManager.SaveCurrent()
+				if _, err := app.sessionManager.SaveCurrent(); err != nil {
+					diag.Error("session.save.persona", err)
+				}
 				return nil
 			},
 			formatPersonaList,

@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
@@ -27,7 +28,9 @@ func (app *App) initCommandsCore() {
 		commands.ClearHandler(func() error {
 			app.session = app.session.Clear()
 			app.sessionManager.SetCurrent(app.session)
-			_, _ = app.sessionManager.SaveCurrent()
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				diag.Error("session.save.clear", err)
+			}
 			app.refreshTelemetry(app.tuiApp)
 			return nil
 		}, nil))
@@ -68,7 +71,9 @@ func (app *App) initCommandsCore() {
 				}
 				app.commitConfigChange()
 				app.sessionManager.SetCurrent(app.session)
-				_, _ = app.sessionManager.SaveCurrent()
+				if _, err := app.sessionManager.SaveCurrent(); err != nil {
+					diag.Error("session.save.model", err)
+				}
 				app.refreshTelemetry(app.tuiApp)
 				return nil
 			},

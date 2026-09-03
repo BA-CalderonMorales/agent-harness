@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -154,7 +155,9 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			}
 			app.session.AddMessage(e.Message)
 			app.sessionManager.SetCurrent(app.session)
-			_, _ = app.sessionManager.SaveCurrent()
+			if _, err := app.sessionManager.SaveCurrent(); err != nil {
+				diag.Error("session.save.turn", err)
+			}
 		case types.StreamError:
 			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 		}

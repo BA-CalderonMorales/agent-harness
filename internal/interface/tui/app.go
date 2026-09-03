@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/git"
 	tea "github.com/charmbracelet/bubbletea"
@@ -226,7 +227,10 @@ func (a *App) Send(msg tea.Msg) {
 	select {
 	case a.msgChan <- msg:
 	default:
-		// Channel full, drop message (shouldn't happen with buffer)
+		// Channel full, drop message. Dropped streaming events surface
+		// as frozen output with no cause — record the drop so a frozen
+		// chat traces back here in seconds.
+		diag.Errorf("tui.send.drop", "message channel full, dropped %T", msg)
 	}
 }
 
