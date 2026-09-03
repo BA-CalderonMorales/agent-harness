@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
+	"strings"
 	"time"
 )
 
@@ -38,6 +39,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 	var pendingToolUse *types.ToolUseBlock
 	var toolInputBuffer string
 	var toolUses []types.ToolUseBlock
+	var currentReasoning strings.Builder
 
 	idle := time.NewTimer(l.idleWindow())
 	defer idle.Stop()
@@ -73,6 +75,16 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 			switch e := ev.(type) {
 			case types.LLMMessageStart:
 				msg.UUID = e.ID
+			case types.LLMReasoningDelta:
+				// Reasoning is wait-state color, not transcript material:
+				// forward the live text for the thinking badge and keep
+				// it out of the durable message.
+				currentReasoning.WriteString(e.Delta)
+				select {
+				case out <- types.StreamThinking{Text: currentReasoning.String()}:
+				case <-ctx.Done():
+					return nil, nil, ctx.Err()
+				}
 			case types.LLMTextDelta:
 				currentText += e.Delta
 			case types.LLMToolUseDelta:

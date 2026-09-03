@@ -54,6 +54,12 @@ func (a *App) SetThinking(thinking bool, text string) {
 	a.chatModel.SetThinking(thinking, text)
 }
 
+// SetThinkingText updates the live reasoning preview without resetting
+// the thinking timer.
+func (a *App) SetThinkingText(text string) {
+	a.chatModel.SetThinkingText(text)
+}
+
 // ShowStatus shows a status message.
 func (a *App) ShowStatus(text string, statusType string) {
 	a.statusMessage = text

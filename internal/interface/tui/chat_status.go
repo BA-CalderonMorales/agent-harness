@@ -85,6 +85,27 @@ func thinkingHint(elapsed time.Duration) string {
 	return "still thinking — first token can take minutes on CPU models"
 }
 
+// reasoningPreviewTruncate is the visible tail length of the live
+// reasoning stream. The head of a reasoning trace is stale by the time
+// it renders; the tail is where the model is now.
+const reasoningPreviewTruncate = 100
+
+// reasoningPreview renders the tail of the live reasoning stream for the
+// wait state. Empty when the model sent no reasoning (or the default
+// "Thinking..." placeholder is still in place).
+func reasoningPreview(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" || text == "Thinking..." {
+		return ""
+	}
+	// Single line: reasoning paragraphs collapse for the preview.
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) > reasoningPreviewTruncate {
+		text = "…" + text[len(text)-reasoningPreviewTruncate:]
+	}
+	return text
+}
+
 // ConsumesTab returns whether this view consumes Tab key.
 // When inline suggestions are showing, Tab is used for auto-completion.
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {

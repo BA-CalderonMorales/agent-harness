@@ -207,10 +207,17 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	// italic, etc.). While thinking (before the first chunk) the bubble is
 	// hidden so only the animated header shows. Once the first token has
 	// been pending long enough to suggest a slow local model, an explanatory
-	// progress line fills the gap.
+	// progress line fills the gap. When reasoning deltas are streaming
+	// (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning text
+	// previews under the badge instead — the model's wait state, not
+	// its output.
 	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
 		if hint := thinkingHint(m.elapsed); hint != "" {
 			b.WriteString(HelpDimStyle.Render(hint))
+			b.WriteString("\n")
+		}
+		if preview := reasoningPreview(m.thinkingText); preview != "" {
+			b.WriteString(HelpDimStyle.Render(preview))
 			b.WriteString("\n")
 		}
 		return b.String()

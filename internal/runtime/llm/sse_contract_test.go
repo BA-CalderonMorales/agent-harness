@@ -129,11 +129,12 @@ func TestReadSSECancellationInterruptsBlockedRead(t *testing.T) {
 }
 
 type sseObservation struct {
-	starts []string
-	text   []string
-	tools  []types.LLMToolUseDelta
-	stops  []types.LLMMessageStop
-	errors []error
+	starts    []string
+	text      []string
+	reasoning []string
+	tools     []types.LLMToolUseDelta
+	stops     []types.LLMMessageStop
+	errors    []error
 }
 
 func observeSSEEvents(events []types.LLMEvent) sseObservation {
@@ -144,6 +145,8 @@ func observeSSEEvents(events []types.LLMEvent) sseObservation {
 			got.starts = append(got.starts, event.ID)
 		case types.LLMTextDelta:
 			got.text = append(got.text, event.Delta)
+		case types.LLMReasoningDelta:
+			got.reasoning = append(got.reasoning, event.Delta)
 		case types.LLMToolUseDelta:
 			got.tools = append(got.tools, event)
 		case types.LLMMessageStop:
@@ -246,11 +249,11 @@ func assertErrorContains(t *testing.T, err error, fragments ...string) {
 	}
 }
 
-// TestReadSSEIgnoresNvidiaReasoningContent pins the NVIDIA thinking
-// stream contract: nemotron models interleave reasoning_content deltas
-// with content deltas, and the parser must ignore the reasoning field
-// (it carries no usable tool/text data for this harness) while keeping
-// the visible content and finish metadata intact.
+// TestReadSSEIgnoresNvidiaReasoningContent pins the reasoning stream
+// contract: GLM/DeepSeek/Nemotron thinking models interleave
+// reasoning_content deltas with content deltas, and the parser must
+// surface the reasoning as LLMReasoningDelta events while keeping the
+// visible content and finish metadata intact.
 func TestReadSSEIgnoresNvidiaReasoningContent(t *testing.T) {
 	events := collectSSEEvents(t, context.Background(), fixtureBody(t, "nvidia-thinking.sse", 3))
 	got := observeSSEEvents(events)
@@ -259,7 +262,10 @@ func TestReadSSEIgnoresNvidiaReasoningContent(t *testing.T) {
 		t.Fatalf("unexpected parser errors: %v", got.errors)
 	}
 	if want := []string{"The answer"}; !reflect.DeepEqual(got.text, want) {
-		t.Errorf("text deltas = %#v, want %#v (reasoning_content must be ignored)", got.text, want)
+		t.Errorf("text deltas = %#v, want %#v", got.text, want)
+	}
+	if len(got.reasoning) == 0 {
+		t.Errorf("reasoning deltas = %#v, want at least one LLMReasoningDelta (reasoning_content must surface for the thinking badge)", got.reasoning)
 	}
 	if len(got.stops) != 1 {
 		t.Fatalf("message stops = %#v, want exactly one stop", got.stops)

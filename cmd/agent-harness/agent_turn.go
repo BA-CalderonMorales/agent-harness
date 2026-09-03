@@ -121,6 +121,11 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			} else if e.Notice != "" {
 				tuiApp.Send(tui.StatusMsg{Text: e.Notice, Type: "info"})
 			}
+		case types.StreamThinking:
+			// Reasoning preview: update the badge text without touching
+			// the thinking timer (SetThinking would reset the clock on
+			// every reasoning delta).
+			tuiApp.SetThinkingText(e.Text)
 		case types.StreamMessage:
 			// System-role notices (tool-call limit, loop detection) are
 			// loop announcements, not model speech: they must render as

@@ -313,26 +313,17 @@ func ShortenModelName(model string) string {
 
 	parts := strings.SplitN(model, "/", 2)
 	if len(parts) == 2 {
-		provider := parts[0]
-		rest := parts[1]
-		segments := strings.Split(rest, "-")
-
-		short := ""
-		for i := len(segments) - 1; i >= 0; i-- {
-			s := segments[i]
-			if strings.ContainsAny(s, "0123456789") {
-				// Prefer segments that end with 'b' (like "120b" for billion parameters)
-				// and are longer than current short (indicating more specific version)
-				if len(s) > len(short) || (len(s) == len(short) && strings.HasSuffix(s, "b")) {
-					short = s
-				}
-			}
+		// Registry paths (accounts/fireworks/models/glm-5p3-flash) bury
+		// the identity in boilerplate: show the last path segment and
+		// front-truncate with an ellipsis when it still overflows.
+		tail := parts[1]
+		if idx := strings.LastIndex(tail, "/"); idx != -1 {
+			tail = tail[idx+1:]
 		}
-		if short == "" {
-			short = segments[len(segments)-1]
+		result := tail
+		if len(tail) > 24 {
+			result = "…" + tail[len(tail)-23:]
 		}
-
-		result := provider + "..." + short
 		if tag != "" {
 			result += "(" + tag + ")"
 		}

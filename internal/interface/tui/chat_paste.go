@@ -15,6 +15,30 @@ import (
 // characters of log file scrolling past in their input box.
 const PasteCollapseThreshold = 300
 
+// PastePreviewLines is how many leading lines of a collapsed paste the
+// transcript shows verbatim: the head of the content identifies what
+// was sent, and a marker states exactly how much was hidden.
+const PastePreviewLines = 8
+
+// pastePreview renders pasted input for the transcript. A blackout
+// marker ("[Pasted text, N characters]") hides the very content an
+// audit needs; a bounded preview keeps the transcript honest without
+// flooding it.
+func pastePreview(input string) string {
+	lines := strings.Split(input, "\n")
+	head := lines
+	if len(lines) > PastePreviewLines {
+		head = lines[:PastePreviewLines]
+	}
+	text := strings.Join(head, "\n")
+	if hidden := len(lines) - len(head); hidden > 0 {
+		text += fmt.Sprintf("\n[… +%d more lines · %d characters total]", hidden, len(input))
+	} else if len(input) > PasteDisplayThreshold {
+		text += fmt.Sprintf(" [… %d characters total]", len(input))
+	}
+	return text
+}
+
 // stashPaste parks a large paste and returns its placeholder token.
 // The full content rides in pendingPastes until submit expands it.
 func (m *ChatModel) stashPaste(content string) (token string, full string) {

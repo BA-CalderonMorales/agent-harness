@@ -1106,13 +1106,23 @@ var _ = Describe("ShortenModelName", func() {
 
 		It("should shorten provider/model format", func() {
 			result := ShortenModelName("openai/gpt-4-turbo")
-			Expect(result).To(ContainSubstring("openai"))
-			Expect(result).To(ContainSubstring("4"))
+			Expect(result).To(Equal("gpt-4-turbo"))
 		})
 
 		It("should preserve tag", func() {
 			result := ShortenModelName("openai/gpt-4:latest")
 			Expect(result).To(ContainSubstring("latest"))
+		})
+
+		It("should keep the registry identity tail", func() {
+			result := ShortenModelName("accounts/fireworks/models/glm-5p3-flash")
+			Expect(result).To(Equal("glm-5p3-flash"))
+		})
+
+		It("should front-truncate overlong registry tails", func() {
+			result := ShortenModelName("accounts/fireworks/models/qwen3p-next-80b-a3b-instruct")
+			Expect(result).To(HavePrefix("…"))
+			Expect(result).To(ContainSubstring("instruct"))
 		})
 
 		It("should handle long single names", func() {
@@ -1121,7 +1131,7 @@ var _ = Describe("ShortenModelName", func() {
 			Expect(len(result)).To(BeNumerically("<=", 23))
 		})
 
-		It("should prefer parameter size segments", func() {
+		It("should keep parameter size in the tail", func() {
 			result := ShortenModelName("openrouter/meta-llama-3-70b")
 			Expect(result).To(ContainSubstring("70b"))
 		})

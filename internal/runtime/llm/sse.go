@@ -35,8 +35,9 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 	}
 	type streamChoice struct {
 		Delta struct {
-			Content   string          `json:"content"`
-			ToolCalls []toolCallDelta `json:"tool_calls"`
+			Content          string          `json:"content"`
+			ReasoningContent string          `json:"reasoning_content"`
+			ToolCalls        []toolCallDelta `json:"tool_calls"`
 		} `json:"delta"`
 		FinishReason *string `json:"finish_reason"`
 	}
@@ -202,6 +203,12 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 
 				if len(chunk.Choices) > 0 {
 					choice := chunk.Choices[0]
+					if choice.Delta.ReasoningContent != "" {
+						if !emit(types.LLMReasoningDelta{Delta: choice.Delta.ReasoningContent}) {
+							emitContextError()
+							return
+						}
+					}
 					if choice.Delta.Content != "" {
 						if !emit(types.LLMTextDelta{Delta: choice.Delta.Content}) {
 							emitContextError()
