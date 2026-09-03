@@ -20,7 +20,12 @@ func (ll *LayeredLoader) extractPermissionToggles(config *LayeredConfig, values 
 func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_PROVIDER", "AGENT_HARNESS_PROVIDER"), &config.Provider)
 	applyEnvString(firstEnv("AH_RUNTIME", "AGENT_HARNESS_RUNTIME"), &config.Runtime)
-	applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
+	if firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL") != "" {
+		applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
+		// The env pin outranks a resumed session's stored model, the
+		// same way EndpointPinned outranks provider defaults.
+		config.ModelPinned = true
+	}
 	applyEnvString(firstEnv("AH_MODEL_PATH", "AGENT_HARNESS_MODEL_PATH"), &config.ModelPath)
 	if endpoint := firstEnv("AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL"); endpoint != "" {
 		applyEnvString(endpoint, &config.EndpointURL)

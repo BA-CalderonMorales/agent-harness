@@ -45,11 +45,15 @@ type ConfigEntry struct {
 
 // LayeredConfig holds merged configuration from all sources
 type LayeredConfig struct {
-	merged         map[string]interface{}
-	loadedEntries  []ConfigEntry
-	Provider       string
-	APIKey         string
-	Model          string
+	merged        map[string]interface{}
+	loadedEntries []ConfigEntry
+	Provider      string
+	APIKey        string
+	Model         string
+	// ModelPinned is true when AH_MODEL pinned the model in the
+	// environment: the pin outranks a resumed session's stored model,
+	// exactly like EndpointPinned outranks provider defaults.
+	ModelPinned    bool
 	EndpointPinned bool // endpoint came from AH_ENDPOINT_URL; survives provider switches
 	Runtime        string
 	ModelPath      string
