@@ -52,6 +52,7 @@ func (h Help) renderContent() string {
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("l"), HelpDimStyle.Render("Next tab (login wizard when setup needed)")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("j/k, ↑/↓"), HelpDimStyle.Render("Scroll view")))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("g/G"), HelpDimStyle.Render("Top / bottom")))
+	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("Ctrl+u/d"), HelpDimStyle.Render("Half page up / down")))
 	lines = append(lines, "")
 	lines = append(lines, CategoryStyle.Render("  Modes"))
 	lines = append(lines, fmt.Sprintf("    %-12s %s", HelpKeyStyle.Render("i"), HelpDimStyle.Render("Enter insert mode (type)")))

@@ -189,6 +189,12 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			case "G", "end":
 				a.gotoActiveViewBottom()
 				return a, nil, true
+			case "ctrl+u":
+				a.scrollActiveView(-a.halfPageLines())
+				return a, nil, true
+			case "ctrl+d":
+				a.scrollActiveView(a.halfPageLines())
+				return a, nil, true
 			case "h":
 				if a.activeView != viewSessions {
 					return a, a.switchView(viewHome), true
