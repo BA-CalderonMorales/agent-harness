@@ -105,6 +105,23 @@ type App struct {
 
 	// Agent cancellation context
 	agentCancelFunc context.CancelFunc
+
+	// onAgentModeChanged is the host hook fired after the composer
+	// cycles the agent mode chip; hosts apply the machinery the mode
+	// implies (approval prompting, plan gating, tool availability).
+	onAgentModeChanged func(mode string)
+}
+
+// AgentModeChangedMsg is emitted after the composer cycles the agent
+// mode chip. Mode is one of: manual, auto, plan, chat.
+type AgentModeChangedMsg struct {
+	Mode string
+}
+
+// SetAgentModeChangedHandler registers the host hook for agent mode
+// cycles. The handler runs on the message loop, so its mutations persist.
+func (a *App) SetAgentModeChangedHandler(fn func(mode string)) {
+	a.onAgentModeChanged = fn
 }
 
 // NewApp creates a new TUI application.

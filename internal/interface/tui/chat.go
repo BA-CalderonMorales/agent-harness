@@ -123,6 +123,7 @@ type ChatModel struct {
 	provider  string
 	effort    string
 	modeLabel string // "typing" / "navigate" when persona is empty
+	agentMode string // composer agent mode chip; "" hides it
 
 	// Streaming state
 	streaming       bool
@@ -282,6 +283,12 @@ func (m *ChatModel) SetProvider(provider string) {
 // SetEffort sets the reasoning effort shown in the composer mode line.
 func (m *ChatModel) SetEffort(effort string) {
 	m.effort = effort
+}
+
+// SetAgentMode sets the agent mode chip shown in the composer mode line.
+// Empty hides the chip (boot before the mode is synced).
+func (m *ChatModel) SetAgentMode(mode string) {
+	m.agentMode = mode
 }
 
 // SetModeLabel sets the vim-mode label used when no persona is set.

@@ -98,6 +98,7 @@ func (app *App) initSession() error {
 	app.costTracker = agent.NewCostTracker()
 	app.costTracker.SetModel(app.session.Model)
 	app.initExecutionMode()
+	app.syncAgentMode()
 
 	return nil
 }

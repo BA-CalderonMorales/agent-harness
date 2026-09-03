@@ -192,10 +192,22 @@ var _ = Describe("App", func() {
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 
-			It("should set normal mode when entering home from chat", func() {
+			It("should cycle the agent mode without leaving the composer", func() {
 				app.activeView = viewChat
 				app.mode = ModeInsert
 				app.chatModel.Focus()
+				app.chatModel.SetAgentMode("manual")
+
+				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
+				updated := model.(*App)
+				Expect(updated.activeView).To(Equal(viewChat))
+				Expect(updated.mode).To(Equal(ModeInsert))
+				Expect(updated.chatModel.agentMode).To(Equal("auto"))
+			})
+
+			It("should set normal mode when entering home from chat in normal mode", func() {
+				app.activeView = viewChat
+				app.mode = ModeNormal
 
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
 				updated := model.(*App)

@@ -35,7 +35,7 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 	toolCtx := tools.Context{
 		Options: tools.Options{
 			MainLoopModel: app.session.Model,
-			Tools:         app.toolRegistry.FilterEnabled(),
+			Tools:         app.enabledToolsForMode(),
 			Debug:         false,
 		},
 		AbortController:   ctx,

@@ -124,6 +124,9 @@ func (m ChatModel) renderModeLine() string {
 	if m.provider != "" {
 		parts = append(parts, m.provider)
 	}
+	if m.agentMode != "" {
+		parts = append(parts, ModePromptStyle.Render(m.agentMode))
+	}
 	effort := m.effort
 	if effort == "" {
 		effort = "medium"

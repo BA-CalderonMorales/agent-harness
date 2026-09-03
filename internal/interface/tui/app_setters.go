@@ -91,6 +91,11 @@ func (a *App) SetChatModel(model string) {
 	a.chatModel.SetModel(model)
 }
 
+// SetAgentMode forwards the agent mode chip to the chat composer.
+func (a *App) SetAgentMode(mode string) {
+	a.chatModel.SetAgentMode(mode)
+}
+
 // SetRuntimeContext sets compact runtime metadata for the bottom status line.
 func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
 	a.provider = provider

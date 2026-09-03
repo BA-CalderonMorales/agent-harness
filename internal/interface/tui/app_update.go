@@ -222,6 +222,14 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
+	// Agent mode cycle - sync host machinery with the composer chip
+	// -------------------------------------------------------------------------
+	case AgentModeChangedMsg:
+		if a.onAgentModeChanged != nil {
+			a.onAgentModeChanged(msg.Mode)
+		}
+
+	// -------------------------------------------------------------------------
 	// Agent cancellation - handle cancel signal
 	// -------------------------------------------------------------------------
 	case AgentCancelMsg:
