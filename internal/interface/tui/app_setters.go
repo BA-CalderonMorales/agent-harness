@@ -139,48 +139,21 @@ func (a *App) syncComposerContext() {
 	a.chatModel.SetEffort(a.effortProfile)
 }
 
-// maxSystemLog caps the durable system-message log shown in settings.
-const maxSystemLog = 50
-
-// logSystemMessage records a durable system message: it lands exactly once
-// as the first note of the chat conversation and is appended to the system
-// log rendered at the bottom of the settings page. Consecutive duplicates
-// (e.g. repeated provider probes) are suppressed.
+// logSystemMessage records a conversation-visible system note: it lands
+// exactly once as the first note of the chat transcript. The durable
+// copy is the diagnostics stream (the Logs tab) — callers mirror there
+// with a site and level.
 func (a *App) logSystemMessage(text string) {
 	if text == "" {
 		return
 	}
-	// Dedupe against the chat-head note and the previous log entry.
+	// Dedupe against the chat-head note: repeated provider probes must
+	// not stack identical lines.
 	if len(a.chatModel.messages) > 0 && a.chatModel.messages[0].Role == "system" && a.chatModel.messages[0].Content == text {
-		return
-	}
-	if len(a.systemLog) > 0 && a.systemLog[len(a.systemLog)-1] == text {
 		return
 	}
 
 	a.chatModel.PrependSystemNote(text)
-	a.systemLog = append(a.systemLog, text)
-	if len(a.systemLog) > maxSystemLog {
-		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
-	}
-	a.logsModel.SetMessages(a.systemLog)
-}
-
-// AppendSystemLog records a message in the Logs tab only — for
-// operational notes (storage footprints, probe details) that have no
-// business interrupting the conversation pane.
-func (a *App) AppendSystemLog(text string) {
-	if text == "" {
-		return
-	}
-	if len(a.systemLog) > 0 && a.systemLog[len(a.systemLog)-1] == text {
-		return
-	}
-	a.systemLog = append(a.systemLog, text)
-	if len(a.systemLog) > maxSystemLog {
-		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
-	}
-	a.logsModel.SetMessages(a.systemLog)
 }
 
 // SetChatPersona sets the current persona for contextual UI behavior.

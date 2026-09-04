@@ -45,7 +45,7 @@ func TestGuidanceRidesWithClear(t *testing.T) {
 	for _, msg := range m.messages {
 		joined += msg.Content + "\n"
 	}
-	if !strings.Contains(joined, "Quick keys") {
+	if !strings.Contains(joined, `"i" to start chatting`) {
 		t.Fatalf("/clear did not re-show guidance:\n%s", joined)
 	}
 
@@ -58,10 +58,18 @@ func TestGuidanceRidesWithClear(t *testing.T) {
 }
 
 // TestGuidanceContentCoversCoreKeys keeps the block honest about the
-// keys it teaches: i, Esc, j/k, Enter, Shift+Tab, /.
+// format and the keys it teaches: quoted keys, bullet lines, i, Esc,
+// j/k, Enter, Shift+Tab, /.
 func TestGuidanceContentCoversCoreKeys(t *testing.T) {
 	got := navigationGuidance()
-	for _, want := range []string{"i ", "Esc", "j/k", "Enter", "Shift+Tab", "/ commands"} {
+	for _, want := range []string{
+		`• "i" to start chatting`,
+		`• "Esc" to stop chatting`,
+		`• "j" and "k" to scroll up and down`,
+		`• "Enter" expands`,
+		`• "Shift+Tab" cycles agent modes`,
+		`"/" opens commands`,
+	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("guidance missing %q:\n%s", want, got)
 		}

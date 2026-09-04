@@ -601,7 +601,7 @@ var _ = Describe("App", func() {
 				model, _ := app.Update(ClearChatMsg{})
 				updated := model.(*App)
 				Expect(updated.chatModel.messages).To(HaveLen(1))
-				Expect(updated.chatModel.messages[0].Content).To(ContainSubstring("Quick keys"))
+				Expect(updated.chatModel.messages[0].Content).To(ContainSubstring(`"i" to start chatting`))
 			})
 
 			It("should add follow-up message when provided", func() {
@@ -696,7 +696,7 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
 				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
 				Expect(view).To(ContainSubstring("effort medium"))
-				Expect(view).To(ContainSubstring("ctrl+p commands"))
+				Expect(view).To(ContainSubstring(`"?" help`))
 				Expect(view).To(ContainSubstring("$0.12"))
 				Expect(view).ToNot(ContainSubstring(testHome))
 			})
@@ -714,7 +714,7 @@ var _ = Describe("App", func() {
 				It("should keep everything on a generous width", func() {
 					app.width = 180
 					view := app.View()
-					Expect(view).To(ContainSubstring("ctrl+p commands"))
+					Expect(view).To(ContainSubstring(`"?" help`))
 					Expect(view).To(ContainSubstring("$0.42"))
 					Expect(view).To(ContainSubstring("ctx"))
 				})
@@ -954,7 +954,7 @@ var _ = Describe("App", func() {
 				Expect(updated.chatModel.messages).To(HaveLen(3))
 				Expect(updated.chatModel.messages[0].Role).To(Equal("system"))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Loaded session sess-aaa"))
-				Expect(updated.chatModel.messages[2].Content).To(ContainSubstring("Quick keys"))
+				Expect(updated.chatModel.messages[2].Content).To(ContainSubstring(`"i" to start chatting`))
 				Expect(updated.activeView).To(Equal(viewChat))
 				Expect(updated.statusMessage).To(Equal(""))
 				Expect(updated.statusType).To(Equal(""))
