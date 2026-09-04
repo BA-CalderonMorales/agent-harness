@@ -109,7 +109,7 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 	}
 	d.tuiApp.Send(tui.SessionsRefreshedMsg{
 		Sessions:   d.app.getSessionInfos(),
-		Notice:     sprintf("Exported to %s", absPath),
+		Notice:     sprintf("Exported to %s", abbreviatePath(absPath)),
 		NoticeType: "success",
 	})
 }

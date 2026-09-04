@@ -162,7 +162,11 @@ func (m *HomeModel) renderRecentSessions() string {
 			marker = IndicatorSelected
 			style = ListSelectedStyle
 		}
-		line := fmt.Sprintf("%s%s · %d msgs · %d turns", marker, label, s.MessageCount, s.Turns)
+		turns := fmt.Sprintf("%d turns", s.Turns)
+		if s.Turns == 1 {
+			turns = "1 turn"
+		}
+		line := fmt.Sprintf("%s%s · %d msgs · %s", marker, label, s.MessageCount, turns)
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
