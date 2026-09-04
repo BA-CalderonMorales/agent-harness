@@ -218,6 +218,18 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				a.chatModel.SetInput("/")
 				return a, nil, true
 			}
+		case "m":
+			// Mouse capture toggle: the app owns the mouse for scroll and
+			// click targeting, which makes terminal text selection fight
+			// the UI. 'm' hands the mouse back to the terminal for
+			// native select-and-copy, and 'm' again restores capture.
+			a.mouseCapture = !a.mouseCapture
+			if a.mouseCapture {
+				a.ShowStatus(`Mouse capture on — "m" to select-copy`, "info")
+				return a, func() tea.Msg { return tea.EnableMouseCellMotion() }, true
+			}
+			a.ShowStatus(`Mouse capture off — select to copy · "m" restores`, "info")
+			return a, func() tea.Msg { return tea.DisableMouse() }, true
 		}
 
 		// View switching shortcuts
