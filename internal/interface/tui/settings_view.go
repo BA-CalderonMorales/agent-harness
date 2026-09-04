@@ -29,7 +29,7 @@ func (m SettingsModel) View() string {
 	b.WriteString(RenderHeader(HeaderConfig{
 		Title:    "Settings",
 		Subtitle: "Configuration options",
-		Count:    len(m.settings),
+		Count:    -1, // no count: 17 settings is noise, not signal
 	}))
 
 	// Build settings list content for viewport

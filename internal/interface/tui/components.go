@@ -161,7 +161,7 @@ func RenderHeader(cfg HeaderConfig) string {
 		parts = append(parts, InfoStyle.Render("["+cfg.Badge+"]"))
 	}
 
-	if cfg.Count >= 0 {
+	if cfg.Count > 0 {
 		parts = append(parts, HelpDimStyle.Render(fmt.Sprintf("(%d)", cfg.Count)))
 	}
 

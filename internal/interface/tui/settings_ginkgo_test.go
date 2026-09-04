@@ -370,13 +370,13 @@ var _ = Describe("SettingsModel", func() {
 				Expect(view).To(ContainSubstring("Choose your color scheme"))
 			})
 
-			It("should render settings count in header", func() {
+			It("should not render the settings count in the header", func() {
 				settings.SetSettings([]Setting{
 					{Key: "a", Label: "A", Type: "string"},
 					{Key: "b", Label: "B", Type: "string"},
 				})
 				view := settings.View()
-				Expect(view).To(ContainSubstring("(2)"))
+				Expect(view).ToNot(ContainSubstring("(2)"))
 			})
 		})
 	})

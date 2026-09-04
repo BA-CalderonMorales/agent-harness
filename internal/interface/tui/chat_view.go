@@ -35,7 +35,7 @@ func (m ChatModel) View() string {
 	header := RenderHeader(HeaderConfig{
 		Title:    "Chat",
 		Subtitle: "Agent conversation",
-		Count:    len(m.messages),
+		Count:    -1, // no count: internal message tallies are not user signal
 	})
 	sections = append(sections, header)
 
