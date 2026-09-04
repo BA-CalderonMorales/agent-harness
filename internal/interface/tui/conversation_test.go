@@ -329,7 +329,7 @@ func TestClearChatWithoutFollowUpMsg(t *testing.T) {
 	if len(chat.messages) != 1 {
 		t.Errorf("expected 1 guidance message after bare clear, got %d", len(chat.messages))
 	}
-	if !strings.Contains(chat.messages[0].Content, "Quick keys") {
+	if !strings.Contains(chat.messages[0].Content, `"i" to start chatting`) {
 		t.Errorf("expected navigation guidance after bare clear, got %q", chat.messages[0].Content)
 	}
 }
