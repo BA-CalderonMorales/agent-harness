@@ -302,18 +302,21 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		// the statusbar badge become the fix (l: login), not prose.
 		a.homeModel.SetSetupRequired(msg.Readiness == 4)
 		// Every readiness state is a durable system message: it lands
-		// exactly once at the top of the chat pane and in the Settings
-		// page's System Messages section. Nothing provider-related ever
-		// clutters the footer.
+		// exactly once at the top of the chat pane and mirrors into the
+		// diagnostics stream (the Logs tab) at the matching level.
 		switch msg.Readiness {
 		case 1: // ProviderReady
 			a.logSystemMessage(fmt.Sprintf("Provider ready: %s", msg.Message))
+			diag.Info("provider.ready", msg.Message)
 		case 2: // ProviderWarning
 			a.logSystemMessage(fmt.Sprintf("Provider warning: %s", msg.Message))
+			diag.Warnf("provider.warning", "%s", msg.Message)
 		case 3: // ProviderUnavailable
 			a.logSystemMessage(fmt.Sprintf("Provider unavailable: %s", msg.Message))
+			diag.Warnf("provider.unavailable", "%s", msg.Message)
 		case 4: // ProviderMisconfigured
 			a.logSystemMessage(fmt.Sprintf("Provider misconfigured: %s", msg.Message))
+			diag.Errorf("provider.misconfigured", "%s", msg.Message)
 		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
