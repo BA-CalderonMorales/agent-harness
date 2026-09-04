@@ -11,7 +11,8 @@ import (
 
 // reportStorageFootprint logs the on-disk footprint of the data home
 // once the TUI is up. Storage the user can see is storage the user can
-// manage — the numbers land in the Settings system log, not the footer.
+// manage — but the chat pane is for conversation: the numbers land in
+// the Logs tab's system log only.
 func (app *App) reportStorageFootprint(tuiApp *tui.App) {
 	if tuiApp == nil {
 		return
@@ -23,7 +24,7 @@ func (app *App) reportStorageFootprint(tuiApp *tui.App) {
 	toolResults := dirFootprint(config.DataToolResults())
 
 	total := sessions.bytes + audit.bytes + logs.bytes + toolResults.bytes
-	tuiApp.AddMessage("system", sprintf(
+	tuiApp.AppendSystemLog(sprintf(
 		"Storage: %s under %s (sessions %d files / %s · audit %s · logs %s · tool results %s)",
 		format.HumanBytes(total),
 		config.DataHome(),

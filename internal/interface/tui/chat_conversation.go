@@ -18,19 +18,6 @@ func (m *ChatModel) AddMessage(role, content string) {
 	m.refreshViewportFollow()
 }
 
-// ReplaceWelcomeMessage swaps the boot welcome message content in place
-// when late context (git) arrives, keeping the welcome's position in the
-// conversation instead of appending a second copy.
-func (m *ChatModel) ReplaceWelcomeMessage(content string) {
-	for i := range m.messages {
-		if m.messages[i].Role == "system" && strings.HasPrefix(m.messages[i].Content, "Agent Harness") {
-			m.messages[i].Content = content
-			m.refreshViewport()
-			return
-		}
-	}
-}
-
 // PrependSystemNote inserts a system note as the first message of the
 // conversation so session notices land under the chat header exactly once;
 // the user can always scroll back up to it.

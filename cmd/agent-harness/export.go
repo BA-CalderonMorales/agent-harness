@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 
@@ -63,10 +64,27 @@ func parseExportArgs(args, sessionID string) (string, string, error) {
 		}
 	}
 	if path == "" {
-		path = fmt.Sprintf("session-%s.%s", exportIDPrefix(sessionID), ext)
+		path = filepath.Join(defaultExportDir(), fmt.Sprintf("session-%s.%s", exportIDPrefix(sessionID), ext))
 	}
 
 	return format, path, nil
+}
+
+// defaultExportDir is where exports land when the caller gives no path:
+// the user's Downloads directory when it exists (the natural "give me
+// the file" answer on WSL, macOS, and Linux desktops alike), falling
+// back to the working directory. Exports used to dump into the repo
+// root, littering the project the agent is working in.
+func defaultExportDir() string {
+	home, err := os.UserHomeDir()
+	if err != nil || home == "" {
+		return "."
+	}
+	downloads := filepath.Join(home, "Downloads")
+	if info, err := os.Stat(downloads); err == nil && info.IsDir() {
+		return downloads
+	}
+	return "."
 }
 
 func normalizeExportFormat(format string) (string, string, error) {

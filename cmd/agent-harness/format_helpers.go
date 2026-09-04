@@ -7,6 +7,27 @@ import (
 	"strings"
 )
 
+// abbreviatePath shortens a path for a one-line status flash: home
+// collapses to ~, and over-long paths keep their tail (the filename is
+// the part that matters) — a right-truncated path showed the user
+// everything except where the file actually was.
+func abbreviatePath(path string) string {
+	const budget = 48
+	if len(path) <= budget {
+		return path
+	}
+	return "…" + path[len(path)-budget+1:]
+}
+
+// plural treats 1 as singular; "%d turns" on a one-turn session read
+// like a bug report.
+func plural(n int, word string) string {
+	if n == 1 {
+		return word
+	}
+	return word + "s"
+}
+
 // formatSessionList formats sessions for display.
 func formatSessionList(sessions []state.SessionMetadata, currentID string) string {
 	if len(sessions) == 0 {
@@ -19,7 +40,7 @@ func formatSessionList(sessions []state.SessionMetadata, currentID string) strin
 		if s.ID == currentID {
 			active = " (active)"
 		}
-		lines = append(lines, sprintf("  %s - %d messages, %d turns%s", s.ID[:8], s.MessageCount, s.Turns, active))
+		lines = append(lines, sprintf("  %s - %d messages, %d %s%s", s.ID[:8], s.MessageCount, s.Turns, plural(s.Turns, "turn"), active))
 	}
 	return strings.Join(lines, "\n")
 }

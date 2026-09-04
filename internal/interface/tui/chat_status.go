@@ -116,7 +116,9 @@ func reasoningPreview(text string) string {
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
-		msg.ReasoningText = m.thinkingText
+		if !m.thinkingIsStatus {
+			msg.ReasoningText = m.thinkingText
+		}
 		msg.ResponseTime = m.elapsed
 		msg.StreamedChunks = m.chunkCount
 		msg.Thinking = true
@@ -145,7 +147,9 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 func (m *ChatModel) finalizeStreamingMessage(content string) {
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
-		msg.ReasoningText = m.thinkingText
+		if !m.thinkingIsStatus {
+			msg.ReasoningText = m.thinkingText
+		}
 		msg.Timestamp = time.Now()
 		msg.ResponseTime = m.elapsed
 		msg.StreamedChunks = m.chunkCount

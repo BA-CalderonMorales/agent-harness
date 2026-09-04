@@ -29,12 +29,18 @@ func (m SettingsModel) View() string {
 	b.WriteString(RenderHeader(HeaderConfig{
 		Title:    "Settings",
 		Subtitle: "Configuration options",
-		Count:    len(m.settings),
+		Count:    -1, // no count: 17 settings is noise, not signal
 	}))
 
 	// Build settings list content for viewport
 	var settingsContent strings.Builder
 	currentCat := ""
+	// cursorLine tracks the rendered line of every setting row: the
+	// viewport scroll must land the cursor row in view exactly, and a
+	// per-row average cannot (descriptions and category headers make
+	// rows uneven — the old estimate let the cursor scroll out of
+	// sight past the last category).
+	cursorLine := make([]int, len(m.settings))
 	for i, setting := range m.settings {
 		if setting.Category != "" && setting.Category != currentCat {
 			if currentCat != "" {
@@ -45,13 +51,41 @@ func (m SettingsModel) View() string {
 			settingsContent.WriteString(categoryHeader)
 			settingsContent.WriteString("\n")
 		}
+		cursorLine[i] = strings.Count(settingsContent.String(), "\n")
 		settingsContent.WriteString(m.renderSetting(setting, i == m.cursor))
 		settingsContent.WriteString("\n")
 	}
 
 	// Update viewport content (settings rows only; the system log lives
-	// in the Logs tab).
+	// in the Logs tab), then land the scroll so the cursor row — and
+	// its whole block — is on screen.
 	m.viewport.SetContent(settingsContent.String())
+	if m.cursor >= 0 && m.cursor < len(cursorLine) {
+		totalLines := strings.Count(settingsContent.String(), "\n") + 1
+		maxOffset := totalLines - m.viewport.Height
+		if maxOffset < 0 {
+			maxOffset = 0
+		}
+		offset := m.viewport.YOffset
+		// The selected row renders two lines (label + description);
+		// unselected rows render one.
+		rowEnd := cursorLine[m.cursor] + 1
+		if m.cursor < len(m.settings) && m.settings[m.cursor].Description != "" && !m.editing {
+			rowEnd++
+		}
+		if cursorLine[m.cursor] < offset {
+			offset = cursorLine[m.cursor]
+		} else if rowEnd > offset+m.viewport.Height {
+			offset = rowEnd - m.viewport.Height
+		}
+		if offset > maxOffset {
+			offset = maxOffset
+		}
+		if offset < 0 {
+			offset = 0
+		}
+		m.viewport.SetYOffset(offset)
+	}
 
 	// Render viewport (scrollable settings list)
 	b.WriteString(m.viewport.View())

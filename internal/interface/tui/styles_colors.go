@@ -21,7 +21,11 @@ var (
 	ColorTextDim   = lipgloss.Color("#9E9E9E")
 	ColorSurface   = lipgloss.Color("#1E1E2E")
 	ColorBorder    = lipgloss.Color("#3A3A4A")
-	ColorMuted     = lipgloss.Color("#5A5A6A")
+	// ColorMuted carries the instruction layer (mode line, hints,
+	// descriptions): it must hold 4.5:1 against the surface. The old
+	// #5A5A6A managed 2.43:1 — instruction text below the accessibility
+	// floor. Keep in sync with themes["default"].
+	ColorMuted     = lipgloss.Color("#878799")
 	ColorHighlight = lipgloss.Color("#2A2A3E")
 )
 
