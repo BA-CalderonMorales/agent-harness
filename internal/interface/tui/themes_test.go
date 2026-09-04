@@ -149,6 +149,49 @@ func hexRGB(hexs lipgloss.Color) (float64, float64, float64) {
 	return parse(hex[0:2]), parse(hex[2:4]), parse(hex[4:6])
 }
 
+// TestThemeInstructionTextContrast pins the accessibility floor for the
+// instruction layer: Muted (mode line, hints, descriptions) and TextDim
+// (timestamps, secondary labels) must hold WCAG AA normal (4.5:1)
+// against each theme's own surface, in every theme. The pre-fix catalog
+// measured Muted as low as 1.69:1 (nord) — instruction text below the
+// readable floor everywhere.
+func TestThemeInstructionTextContrast(t *testing.T) {
+	for _, name := range ThemeNames() {
+		theme, _ := LookupTheme(name)
+		sr, sg, sb := hexRGB(theme.Palette.Surface)
+		surface := [3]float64{sr, sg, sb}
+		for tokenName, token := range map[string]lipgloss.Color{
+			"Muted":   theme.Palette.Muted,
+			"TextDim": theme.Palette.TextDim,
+		} {
+			tr, tg, tb := hexRGB(token)
+			r := contrastRatio([3]float64{tr, tg, tb}, surface)
+			if r < 4.5 {
+				t.Errorf("%s: %s contrast %.2f:1, want >= 4.5:1", name, tokenName, r)
+			}
+		}
+	}
+}
+
+// contrastRatio computes the WCAG 2.x contrast ratio between two RGB
+// triples (0..1).
+func contrastRatio(a, b [3]float64) float64 {
+	lum := func(c [3]float64) float64 {
+		lin := func(v float64) float64 {
+			if v <= 0.03928 {
+				return v / 12.92
+			}
+			return math.Pow((v+0.055)/1.055, 2.4)
+		}
+		return 0.2126*lin(c[0]) + 0.7152*lin(c[1]) + 0.0722*lin(c[2])
+	}
+	la, lb := lum(a), lum(b)
+	if la < lb {
+		la, lb = lb, la
+	}
+	return (la + 0.05) / (lb + 0.05)
+}
+
 func hueDistance(a, b float64) float64 {
 	d := math.Abs(a-b) - math.Floor(math.Abs(a-b)/360)*360
 	if d > 180 {
