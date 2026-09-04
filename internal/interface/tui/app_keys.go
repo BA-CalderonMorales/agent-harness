@@ -40,8 +40,10 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		case "?", "esc", "q":
 			a.showHelp = false
 			return a, nil, true
+		default:
+			a.helpModel = a.helpModel.Update(msg)
+			return a, nil, true
 		}
-		return a, nil, true
 	}
 
 	// When command palette is open, delegate to it

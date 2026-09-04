@@ -53,6 +53,9 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	case tea.WindowSizeMsg:
 		next, cmd := a.resize(msg.Width, msg.Height)
 		*a = next
+		if a.showHelp {
+			a.helpModel.Open(msg.Width, msg.Height, "")
+		}
 		return a, cmd
 
 	// -------------------------------------------------------------------------
