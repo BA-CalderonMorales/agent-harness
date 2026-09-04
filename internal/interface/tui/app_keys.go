@@ -206,6 +206,18 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				a.focusActive()
 				return a, nil, true
 			}
+		case "/":
+			// Slash commands are typed, and the composer is blurred in
+			// navigate mode — a '/' there silently vanished (typed
+			// commands died unfired). Focus the composer with the slash
+			// pre-inserted: the command is already on screen.
+			if a.mode == ModeNormal && a.activeView == viewChat {
+				a.mode = ModeInsert
+				a.chatModel.SetModeLabel("typing")
+				a.focusActive()
+				a.chatModel.SetInput("/")
+				return a, nil, true
+			}
 		}
 
 		// View switching shortcuts
