@@ -1,11 +1,13 @@
 package tui
 
 import (
+	"strings"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
+	"github.com/charmbracelet/lipgloss"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -520,6 +522,81 @@ var _ = Describe("SettingsModel", func() {
 			m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyEnter})
 			settings = m.(SettingsModel)
 			Expect(settings.CapturesAllKeys()).To(BeTrue())
+		})
+	})
+})
+
+var _ = Describe("Logs Table and Detail", func() {
+	Context("Given a diagnostics stream", func() {
+		var logs LogsModel
+
+		BeforeEach(func() {
+			logs = NewLogsModel()
+			logs, _ = logs.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
+			logs.Focus()
+			logs.AppendEntry(diag.Entry{
+				Timestamp: time.Now(),
+				Level:     diag.LevelInfo,
+				Site:      "provider.ready",
+				Message:   "2 models available",
+				Caller:    "app_update.go:310",
+			})
+			logs.AppendEntry(diag.Entry{
+				Timestamp: time.Now(),
+				Level:     diag.LevelPanic,
+				Site:      "agent.turn.panic",
+				Message:   "runtime error: nil pointer dereference",
+				Caller:    "loop.go:52",
+				Stack:     "goroutine 1 [running]:\nmain.(*App).runAgentTurn(...)",
+			})
+		})
+
+		It("should render the column header once", func() {
+			view := logs.View()
+			Expect(strings.Count(view, "TIME     LEVEL   SITE")).To(Equal(1))
+		})
+
+		It("should keep each entry on a single truncatable line", func() {
+			for _, line := range strings.Split(logs.View(), "\n") {
+				if strings.Contains(line, "agent.turn.panic") {
+					Expect(lipgloss.Width(line)).To(BeNumerically("<=", 101))
+					return
+				}
+			}
+			Fail("panic row not rendered in the table")
+		})
+
+		It("should open the full detail modal on Enter", func() {
+			logs.cursor = 1
+			m, _ := logs.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			logs = m
+			Expect(logs.DetailOpen()).To(BeTrue())
+			view := logs.View()
+			Expect(view).To(ContainSubstring("Log detail"))
+			Expect(strings.Contains(view, "app_update.go:310") || strings.Contains(view, "loop.go:52")).To(BeTrue())
+			Expect(view).To(ContainSubstring("goroutine 1"))
+		})
+
+		It("should fold the detail on any key", func() {
+			logs.cursor = 0
+			m, _ := logs.Update(tea.KeyMsg{Type: tea.KeyEnter})
+			logs = m
+			Expect(logs.DetailOpen()).To(BeTrue())
+			m, _ = logs.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			logs = m
+			Expect(logs.DetailOpen()).To(BeFalse())
+		})
+
+		It("should select rows by mouse row", func() {
+			logs.Focus()
+			m, _ := logs.Update(tea.MouseMsg(tea.MouseEvent{
+				Action: tea.MouseActionPress,
+				Button: tea.MouseButtonLeft,
+				Y:      1 + 3 + 1,
+			}))
+			logs = m
+			Expect(logs.cursor).To(Equal(1))
+			Expect(logs.DetailOpen()).To(BeTrue())
 		})
 	})
 })
