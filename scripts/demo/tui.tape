@@ -3,8 +3,9 @@
 # A real conversation against a hosted GLM model (fireworks provider):
 # a fast first response, then a short tool call reading AGENTS.md to
 # say what the repo is about. The tour then shows the Logs tab with the
-# live diagnostics stream, two themes so the palette switch is visible,
-# the '?' help overlay, and closes on Home.
+# live diagnostics stream, the selection marker riding the cursor, the
+# detail modal with its exit hint, the level filter, two themes so the
+# palette switch is visible, the '?' help overlay, and closes on Home.
 #
 # Record from the repository root:
 #   chmod +x scripts/demo/demo-boot-live.sh
@@ -72,13 +73,34 @@ Sleep 1.5s
 Type@100ms "4"
 Sleep 3s
 # 8. The Logs tab: the live diagnostics stream — levels, timestamps,
-#    source sites, exact file:line callers.
+#    source sites, exact file:line callers, and the selection marker
+#    on the row the cursor owns.
+
+Type "j"
+Sleep 900ms
+Type "k"
+Sleep 900ms
+Type "j"
+Sleep 900ms
+# 9. The selection moves: the marker follows the cursor and the
+#    n/m counter tracks it — in a quiet stream as much as a live one.
+
+Enter
+Sleep 2.5s
+# 10. The detail modal: the full entry with the exit hint pinned
+#     bottom-right.
+
+Type "j"
+Sleep 700ms
+Escape
+Sleep 900ms
+# 11. j/k scroll the modal's content; Esc folds it.
 
 Type "f"
 Sleep 1.5s
 Type "f"
 Sleep 1.5s
-# 9. The level filter cycles: all → warning+ → error+.
+# 12. The level filter cycles: all → warning+ → error+.
 
 Type@100ms "2"
 Sleep 2s
@@ -93,18 +115,18 @@ Sleep 2.5s
 Type "/theme default"
 Enter
 Sleep 2s
-# 10. Themes: the palette switches live — midnight, paper, back to the
+# 13. Themes: the palette switches live — midnight, paper, back to the
 #     default.
 
 Escape
 Sleep 400ms
 Type "?"
 Sleep 3s
-# 11. The help overlay: the scrollable key map (j/k to scroll).
+# 14. The help overlay: the scrollable key map (j/k to scroll).
 
 Escape
 Sleep 500ms
 Type@100ms "1"
 Sleep 3s
-# 12. Home tab — the tour ends where it started. The tape ends on the
+# 15. Home tab — the tour ends where it started. The tape ends on the
 #     TUI: no exit, no shell.
