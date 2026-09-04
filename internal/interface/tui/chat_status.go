@@ -113,12 +113,20 @@ func reasoningPreview(text string) string {
 // and each full-transcript render (markdown included) is the streaming
 // flicker. The turn timer's tick repaints everything accumulated — 4
 // frames a second is smooth; a render per token is a strobe.
+// currentReasoningText is the reasoning safe to persist on a message:
+// empty while the thinking text is loop status ("Thinking...",
+// "Connecting to …") — status drives the badge, never the record.
+func (m ChatModel) currentReasoningText() string {
+	if m.thinkingIsStatus {
+		return ""
+	}
+	return m.thinkingText
+}
+
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
-		if !m.thinkingIsStatus {
-			msg.ReasoningText = m.thinkingText
-		}
+		msg.ReasoningText = m.currentReasoningText()
 		msg.ResponseTime = m.elapsed
 		msg.StreamedChunks = m.chunkCount
 		msg.Thinking = true
@@ -129,7 +137,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 			Role:           "assistant",
 			Content:        content,
 			Timestamp:      time.Now(),
-			ReasoningText:  m.thinkingText,
+			ReasoningText:  m.currentReasoningText(),
 			ResponseTime:   m.elapsed,
 			StreamedChunks: m.chunkCount,
 			Thinking:       true,
@@ -147,9 +155,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 func (m *ChatModel) finalizeStreamingMessage(content string) {
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
-		if !m.thinkingIsStatus {
-			msg.ReasoningText = m.thinkingText
-		}
+		msg.ReasoningText = m.currentReasoningText()
 		msg.Timestamp = time.Now()
 		msg.ResponseTime = m.elapsed
 		msg.StreamedChunks = m.chunkCount
@@ -159,7 +165,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 			Role:           "assistant",
 			Content:        content,
 			Timestamp:      time.Now(),
-			ReasoningText:  m.thinkingText,
+			ReasoningText:  m.currentReasoningText(),
 			ResponseTime:   m.elapsed,
 			StreamedChunks: m.chunkCount,
 			Thinking:       false,
