@@ -1,7 +1,11 @@
 package tui
 
 import (
+	"time"
+
 	tea "github.com/charmbracelet/bubbletea"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
 )
@@ -161,24 +165,32 @@ var _ = Describe("SettingsModel", func() {
 	})
 
 	Describe("Logs Tab", func() {
-		Context("Given system messages exist", func() {
+		Context("Given diagnostics entries exist", func() {
 			var logs LogsModel
 
 			BeforeEach(func() {
 				logs = NewLogsModel()
 				logs, _ = logs.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-				logs.SetMessages([]string{
-					"Started new chat abc123",
-					"Provider unavailable: connection refused",
-					"Deleted session def456",
-					"Provider ready: 12 models available",
+				logs.AppendEntry(diag.Entry{
+					Timestamp: time.Now(),
+					Level:     diag.LevelInfo,
+					Site:      "chat.lifecycle",
+					Message:   "Started new chat abc123",
+				})
+				logs.AppendEntry(diag.Entry{
+					Timestamp: time.Now(),
+					Level:     diag.LevelWarning,
+					Site:      "provider.unavailable",
+					Message:   "connection refused",
+					Caller:    "app_update.go:310",
 				})
 			})
 
-			It("should render the log under its own header", func() {
+			It("should render the stream under its own header", func() {
 				view := logs.View()
 				Expect(view).To(ContainSubstring("Logs"))
-				Expect(view).To(ContainSubstring("Provider unavailable: connection refused"))
+				Expect(view).To(ContainSubstring("provider.unavailable"))
+				Expect(view).To(ContainSubstring("connection refused"))
 			})
 
 			It("should scroll the log with j/k when focused", func() {
@@ -189,10 +201,19 @@ var _ = Describe("SettingsModel", func() {
 				Expect(logs.viewport.YOffset).To(BeNumerically(">=", offsetBefore))
 			})
 
-			It("should render the empty state before any messages", func() {
+			It("should render the empty state before any entries", func() {
 				empty := NewLogsModel()
 				empty, _ = empty.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-				Expect(empty.View()).To(ContainSubstring("no system messages"))
+				Expect(empty.View()).To(ContainSubstring("no entries at this level"))
+			})
+
+			It("should filter by level with f", func() {
+				logs.Focus()
+				m, _ := logs.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("f")})
+				logs = m
+				view := logs.View()
+				Expect(view).ToNot(ContainSubstring("Started new chat abc123"))
+				Expect(view).To(ContainSubstring("connection refused"))
 			})
 		})
 	})

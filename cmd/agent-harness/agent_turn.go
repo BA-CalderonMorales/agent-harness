@@ -241,7 +241,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	// Turn lifecycle lands in the diagnostics stream: one INFO line per
 	// completed turn is the spine of the Logs tab's story.
 	diag.Infof("agent.turn.complete", "turn finished in %s (%d tool calls, %d chars)",
-		time.Since(turnStarted), toolCallCount, responseText.Len())
+		time.Since(turnStarted).Round(100*time.Millisecond), toolCallCount, responseText.Len())
 
 	// Auto-save check: notices land in the chat pane + Settings system
 	// log (deduped, once), never in the footer.

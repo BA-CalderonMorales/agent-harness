@@ -289,6 +289,11 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 
+	case LogEntryMsg:
+		a.logsModel.AppendEntry(msg.Entry)
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
 	case ProviderReadinessMsg:
 		// A probe from a previous provider (or an older key) may finish
 		// after a switch started a new probe: only the newest generation
@@ -347,6 +352,8 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			}
 			cmd2 = c
 		}
+	case viewLogs:
+		a.logsModel, cmd2 = a.logsModel.Update(msg)
 	case viewSettings:
 		if model, c := a.settingsModel.Update(msg); model != nil {
 			if m, ok := model.(SettingsModel); ok {
