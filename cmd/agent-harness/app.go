@@ -133,7 +133,6 @@ func (app *App) run() error {
 	tuiApp.SetGitContextHandler(func(ctx *git.Context, ta *tui.App) {
 		app.gitContext = ctx
 		ta.SetProjectInfo(app.getProjectInfo())
-		ta.ReplaceWelcomeMessage(app.buildWelcomeMessage())
 	})
 
 	// Initial data

@@ -13,12 +13,6 @@ func (a *App) AddMessage(role, content string) {
 	a.chatModel.AddMessage(role, content)
 }
 
-// ReplaceWelcomeMessage swaps the boot welcome in place when late context
-// (git) arrives.
-func (a *App) ReplaceWelcomeMessage(content string) {
-	a.chatModel.ReplaceWelcomeMessage(content)
-}
-
 // SetInput sets the chat input text.
 func (a *App) SetInput(text string) {
 	a.chatModel.SetInput(text)
@@ -165,6 +159,23 @@ func (a *App) logSystemMessage(text string) {
 	}
 
 	a.chatModel.PrependSystemNote(text)
+	a.systemLog = append(a.systemLog, text)
+	if len(a.systemLog) > maxSystemLog {
+		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
+	}
+	a.logsModel.SetMessages(a.systemLog)
+}
+
+// AppendSystemLog records a message in the Logs tab only — for
+// operational notes (storage footprints, probe details) that have no
+// business interrupting the conversation pane.
+func (a *App) AppendSystemLog(text string) {
+	if text == "" {
+		return
+	}
+	if len(a.systemLog) > 0 && a.systemLog[len(a.systemLog)-1] == text {
+		return
+	}
 	a.systemLog = append(a.systemLog, text)
 	if len(a.systemLog) > maxSystemLog {
 		a.systemLog = a.systemLog[len(a.systemLog)-maxSystemLog:]
