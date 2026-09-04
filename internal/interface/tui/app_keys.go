@@ -250,6 +250,16 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 
 		// Navigation in normal mode
 		if a.mode == ModeNormal {
+			// The Logs detail modal owns j/k (scroll its content) and
+			// q (close) — without this the navigate path scrolled the
+			// table behind the modal and Esc never reached it.
+			if a.activeView == viewLogs && a.logsModel.DetailOpen() {
+				switch msg.String() {
+				case "esc", "q", "j", "k", "up", "down":
+					a.logsModel, _ = a.logsModel.Update(msg)
+					return a, nil, true
+				}
+			}
 			switch msg.String() {
 			case "enter":
 				// Chat: expand the most recent tool call's full record
