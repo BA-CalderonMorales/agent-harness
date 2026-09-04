@@ -174,6 +174,10 @@ func (LogsModel) rowStyle(e diag.Entry) func(string) string {
 	}
 }
 
+// ConsumesEsc keeps the global Esc handler from stealing the key while
+// the detail modal is open — Esc there means "close the modal".
+func (m *LogsModel) ConsumesEsc() bool { return m.detail != nil }
+
 // MoveCursor shifts the selection by lines (the navigate-mode j/k
 // entry point) and keeps the row in view.
 func (m *LogsModel) MoveCursor(lines int) {
@@ -339,36 +343,45 @@ func (m LogsModel) renderDetail() string {
 		lines = append(lines, strings.Split(HelpDimStyle.Render(wrapText(e.Stack, m.detailWidth()-8)), "\n")...)
 	}
 
-	// Exit hint, pinned bottom-right: how to leave the modal — the same
-	// pattern the status bar uses for its bindings.
+	// The exit hint owns the modal's bottom row, right-aligned — pinned
+	// to the frame, never floating after the content. The content
+	// window gets every row above it.
 	hint := HelpDimStyle.Render(`"Esc" to close · "j"/"k" to scroll`)
-	hintPad := m.detailWidth() - 6 - lipgloss.Width(hint)
+	hintPad := m.detailWidth() - 8 - lipgloss.Width(hint)
 	if hintPad < 0 {
 		hintPad = 0
 	}
-	lines = append(lines, "", strings.Repeat(" ", hintPad)+hint)
+	hintRow := strings.Repeat(" ", hintPad) + hint
 
-	// Window the lines: j/k scrolls, and the hint stays at the bottom.
-	visible := m.height - 12
-	if visible < 3 {
-		visible = 3
+	bodyRows := m.height - 10
+	if bodyRows < 4 {
+		bodyRows = 4
 	}
-	maxScroll := len(lines) - visible
+	contentRows := bodyRows - 1
+	maxScroll := len(lines) - contentRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
 	if m.detailScroll > maxScroll {
 		m.detailScroll = maxScroll
 	}
-	end := m.detailScroll + visible
+	end := m.detailScroll + contentRows
 	if end > len(lines) {
 		end = len(lines)
 	}
+	window := lines[m.detailScroll:end]
+
+	var body []string
+	body = append(body, window...)
+	for len(body) < contentRows {
+		body = append(body, "")
+	}
+	body = append(body, hintRow)
 
 	panel := PanelStyle.
 		Width(m.detailWidth()).
-		Height(m.height - 6).
-		Render(strings.Join(lines[m.detailScroll:end], "\n"))
+		Height(bodyRows).
+		Render(strings.Join(body, "\n"))
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
 }
 

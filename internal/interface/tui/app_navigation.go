@@ -105,6 +105,8 @@ func (a *App) activeViewConsumesEsc() bool {
 		return a.chatModel.ConsumesEsc()
 	case viewSessions:
 		return a.sessionsModel.ConsumesEsc()
+	case viewLogs:
+		return a.logsModel.ConsumesEsc()
 	case viewSettings:
 		return a.settingsModel.ConsumesEsc()
 	}
