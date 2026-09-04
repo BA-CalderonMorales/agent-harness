@@ -2,10 +2,9 @@
 #
 # A real conversation against a hosted GLM model (fireworks provider):
 # a fast first response, then a short tool call reading AGENTS.md to
-# say what the repo is about. Closes with the tab tour — Sessions,
-# Settings, Home — showing the conversation landed in the session
-# store. The composer shows the agent mode chip, set to auto via
-# /mode — tool calls approve without asking.
+# say what the repo is about. The tour then shows the Logs tab with the
+# live diagnostics stream, two themes so the palette switch is visible,
+# the '?' help overlay, and closes on Home.
 #
 # Record from the repository root:
 #   chmod +x scripts/demo/demo-boot-live.sh
@@ -36,7 +35,7 @@ Show
 
 Type@100ms "2"
 Sleep 2s
-# 2. Chat tab: the welcome message.
+# 2. Chat tab: the two-line welcome and the bullet guidance.
 
 Type@100ms "i"
 Sleep 500ms
@@ -56,18 +55,56 @@ Enter
 Sleep 25s
 # 5. Second turn: a short tool call, then the summary.
 
-# 6. The tab tour: leave the composer (Esc → normal mode — digit
-#    hotkeys switch views there), then walk Sessions, Logs, Settings,
-#    Home.
 Escape
-Sleep 500ms
-Type@100ms "3"
-Sleep 3s
+Sleep 400ms
+Type "t"
+Sleep 1s
+Type "t"
+Sleep 1s
+# 6. Tool-run collapse on, then off again — the count line and the
+#    carets doing their job.
+
+Type "y"
+Sleep 1.5s
+# 7. 'y' copies the expanded record to the clipboard; the status flash
+#    names what went where.
+
 Type@100ms "4"
 Sleep 3s
-Type@100ms "5"
+# 8. The Logs tab: the live diagnostics stream — levels, timestamps,
+#    source sites, exact file:line callers.
+
+Type "f"
+Sleep 1.5s
+Type "f"
+Sleep 1.5s
+# 9. The level filter cycles: all → warning+ → error+.
+
+Type@100ms "2"
+Sleep 2s
+Type@100ms "i"
+Sleep 400ms
+Type "/theme midnight"
+Enter
+Sleep 2.5s
+Type "/theme paper"
+Enter
+Sleep 2.5s
+Type "/theme default"
+Enter
+Sleep 2s
+# 10. Themes: the palette switches live — midnight, paper, back to the
+#     default.
+
+Escape
+Sleep 400ms
+Type "?"
 Sleep 3s
+# 11. The help overlay: the scrollable key map (j/k to scroll).
+
+Escape
+Sleep 500ms
 Type@100ms "1"
 Sleep 3s
-# 7. Home tab — the tour ends where it started. The tape ends on the
-#    TUI: no exit, no shell.
+# 12. Home tab — the tour ends where it started. The tape ends on the
+#     TUI: no exit, no shell.

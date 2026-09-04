@@ -29,6 +29,10 @@ type ApprovalDialogModel struct {
 	options  []ApprovalOption
 	selected int
 
+	// scroll offsets the command/preview detail when the dialog is
+	// taller than the terminal: the command is never clipped off screen,
+	// the decision options stay pinned.
+	scroll int
 	// Suggest mode: the "Reject + Suggest" option opens a one-line
 	// input; the text is delivered to the agent as the deny reason.
 	suggestMode bool
@@ -86,6 +90,7 @@ func (m *ApprovalDialogModel) Show(req *approval.ApprovalRequest) {
 	m.selected = 0
 	m.suggestMode = false
 	m.suggestBuf = ""
+	m.scroll = 0
 }
 
 // Hide hides the approval dialog
@@ -224,6 +229,18 @@ func (m ApprovalDialogModel) Update(msg tea.Msg) (ApprovalDialogModel, tea.Cmd) 
 			m.selected++
 			if m.selected >= len(m.options) {
 				m.selected = 0
+			}
+
+		case tea.KeyRunes:
+			// j/k scroll the command detail when it outgrows the
+			// terminal — the decision options stay pinned either way.
+			switch string(msg.Runes) {
+			case "j":
+				m.scroll++
+			case "k":
+				if m.scroll > 0 {
+					m.scroll--
+				}
 			}
 		}
 

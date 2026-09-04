@@ -40,8 +40,10 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		case "?", "esc", "q":
 			a.showHelp = false
 			return a, nil, true
+		default:
+			a.helpModel = a.helpModel.Update(msg)
+			return a, nil, true
 		}
-		return a, nil, true
 	}
 
 	// When command palette is open, delegate to it
@@ -226,10 +228,10 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			a.mouseCapture = !a.mouseCapture
 			if a.mouseCapture {
 				a.ShowStatus(`Mouse capture on — "m" to select-copy`, "info")
-				return a, func() tea.Msg { return tea.EnableMouseCellMotion() }, true
+				return a, tea.Batch(func() tea.Msg { return tea.EnableMouseCellMotion() }, a.statusFlashCmd()), true
 			}
 			a.ShowStatus(`Mouse capture off — select to copy · "m" restores`, "info")
-			return a, func() tea.Msg { return tea.DisableMouse() }, true
+			return a, tea.Batch(func() tea.Msg { return tea.DisableMouse() }, a.statusFlashCmd()), true
 		}
 
 		// View switching shortcuts

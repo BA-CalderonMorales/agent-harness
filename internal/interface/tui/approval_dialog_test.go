@@ -3,6 +3,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -437,5 +438,47 @@ func TestApprovalDialog_SuggestMode(t *testing.T) {
 	}
 	if approvalMsg.Decision != approval.DecisionRejectAll {
 		t.Fatalf("decision = %v, want reject-all", approvalMsg.Decision)
+	}
+}
+
+// TestApprovalDialogScrollKeepsCommandReachable pins the height fix: a
+// long command in a short terminal used to clip the top and bottom of
+// the dialog — the command and the options were both off screen. The
+// detail now scrolls (j/k) while the options stay pinned, and the whole
+// command remains reachable.
+func TestApprovalDialogScrollKeepsCommandReachable(t *testing.T) {
+	dialog := NewApprovalDialog()
+	dialog, _ = dialog.Update(tea.WindowSizeMsg{Width: 100, Height: 18})
+
+	long := "kubectl apply -f /very/long/path/to/deployment-manifest-production-cluster.yaml && kubectl rollout status deployment/agent-harness --timeout=90s && echo rollout-complete"
+	req := approval.NewApprovalRequest(approval.CommandInfo{
+		ID:          "cmd-1",
+		ToolName:    "bash",
+		DisplayName: "bash",
+		Command:     long,
+		Description: long,
+	})
+	dialog.Show(req)
+
+	// Head of the command visible before any scroll.
+	head := dialog.View()
+	if !strings.Contains(head, "kubectl apply -f") {
+		t.Fatalf("command head not rendered:\n%s", head)
+	}
+	if !strings.Contains(head, "1. Approve") {
+		t.Fatal("options not pinned in view")
+	}
+
+	// Scroll to the bottom: the command tail becomes visible, options
+	// still pinned.
+	for i := 0; i < 12; i++ {
+		dialog.scroll++
+	}
+	tail := dialog.View()
+	if !strings.Contains(tail, "rollout-complete") {
+		t.Fatalf("command tail unreachable after scroll:\n%s", tail)
+	}
+	if !strings.Contains(tail, "1. Approve") {
+		t.Fatal("options scrolled away")
 	}
 }
