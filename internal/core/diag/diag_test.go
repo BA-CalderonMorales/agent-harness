@@ -151,3 +151,32 @@ func readAll(t *testing.T, dir string) []Entry {
 	}
 	return out
 }
+
+// TestDiagSinkMustNotRecurse pins the failure surface rule: a sink that
+// logs (the TUI forwards entries through Send, and Send's full-channel
+// drop path logs) must not loop — the first stack overflow took down
+// the whole test binary. Re-entrant entries skip the sink.
+func TestDiagSinkMustNotRecurse(t *testing.T) {
+	dir := t.TempDir()
+	SetDir(dir)
+	defer func() { SetDir("") }()
+
+	depth := 0
+	maxDepth := 0
+	SetSink(func(e Entry) {
+		depth++
+		if depth > maxDepth {
+			maxDepth = depth
+		}
+		if depth <= 8 {
+			Errorf("sink.loop", "re-entry %d", depth)
+		}
+		depth--
+	})
+	defer SetSink(nil)
+
+	Info("sink.test", "single spark")
+	if maxDepth > 1 {
+		t.Fatalf("sink recursed to depth %d, want max 1", maxDepth)
+	}
+}

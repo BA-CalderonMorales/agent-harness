@@ -95,10 +95,11 @@ func Dir() string {
 // set, receives every entry as it is logged (the TUI routes it onto the
 // event loop through its drop-safe channel).
 var (
-	streamMu sync.Mutex
-	ring     []Entry
-	ringCap  = 500
-	sink     func(Entry)
+	streamMu   sync.Mutex
+	ring       []Entry
+	ringCap    = 500
+	sink       func(Entry)
+	sinkActive bool
 )
 
 // SetSink registers a callback fired for every entry. One sink per
@@ -196,8 +197,21 @@ func write(entry Entry) {
 		ring = ring[len(ring)-ringCap:]
 	}
 	fn := sink
+	busy := sinkActive
+	if fn != nil && !busy {
+		sinkActive = true
+	}
 	streamMu.Unlock()
-	if fn != nil {
+	if fn != nil && !busy {
+		// The sink is forbidden from recursing: a sink that logs (the
+		// TUI forwards entries through Send, and Send's drop path logs)
+		// would loop until the stack blows. Re-entrant entries skip the
+		// sink and go to the ring and file only.
+		defer func() {
+			streamMu.Lock()
+			sinkActive = false
+			streamMu.Unlock()
+		}()
 		fn(entry)
 	}
 
