@@ -110,7 +110,6 @@ func (m SettingsModel) CapturesAllKeys() bool {
 // Scroll scrolls the list and updates viewport.
 // CRITICAL FIX: Also scrolls the viewport to ensure all settings are visible
 func (m *SettingsModel) Scroll(lines int) {
-	oldCursor := m.cursor
 	if lines > 0 {
 		for i := 0; i < lines && m.cursor < len(m.settings)-1; i++ {
 			m.cursor++
@@ -120,33 +119,8 @@ func (m *SettingsModel) Scroll(lines int) {
 			m.cursor--
 		}
 	}
-	// Scroll viewport to keep cursor visible
-	if m.cursor != oldCursor {
-		m.syncViewportToCursor()
-	}
-}
-
-// syncViewportToCursor ensures the cursor is visible in the viewport
-func (m *SettingsModel) syncViewportToCursor() {
-	// Approximate line height per setting (2 lines: label/value + description)
-	lineHeight := 2
-	cursorLine := m.cursor * lineHeight
-
-	// If cursor is above viewport, scroll up
-	if cursorLine < m.viewport.YOffset {
-		m.viewport.SetYOffset(cursorLine)
-	}
-
-	// If cursor is below viewport, scroll down
-	viewportBottom := m.viewport.YOffset + m.viewport.Height
-	cursorBottom := cursorLine + lineHeight
-	if cursorBottom > viewportBottom {
-		newOffset := cursorBottom - m.viewport.Height
-		if newOffset < 0 {
-			newOffset = 0
-		}
-		m.viewport.SetYOffset(newOffset)
-	}
+	// Viewport sync happens in View, which knows each row's rendered
+	// position exactly.
 }
 
 // GotoTop scrolls to top.

@@ -8,7 +8,9 @@ import (
 	"time"
 )
 
-// getSessionInfos returns session info for TUI.
+// getSessionInfos returns session info for TUI. Empty sessions are
+// dropped: a just-created session has nothing to resume, and "0 msgs ·
+// 0 turns" in Recent Sessions is noise on the first boot.
 func (app *App) getSessionInfos() []tui.SessionInfo {
 	sessions, err := app.sessionManager.ListSessions()
 	if err != nil {
@@ -21,7 +23,14 @@ func (app *App) getSessionInfos() []tui.SessionInfo {
 	currentSession := app.sessionManager.GetCurrent()
 	sessions = ensureCurrentSession(sessions, currentSession)
 
-	return convertToSessionInfos(sessions, currentSession)
+	infos := convertToSessionInfos(sessions, currentSession)
+	filtered := infos[:0]
+	for _, info := range infos {
+		if info.MessageCount > 0 {
+			filtered = append(filtered, info)
+		}
+	}
+	return filtered
 }
 
 // ensureCurrentSession adds the current session to the list when it is

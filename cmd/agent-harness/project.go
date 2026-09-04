@@ -33,46 +33,25 @@ func (app *App) getProjectInfo() tui.ProjectInfo {
 // getWorkspaceInfo returns formatted workspace information.
 
 // buildWelcomeMessage creates a contextual welcome message.
+// buildWelcomeMessage greets in the chat pane. It is the greeting, not
+// a second dashboard: git state, project type, and storage live on the
+// Home tab, and the navigation pointers live in the guidance block —
+// the welcome used to dump both, an eight-line telemetry wall ahead of
+// any conversation.
 func (app *App) buildWelcomeMessage() string {
-	var parts []string
-	parts = append(parts, sprintf("Agent Harness %s", Version))
+	parts := []string{sprintf("Agent Harness %s", Version)}
 
-	// Persona-aware greeting
 	if app.session != nil && app.session.Persona != "" {
 		if p, err := persona.Parse(app.session.Persona); err == nil {
-			parts = append(parts, sprintf("  Mode: %s — %s", p.DisplayName(), p.WelcomeGreeting()))
+			parts = append(parts, p.WelcomeGreeting())
 		}
 	}
 
 	if app.session != nil && len(app.session.Messages) > 0 {
-		parts = append(parts, sprintf("  Resumed session %s (%d messages, %d turns)",
+		parts = append(parts, sprintf("Resumed session %s (%d messages, %d turns)",
 			app.session.ID[:8], len(app.session.Messages), app.session.Turns))
 	}
 
-	if app.gitContext != nil && app.gitContext.IsRepo {
-		parts = append(parts, sprintf("  Git: %s (%s)", filepath.Base(app.gitContext.Root), app.gitContext.Branch))
-		if len(app.gitContext.RecentCommits) > 0 {
-			parts = append(parts, sprintf("  Last commit: %s", app.gitContext.RecentCommits[0]))
-		}
-		if app.gitContext.HasChanges {
-			parts = append(parts, "  Status: uncommitted changes present")
-		} else {
-			parts = append(parts, "  Status: clean")
-		}
-	} else {
-		parts = append(parts, sprintf("  Dir: %s", app.cwd))
-	}
-
-	if projType := detectProjectType(app.cwd); projType != "" {
-		parts = append(parts, sprintf("  Project: %s", projType))
-	}
-
-	if app.session.PlanMode {
-		parts = append(parts, "  Mode: plan — outline before executing")
-	}
-
-	parts = append(parts, "")
-	parts = append(parts, "Type /help for commands")
 	return strings.Join(parts, "\n")
 }
 

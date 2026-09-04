@@ -130,7 +130,13 @@ type ChatModel struct {
 	// State
 	thinking     bool
 	thinkingText string
-	model        string
+	// thinkingIsStatus marks thinkingText as loop status ("Thinking...",
+	// "Connecting to …") rather than model reasoning: status must drive
+	// the badge, never the reasoning record — the expanded reasoning
+	// frame once rendered "Connecting to local..." as the model's
+	// thoughts.
+	thinkingIsStatus bool
+	model            string
 
 	// Composer mode line metadata (set by the app-level runtime context)
 	provider  string

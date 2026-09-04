@@ -101,6 +101,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case AgentStartMsg:
 		m.thinking = true
 		m.thinkingText = "Thinking..."
+		m.thinkingIsStatus = true
 		m.streaming = true
 		m.turnInterrupted = false
 		m.streamBuffer = ""
@@ -123,6 +124,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Show connecting state to user so they know we're trying
 		m.thinking = true
 		m.thinkingText = fmt.Sprintf("Connecting to %s...", msg.Endpoint)
+		m.thinkingIsStatus = true
 		return m, nil
 
 	case AgentThinkingMsg:
