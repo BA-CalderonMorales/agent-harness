@@ -301,19 +301,6 @@ func (m LogsModel) View() string {
 	}
 
 	filterName := levelFilters[m.filter].name
-	var b strings.Builder
-	b.WriteString(RenderHeader(HeaderConfig{
-		Title:    "Logs",
-		Subtitle: "Diagnostics stream",
-		Count:    len(m.entries),
-	}))
-	b.WriteString("\n")
-	b.WriteString(m.tableHeader())
-	b.WriteString("\n")
-	b.WriteString(m.viewport.View())
-	if strings.TrimSpace(m.viewport.View()) == "" {
-		b.WriteString(HelpDimStyle.Render("  no entries at this level"))
-	}
 	hints := []ActionHint{
 		{Key: "↑/↓", Desc: "Select"},
 		{Key: "Enter", Desc: "Detail"},
@@ -325,8 +312,40 @@ func (m LogsModel) View() string {
 			Desc: "Selected",
 		})
 	}
-	b.WriteString(RenderFooter(hints))
-	return b.String()
+
+	// Body: everything above the hint line.
+	var body strings.Builder
+	body.WriteString(RenderHeader(HeaderConfig{
+		Title:    "Logs",
+		Subtitle: "Diagnostics stream",
+		Count:    len(m.entries),
+	}))
+	body.WriteString("\n")
+	body.WriteString(m.tableHeader())
+	body.WriteString("\n")
+	body.WriteString(m.viewport.View())
+	if strings.TrimSpace(m.viewport.View()) == "" {
+		body.WriteString(HelpDimStyle.Render("  no entries at this level"))
+	}
+
+	// The hint line pins to the pane's bottom row — bottom-left, one
+	// row above the status bar — instead of floating after the last
+	// entry. The gap between the stream and the hints is padding.
+	lines := strings.Split(body.String(), "\n")
+	pane := m.height
+	if pane < 4 {
+		pane = 4
+	}
+	// RenderFooter emits a blank separator line before the hints.
+	pad := pane - len(lines) - 2
+	if pad < 0 {
+		pad = 0
+	}
+	for i := 0; i < pad; i++ {
+		lines = append(lines, "")
+	}
+	lines = append(lines, strings.TrimPrefix(RenderFooter(hints), "\n"))
+	return strings.Join(lines, "\n")
 }
 
 // renderDetail shows the full entry: every field, the message wrapped to
