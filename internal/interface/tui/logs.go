@@ -311,11 +311,18 @@ func (m LogsModel) View() string {
 	if strings.TrimSpace(m.viewport.View()) == "" {
 		b.WriteString(HelpDimStyle.Render("  no entries at this level"))
 	}
-	b.WriteString(RenderFooter([]ActionHint{
+	hints := []ActionHint{
 		{Key: "↑/↓", Desc: "Select"},
 		{Key: "Enter", Desc: "Detail"},
 		{Key: "f", Desc: "Filter: " + filterName},
-	}))
+	}
+	if len(m.visible) > 0 {
+		hints = append(hints, ActionHint{
+			Key:  fmt.Sprintf("%d/%d", m.cursor+1, len(m.visible)),
+			Desc: "Selected",
+		})
+	}
+	b.WriteString(RenderFooter(hints))
 	return b.String()
 }
 
