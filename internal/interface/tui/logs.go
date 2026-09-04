@@ -53,15 +53,16 @@ func levelRank(level string) int {
 }
 
 type LogsModel struct {
-	width    int
-	height   int
-	viewport viewport.Model
-	focused  bool
-	filter   int
-	entries  []diag.Entry
-	visible  []diag.Entry // filtered rows, index = table row
-	cursor   int          // selected row in visible
-	detail   *diag.Entry  // non-nil: the detail modal is open
+	width        int
+	height       int
+	viewport     viewport.Model
+	focused      bool
+	filter       int
+	entries      []diag.Entry
+	visible      []diag.Entry // filtered rows, index = table row
+	cursor       int          // selected row in visible
+	detail       *diag.Entry  // non-nil: the detail modal is open
+	detailScroll int          // detail modal scroll offset
 }
 
 // NewLogsModel creates a new logs view model.
@@ -173,6 +174,36 @@ func (LogsModel) rowStyle(e diag.Entry) func(string) string {
 	}
 }
 
+// MoveCursor shifts the selection by lines (the navigate-mode j/k
+// entry point) and keeps the row in view.
+func (m *LogsModel) MoveCursor(lines int) {
+	if len(m.visible) == 0 {
+		return
+	}
+	m.cursor += lines
+	if m.cursor < 0 {
+		m.cursor = 0
+	}
+	if m.cursor > len(m.visible)-1 {
+		m.cursor = len(m.visible) - 1
+	}
+	m.scrollToCursor()
+}
+
+// CursorTop selects the first entry.
+func (m *LogsModel) CursorTop() {
+	m.cursor = 0
+	m.scrollToCursor()
+}
+
+// CursorBottom selects the last entry.
+func (m *LogsModel) CursorBottom() {
+	if len(m.visible) > 0 {
+		m.cursor = len(m.visible) - 1
+	}
+	m.scrollToCursor()
+}
+
 // Update handles resize, cursor keys, the filter cycle, detail open/
 // close, and mouse clicks on the table.
 func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
@@ -202,8 +233,19 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if m.detail != nil {
-			// Any key folds the detail modal.
-			m.detail = nil
+			// The detail modal scrolls its content (j/k) and folds on
+			// Esc — folding on any key made a long stack unreadable.
+			switch msg.String() {
+			case "esc", "q":
+				m.detail = nil
+				m.detailScroll = 0
+			case "j", "down":
+				m.detailScroll++
+			case "k", "up":
+				if m.detailScroll > 0 {
+					m.detailScroll--
+				}
+			}
 			return m, nil
 		}
 		if !m.focused {
@@ -229,6 +271,7 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 		case "enter":
 			if len(m.visible) > 0 {
 				m.detail = &m.visible[m.cursor]
+				m.detailScroll = 0
 			}
 		case "f":
 			m.filter = (m.filter + 1) % len(levelFilters)
@@ -273,31 +316,59 @@ func (m LogsModel) View() string {
 }
 
 // renderDetail shows the full entry: every field, the message wrapped to
-// the modal width, and the stack when present.
+// the modal width, and the stack when present — scrolled with j/k when
+// the content outgrows the modal, with the exit hint pinned bottom-right.
 func (m LogsModel) renderDetail() string {
 	e := *m.detail
-	var b strings.Builder
-	b.WriteString(HelpTitleStyle.Render("Log detail"))
-	b.WriteString("\n\n")
-	b.WriteString(fmt.Sprintf("Level:   %s\n", strings.ToUpper(e.Level)))
-	b.WriteString(fmt.Sprintf("Time:    %s\n", e.Timestamp.Local().Format("15:04:05")))
-	b.WriteString(fmt.Sprintf("Site:    %s\n", e.Site))
+	var lines []string
+	lines = append(lines, HelpTitleStyle.Render("Log detail"), "")
+	lines = append(lines, fmt.Sprintf("Level:   %s", strings.ToUpper(e.Level)))
+	lines = append(lines, fmt.Sprintf("Time:    %s", e.Timestamp.Local().Format("15:04:05")))
+	lines = append(lines, fmt.Sprintf("Site:    %s", e.Site))
 	if e.Caller != "" {
-		b.WriteString(fmt.Sprintf("Source:  %s\n", e.Caller))
+		lines = append(lines, fmt.Sprintf("Source:  %s", e.Caller))
 	}
-	b.WriteString("\n")
-	b.WriteString(wrapText(e.Message, m.width-10))
+	lines = append(lines, "")
+	lines = append(lines, strings.Split(wrapText(e.Message, m.detailWidth()-8), "\n")...)
 	if e.Detail != "" {
-		b.WriteString("\n\n" + wrapText(e.Detail, m.width-10))
+		lines = append(lines, "")
+		lines = append(lines, strings.Split(wrapText(e.Detail, m.detailWidth()-8), "\n")...)
 	}
 	if e.Stack != "" {
-		b.WriteString("\n\n" + HelpDimStyle.Render(wrapText(e.Stack, m.width-10)))
+		lines = append(lines, "")
+		lines = append(lines, strings.Split(HelpDimStyle.Render(wrapText(e.Stack, m.detailWidth()-8)), "\n")...)
+	}
+
+	// Exit hint, pinned bottom-right: how to leave the modal — the same
+	// pattern the status bar uses for its bindings.
+	hint := HelpDimStyle.Render(`"Esc" to close · "j"/"k" to scroll`)
+	hintPad := m.detailWidth() - 6 - lipgloss.Width(hint)
+	if hintPad < 0 {
+		hintPad = 0
+	}
+	lines = append(lines, "", strings.Repeat(" ", hintPad)+hint)
+
+	// Window the lines: j/k scrolls, and the hint stays at the bottom.
+	visible := m.height - 12
+	if visible < 3 {
+		visible = 3
+	}
+	maxScroll := len(lines) - visible
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	if m.detailScroll > maxScroll {
+		m.detailScroll = maxScroll
+	}
+	end := m.detailScroll + visible
+	if end > len(lines) {
+		end = len(lines)
 	}
 
 	panel := PanelStyle.
 		Width(m.detailWidth()).
 		Height(m.height - 6).
-		Render(b.String())
+		Render(strings.Join(lines[m.detailScroll:end], "\n"))
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
 }
 

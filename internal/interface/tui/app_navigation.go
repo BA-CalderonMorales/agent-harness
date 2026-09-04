@@ -141,6 +141,10 @@ func (a *App) scrollActiveView(lines int) {
 		a.chatModel.Scroll(lines)
 	case viewSessions:
 		a.sessionsModel.Scroll(lines)
+	case viewLogs:
+		// The Logs tab's j/k move the selection cursor, not the scroll
+		// window — the cursor is the thing Enter acts on.
+		a.logsModel.MoveCursor(lines)
 	case viewSettings:
 		a.settingsModel.Scroll(lines)
 	}
@@ -164,6 +168,8 @@ func (a *App) gotoActiveViewTop() {
 		a.chatModel.GotoTop()
 	case viewSessions:
 		a.sessionsModel.GotoTop()
+	case viewLogs:
+		a.logsModel.CursorTop()
 	case viewSettings:
 		a.settingsModel.GotoTop()
 	}
@@ -177,6 +183,8 @@ func (a *App) gotoActiveViewBottom() {
 		a.chatModel.GotoBottom()
 	case viewSessions:
 		a.sessionsModel.GotoBottom()
+	case viewLogs:
+		a.logsModel.CursorBottom()
 	case viewSettings:
 		a.settingsModel.GotoBottom()
 	}
