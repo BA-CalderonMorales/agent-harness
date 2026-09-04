@@ -9,6 +9,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
@@ -47,6 +48,11 @@ type App struct {
 	// bootNotice carries a credential/config problem discovered before
 	// the TUI exists; run() surfaces it once the TUI is up.
 	bootNotice string
+
+	// modelResetNote records a boot-time model/provider mismatch fix
+	// (a stranded model reset to the provider's default) so the notice
+	// reaches the transcript once the TUI is up.
+	modelResetNote string
 }
 
 // newApp creates and initializes a App instance.
@@ -84,7 +90,15 @@ func newApp() (*App, error) {
 	app.initTools()
 	app.initCommands()
 
+	// A provider switch (env override, saved config) can strand a model
+	// from the previous provider — the mode line once read
+	// "glm-5p3-flash · local". Reset to the provider's default and say
+	// so in the transcript.
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
+	if previous, reset := app.ensureModelFitsProvider(app.config, app.session.Model); reset {
+		app.session.Model = app.config.Model
+		app.modelResetNote = sprintf("Model %s is not a %s model — switched to %s", previous, app.config.Provider, app.config.Model)
+	}
 	app.loop = agent.NewLoop(app.client)
 	applyCatalogContext(app.config, app.session.Model)
 	if app.config.ContextLength > 0 {
@@ -104,6 +118,10 @@ func (app *App) run() error {
 	// under the "theme" settings key via the Settings tab or /theme.
 	if app.config.Theme != "" {
 		tuiApp.ApplyTheme(app.config.Theme)
+	}
+	if app.modelResetNote != "" {
+		diag.Info("model.reset", app.modelResetNote)
+		tuiApp.AddMessage("system", app.modelResetNote)
 	}
 
 	// Re-register slash commands that need TUI integration

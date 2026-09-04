@@ -48,6 +48,70 @@ func (app *App) applyModelContext(model string) {
 	applyCatalogContext(app.config, model)
 }
 
+// ensureModelFitsProvider resets a model that cannot exist on the
+// active provider to that provider's default. A provider switch (env
+// override, saved config) strands the old model otherwise: the mode
+// line read "glm-5p3-flash · local" — a Fireworks model pointed at a
+// local server.
+//
+// Two checks: hosted providers compare against the static catalog
+// (offline, deterministic); local providers compare against the live
+// /v1/models list, because any model name is legitimate on a local
+// server and only the endpoint knows what it serves. An unreachable or
+// silent endpoint keeps the current model — no evidence, no reset.
+// Returns the previous model when a reset happened.
+func (app *App) ensureModelFitsProvider(cfg *config.LayeredConfig, sessionModel string) (string, bool) {
+	if cfg == nil {
+		return "", false
+	}
+	model := cfg.Model
+	if model == "" && sessionModel != "" {
+		model = sessionModel
+	}
+	if model == "" {
+		return "", false
+	}
+
+	if !config.IsLocalProvider(cfg.Provider) {
+		for _, item := range getModelsForProvider(cfg.Provider, model) {
+			if item.ID == model {
+				return "", false
+			}
+		}
+	} else {
+		if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
+			infos, err := c.ListModelsDetailed()
+			if err != nil || len(infos) == 0 {
+				return "", false // endpoint silent: no evidence, no reset
+			}
+			known := false
+			for _, info := range infos {
+				if info.ID == model {
+					known = true
+					break
+				}
+			}
+			if !known {
+				previous := model
+				cfg.Model = config.DefaultModel
+				if cfg.Model == previous {
+					return "", false
+				}
+				return previous, true
+			}
+			return "", false
+		}
+		return "", false
+	}
+
+	previous := model
+	cfg.Model = config.DefaultModelForProvider(cfg.Provider)
+	if cfg.Model == previous {
+		return "", false
+	}
+	return previous, true
+}
+
 // getModelsForProvider returns models appropriate for the provider.
 func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 	switch provider {
