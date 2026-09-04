@@ -22,17 +22,33 @@ func (m ApprovalDialogModel) View() string {
 		return ""
 	}
 
-	// Build the dialog content
+	// The dialog must fit the terminal at every size: title and the
+	// decision options stay pinned, while the command/preview detail
+	// scrolls between them (j/k). On a short terminal the old layout
+	// clipped the top and bottom — exactly the command being approved
+	// and the keys that answer it.
 	var sections []string
 
-	// Title
 	title := TitleStyle.Render("Command Approval Required")
 	sections = append(sections, title)
 
-	// Command display
-	cmd := m.request.Command
-	cmdDisplay := m.renderCommandDisplay(cmd)
-	sections = append(sections, cmdDisplay)
+	detailLines := m.detailLines()
+	maxScroll := len(detailLines) - m.visibleDetailRows()
+	if maxScroll < 0 {
+		maxScroll = 0
+	}
+	scroll := m.scroll
+	if scroll > maxScroll {
+		scroll = maxScroll
+	}
+	end := scroll + m.visibleDetailRows()
+	if end > len(detailLines) {
+		end = len(detailLines)
+	}
+	if scroll > end {
+		scroll = end
+	}
+	sections = append(sections, detailLines[scroll:end]...)
 
 	if m.suggestMode {
 		// Reject + Suggest input: the text goes to the agent as the deny
@@ -48,7 +64,7 @@ func (m ApprovalDialogModel) View() string {
 		sections = append(sections, optionsDisplay)
 
 		// Help text
-		help := HelpDimStyle.Render("Number/letter keys act instantly · Arrows + Enter also work · ESC rejects")
+		help := HelpDimStyle.Render("Number/letter keys act instantly · Arrows + Enter also work · ESC rejects · j/k scroll")
 		sections = append(sections, help)
 	}
 
@@ -59,13 +75,36 @@ func (m ApprovalDialogModel) View() string {
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
 		Background(ColorSurface).
-		Padding(2).
+		Padding(1, 2).
 		Width(m.width - 10)
 
 	dialog := dialogStyle.Render(content)
 
 	// Center the dialog
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+}
+
+// visibleDetailRows is how many detail lines fit between the pinned
+// title and the pinned options at the current terminal height.
+func (m ApprovalDialogModel) visibleDetailRows() int {
+	rows := m.height - 13
+	if rows < 3 {
+		rows = 3
+	}
+	return rows
+}
+
+// detailLines renders the scrollable middle: the command block, its
+// description, the change preview, and the risk note, wrapped to the
+// dialog width.
+func (m ApprovalDialogModel) detailLines() []string {
+	if m.request == nil {
+		return nil
+	}
+	var lines []string
+	cmdDisplay := m.renderCommandDisplay(m.request.Command)
+	lines = append(lines, strings.Split(cmdDisplay, "\n")...)
+	return lines
 }
 
 func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) string {

@@ -66,3 +66,39 @@ func TestApplyModelContextPrefersLive(t *testing.T) {
 		t.Fatalf("catalog fallback not applied: %d", app.config.ContextLength)
 	}
 }
+
+// TestEnsureModelFitsProviderLocalUsesLiveList covers the user's repro:
+// boot local with a stranded fireworks model and the mode line reads
+// "glm-5p3-flash · local" — the live list resets it to the local
+// default, while a model the endpoint serves stays. Hosted providers
+// validate against the static catalog instead.
+func TestEnsureModelFitsProviderLocalUsesLiveList(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "deepreinforce-ai/Ornith-1.0-9B-GGUF", "context_length": 8192},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	app := &App{client: llm.NewHTTPClientWithBaseURL("local", "", srv.URL)}
+	cfg := &config.LayeredConfig{Provider: "local", Model: "accounts/fireworks/models/glm-5p3-flash"}
+
+	previous, reset := app.ensureModelFitsProvider(cfg, cfg.Model)
+	if !reset {
+		t.Fatal("stranded fireworks model on local provider must reset")
+	}
+	if previous != "accounts/fireworks/models/glm-5p3-flash" {
+		t.Fatalf("previous = %q", previous)
+	}
+	if cfg.Model != config.DefaultModel {
+		t.Fatalf("model = %q, want the local default", cfg.Model)
+	}
+
+	// A model the endpoint actually serves stays.
+	cfg.Model = "deepreinforce-ai/Ornith-1.0-9B-GGUF"
+	if _, reset = app.ensureModelFitsProvider(cfg, cfg.Model); reset {
+		t.Fatal("live-served model must not reset")
+	}
+}
