@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"math/rand"
+	"strings"
 	"testing"
 	"time"
 
@@ -17,6 +18,9 @@ func logsKeyApp(t *testing.T, n int) *App {
 	app := NewApp()
 	app.width = 120
 	app.height = 32
+	// A real boot delivers a WindowSizeMsg; without it the Logs model
+	// renders "Loading..." and the table never exists.
+	app.Update(tea.WindowSizeMsg{Width: 120, Height: 32})
 	// NewApp seeds the Logs tab from the diag ring; tests own their
 	// stream, so drop whatever earlier tests logged into the ring.
 	app.logsModel.entries = nil
@@ -206,5 +210,31 @@ func TestLogsTabCursorRandomWalk(t *testing.T) {
 					trial, stepIdx, got, want)
 			}
 		}
+	}
+}
+
+// TestLogsSelectionMarkerVisible pins the theme-proof cue: exactly one
+// row carries the ▸ marker, and it is the row the cursor points at —
+// on any terminal, any palette. A background-only highlight proved
+// invisible on dark themes; this is the regression that must never
+// come back.
+func TestLogsSelectionMarkerVisible(t *testing.T) {
+	app := logsKeyApp(t, 6)
+	logsPress(app, "down")
+	logsPress(app, "down")
+
+	out := app.logsModel.View()
+	rows := strings.Split(out, "\n")
+	marked := 0
+	for _, row := range rows {
+		if strings.Contains(row, "▸") {
+			marked++
+			if !strings.Contains(row, "site.02") {
+				t.Fatalf("marker on the wrong row: %q", row)
+			}
+		}
+	}
+	if marked != 1 {
+		t.Fatalf("marker count = %d, want exactly 1", marked)
 	}
 }

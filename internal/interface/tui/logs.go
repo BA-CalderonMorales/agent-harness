@@ -117,9 +117,12 @@ func (m *LogsModel) refresh() {
 	for i, e := range m.visible {
 		row := m.tableRow(e)
 		if i == m.cursor {
-			b.WriteString(ListSelectedStyle.Render(row))
+			// The ▸ marker carries the selection on themes where the
+			// highlight background blends into the page background —
+			// the marker is the load-bearing cue, the style the bonus.
+			b.WriteString(ListSelectedStyle.Render("▸ " + row))
 		} else {
-			b.WriteString(m.rowStyle(e)(row))
+			b.WriteString(m.rowStyle(e)("  " + row))
 		}
 		b.WriteString("\n")
 	}
@@ -140,7 +143,7 @@ func (m *LogsModel) scrollToCursor() {
 }
 
 func (m *LogsModel) tableHeader() string {
-	return HelpDimStyle.Render(fmt.Sprintf("%-8s %-7s %-22s %s", "TIME", "LEVEL", "SITE", "DETAIL"))
+	return HelpDimStyle.Render(fmt.Sprintf("  %-8s %-7s %-22s %s", "TIME", "LEVEL", "SITE", "DETAIL"))
 }
 
 // tableRow renders one entry as a single line — the table never wraps,
@@ -191,13 +194,13 @@ func (m *LogsModel) MoveCursor(lines int) {
 	if m.cursor > len(m.visible)-1 {
 		m.cursor = len(m.visible) - 1
 	}
-	m.scrollToCursor()
+	m.refresh()
 }
 
 // CursorTop selects the first entry.
 func (m *LogsModel) CursorTop() {
 	m.cursor = 0
-	m.scrollToCursor()
+	m.refresh()
 }
 
 // CursorBottom selects the last entry.
@@ -205,7 +208,7 @@ func (m *LogsModel) CursorBottom() {
 	if len(m.visible) > 0 {
 		m.cursor = len(m.visible) - 1
 	}
-	m.scrollToCursor()
+	m.refresh()
 }
 
 // Update handles resize, cursor keys, the filter cycle, detail open/
@@ -259,19 +262,19 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 		case "up", "k":
 			if m.cursor > 0 {
 				m.cursor--
-				m.scrollToCursor()
+				m.refresh()
 			}
 		case "down", "j":
 			if m.cursor < len(m.visible)-1 {
 				m.cursor++
-				m.scrollToCursor()
+				m.refresh()
 			}
 		case "g":
 			m.cursor = 0
-			m.scrollToCursor()
+			m.refresh()
 		case "G":
 			m.cursor = len(m.visible) - 1
-			m.scrollToCursor()
+			m.refresh()
 		case "enter":
 			if len(m.visible) > 0 {
 				m.detail = &m.visible[m.cursor]
