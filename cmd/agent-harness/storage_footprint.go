@@ -1,22 +1,20 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/format"
 )
 
 // reportStorageFootprint logs the on-disk footprint of the data home
 // once the TUI is up. Storage the user can see is storage the user can
-// manage — but the chat pane is for conversation: the numbers land in
-// the Logs tab's system log only.
+// manage — it lives in the diagnostics stream, not the chat pane.
 func (app *App) reportStorageFootprint(tuiApp *tui.App) {
-	if tuiApp == nil {
-		return
-	}
 
 	sessions := dirFootprint(config.DataSessions())
 	audit := dirFootprint(config.DataAudit())
@@ -24,7 +22,7 @@ func (app *App) reportStorageFootprint(tuiApp *tui.App) {
 	toolResults := dirFootprint(config.DataToolResults())
 
 	total := sessions.bytes + audit.bytes + logs.bytes + toolResults.bytes
-	tuiApp.AppendSystemLog(sprintf(
+	diag.Info("storage.footprint", fmt.Sprintf(
 		"Storage: %s under %s (sessions %d files / %s · audit %s · logs %s · tool results %s)",
 		format.HumanBytes(total),
 		config.DataHome(),

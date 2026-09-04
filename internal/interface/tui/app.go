@@ -87,10 +87,6 @@ type App struct {
 	contextLen int
 	costTotal  float64
 
-	// systemLog is the durable, capped list of system messages shown at the
-	// bottom of the settings page.
-	systemLog []string
-
 	// Provider readiness
 	providerReadiness    int // 0=checking, 1=ready, 2=warning, 3=unavailable, 4=misconfigured
 	providerReadinessMsg string
@@ -117,6 +113,11 @@ type App struct {
 	// onExportPick is the host hook for the Home export modal: it
 	// receives the picked session ID and runs the export journey.
 	onExportPick func(id string)
+
+	// mouseCapture mirrors the terminal's mouse mode: on by default (the
+	// program option enables cell motion), toggled with 'm' so the
+	// terminal's own select-and-copy can take over.
+	mouseCapture bool
 }
 
 // AgentModeChangedMsg is emitted after the composer cycles the agent
@@ -156,11 +157,22 @@ func NewApp() *App {
 		exportPicker:   NewExportPicker(),
 		loginDialog:    NewLoginDialog(),
 		msgChan:        make(chan tea.Msg, 64),
+		mouseCapture:   true,
 	}
 	app.chatModel.SetModeLabel("navigate")
 	app.chatModel.Blur()
 	app.focusActive()
 	app.homeModel.Init()
+
+	// The Logs tab tails the diagnostics stream: seed with everything
+	// logged before construction, then forward new entries onto the
+	// event loop through the drop-safe channel.
+	for _, e := range diag.Recent() {
+		app.logsModel.AppendEntry(e)
+	}
+	diag.SetSink(func(e diag.Entry) {
+		app.Send(LogEntryMsg{Entry: e})
+	})
 	return app
 }
 
@@ -263,7 +275,7 @@ func (a *App) Send(msg tea.Msg) {
 		// Channel full, drop message. Dropped streaming events surface
 		// as frozen output with no cause — record the drop so a frozen
 		// chat traces back here in seconds.
-		diag.Errorf("tui.send.drop", "message channel full, dropped %T", msg)
+		diag.Warnf("tui.send.drop", "message channel full, dropped %T", msg)
 	}
 }
 

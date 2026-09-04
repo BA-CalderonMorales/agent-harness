@@ -134,7 +134,18 @@ func (m ChatModel) renderModeLine() string {
 	}
 	parts = append(parts, "effort "+effort)
 
-	return InputMetaStyle.Render(strings.Join(parts, " · "))
+	line := InputMetaStyle.Render(strings.Join(parts, " · "))
+
+	// While typing, the escape hatch rides on the same row,
+	// right-aligned: "Esc" to navigate.
+	if m.focused {
+		hint := HelpDimStyle.Render(`"Esc" to navigate`)
+		pad := m.width - lipgloss.Width(line) - lipgloss.Width(hint)
+		if pad > 0 {
+			line += strings.Repeat(" ", pad) + hint
+		}
+	}
+	return line
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.

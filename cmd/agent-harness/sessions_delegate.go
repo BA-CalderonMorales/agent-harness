@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -107,6 +108,7 @@ func (d *tuiSessionsDelegate) OnSessionExport(id string) {
 	if absErr != nil {
 		absPath = path
 	}
+	diag.Info("session.export", absPath)
 	d.tuiApp.Send(tui.SessionsRefreshedMsg{
 		Sessions:   d.app.getSessionInfos(),
 		Notice:     sprintf("Exported to %s", abbreviatePath(absPath)),

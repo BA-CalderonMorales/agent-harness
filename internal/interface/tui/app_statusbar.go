@@ -71,7 +71,7 @@ func (a App) renderStatusBar() string {
 	if a.costTotal > 0 {
 		telemetry = append(telemetry, "$"+fmt.Sprintf("%.2f", a.costTotal))
 	}
-	telemetry = append(telemetry, "ctrl+p commands")
+	telemetry = append(telemetry, `"?" help`, `"m" copy`)
 
 	// Drop right segments until the health badge, a minimum path, the gap,
 	// and the remaining segments all fit end-to-end inside the column. The
