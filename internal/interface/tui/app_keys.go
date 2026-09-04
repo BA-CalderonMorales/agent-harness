@@ -228,10 +228,10 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			a.mouseCapture = !a.mouseCapture
 			if a.mouseCapture {
 				a.ShowStatus(`Mouse capture on — "m" to select-copy`, "info")
-				return a, func() tea.Msg { return tea.EnableMouseCellMotion() }, true
+				return a, tea.Batch(func() tea.Msg { return tea.EnableMouseCellMotion() }, a.statusFlashCmd()), true
 			}
 			a.ShowStatus(`Mouse capture off — select to copy · "m" restores`, "info")
-			return a, func() tea.Msg { return tea.DisableMouse() }, true
+			return a, tea.Batch(func() tea.Msg { return tea.DisableMouse() }, a.statusFlashCmd()), true
 		}
 
 		// View switching shortcuts
