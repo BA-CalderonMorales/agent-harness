@@ -17,6 +17,11 @@ func logsKeyApp(t *testing.T, n int) *App {
 	app := NewApp()
 	app.width = 120
 	app.height = 32
+	// NewApp seeds the Logs tab from the diag ring; tests own their
+	// stream, so drop whatever earlier tests logged into the ring.
+	app.logsModel.entries = nil
+	app.logsModel.visible = app.logsModel.visible[:0]
+	app.logsModel.cursor = 0
 	for i := 0; i < n; i++ {
 		app.logsModel.AppendEntry(diag.Entry{
 			Level: "info", Site: fmt.Sprintf("site.%02d", i),
