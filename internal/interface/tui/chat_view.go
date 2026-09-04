@@ -198,13 +198,13 @@ func (m ChatModel) assistantReasoningRows(msg ChatMessage) (start, lines int, ok
 			hintRows = 1
 		}
 		if m.expandedMessageID == msg.ID {
-			if full := strings.TrimSpace(m.thinkingText); full != "" {
+			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
 				// Full reasoning plus the "esc to close" footer.
 				return headerRows + hintRows, strings.Count(full, "\n") + 2, true
 			}
 			return 0, 0, false
 		}
-		if reasoningPreview(m.thinkingText) != "" {
+		if !m.thinkingIsStatus && reasoningPreview(m.thinkingText) != "" {
 			return headerRows + hintRows, 1, true
 		}
 		return 0, 0, false
@@ -258,17 +258,19 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 			b.WriteString("\n")
 		}
 		if m.expandedMessageID == msg.ID {
-			if full := strings.TrimSpace(m.thinkingText); full != "" {
+			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
 				b.WriteString(HelpDimStyle.Render(full))
 				b.WriteString("\n")
 				b.WriteString(HelpDimStyle.Render("   └─ esc to close"))
 				b.WriteString("\n")
 			}
-		} else if preview := reasoningPreview(m.thinkingText); preview != "" {
-			// The caret advertises the click: the preview line opens
-			// the full reasoning record.
-			b.WriteString(HelpDimStyle.Render(expandCaret(false) + " " + preview))
-			b.WriteString("\n")
+		} else if !m.thinkingIsStatus {
+			if preview := reasoningPreview(m.thinkingText); preview != "" {
+				// The caret advertises the click: the preview line opens
+				// the full reasoning record.
+				b.WriteString(HelpDimStyle.Render(expandCaret(false) + " " + preview))
+				b.WriteString("\n")
+			}
 		}
 		return b.String()
 	}
