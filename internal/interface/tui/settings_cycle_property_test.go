@@ -79,6 +79,24 @@ func TestSettingsChoiceCycleProperty(t *testing.T) {
 		gen.IntRange(0, 3),
 	))
 
+	// single option: the cycle is a no-op — the value cannot move, and
+	// a selector that cannot move must never error or wrap around.
+	singleOption := func() string {
+		s := &Setting{Type: "choice", Options: []string{"solo"}, Value: "solo"}
+		cycleChoice(s, 1)
+		if s.Value != "solo" {
+			return "single-option forward cycle moved the value"
+		}
+		cycleChoice(s, -1)
+		if s.Value != "solo" {
+			return "single-option backward cycle moved the value"
+		}
+		return ""
+	}
+	properties.Property("a single-option cycle is a no-op", prop.ForAll(
+		singleOption,
+	))
+
 	unknownSnap := func(options []string) string {
 		s := &Setting{Type: "choice", Options: options, Value: "no-such-value"}
 		cycleChoice(s, 1)
