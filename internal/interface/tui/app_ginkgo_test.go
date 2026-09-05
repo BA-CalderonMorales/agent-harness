@@ -684,7 +684,9 @@ var _ = Describe("App", func() {
 				app.width = 180
 				app.activeView = viewChat
 				app.chatModel.width = 180
-				app.chatModel.height = 24
+				// The real resize path hands sub-models height-5 (tab bar
+				// + status bar reserve); MaxHeight clips stale fixtures.
+				app.chatModel.height = 19
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				GinkgoT().Setenv("HOME", testHome)

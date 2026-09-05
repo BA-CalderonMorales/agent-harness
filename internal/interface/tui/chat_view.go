@@ -201,7 +201,9 @@ func (m ChatModel) renderModeLine() string {
 			line += strings.Repeat(" ", pad) + hint
 		}
 	}
-	return line
+	// A wrapped row is unbudgeted height: truncation keeps the frame
+	// inside the terminal on narrow screens.
+	return lipgloss.NewStyle().MaxWidth(m.width).Render(line)
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
