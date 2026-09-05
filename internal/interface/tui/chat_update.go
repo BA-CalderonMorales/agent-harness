@@ -13,9 +13,10 @@ func (m ChatModel) Init() tea.Cmd {
 }
 
 // Update handles messages.
-// viewportTopOffset counts the lines above the message viewport in the
-// chat view: the app tab bar plus the chat view header.
-const viewportTopOffset = 3
+// viewportTopOffset counts the pane rows above the message viewport in
+// the chat view: the tab bar (padding row, label row, border row) plus
+// the chat view header (title row, blank row).
+const viewportTopOffset = 5
 
 func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd

@@ -200,3 +200,37 @@ func TestCollapsedRunRowsClickThroughRealDispatch(t *testing.T) {
 		}
 	}
 }
+
+// TestClickHitsTheRenderedRow is the screen-truth receipt: the tool
+// row's pane position is read from the real rendered view — not from
+// a compile-time offset — and a click at that screen row must open
+// the record. Catches chrome-height drift (the tab bar grew a border
+// row and the old constant silently aimed two rows low).
+func TestClickHitsTheRenderedRow(t *testing.T) {
+	for _, width := range []int{60, 70, 90} {
+		m := newTurnBlockModel(t, width)
+		m.height = 30
+		m.refreshViewportWithFollow(true)
+
+		// The pane row of the first tool row, read off the render.
+		content := m.viewport.View()
+		rows := strings.Split(content, "\n")
+		toolScreenRow := -1
+		for i, line := range rows {
+			if strings.Contains(line, "bash") && strings.Contains(line, "▸") {
+				toolScreenRow = i + viewportTopOffset
+				break
+			}
+		}
+		if toolScreenRow < 0 {
+			t.Fatalf("w%d: tool row not rendered:\n%s", width, content)
+		}
+
+		m = mouseClickAt(m, toolScreenRow-viewportTopOffset)
+		want := m.messages[0].ID
+		if m.expandedMessageID != want {
+			t.Fatalf("w%d: screen click on row %d expanded %q, want %q",
+				width, toolScreenRow, m.expandedMessageID, want)
+		}
+	}
+}

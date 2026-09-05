@@ -25,10 +25,11 @@ import (
 // full history, the pane just shows a window of it.
 const logsMaxHeight = 20
 
-// logsHeaderRows are the pane rows above the table body: the page
-// header (title + blank) and the column header row. Click math uses it
-// to map a screen row to a table row.
-const logsHeaderRows = 3
+// logsHeaderRows are the pane rows above the table body: the tab bar
+// (padding row, label row, border row), the page header (title + blank)
+// and the column header row. Click math uses it to map a screen row to
+// a table row.
+const logsHeaderRows = 6
 
 // LogEntryMsg delivers a diagnostics entry from the stream (the diag
 // sink forwards through the App's drop-safe channel).
@@ -330,9 +331,9 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 			return m, nil
 		}
 		if tea.MouseEvent(msg).Action == tea.MouseActionPress && tea.MouseEvent(msg).Button == tea.MouseButtonLeft {
-			// Screen Y → table row: tab bar (1) + page header (2) +
+			// Screen Y → table row: tab bar (3) + page header (2) +
 			// column header (1) sit above the viewport, which scrolls.
-			contentRow := msg.Y - logsHeaderRows - 1 + m.viewport.YOffset
+			contentRow := msg.Y - logsHeaderRows + m.viewport.YOffset
 			if contentRow >= 0 && contentRow < len(m.visible) {
 				m.cursor = contentRow
 				m.detail = &m.visible[m.cursor]

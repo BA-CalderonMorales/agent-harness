@@ -589,10 +589,12 @@ var _ = Describe("Logs Table and Detail", func() {
 
 		It("should select rows by mouse row", func() {
 			logs.Focus()
+			// Screen-truth click: table row 1 renders at pane Y 7
+			// (tab bar 3 + page header 2 + column header 1 + row 1).
 			m, _ := logs.Update(tea.MouseMsg(tea.MouseEvent{
 				Action: tea.MouseActionPress,
 				Button: tea.MouseButtonLeft,
-				Y:      1 + 3 + 1,
+				Y:      7,
 			}))
 			logs = m
 			Expect(logs.cursor).To(Equal(1))
