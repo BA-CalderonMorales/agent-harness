@@ -65,10 +65,31 @@ func (a App) view() string {
 // Tab bar rendering - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
 
-func (a App) renderTabBar() string {
+// tabBarTier is one degradation step of the tab bar: a phone pane
+// cannot show five padded labels, so the bar sheds padding, then
+// spelling, then breadth — and never wraps. Tier 0 is the desktop
+// design, byte-identical to the pane that has always worked.
+type tabBarTier struct {
+	pad        int
+	short      bool
+	activeOnly bool
+}
+
+var tabBarTiers = []tabBarTier{
+	{pad: 2}, {pad: 1}, {pad: 1, short: true}, {activeOnly: true},
+}
+
+// shortTabLabels are the narrow-pane spellings; distinct pairs, no
+// iconography, still legible at a glance.
+var shortTabLabels = [viewCount]string{"Ho", "Ch", "Se", "Lo", "St"}
+
+func (a App) renderTabLine(tier tabBarTier) string {
 	var tabs []string
 
 	for i := viewID(0); i < viewCount; i++ {
+		if tier.activeOnly && i != a.activeView {
+			continue
+		}
 		style := TabNormal
 		indicator := " "
 		if i == a.activeView {
@@ -76,18 +97,39 @@ func (a App) renderTabBar() string {
 			indicator = IndicatorSelected
 		}
 		label := indicator + viewLabels[i]
+		if tier.short {
+			label = indicator + shortTabLabels[i]
+		}
 		// Show activity indicator for tabs with unseen updates
 		if a.tabActivity[i] && i != a.activeView {
 			label += " " + InfoStyle.Render(IndicatorActive)
 		}
+		if tier.pad != 2 {
+			style = TabNormal.Padding(0, tier.pad)
+			if i == a.activeView {
+				style = TabActive.Padding(0, tier.pad)
+			}
+		}
 		tabs = append(tabs, style.Render(label))
 	}
 
-	// Join tabs with spacing
-	tabsContent := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
+	return lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
+}
+
+func (a App) renderTabBar() string {
+	// The bar must never wrap: walk the tiers until the line fits the
+	// pane. Tier 0 fits on every desktop pane, so desktop renders the
+	// design it has always had.
+	line := ""
+	for _, tier := range tabBarTiers {
+		line = a.renderTabLine(tier)
+		if lipgloss.Width(line) <= a.width {
+			break
+		}
+	}
 
 	// Center the tabs in the available width
-	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, tabsContent)
+	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, line)
 
 	// Apply tab bar styling with top padding for breathing room
 	return TabBarStyle.Width(a.width).PaddingTop(1).Render(centeredTabs)
