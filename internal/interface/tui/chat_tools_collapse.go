@@ -39,16 +39,6 @@ func (m ChatModel) ToolsCollapsed() bool {
 	return m.toolsCollapsed
 }
 
-// blockClick locates the rows of a rendered block that resolve a mouse
-// click back to the message, relative to the block's first row. Tools
-// map their whole block; the assistant maps only its reasoning rows
-// (preview line, or the expanded reasoning frame). Zero lines means the
-// block has no click target.
-type blockClick struct {
-	start int
-	lines int
-}
-
 // renderToolRun renders a collapsed run as one structured record, the
 // same shape as a single tool line with the tool column carrying the
 // per-tool counts: "01:20:03 ✓ bash ×3 · read ×5   12.3s". The span

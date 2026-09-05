@@ -38,6 +38,7 @@ func (m *ChatModel) dropPlaceholderIfEmpty() {
 	}
 	m.currentStreamingAssistantIdx = -1
 	m.currentStreamingAssistantID = ""
+	m.turnTools = nil
 }
 
 // formatElapsed formats a duration as human-readable string
@@ -124,8 +125,10 @@ func (m ChatModel) currentReasoningText() string {
 }
 
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
+	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
+		msg.Parts = parts
 		msg.ReasoningText = m.currentReasoningText()
 		msg.ResponseTime = m.elapsed
 		msg.StreamedChunks = m.chunkCount
@@ -136,6 +139,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 			ID:             id,
 			Role:           "assistant",
 			Content:        content,
+			Parts:          parts,
 			Timestamp:      time.Now(),
 			ReasoningText:  m.currentReasoningText(),
 			ResponseTime:   m.elapsed,
@@ -147,14 +151,41 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	}
 }
 
+// deriveParts splits the turn's stream buffer at the tool marks:
+// prose runs alternate with the calls that interrupted them.
+func (m *ChatModel) deriveParts(buffer string) []TurnPart {
+	if len(m.turnTools) == 0 {
+		return nil
+	}
+	parts := make([]TurnPart, 0, len(m.turnTools)+1)
+	prev := 0
+	for _, mark := range m.turnTools {
+		at := mark.At
+		if at > len(buffer) {
+			at = len(buffer)
+		}
+		if at > prev {
+			parts = append(parts, TurnPart{Text: buffer[prev:at]})
+		}
+		parts = append(parts, TurnPart{ToolID: mark.ToolID})
+		prev = at
+	}
+	if prev < len(buffer) {
+		parts = append(parts, TurnPart{Text: buffer[prev:]})
+	}
+	return parts
+}
+
 // finalizeStreamingMessage finalizes the streaming message for the current turn.
 // The lookup goes by stable ID: a mid-turn prepend (provider probe,
 // auto-save notice) shifts every index, and an index-based finalize used to
 // write the reply into the wrong message - the user's bubble stayed empty
 // while a system note absorbed the content.
 func (m *ChatModel) finalizeStreamingMessage(content string) {
+	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
+		msg.Parts = parts
 		msg.ReasoningText = m.currentReasoningText()
 		msg.Timestamp = time.Now()
 		msg.ResponseTime = m.elapsed
@@ -164,6 +195,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 		m.messages = append(m.messages, ChatMessage{
 			Role:           "assistant",
 			Content:        content,
+			Parts:          parts,
 			Timestamp:      time.Now(),
 			ReasoningText:  m.currentReasoningText(),
 			ResponseTime:   m.elapsed,
@@ -171,8 +203,10 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 			Thinking:       false,
 		})
 	}
+	m.turnTools = nil
 	m.currentStreamingAssistantIdx = -1
 	m.currentStreamingAssistantID = ""
+	m.turnTools = nil
 	m.refreshViewport()
 }
 

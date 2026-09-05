@@ -113,6 +113,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// New turn for tool-run grouping: collapsed runs are scoped to
 		// one agent turn and never merge across turns.
 		m.turnCounter++
+		m.turnTools = nil
 		// Defer the assistant section: it materializes after
 		// PlaceholderDelay with whatever has buffered, so the thinking
 		// header lags the question a little instead of popping instantly.
@@ -154,6 +155,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.turnInterrupted {
 			return m, nil
 		}
+
+		// The prose before this call is where the call actually
+		// happened: mark the buffer offset — parts derive from it.
+		m.turnTools = append(m.turnTools, turnToolMark{ToolID: msg.ToolID, At: len(m.streamBuffer)})
 
 		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
 		displayName := msg.DisplayName

@@ -100,37 +100,85 @@ func (m ChatModel) renderSingleGroup(msgs []ChatMessage, i int, collapsed bool) 
 	return rendered, next, clicks
 }
 
-// renderTurnBlock renders tools + response as one block: header,
-// nested tool lines (one space in), blank, answer. Click ranges map
-// each tool's rows and the assistant's reasoning rows.
+// renderTurnBlock renders tools + response as one block: the Agent
+// header, then the bubble — prose and tool rows interleaved in the
+// order they actually happened, inside the border.
 func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool) (string, int, []clickRef) {
 	assistant := msgs[j]
 
-	var b strings.Builder
-	var clicks []clickRef
+	// Legacy data carries no segmentation: the run nests above the
+	// whole answer — never dropped.
+	parts := assistant.Parts
+	if len(parts) == 0 {
+		parts = make([]TurnPart, 0, j-i+1)
+		for k := i; k < j; k++ {
+			parts = append(parts, TurnPart{ToolID: msgs[k].ID})
+		}
+		if strings.TrimSpace(assistant.Content) != "" {
+			parts = append(parts, TurnPart{Text: assistant.Content})
+		}
+	}
 
+	// Tool rows resolve by part ID; a row renders through the collapse
+	// machinery so runs merge and expansions open in place. The lookup
+	// also reports the rendered height for the click index.
+	toolRow := func(id string) (string, bool) {
+		for k := i; k < j; k++ {
+			if msgs[k].ID != id {
+				continue
+			}
+			row, _ := m.renderCollapsedMessage(msgs, k, collapsed)
+			return indentBlock(row), true
+		}
+		return "", false
+	}
+
+	var clicks []clickRef
+	b := strings.Builder{}
 	b.WriteString(m.renderAssistantHeader(assistant))
 	b.WriteString("\n")
 
-	line := 1 // the header row
-	for k := i; k < j; {
-		part, next := m.renderCollapsedMessage(msgs, k, collapsed)
-		lines := strings.Count(part, "\n") + 1
-		b.WriteString(indentBlock(part))
-		b.WriteString("\n")
-		clicks = append(clicks, clickRef{start: line, lines: lines, msgID: msgs[k].ID})
-		line += lines + 1
-		k = next
+	width := m.width - 4
+	if width < 1 {
+		width = 1
 	}
-	b.WriteString("\n")
+	inner := m.assistantInnerContent(assistant, parts, toolRow)
+	bubbles := MessageBubbleAssistant.Width(width).Render(inner)
+	b.WriteString(bubbles)
 
-	content := m.renderAssistantContent(assistant)
-	contentLines := strings.Count(content, "\n") + 1
-	b.WriteString(content)
-	if start, rows, ok := m.assistantReasoningRows(assistant); ok {
-		clicks = append(clicks, clickRef{start: line + start, lines: rows, msgID: assistant.ID})
+	// Click ranges: walk the rendered bubble rows and match the tool
+	// rows by their caret content, which survives the border padding.
+	row := 1 // the header row
+	lines := strings.Split(bubbles, "\n")
+	for _, part := range parts {
+		if part.ToolID == "" {
+			continue
+		}
+		for offset, bl := range lines[row:] {
+			if strings.Contains(bl, "✓") || strings.Contains(bl, "→") || strings.Contains(bl, "✗") {
+				// Count the rows of this tool block: the run continues
+				// until a non-tool row (prose or blank).
+				end := offset
+				for end+1 < len(lines[row:]) && !isBubbleProseRow(lines[row+end+1]) {
+					end++
+				}
+				clicks = append(clicks, clickRef{start: row + offset, lines: end - offset + 1, msgID: part.ToolID})
+				row += end + 1
+				break
+			}
+		}
 	}
-	_ = contentLines
 
 	return b.String(), j + 1, clicks
+}
+
+// isBubbleProseRow reports whether a bubble row is prose (markdown
+// text, blank padding) rather than a tool row — tool rows carry the
+// status glyph or caret.
+func isBubbleProseRow(line string) bool {
+	trimmed := strings.TrimLeft(line, " │")
+	if trimmed == "" {
+		return true
+	}
+	return !strings.ContainsAny(trimmed, "✓→✗▸▾")
 }

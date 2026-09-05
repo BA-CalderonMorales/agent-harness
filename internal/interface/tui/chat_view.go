@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
 	"time"
@@ -42,11 +41,17 @@ func (m ChatModel) View() string {
 	})
 	sections = append(sections, header)
 
-	// Viewport for messages — an empty transcript gets the full
-	// empty-state panel, not a bare hint line.
+	// Viewport for messages — a conversation with no turns yet gets
+	// the full empty-state panel. System notices (new-chat notes,
+	// session loads) do not count as conversation: they render above
+	// the panel.
 	vpContent := m.viewport.View()
-	if strings.TrimSpace(vpContent) == "" {
-		vpContent = chatEmptyState(m.persona)
+	if !m.hasConversation() {
+		panel := chatEmptyState(m.persona)
+		if strings.TrimSpace(vpContent) != "" {
+			panel = vpContent + "\n\n" + panel
+		}
+		vpContent = panel
 	}
 
 	// Constrain viewport to calculated height
@@ -299,6 +304,15 @@ func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 // renderAssistantContent is the answer bubble: markdown, thinking
 // hints, the reasoning preview, and the expanded reasoning record.
 func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
+	inner := m.assistantInnerContent(msg, msg.Parts, nil)
+	return MessageBubbleAssistant.Width(m.width - 4).Render(inner)
+}
+
+// assistantInnerContent builds the bubble's inner lines: thinking
+// hints, the reasoning frame, then the response — split where tool
+// calls interrupted it, with each call's row injected at its position.
+// toolRow resolves a tool part to its rendered row; nil skips tools.
+func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, toolRow func(id string) (string, bool)) string {
 	var b strings.Builder
 
 	// Content - render markdown for rich formatting (code blocks, bold,
@@ -343,15 +357,30 @@ func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
 		b.WriteString(ToolTimeStyle.Render(msg.ReasoningText))
 		b.WriteString("\n")
 	}
-	// The bubble adds a left border and padding (2 columns) on top of
-	// Width(width): rendering at the full width makes lipgloss re-wrap
-	// glamour's output and orphan words onto flush-left lines. Render
-	// at the true inner column instead.
+	// The response renders part by part: prose as markdown, and each
+	// tool call's row where it actually happened. Legacy messages
+	// (no Parts) render Content whole.
+	if len(parts) > 0 && toolRow != nil {
+		for _, part := range parts {
+			if part.ToolID != "" {
+				if row, ok := toolRow(part.ToolID); ok {
+					b.WriteString(row)
+					b.WriteString("\n")
+				}
+				continue
+			}
+			if strings.TrimSpace(part.Text) == "" {
+				continue
+			}
+			b.WriteString(renderMarkdown(part.Text, width-2))
+			b.WriteString("\n")
+		}
+		return strings.TrimRight(b.String(), "\n")
+	}
 	renderedContent := renderMarkdown(msg.Content, width-2)
-	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
-	b.WriteString(content)
+	b.WriteString(renderedContent)
 
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
 }
 
 func (m ChatModel) renderToolMessage(msg ChatMessage) string {
@@ -428,11 +457,13 @@ func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
 	return SystemMessageStyle.Render(msg.Content)
 }
 
-// emptyStateHint returns a contextual hint based on the current persona.
-func (m ChatModel) emptyStateHint() string {
-	p, err := persona.Parse(m.persona)
-	if err != nil {
-		return persona.Default().EmptyStateHint()
+// hasConversation reports whether the transcript holds anything the
+// agent or the user said — the empty state's trigger.
+func (m ChatModel) hasConversation() bool {
+	for _, msg := range m.messages {
+		if msg.Role == "user" || msg.Role == "assistant" || msg.IsTool {
+			return true
+		}
 	}
-	return p.EmptyStateHint()
+	return false
 }

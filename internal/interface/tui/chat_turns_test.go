@@ -88,3 +88,60 @@ func TestStreamingToolsRenderStandaloneThenNest(t *testing.T) {
 		t.Fatalf("tool did not absorb into the response block:\n%s", view)
 	}
 }
+
+// TestToolsNestWhereTheyHappened pins the segmented turn: the
+// assistant's Parts carry the true order — prose, tools, prose — and
+// the bubble renders them in sequence, inside the border.
+func TestToolsNestWhereTheyHappened(t *testing.T) {
+	m := newClickTestModel(t)
+	base := time.Now()
+	m.AddMessage("user", "weather?")
+	m.messages = append(m.messages,
+		ChatMessage{
+			ID: "t1", Role: "tool", IsTool: true, Turn: 1,
+			ToolName: "web_fetch", ToolDisplayName: "web_fetch", ToolStatus: ToolStatusSuccess,
+			Content: "22:49:54 ✓ web_fetch  Fetching https://wttr.in/Omaha", Timestamp: base,
+		},
+		ChatMessage{
+			ID: "t2", Role: "tool", IsTool: true, Turn: 1,
+			ToolName: "web_search", ToolDisplayName: "web_search", ToolStatus: ToolStatusSuccess,
+			Content: "22:49:54 ✓ web_search  Searching web for: Omaha NE", Timestamp: base,
+		},
+	)
+	m.AddMessage("assistant", "Got the data — Omaha, tomorrow is a scorcher.")
+	m.messages[len(m.messages)-1].Turn = 1
+	m.messages[len(m.messages)-1].Parts = []TurnPart{
+		{Text: "On it — pulling Omaha's forecast."},
+		{ToolID: "t1"},
+		{ToolID: "t2"},
+		{Text: "Got the data — Omaha, tomorrow is a scorcher."},
+	}
+	m.refreshViewport()
+
+	view := m.View()
+	lines := strings.Split(view, "\n")
+	onIt, tools, got := -1, -1, -1
+	for i, line := range lines {
+		if strings.Contains(line, "On it") {
+			onIt = i
+		}
+		if strings.Contains(line, "Searching web for: Omaha NE") {
+			if tools < 0 {
+				tools = i
+			}
+		}
+		if strings.Contains(line, "scorcher.") {
+			got = i
+		}
+	}
+	if onIt < 0 || tools < 0 || got < 0 {
+		t.Fatalf("segmented turn incomplete:\n%s", view)
+	}
+	if !(onIt < tools && tools < got) {
+		t.Fatalf("expected prose < tools < prose, got rows %d/%d/%d", onIt, tools, got)
+	}
+	// Inside the bubble: the tool row carries the bubble border.
+	if !strings.Contains(lines[tools], "│") {
+		t.Fatalf("tool row is outside the bubble border:\n%s", lines[tools])
+	}
+}
