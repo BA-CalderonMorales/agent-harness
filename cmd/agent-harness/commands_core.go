@@ -226,6 +226,8 @@ func (app *App) initCommandsCore() {
 			return sprintf("Theme set to %s", theme.Name), nil
 		})
 
+	registerDiagnoseCommand(app)
+
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {
 			return app.getMemoryInfo()

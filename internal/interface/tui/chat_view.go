@@ -171,7 +171,12 @@ func (m ChatModel) renderModeLine() string {
 			continue
 		}
 		text := segments[i].text
-		if segments[i].style {
+		switch {
+		case segments[i].style && text == "auto":
+			// Yolo wears a warning: tools run without asking, and the
+			// chip should read as a state, not a decoration.
+			text = WarningStyle.Render(text)
+		case segments[i].style:
 			text = ModePromptStyle.Render(text)
 		}
 		parts = append(parts, text)
