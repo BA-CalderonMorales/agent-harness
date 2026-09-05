@@ -351,7 +351,7 @@ func (m LoginDialogModel) View() string {
 		Padding(1, 2)
 
 	bodyText := fitBlock(panelWidth-4, body.String())
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel.Render(bodyText))
+	return placeOverlay(m.width, m.height, panel.Render(bodyText))
 }
 
 // hasStoredKey reports whether the store holds a key for this provider.
