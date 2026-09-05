@@ -303,13 +303,6 @@ func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	return b.String()
 }
 
-// renderAssistantContent is the answer bubble: markdown, thinking
-// hints, the reasoning preview, and the expanded reasoning record.
-func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
-	inner, _ := m.assistantInnerContent(msg, msg.Parts, nil)
-	return MessageBubbleAssistant.Width(m.width - 4).Render(inner)
-}
-
 // assistantInnerContent builds the bubble's inner lines: thinking
 // hints, the reasoning frame, then the response — split where tool
 // calls interrupted it, with each call's row injected at its position.
@@ -343,10 +336,8 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 				b.WriteString(HelpDimStyle.Render(wrapped))
 				b.WriteString("\n")
 				refs = append(refs, clickRef{start: rows, lines: strings.Count(wrapped, "\n") + 1, msgID: msg.ID})
-				rows += strings.Count(wrapped, "\n") + 1
 				b.WriteString(HelpDimStyle.Render("   └─ esc to close"))
 				b.WriteString("\n")
-				rows++
 			}
 		} else if !m.thinkingIsStatus {
 			if preview := reasoningPreview(m.thinkingText); preview != "" {
@@ -355,7 +346,6 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 				b.WriteString(HelpDimStyle.Render(expandCaret(false) + " " + preview))
 				b.WriteString("\n")
 				refs = append(refs, clickRef{start: rows, lines: 1, msgID: msg.ID})
-				rows++
 			}
 		}
 		return b.String(), refs
