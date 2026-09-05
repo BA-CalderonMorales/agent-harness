@@ -98,23 +98,29 @@ func (a App) renderTabBar() string {
 // ---------------------------------------------------------------------------
 
 func (a App) renderActiveView() string {
-	// Reserve space for tab bar (3 with padding) + status bar (2 with padding)
-	contentHeight := a.height - 5
+	// Reserve space for the fixed chrome: tab bar (3 with padding and
+	// border) + status bar (3 with its top and bottom padding). The
+	// reserve must match the chrome's real height — one row short and
+	// the pane scrolls a row of the tab bar off the top.
+	contentHeight := a.height - 6
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
 
+	// Height pads the pane to its budget; MaxHeight clips anything
+	// that exceeds it — a clipped row is graceful, an overflowing
+	// frame leaves ghost duplicates of the bottom chrome behind.
 	switch a.activeView {
 	case viewHome:
-		return lipgloss.NewStyle().Height(contentHeight).Render(a.homeModel.View())
+		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.homeModel.View())
 	case viewChat:
-		return lipgloss.NewStyle().Height(contentHeight).Render(a.chatModel.View())
+		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
-		return lipgloss.NewStyle().Height(contentHeight).Render(a.sessionsModel.View())
+		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.sessionsModel.View())
 	case viewLogs:
-		return lipgloss.NewStyle().Height(contentHeight).Render(a.logsModel.View())
+		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.logsModel.View())
 	case viewSettings:
-		return lipgloss.NewStyle().Height(contentHeight).Render(a.settingsModel.View())
+		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.settingsModel.View())
 	}
 	return ""
 }

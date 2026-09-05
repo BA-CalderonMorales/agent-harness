@@ -94,22 +94,45 @@ class Handler(BaseHTTPRequestHandler):
                 self.wfile.write(b"data: [DONE]\n\n")
                 self.wfile.flush()
                 return
+            # "think" streams reasoning_content deltas before the
+            # answer: GLM/DeepSeek-style thinking models, so the
+            # reasoning preview and its expanded frame are reproducible
+            # in the live rig.
+            if last_user.startswith("think"):
+                try:
+                    for line in (
+                        "The user wants the repository layout.",
+                        "I should describe the top-level directories,",
+                        "then how the agent loop reaches the TUI.",
+                    ):
+                        chunk = {"choices": [{"delta": {"reasoning_content": line + "\n"}}]}
+                        self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+                        self.wfile.flush()
+                        time.sleep(CHUNK_DELAY)
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
             self.end_headers()
-            for piece in WELCOME.split(" "):
-                chunk = {"choices": [{"delta": {"content": piece + " "}}]}
-                self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+            try:
+                for piece in WELCOME.split(" "):
+                    chunk = {"choices": [{"delta": {"content": piece + " "}}]}
+                    self.wfile.write(("data: " + json.dumps(chunk) + "\n\n").encode())
+                    self.wfile.flush()
+                    time.sleep(CHUNK_DELAY)
+                # A final chunk with finish_reason="stop" is mandatory: the
+                # SSE reader treats a stream that ends without it as an empty
+                # message and the whole turn is lost (stuck thinking header).
+                finish = {"choices": [{"delta": {}, "finish_reason": "stop"}]}
+                self.wfile.write(("data: " + json.dumps(finish) + "\n\n").encode())
                 self.wfile.flush()
-                time.sleep(CHUNK_DELAY)
-            # A final chunk with finish_reason="stop" is mandatory: the
-            # SSE reader treats a stream that ends without it as an empty
-            # message and the whole turn is lost (stuck thinking header).
-            finish = {"choices": [{"delta": {}, "finish_reason": "stop"}]}
-            self.wfile.write(("data: " + json.dumps(finish) + "\n\n").encode())
-            self.wfile.flush()
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
+                self.wfile.write(b"data: [DONE]\n\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                # The client hung up mid-stream (probe timeout, tab
+                # switch): the demo server must survive and serve the
+                # next request.
+                pass
             return
         self._json({"error": "not found"}, 404)
 

@@ -1,0 +1,13 @@
+{
+  "private": true,
+  "scripts": {
+    "gitnexus": "gitnexus"
+  },
+  "overrides": {
+    "adm-zip": "0.6.0",
+    "sharp": "0.35.4"
+  },
+  "dependencies": {
+    "gitnexus": "1.6.11"
+  }
+}

@@ -537,8 +537,9 @@ var _ = Describe("App", func() {
 			It("should reserve space for tab and status bars", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 				updated := model.(*App)
-				// Sub-models should get height minus reserved space (5)
-				Expect(updated.homeModel.height).To(Equal(19))
+				// Sub-models should get height minus reserved space (6:
+				// tab bar 3 + status bar 3)
+				Expect(updated.homeModel.height).To(Equal(18))
 			})
 		})
 	})
@@ -684,7 +685,9 @@ var _ = Describe("App", func() {
 				app.width = 180
 				app.activeView = viewChat
 				app.chatModel.width = 180
-				app.chatModel.height = 24
+				// The real resize path hands sub-models height-6 (tab bar
+				// + status bar reserve); MaxHeight clips stale fixtures.
+				app.chatModel.height = 18
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				GinkgoT().Setenv("HOME", testHome)

@@ -426,7 +426,7 @@ func (m LogsModel) View() string {
 	if len(m.entries) == 0 {
 		// The panel lives BELOW the header: place it in the remaining
 		// rows, or the overflow shoves the tab bar out of view.
-		panel := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center,
+		panel := viewPadded(m.width, m.height-2,
 			strings.Join([]string{
 				HelpTitleStyle.Render("No diagnostics yet"),
 				"",
@@ -451,9 +451,14 @@ func (m LogsModel) View() string {
 	body.WriteString("\n")
 	body.WriteString(m.tableHeader())
 	body.WriteString("\n")
-	body.WriteString(m.viewport.View())
+	// The viewport pads its empty content to its own height — phantom
+	// rows that would push the note off the pane and pin it to the
+	// padding's last row. An empty stream writes the note instead of
+	// the viewport.
 	if strings.TrimSpace(m.viewport.View()) == "" {
 		body.WriteString(HelpDimStyle.Render("  no entries match this day and level"))
+	} else {
+		body.WriteString(m.viewport.View())
 	}
 
 	// The hint line pins to the pane's bottom row — bottom-left, one
@@ -472,7 +477,7 @@ func (m LogsModel) View() string {
 	for i := 0; i < pad; i++ {
 		lines = append(lines, "")
 	}
-	lines = append(lines, strings.TrimPrefix(RenderFooter(hints), "\n"))
+	lines = append(lines, fitBlock(m.width, strings.TrimPrefix(RenderFooter(hints), "\n")))
 	return strings.Join(lines, "\n")
 }
 
