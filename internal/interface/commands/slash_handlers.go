@@ -96,21 +96,43 @@ func LimitHandler(getLimit func() int, setLimit func(int) error) SlashHandler {
 	}
 }
 
-// ModelHandler handles model switching
+// NextInList returns the entry after current, wrapping — the /theme
+// cycle semantics, shared by every selector-style command. An unknown
+// or absent current wraps to the first entry.
+func NextInList(list []string, current string) string {
+	if len(list) == 0 {
+		return ""
+	}
+	for i, item := range list {
+		if item == current {
+			return list[(i+1)%len(list)]
+		}
+	}
+	return list[0]
+}
+
+// ModelHandler handles model switching: bare /model cycles to the next
+// model in the provider's list — browsing stays on /models.
 func ModelHandler(getModel func() string, setModel func(string) error, listModels func() []string) SlashHandler {
 	return func(args string) (string, error) {
 		if args == "" {
 			current := getModel()
-			models := listModels()
-			result := fmt.Sprintf("Model\n  Current          %s\n\nAvailable models:\n", current)
-			for _, m := range models {
-				marker := "  "
-				if m == current {
-					marker = "● "
-				}
-				result += fmt.Sprintf("%s%s\n", marker, m)
+			next := NextInList(listModels(), current)
+			if next == "" {
+				return "", fmt.Errorf("no models available — /models picks from the full list")
 			}
-			return result, nil
+			if next == current {
+				// One model, already current: a no-op with a notice, not
+				// an error — cycling is never a failure.
+				return fmt.Sprintf("Only one model available — already on %s", current), nil
+			}
+			if err := setModel(next); err != nil {
+				return "", err
+			}
+			return fmt.Sprintf(`Model cycled
+  Previous         %s
+  Current          %s
+  Preserved        Conversation context maintained`, current, next), nil
 		}
 
 		previous := getModel()

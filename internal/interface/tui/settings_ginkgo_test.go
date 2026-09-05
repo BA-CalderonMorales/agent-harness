@@ -206,7 +206,7 @@ var _ = Describe("SettingsModel", func() {
 			It("should render the empty state before any entries", func() {
 				empty := NewLogsModel()
 				empty, _ = empty.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
-				Expect(empty.View()).To(ContainSubstring("no entries at this level"))
+				Expect(empty.View()).To(ContainSubstring("No diagnostics yet"))
 			})
 
 			It("should filter by level with f", func() {

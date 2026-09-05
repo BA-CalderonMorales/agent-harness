@@ -8,10 +8,10 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
 
-// TestThemeCommandListsAndApplies pins /theme: no args lists the
-// catalog with the active marker, a valid name applies and persists,
+// TestThemeCommandCycles pins bare /theme: it advances to the next
+// palette in the catalog and wraps. A valid name applies and persists,
 // an unknown name errors.
-func TestThemeCommandListsAndApplies(t *testing.T) {
+func TestThemeCommandCycles(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	app.initCommandsCore()
 	reg := app.cmdRegistry
@@ -20,8 +20,14 @@ func TestThemeCommandListsAndApplies(t *testing.T) {
 	if !handled || err != nil {
 		t.Fatalf("/theme not handled: handled=%v err=%v", handled, err)
 	}
-	if !strings.Contains(out, "→ default") || !strings.Contains(out, "nord") {
-		t.Fatalf("/theme listing wrong:\n%s", out)
+	names := tui.ThemeNames()
+	// ThemeNames pins "default" first; the cycle wraps to the next entry.
+	want := names[1]
+	if app.config.Theme != want {
+		t.Fatalf("bare /theme applied %q, want %q (next after default)", app.config.Theme, want)
+	}
+	if !strings.Contains(out, want) {
+		t.Fatalf("/theme output missing %q:\n%s", want, out)
 	}
 
 	out, _, err = reg.Handle("/theme nord")

@@ -289,24 +289,25 @@ var _ = Describe("End-to-End Command Chains", func() {
 			func() []string { return []string{"gpt-4o", "claude-3-5-sonnet"} },
 		))
 
-		By("listing models")
+		By("cycling models with a bare /model")
 		result, handled, err := registry.Handle("/model")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(handled).To(BeTrue())
-		Expect(result).To(ContainSubstring("gpt-4o"))
+		Expect(result).To(ContainSubstring("Model cycled"))
+		Expect(current).To(Equal("claude-3-5-sonnet"))
 
-		By("switching model")
+		By("cycling again wraps back to the first model")
+		_, handled, err = registry.Handle("/model")
+		Expect(err).ToNot(HaveOccurred())
+		Expect(handled).To(BeTrue())
+		Expect(current).To(Equal("gpt-4o"))
+
+		By("switching model by name")
 		result, handled, err = registry.Handle("/model claude-3-5-sonnet")
 		Expect(err).ToNot(HaveOccurred())
 		Expect(handled).To(BeTrue())
 		Expect(result).To(ContainSubstring("Model updated"))
 		Expect(current).To(Equal("claude-3-5-sonnet"))
-
-		By("listing again to verify new current")
-		result, handled, err = registry.Handle("/model")
-		Expect(err).ToNot(HaveOccurred())
-		Expect(handled).To(BeTrue())
-		Expect(result).To(ContainSubstring("● claude-3-5-sonnet"))
 	})
 
 	It("should handle a full branch workflow", func() {

@@ -116,10 +116,17 @@ func (h Help) View() string {
 		return ""
 	}
 
+	hint := HelpDimStyle.Render(`"Esc" to close · "j"/"k" to scroll`)
+	hintPad := h.panelWidth() - 8 - lipgloss.Width(hint)
+	if hintPad < 0 {
+		hintPad = 0
+	}
+	hintRow := strings.Repeat(" ", hintPad) + hint
+
 	panel := PanelStyle.
 		Width(h.panelWidth()).
 		Height(h.height - 4).
-		Render(h.title() + h.viewport.View())
+		Render(h.title() + h.viewport.View() + "\n" + hintRow)
 
 	return lipgloss.Place(h.width, h.height, lipgloss.Center, lipgloss.Center, panel)
 }

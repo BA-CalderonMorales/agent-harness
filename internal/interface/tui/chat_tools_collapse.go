@@ -39,84 +39,13 @@ func (m ChatModel) ToolsCollapsed() bool {
 	return m.toolsCollapsed
 }
 
-// blockClick locates the rows of a rendered block that resolve a mouse
-// click back to the message, relative to the block's first row. Tools
-// map their whole block; the assistant maps only its reasoning rows
-// (preview line, or the expanded reasoning frame). Zero lines means the
-// block has no click target.
-type blockClick struct {
-	start int
-	lines int
-}
-
-// appendCollapsedMessageTracked is appendCollapsedMessage with the
-// rendered block returned so the viewport line index can map clicks
-// back to messages; the blockClick reports which rows are clickable.
-// The returned index is absolute: the caller assigns it straight back
-// into the loop cursor.
-func (m ChatModel) appendCollapsedMessageTracked(content *strings.Builder, msgs []ChatMessage, i int, collapsed bool) (string, int, blockClick) {
-	msg := msgs[i]
-
-	if !collapsed || !toolRunIsCollapsible(msg) {
-		return m.appendPlainMessageTracked(content, msgs, i)
-	}
-
-	// Gather the contiguous run: same turn, same tool, all final.
-	j := i + 1
-	for j < len(msgs) && msgs[j].Role == "tool" &&
-		msgs[j].Turn == msg.Turn &&
-		msgs[j].ToolName == msg.ToolName &&
-		toolRunIsCollapsible(msgs[j]) {
-		j++
-	}
-
-	// Expanding any member of a run unfolds the run message-by-message
-	// so the expanded record has a visible home.
-	if j-i > 1 {
-		for k := i; k < j; k++ {
-			if m.expandedMessageID != "" && m.expandedMessageID == msgs[k].ID {
-				return m.appendPlainMessageTracked(content, msgs, i)
-			}
-		}
-	}
-
-	if j-i == 1 {
-		return m.appendPlainMessageTracked(content, msgs, i)
-	}
-
-	rendered := m.renderToolRun(msgs[i:j])
-	content.WriteString(rendered)
-	content.WriteString("\n\n")
-	lines := strings.Count(rendered, "\n") + 1
-	return rendered, j, blockClick{start: 0, lines: lines}
-}
-
-// appendPlainMessageTracked renders one message with no run merging and
-// reports its clickable rows: the whole block for tools, the reasoning
-// rows for assistant messages, nothing otherwise.
-func (m ChatModel) appendPlainMessageTracked(content *strings.Builder, msgs []ChatMessage, i int) (string, int, blockClick) {
-	msg := msgs[i]
-	rendered := m.renderMessage(msg)
-	content.WriteString(rendered)
-	content.WriteString("\n\n")
-	lines := strings.Count(rendered, "\n") + 1
-
-	if msg.IsTool {
-		return rendered, i + 1, blockClick{start: 0, lines: lines}
-	}
-	if msg.Role == "assistant" {
-		if start, rows, ok := m.assistantReasoningRows(msg); ok {
-			return rendered, i + 1, blockClick{start: start, lines: rows}
-		}
-	}
-	return rendered, i + 1, blockClick{}
-}
-
 // renderToolRun renders a collapsed run as one structured record, the
 // same shape as a single tool line with the tool column carrying the
 // per-tool counts: "01:20:03 ✓ bash ×3 · read ×5   12.3s". The span
 // comes from the first and last message timestamps.
-func (m ChatModel) renderToolRun(run []ChatMessage) string {
+// renderToolRunAt renders the collapsed run for a width budget —
+// nested runs live inside the response bubble.
+func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 	counts := make(map[string]int)
 	for _, msg := range run {
 		counts[msg.ToolDisplayName]++
@@ -158,7 +87,7 @@ func (m ChatModel) renderToolRun(run []ChatMessage) string {
 	)
 	left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
 	dur := ToolTimeStyle.Render(formatElapsed(span))
-	pad := m.width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
+	pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
 	if pad < 2 {
 		pad = 2
 	}

@@ -67,15 +67,17 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	m.clickIndex = m.clickIndex[:0]
 	line := 0
 	for i := 0; i < len(m.messages); {
-		rendered, next, click := m.appendCollapsedMessageTracked(&content, m.messages, i, m.toolsCollapsed)
-		lines := strings.Count(rendered, "\n") + 1
-		if click.lines > 0 {
+		rendered, next, clicks := m.appendTurnGroupTracked(m.messages, i, m.toolsCollapsed)
+		content.WriteString(rendered)
+		content.WriteString("\n\n")
+		for _, cr := range clicks {
 			m.clickIndex = append(m.clickIndex, clickRange{
-				start: line + click.start, end: line + click.start + click.lines - 1,
-				msgID: m.messages[i].ID,
+				start: line + cr.start, end: line + cr.start + cr.lines - 1,
+				msgID: cr.msgID,
 			})
 		}
-		line += lines + 2 // the "\n\n" separator between messages
+		lines := strings.Count(rendered, "\n") + 1
+		line += lines + 2 // the "\n\n" separator between groups
 		i = next
 	}
 

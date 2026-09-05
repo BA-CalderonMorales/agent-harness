@@ -56,6 +56,7 @@ func receiveTUIMessage(t *testing.T, app *tui.App) tea.Msg {
 func chatMessages(t *testing.T, app *tui.App) []struct {
 	role    string
 	content string
+	parts   []tui.TurnPart
 } {
 	t.Helper()
 
@@ -64,15 +65,22 @@ func chatMessages(t *testing.T, app *tui.App) []struct {
 	got := make([]struct {
 		role    string
 		content string
+		parts   []tui.TurnPart
 	}, 0, messages.Len())
 	for i := 0; i < messages.Len(); i++ {
 		msg := messages.Index(i)
+		var parts []tui.TurnPart
+		if field := msg.FieldByName("Parts"); field.IsValid() && !field.IsNil() {
+			parts = field.Interface().([]tui.TurnPart)
+		}
 		got = append(got, struct {
 			role    string
 			content string
+			parts   []tui.TurnPart
 		}{
 			role:    msg.FieldByName("Role").String(),
 			content: msg.FieldByName("Content").String(),
+			parts:   parts,
 		})
 	}
 	return got

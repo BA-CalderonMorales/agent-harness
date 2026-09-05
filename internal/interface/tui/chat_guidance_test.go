@@ -5,7 +5,7 @@ import (
 	"testing"
 )
 
-func newGuidanceTestModel() ChatModel {
+func newEmptyChatTestModel() ChatModel {
 	m := NewChatModel()
 	m.width = 120
 	m.viewport.Width = 120
@@ -14,68 +14,85 @@ func newGuidanceTestModel() ChatModel {
 	return m
 }
 
-// TestGuidanceShowsOncePerSession pins the once-only guard.
-func TestGuidanceShowsOncePerSession(t *testing.T) {
-	m := newGuidanceTestModel()
-	m.ShowNavigationGuidance()
-	first := len(m.messages)
-	if first != 1 {
-		t.Fatalf("first ShowNavigationGuidance added %d messages, want 1", first)
-	}
-	m.ShowNavigationGuidance()
-	if len(m.messages) != first {
-		t.Fatalf("second ShowNavigationGuidance added another message")
-	}
-	for _, msg := range m.messages {
-		if msg.Role != "system" {
-			t.Fatalf("guidance must be a system message, got %q", msg.Role)
+// emptyStateLines renders the panel and strips the centering padding.
+func emptyStateLines(t *testing.T, m ChatModel) []string {
+	t.Helper()
+	view := m.View()
+	var lines []string
+	for _, line := range strings.Split(view, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
 		}
 	}
+	return lines
 }
 
-// TestGuidanceRidesWithClear pins the /clear behavior: a wiped pane
-// greets with guidance again.
-func TestGuidanceRidesWithClear(t *testing.T) {
-	m := newGuidanceTestModel()
-	m.ShowNavigationGuidance()
-
-	model, _ := m.Update(ClearChatMsg{})
-	m = model.(ChatModel)
-	joined := ""
-	for _, msg := range m.messages {
-		joined += msg.Content + "\n"
-	}
-	if !strings.Contains(joined, `"i" to start chatting`) {
-		t.Fatalf("/clear did not re-show guidance:\n%s", joined)
-	}
-
-	// And the once-per-session guard is re-armed, not stuck on.
-	count := len(m.messages)
-	m.ShowNavigationGuidance()
-	if len(m.messages) != count {
-		t.Fatalf("guidance re-armed after /clear should not double-show")
-	}
-}
-
-// TestGuidanceContentCoversCoreKeys keeps the block honest about the
-// format and the keys it teaches: quoted keys, bullet lines, i, Esc,
-// j/k, Enter, Shift+Tab, /.
-func TestGuidanceContentCoversCoreKeys(t *testing.T) {
-	got := navigationGuidance()
+// TestChatEmptyStatePanel pins the panel a fresh pane renders: what to
+// ask first (the persona hint), what the agent does, which keys move
+// you — quoted keys, bullet lines, capped height.
+func TestChatEmptyStatePanel(t *testing.T) {
+	m := newEmptyChatTestModel()
+	got := strings.Join(emptyStateLines(t, m), "\n")
 	for _, want := range []string{
-		`• "i" to start chatting`,
-		`• "Esc" to stop chatting`,
-		`• "j" and "k" to scroll up and down`,
-		`• "Enter" expands`,
-		`• "Shift+Tab" cycles agent modes`,
-		`"/" opens commands`,
+		"The agent is ready.",
+		"Ask it to Describe a feature to build or a bug to fix.",
+		`"i" to start · "/" commands · "?" help`,
 	} {
 		if !strings.Contains(got, want) {
-			t.Fatalf("guidance missing %q:\n%s", want, got)
+			t.Fatalf("empty-state panel missing %q:\n%s", want, got)
 		}
 	}
 	lines := strings.Count(got, "\n") + 1
-	if lines > 6 {
-		t.Fatalf("guidance grew to %d lines (cap 6)", lines)
+	if lines > 8 {
+		t.Fatalf("empty-state panel grew to %d lines (cap 8)", lines)
+	}
+}
+
+// TestChatEmptyStateFollowsPersona pins the persona seed: the panel's
+// first ask mirrors the active persona's hint.
+func TestChatEmptyStateFollowsPersona(t *testing.T) {
+	m := newEmptyChatTestModel()
+	m.persona = "developer"
+
+	got := strings.Join(emptyStateLines(t, m), "\n")
+	if !strings.Contains(got, "Describe a feature to build or a bug to fix") {
+		t.Fatalf("panel did not carry the developer hint:\n%s", got)
+	}
+}
+
+// TestChatEmptyViewRendersPanel ties the panel into the real View: an
+// empty transcript shows it, and the old internal chunk counter stays
+// out of the assistant header.
+func TestChatEmptyViewRendersPanel(t *testing.T) {
+	m := newEmptyChatTestModel()
+	view := m.View()
+	if !strings.Contains(view, "The agent is ready.") {
+		t.Fatalf("empty chat View did not render the panel:\n%s", view)
+	}
+	if strings.Contains(view, "chunks") {
+		t.Fatalf("internal chunk counter leaked into the view:\n%s", view)
+	}
+}
+
+// TestChatEmptyStateSurvivesSystemNotice pins the New-Chat flow: the
+// "Started new chat" notice renders above the panel, and the panel's
+// centering shrinks by the notice's rows — placed at full height the
+// combined block overflows and MaxHeight clips the text out of view.
+func TestChatEmptyStateSurvivesSystemNotice(t *testing.T) {
+	m := newEmptyChatTestModel()
+	m.AddMessage("system", "Started new chat 27059f53")
+	m.refreshViewport()
+
+	lines := emptyStateLines(t, m)
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "Started new chat 27059f53") {
+		t.Fatalf("notice missing:\n%s", joined)
+	}
+	if !strings.Contains(joined, "The agent is ready.") {
+		t.Fatalf("panel clipped by the notice:\n%s", joined)
+	}
+	if !strings.Contains(joined, `"i" to start · "/" commands · "?" help`) {
+		t.Fatalf("panel key line clipped:\n%s", joined)
 	}
 }

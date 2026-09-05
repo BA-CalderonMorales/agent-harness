@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/audit"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -47,6 +48,7 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 					if note != "" {
 						message = sprintf("Rejected by user: %s", note)
 					}
+					diag.Infof("permission.rejected", "%s — %s", toolName, message)
 					return tools.PermissionDecision{
 						Behavior: tools.Deny,
 						Message:  message,
@@ -60,6 +62,15 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 		}
 
 		makeDecision := func(behavior tools.DecisionBehavior, message string) tools.PermissionDecision {
+			// Explainability rides the diagnostics stream: a deny names
+			// the rule that fired, an ask names the trigger — the user
+			// reads the decision on the Logs tab, not in the dark.
+			switch behavior {
+			case tools.Deny:
+				diag.Warnf("permission.deny", "%s — %s", toolName, message)
+			case tools.Ask:
+				diag.Infof("permission.ask", "%s — %s", toolName, message)
+			}
 			return tools.PermissionDecision{
 				Behavior:     behavior,
 				UpdatedInput: toolInput,
