@@ -227,7 +227,10 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			// click targeting, which makes terminal text selection fight
 			// the UI. 'm' hands the mouse back to the terminal for
 			// native select-and-copy, and 'm' again restores capture.
+			// On a phone pane capture-off is the touch default: taps
+			// raise the soft keyboard, flicks scroll the terminal.
 			a.mouseCapture = !a.mouseCapture
+			a.mouseCaptureTouched = true
 			if a.mouseCapture {
 				a.ShowStatus(`Mouse capture on — "m" to select-copy`, "info")
 				return a, tea.Batch(func() tea.Msg { return tea.EnableMouseCellMotion() }, a.statusFlashCmd()), true
@@ -374,8 +377,13 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	// real height — one row short and the pane scrolls the tab bar's
 	// padding row off the top.
 	reserved := 6
+
+	// Phone panes inset their content by the gutter; sub-models render
+	// to the inset width so the padding and the text agree. Desktop
+	// panes keep the full width.
+	gutter := gutterFor(width)
 	contentMsg := tea.WindowSizeMsg{
-		Width:  width,
+		Width:  width - 2*gutter,
 		Height: height - reserved,
 	}
 
@@ -414,11 +422,36 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	}
 
 	if settingsModel, cmd := a.settingsModel.Update(contentMsg); settingsModel != nil {
-		if m, ok := settingsModel.(SettingsModel); ok {
-			a.settingsModel = m
-		}
+		a.settingsModel = settingsModel.(SettingsModel)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
+		}
+	}
+
+	// The approval dialog is a full-pane overlay: it renders from the
+	// pane's own size, so its frame must track resizes too — a dialog
+	// that never learned the pane renders as a sliver.
+	a.approvalDialog.width = width
+	a.approvalDialog.height = height
+
+	// Touch-first default on phone panes in touch hosts (tmux,
+	// Termux): with mouse capture on, a tap becomes a click event and
+	// the soft keyboard never rises — the dead end whose only exit was
+	// the host terminal's drawer button. Capture yields unless the
+	// user chose it with m. A narrow desktop pane is not a touch
+	// device and keeps the frozen behavior.
+	if !a.mouseCaptureTouched && (inTmux() || isTermux) {
+		mobile := isMobilePane(width)
+		switch {
+		case mobile && a.mouseCapture:
+			a.mouseCapture = false
+			if !a.touchModeNoticed {
+				a.touchModeNoticed = true
+				a.ShowStatus("touch mode: tap raises the keyboard · m for gestures", "info")
+				cmds = append(cmds, a.statusFlashCmd())
+			}
+		case !mobile && !a.mouseCapture:
+			a.mouseCapture = true
 		}
 	}
 

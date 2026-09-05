@@ -65,10 +65,31 @@ func (a App) view() string {
 // Tab bar rendering - Golazo-inspired centered design
 // ---------------------------------------------------------------------------
 
-func (a App) renderTabBar() string {
+// tabBarTier is one degradation step of the tab bar: a phone pane
+// cannot show five padded labels, so the bar sheds padding, then
+// spelling, then breadth — and never wraps. Tier 0 is the desktop
+// design, byte-identical to the pane that has always worked.
+type tabBarTier struct {
+	pad        int
+	short      bool
+	activeOnly bool
+}
+
+var tabBarTiers = []tabBarTier{
+	{pad: 2}, {pad: 1}, {pad: 1, short: true}, {activeOnly: true},
+}
+
+// shortTabLabels are the narrow-pane spellings; distinct pairs, no
+// iconography, still legible at a glance.
+var shortTabLabels = [viewCount]string{"Ho", "Ch", "Se", "Lo", "St"}
+
+func (a App) renderTabLine(tier tabBarTier) string {
 	var tabs []string
 
 	for i := viewID(0); i < viewCount; i++ {
+		if tier.activeOnly && i != a.activeView {
+			continue
+		}
 		style := TabNormal
 		indicator := " "
 		if i == a.activeView {
@@ -76,18 +97,39 @@ func (a App) renderTabBar() string {
 			indicator = IndicatorSelected
 		}
 		label := indicator + viewLabels[i]
+		if tier.short {
+			label = indicator + shortTabLabels[i]
+		}
 		// Show activity indicator for tabs with unseen updates
 		if a.tabActivity[i] && i != a.activeView {
 			label += " " + InfoStyle.Render(IndicatorActive)
 		}
+		if tier.pad != 2 {
+			style = TabNormal.Padding(0, tier.pad)
+			if i == a.activeView {
+				style = TabActive.Padding(0, tier.pad)
+			}
+		}
 		tabs = append(tabs, style.Render(label))
 	}
 
-	// Join tabs with spacing
-	tabsContent := lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
+	return lipgloss.JoinHorizontal(lipgloss.Center, tabs...)
+}
+
+func (a App) renderTabBar() string {
+	// The bar must never wrap: walk the tiers until the line fits the
+	// pane. Tier 0 fits on every desktop pane, so desktop renders the
+	// design it has always had.
+	line := ""
+	for _, tier := range tabBarTiers {
+		line = a.renderTabLine(tier)
+		if lipgloss.Width(line) <= a.width {
+			break
+		}
+	}
 
 	// Center the tabs in the available width
-	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, tabsContent)
+	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, line)
 
 	// Apply tab bar styling with top padding for breathing room
 	return TabBarStyle.Width(a.width).PaddingTop(1).Render(centeredTabs)
@@ -96,6 +138,19 @@ func (a App) renderTabBar() string {
 // ---------------------------------------------------------------------------
 // Active view content
 // ---------------------------------------------------------------------------
+
+// gutterFor is the horizontal breathing room around a tab's content:
+// a phone pane should not press text against the device's edges.
+// Desktop panes get none — their layout is frozen.
+func gutterFor(width int) int {
+	if !isMobilePane(width) {
+		return 0
+	}
+	if width >= 50 {
+		return 2
+	}
+	return 1
+}
 
 func (a App) renderActiveView() string {
 	// Reserve space for the fixed chrome: tab bar (3 with padding and
@@ -107,20 +162,31 @@ func (a App) renderActiveView() string {
 		contentHeight = 1
 	}
 
+	// The gutter insets the content on phone panes; sub-models already
+	// rendered to the inset width (resize shrank it), so the padding
+	// and the content agree. Desktop: gutter 0, byte-identical output.
+	gutter := gutterFor(a.width)
+	var styled lipgloss.Style
+	if gutter > 0 {
+		styled = lipgloss.NewStyle().Padding(0, gutter)
+	} else {
+		styled = lipgloss.NewStyle()
+	}
+
 	// Height pads the pane to its budget; MaxHeight clips anything
 	// that exceeds it — a clipped row is graceful, an overflowing
 	// frame leaves ghost duplicates of the bottom chrome behind.
 	switch a.activeView {
 	case viewHome:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.homeModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.homeModel.View())
 	case viewChat:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.chatModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.sessionsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.sessionsModel.View())
 	case viewLogs:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.logsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.logsModel.View())
 	case viewSettings:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.settingsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.settingsModel.View())
 	}
 	return ""
 }

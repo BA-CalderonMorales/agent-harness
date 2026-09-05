@@ -296,7 +296,7 @@ var _ = Describe("ApprovalDialogModel", func() {
 
 			It("should render command approval title", func() {
 				view := dialog.View()
-				Expect(view).To(ContainSubstring("Command Approval Required"))
+				Expect(view).To(ContainSubstring("Approval required"))
 			})
 
 			It("should render the command", func() {
@@ -331,7 +331,7 @@ var _ = Describe("ApprovalDialogModel", func() {
 				dialog.width = 80
 				dialog.height = 24
 				view := dialog.View()
-				Expect(view).To(ContainSubstring("DESTRUCTIVE"))
+				Expect(view).To(ContainSubstring("destructive"))
 			})
 		})
 

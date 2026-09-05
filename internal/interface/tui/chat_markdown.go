@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -16,14 +15,7 @@ import (
 var (
 	markdownRenderersMu sync.Mutex
 	markdownRenderers   = map[int]*glamour.TermRenderer{}
-	isTermux            = detectTermux()
 )
-
-// detectTermux checks if we're running in Termux environment
-func detectTermux() bool {
-	return os.Getenv("TERMUX_VERSION") != "" ||
-		strings.Contains(os.Getenv("HOME"), "com.termux")
-}
 
 // transparentMarkdownStyle derives the app's glamour style from the
 // dark base with one governing principle: the chat renders on the

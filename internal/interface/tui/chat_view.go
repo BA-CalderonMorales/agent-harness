@@ -29,6 +29,9 @@ func (m ChatModel) View() string {
 	// Ensure viewport has correct dimensions
 	m.viewport.Width = m.width
 	m.viewport.Height = vpHeight
+	// Composer top row in pane coordinates: the click mapper turns a
+	// tap on the composer into a focus request (tap-to-type).
+	m.lastComposerTop = viewportTopOffset + vpHeight
 
 	// Build the view
 	var sections []string

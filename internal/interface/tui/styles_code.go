@@ -46,6 +46,22 @@ func fitBlock(width int, content string) string {
 	return wrap.String(wordwrap.String(content, width), width)
 }
 
+// fitBlockCode wraps code — command lines in an approval view. Spaces
+// are the only break points: a hyphen is semantic in a flag or a
+// hostname, and a token split mid-word invites the reader to approve
+// something they misread. The character ceiling still applies for a
+// single token wider than the line.
+func fitBlockCode(width int, content string) string {
+	if width < 1 {
+		width = 1
+	}
+	ww := wordwrap.NewWriter(width)
+	ww.Breakpoints = []rune{}
+	ww.Write([]byte(content))
+	ww.Close()
+	return wrap.String(ww.String(), width)
+}
+
 // viewPadded centers content within the given width and height, after
 // fitting the block to the width.
 func viewPadded(width, height int, content string) string {

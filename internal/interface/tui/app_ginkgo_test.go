@@ -768,7 +768,7 @@ var _ = Describe("App", func() {
 				app.approvalDialog.width = 80
 				app.approvalDialog.height = 24
 				view := app.View()
-				Expect(view).To(ContainSubstring("Command Approval Required"))
+				Expect(view).To(ContainSubstring("Approval required"))
 			})
 		})
 

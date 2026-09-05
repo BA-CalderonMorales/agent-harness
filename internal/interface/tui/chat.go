@@ -193,6 +193,10 @@ type ChatModel struct {
 	// Current tool message for in-place updates (replaces previous tool display)
 	currentToolMsg *ChatMessage
 
+	// lastComposerTop is the composer's top row in pane coordinates,
+	// recorded by View for the tap-to-type click mapping.
+	lastComposerTop int
+
 	// completedToolMsgs tracks all finalized tool messages for the current turn.
 	// Previously this was a single pointer for single-line replacement, but users
 	// want to see every tool call that happens during a conversation turn. The

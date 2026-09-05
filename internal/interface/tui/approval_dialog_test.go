@@ -9,6 +9,7 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ---------------------------------------------------------------------------
@@ -465,7 +466,7 @@ func TestApprovalDialogScrollKeepsCommandReachable(t *testing.T) {
 	if !strings.Contains(head, "kubectl apply -f") {
 		t.Fatalf("command head not rendered:\n%s", head)
 	}
-	if !strings.Contains(head, "1. Approve") {
+	if !strings.Contains(head, "\u00b7 Approve") {
 		t.Fatal("options not pinned in view")
 	}
 
@@ -478,7 +479,35 @@ func TestApprovalDialogScrollKeepsCommandReachable(t *testing.T) {
 	if !strings.Contains(tail, "rollout-complete") {
 		t.Fatalf("command tail unreachable after scroll:\n%s", tail)
 	}
-	if !strings.Contains(tail, "1. Approve") {
+	if !strings.Contains(tail, "\u00b7 Approve") {
 		t.Fatal("options scrolled away")
+	}
+}
+
+// TestApprovalModalFitsEveryPane: the modal is the decision surface —
+// it must render its frame, the command, and all four options inside
+// any pane, from phone to desktop, without a row overflowing.
+func TestApprovalModalFitsEveryPane(t *testing.T) {
+	for _, width := range []int{40, 50, 60, 70, 100} {
+		dialog := NewApprovalDialog()
+		dialog, _ = dialog.Update(tea.WindowSizeMsg{Width: width, Height: 20})
+		req := approval.NewApprovalRequest(approval.CommandInfo{
+			ID: "fit", ToolName: "bash", DisplayName: "Shell",
+			Command:       "kubectl apply -f /very/long/path/cluster.yaml && echo done",
+			IsDestructive: true,
+		})
+		dialog.Show(req)
+
+		view := dialog.View()
+		for i, line := range strings.Split(view, "\n") {
+			if w := ansi.StringWidth(line); w > width {
+				t.Fatalf("w%d: modal row %d overflows (%d wide)", width, i, w)
+			}
+		}
+		for _, want := range []string{"Approval required", "destructive", "$", "kubectl", "\u00b7 Approve", "\u00b7 Reject", "esc", "rejects"} {
+			if !strings.Contains(view, want) {
+				t.Fatalf("w%d: modal missing %q:\n%s", width, want, view)
+			}
+		}
 	}
 }
