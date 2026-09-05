@@ -139,6 +139,19 @@ func (a App) renderTabBar() string {
 // Active view content
 // ---------------------------------------------------------------------------
 
+// gutterFor is the horizontal breathing room around a tab's content:
+// a phone pane should not press text against the device's edges.
+// Desktop panes get none — their layout is frozen.
+func gutterFor(width int) int {
+	if !isMobilePane(width) {
+		return 0
+	}
+	if width >= 50 {
+		return 2
+	}
+	return 1
+}
+
 func (a App) renderActiveView() string {
 	// Reserve space for the fixed chrome: tab bar (3 with padding and
 	// border) + status bar (3 with its top and bottom padding). The
@@ -149,20 +162,31 @@ func (a App) renderActiveView() string {
 		contentHeight = 1
 	}
 
+	// The gutter insets the content on phone panes; sub-models already
+	// rendered to the inset width (resize shrank it), so the padding
+	// and the content agree. Desktop: gutter 0, byte-identical output.
+	gutter := gutterFor(a.width)
+	var styled lipgloss.Style
+	if gutter > 0 {
+		styled = lipgloss.NewStyle().Padding(0, gutter)
+	} else {
+		styled = lipgloss.NewStyle()
+	}
+
 	// Height pads the pane to its budget; MaxHeight clips anything
 	// that exceeds it — a clipped row is graceful, an overflowing
 	// frame leaves ghost duplicates of the bottom chrome behind.
 	switch a.activeView {
 	case viewHome:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.homeModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.homeModel.View())
 	case viewChat:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.chatModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.chatModel.View())
 	case viewSessions:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.sessionsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.sessionsModel.View())
 	case viewLogs:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.logsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.logsModel.View())
 	case viewSettings:
-		return lipgloss.NewStyle().Height(contentHeight).MaxHeight(contentHeight).Render(a.settingsModel.View())
+		return styled.Height(contentHeight).MaxHeight(contentHeight).Render(a.settingsModel.View())
 	}
 	return ""
 }

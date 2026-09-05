@@ -377,8 +377,13 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	// real height — one row short and the pane scrolls the tab bar's
 	// padding row off the top.
 	reserved := 6
+
+	// Phone panes inset their content by the gutter; sub-models render
+	// to the inset width so the padding and the text agree. Desktop
+	// panes keep the full width.
+	gutter := gutterFor(width)
 	contentMsg := tea.WindowSizeMsg{
-		Width:  width,
+		Width:  width - 2*gutter,
 		Height: height - reserved,
 	}
 
