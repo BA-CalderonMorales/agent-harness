@@ -111,14 +111,21 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		style = ListSelectedStyle
 	}
 
-	// Build label
+	// Build label: title (or id) plus how long ago it moved — the
+	// field that actually tells two sessions apart.
 	label := session.Title
 	if label == "" {
-		label = fmt.Sprintf("Session %s", session.ID[:8])
+		if len(session.ID) >= 8 {
+			label = fmt.Sprintf("Session %s", session.ID[:8])
+		} else {
+			label = fmt.Sprintf("Session %s", session.ID)
+		}
 	}
-	if len(label) > width-12 {
-		label = label[:width-15] + "..."
+	age := RelativeTime(session.UpdatedAt)
+	if len(label) > width-12-len(age) {
+		label = label[:width-15-len(age)] + "..."
 	}
+	label += " " + HelpDimStyle.Render(age)
 
 	line := style.Render(prefix + label)
 

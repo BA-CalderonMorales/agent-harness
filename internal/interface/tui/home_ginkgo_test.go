@@ -159,10 +159,20 @@ var _ = Describe("HomeModel", func() {
 				home.Update(tea.KeyMsg{Type: tea.KeyDown})
 				Expect(home.cursorInActions()).To(BeFalse())
 
-				By("pressing d to delete")
+				By("pressing d to arm the delete (confirmation first)")
 				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				Expect(delegate.deleteSessionCalled).To(BeFalse())
+
+				By("pressing y to confirm")
+				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("y")})
 				Expect(delegate.deleteSessionCalled).To(BeTrue())
 				Expect(delegate.deleteSessionID).To(Equal("sess-alpha"))
+
+				By("pressing n to cancel instead")
+				delegate.deleteSessionCalled = false
+				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("d")})
+				home.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("n")})
+				Expect(delegate.deleteSessionCalled).To(BeFalse())
 			})
 
 			It("should not delete when cursor is on an action", func() {

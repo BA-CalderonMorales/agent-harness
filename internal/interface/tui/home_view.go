@@ -138,7 +138,15 @@ func (m *HomeModel) renderRecentSessions() string {
 	var b strings.Builder
 
 	b.WriteString(HeaderSecondary.Render("  Recent Sessions"))
-	b.WriteString(HelpDimStyle.Render("   [d] delete"))
+	if m.deleting >= 0 {
+		title := "(untitled)"
+		if m.deleting < len(m.sessions) && m.sessions[m.deleting].Title != "" {
+			title = m.sessions[m.deleting].Title
+		}
+		b.WriteString(HelpDimStyle.Render(fmt.Sprintf("   [y] delete %q · [n] cancel", title)))
+	} else {
+		b.WriteString(HelpDimStyle.Render("   [d] delete"))
+	}
 	b.WriteString("\n\n")
 
 	count := 3

@@ -69,10 +69,12 @@ var BashTool = tools.NewTool(tools.Tool{
 	},
 	UserFacingName: func(map[string]any) string { return "Shell" },
 	GetActivityDescription: func(input map[string]any) string {
-		if c, ok := input["command"].(string); ok {
-			return "Running " + c
+		// The status glyph already says running/done — the detail is
+		// just the command, or "Running echo hi" would read doubled.
+		if c, ok := input["command"].(string); ok && c != "" {
+			return c
 		}
-		return "Running bash command"
+		return "bash command"
 	},
 })
 

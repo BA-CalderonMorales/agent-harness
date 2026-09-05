@@ -44,6 +44,10 @@ type HomeModel struct {
 	estimatedTokens int
 	setupRequired   bool
 
+	// deleting indexes the pending session deletion; -1 when idle. The
+	// y/n confirm mirrors the Sessions tab — same verb, same safety.
+	deleting int
+
 	// Quick action cursor (spans both actions and sessions)
 	actionCursor int
 	actions      []homeAction
@@ -89,6 +93,7 @@ func NewHomeModel() HomeModel {
 	return HomeModel{
 		actionCursor: 0,
 		actions:      make([]homeAction, 0),
+		deleting:     -1,
 	}
 }
 
@@ -141,6 +146,22 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// While a deletion is pending, y commits and n/Esc cancels;
+		// any other key keeps the pending state and navigates.
+		if m.deleting >= 0 {
+			switch msg.String() {
+			case "y":
+				if m.deleting < len(m.sessions) && m.delegate != nil {
+					m.delegate.OnDeleteSession(m.sessions[m.deleting].ID)
+				}
+				m.deleting = -1
+				return m, nil
+			case "n", "esc":
+				m.deleting = -1
+				return m, nil
+			}
+		}
+
 		switch msg.String() {
 		case "up", "k":
 			if m.actionCursor > 0 {
@@ -163,13 +184,15 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		case "d":
 			// Delete the session under the cursor (sessions region only;
-			// action shortcuts keep precedence elsewhere).
-			if !m.cursorInActions() && m.delegate != nil {
+			// action shortcuts keep precedence elsewhere). Asks first:
+			// y commits, n/Esc backs out.
+			if !m.cursorInActions() {
 				idx := m.cursorSessionIndex()
 				if idx >= 0 && idx < len(m.sessions) {
-					m.delegate.OnDeleteSession(m.sessions[idx].ID)
+					m.deleting = idx
 				}
 			}
+
 		default:
 			// Handle individual action shortcuts
 			for _, action := range m.actions {
