@@ -256,39 +256,23 @@ func expandCaret(expanded bool) string {
 	return "▸"
 }
 
-// assistantReasoningRows reports the block-relative rows that carry the
-// model's reasoning for an assistant message — the live preview line
-// while thinking, or the expanded reasoning frame — so a click on those
-// rows resolves back to the message. ok is false when the block exposes
-// no reasoning rows. The row math must mirror renderAssistantMessage.
-func (m ChatModel) assistantReasoningRows(msg ChatMessage) (start, lines int, ok bool) {
-	const headerRows = 1
-	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
-		hintRows := 0
-		if thinkingHint(m.elapsed) != "" {
-			hintRows = 1
-		}
-		if m.expandedMessageID == msg.ID {
-			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
-				// Full reasoning plus the "esc to close" footer.
-				return headerRows + hintRows, strings.Count(full, "\n") + 2, true
-			}
-			return 0, 0, false
-		}
-		if !m.thinkingIsStatus && reasoningPreview(m.thinkingText) != "" {
-			return headerRows + hintRows, 1, true
-		}
-		return 0, 0, false
-	}
-	if m.expandedMessageID == msg.ID && strings.TrimSpace(msg.ReasoningText) != "" {
-		// Frame header + reasoning + "esc to close" footer.
-		return headerRows, strings.Count(msg.ReasoningText, "\n") + 3, true
-	}
-	return 0, 0, false
-}
+// assistantReasoningRows is superseded by the click refs constructed
+// while rendering (assistantInnerContent): row estimates from the raw
+// text drift the moment a segment wraps inside the bubble.
 
 func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
-	return m.renderAssistantHeader(msg) + "\n" + m.renderAssistantContent(msg)
+	rendered, _ := m.renderAssistantTracked(msg, m.width)
+	return rendered
+}
+
+// renderAssistantTracked renders the assistant block — header row, then
+// the answer bubble — and reports the clickable ranges inside it,
+// relative to the block's first row. The bubble is left-border only, so
+// inner rows map onto bubble rows one-to-one; only the header offsets.
+func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, []clickRef) {
+	inner, refs := m.assistantInnerContent(msg, msg.Parts, nil)
+	bubbles := MessageBubbleAssistant.Width(width - 4).Render(inner)
+	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
 
 // renderAssistantHeader is the "Agent 22:24 (22.3s)" line — split from
@@ -322,7 +306,7 @@ func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 // renderAssistantContent is the answer bubble: markdown, thinking
 // hints, the reasoning preview, and the expanded reasoning record.
 func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
-	inner := m.assistantInnerContent(msg, msg.Parts, nil)
+	inner, _ := m.assistantInnerContent(msg, msg.Parts, nil)
 	return MessageBubbleAssistant.Width(m.width - 4).Render(inner)
 }
 
@@ -330,8 +314,14 @@ func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
 // hints, the reasoning frame, then the response — split where tool
 // calls interrupted it, with each call's row injected at its position.
 // toolRow resolves a tool part to its rendered row; nil skips tools.
-func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, toolRow func(id string) (string, bool)) string {
+// Every dynamic segment is pre-wrapped to the bubble's inner width, so
+// the rendered row count equals the count the click refs report: a
+// segment that wrapped inside the style would silently shift every
+// row below it.
+func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, toolRow func(id string) (string, bool)) (string, []clickRef) {
 	var b strings.Builder
+	var refs []clickRef
+	rows := 0 // running row count of what has been written
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
@@ -345,13 +335,18 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 		if hint := thinkingHint(m.elapsed); hint != "" {
 			b.WriteString(HelpDimStyle.Render(hint))
 			b.WriteString("\n")
+			rows++
 		}
 		if m.expandedMessageID == msg.ID {
 			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
-				b.WriteString(HelpDimStyle.Render(full))
+				wrapped := fitBlock(m.width-4, full)
+				b.WriteString(HelpDimStyle.Render(wrapped))
 				b.WriteString("\n")
+				refs = append(refs, clickRef{start: rows, lines: strings.Count(wrapped, "\n") + 1, msgID: msg.ID})
+				rows += strings.Count(wrapped, "\n") + 1
 				b.WriteString(HelpDimStyle.Render("   └─ esc to close"))
 				b.WriteString("\n")
+				rows++
 			}
 		} else if !m.thinkingIsStatus {
 			if preview := reasoningPreview(m.thinkingText); preview != "" {
@@ -359,21 +354,30 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 				// the full reasoning record.
 				b.WriteString(HelpDimStyle.Render(expandCaret(false) + " " + preview))
 				b.WriteString("\n")
+				refs = append(refs, clickRef{start: rows, lines: 1, msgID: msg.ID})
+				rows++
 			}
 		}
-		return b.String()
+		return b.String(), refs
 	}
 	width := m.width - 4
 	if width < 1 {
 		width = 1
 	}
 	// Expanded reasoning record: the full model thinking, above the
-	// answer — same interaction as an expanded tool call.
+	// answer — same interaction as an expanded tool call. The frame
+	// closes with the └─ footer like a tool record and the live frame.
 	if m.expandedMessageID == msg.ID && strings.TrimSpace(msg.ReasoningText) != "" {
 		b.WriteString(ToolTimeStyle.Render("   ┌─ reasoning · esc to close"))
 		b.WriteString("\n")
-		b.WriteString(ToolTimeStyle.Render(msg.ReasoningText))
+		wrapped := fitBlock(width-2, msg.ReasoningText)
+		b.WriteString(ToolTimeStyle.Render(wrapped))
 		b.WriteString("\n")
+		refs = append(refs, clickRef{start: rows, lines: strings.Count(wrapped, "\n") + 2, msgID: msg.ID})
+		rows += strings.Count(wrapped, "\n") + 2
+		b.WriteString(ToolTimeStyle.Render("   └─ esc to close"))
+		b.WriteString("\n")
+		rows++
 	}
 	// The response renders part by part: prose as markdown, and each
 	// tool call's row where it actually happened. Legacy messages
@@ -384,21 +388,25 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 				if row, ok := toolRow(part.ToolID); ok {
 					b.WriteString(row)
 					b.WriteString("\n")
+					refs = append(refs, clickRef{start: rows, lines: strings.Count(row, "\n") + 1, msgID: part.ToolID})
+					rows += strings.Count(row, "\n") + 1
 				}
 				continue
 			}
 			if strings.TrimSpace(part.Text) == "" {
 				continue
 			}
-			b.WriteString(renderMarkdown(part.Text, width-2))
+			rendered := renderMarkdown(part.Text, width-2)
+			b.WriteString(rendered)
 			b.WriteString("\n")
+			rows += strings.Count(rendered, "\n") + 1
 		}
-		return strings.TrimRight(b.String(), "\n")
+		return strings.TrimRight(b.String(), "\n"), refs
 	}
 	renderedContent := renderMarkdown(msg.Content, width-2)
 	b.WriteString(renderedContent)
 
-	return strings.TrimRight(b.String(), "\n")
+	return strings.TrimRight(b.String(), "\n"), refs
 }
 
 // renderToolMessageAt renders the tool row for a width budget.
@@ -425,9 +433,11 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 
 	// Expanded tool record: the full call beneath the summary line —
 	// exactly what was called, no truncation. Esc (or clicking again)
-	// folds it back.
+	// folds it back. The record is wrapped to the width budget: a row
+	// wider than the pane would wrap on the terminal and shift every
+	// row below it.
 	if expanded {
-		body += "\n" + m.renderToolExpansion(msg)
+		body += "\n" + fitBlock(width, m.renderToolExpansion(msg))
 	}
 	return body
 }
