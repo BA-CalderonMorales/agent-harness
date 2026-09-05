@@ -42,12 +42,12 @@ func (m ChatModel) View() string {
 	sections = append(sections, header)
 
 	// Viewport for messages — a conversation with no turns yet gets
-	// the full empty-state panel. System notices (new-chat notes,
-	// session loads) do not count as conversation: they render above
-	// the panel.
+	// the full empty-state panel, centered in the pane. System notices
+	// (new-chat notes, session loads) do not count as conversation:
+	// they render above the panel.
 	vpContent := m.viewport.View()
 	if !m.hasConversation() {
-		panel := chatEmptyState(m.persona)
+		panel := chatEmptyState(m.persona, m.width, vpHeight)
 		if strings.TrimSpace(vpContent) != "" {
 			panel = vpContent + "\n\n" + panel
 		}

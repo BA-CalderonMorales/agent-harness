@@ -50,9 +50,10 @@ func (c *segmentedClient) Stream(ctx context.Context, req llm.Request) (<-chan t
 	return out, nil
 }
 
-// TestTurnTextSegmentsGetBeats pins the UX fix: within one turn, a text
-// segment that follows tool activity is separated from the previous one
-// by a visible beat — never glued into one meaningless sentence wall.
+// TestTurnTextSegmentsGetBeats pins the UX fix: within one turn, the
+// response segments where tool calls interrupted it — Parts carry the
+// structure, Content stays one clean document, and no synthetic beat
+// text rides the stream.
 func TestTurnTextSegmentsGetBeats(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	tuiApp := tui.NewApp()
@@ -79,21 +80,41 @@ func TestTurnTextSegmentsGetBeats(t *testing.T) {
 		t.Fatal("turn did not settle")
 	}
 
-	// The finalized assistant content: the segments must be separated
-	// by the beat, and the session-facing response must stay clean.
+	// The finalized assistant message: Content stays one clean
+	// document (no beat text), and Parts carry the segmentation.
 	content := ""
+	var parts []tui.TurnPart
 	for _, m := range chatMessages(t, tuiApp) {
 		if m.role == "assistant" {
 			content = m.content
+			parts = m.parts
 		}
 	}
-	if !strings.Contains(content, "Let me take a look around.\n\n· · ·\n\nLet me peek further.") {
-		t.Fatalf("segment beats missing from the assistant bubble:\n%q", content)
+	if strings.Contains(content, "· · ·") {
+		t.Fatalf("synthetic beat leaked into the assistant content:\n%q", content)
 	}
-	if !strings.Contains(content, "· · ·\n\nHere is the tour.") {
-		t.Fatalf("final segment not separated:\n%q", content)
+	for _, want := range []string{
+		"Let me take a look around.",
+		"Let me peek further.",
+		"Here is the tour.",
+	} {
+		if !strings.Contains(content, want) {
+			t.Fatalf("segment text missing %q:\n%q", want, content)
+		}
 	}
-	if strings.Count(content, "· · ·") != 2 {
-		t.Fatalf("expected exactly 2 beats, got %d:\n%q", strings.Count(content, "· · ·"), content)
+
+	// The parts interleave: tool t1, text, tool t2, text — the last
+	// two prose runs merge (no call between them).
+	if len(parts) != 4 {
+		t.Fatalf("parts = %d, want 4 (tool/text/tool/text)", len(parts))
+	}
+	if parts[0].ToolID != "t1" || parts[2].ToolID != "t2" {
+		t.Fatalf("tool parts = [%q, %q], want [t1, t2]", parts[0].ToolID, parts[2].ToolID)
+	}
+	if !strings.Contains(parts[1].Text, "Let me take a look around.") {
+		t.Fatalf("first prose part = %q", parts[1].Text)
+	}
+	if !strings.Contains(parts[3].Text, "Let me peek further.") || !strings.Contains(parts[3].Text, "Here is the tour.") {
+		t.Fatalf("final prose part = %q", parts[3].Text)
 	}
 }

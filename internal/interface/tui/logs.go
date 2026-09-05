@@ -420,6 +420,25 @@ func (m LogsModel) View() string {
 		})
 	}
 
+	// An untouched stream centers the panel: a table with no rows is
+	// furniture. Filters that empty a non-empty stream keep the table
+	// and say so inline.
+	if len(m.entries) == 0 {
+		panel := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+			strings.Join([]string{
+				HelpTitleStyle.Render("No diagnostics yet"),
+				"",
+				HelpDimStyle.Render("Entries appear as the agent works — provider probes, tool calls, errors."),
+				"",
+				HelpDimStyle.Render(`"f" filter · "d" day · "X" clear`),
+			}, "\n"))
+		return RenderHeader(HeaderConfig{
+			Title:    "Logs",
+			Subtitle: "Diagnostics stream",
+			Count:    0,
+		}) + "\n" + panel
+	}
+
 	// Body: everything above the hint line.
 	var body strings.Builder
 	body.WriteString(RenderHeader(HeaderConfig{

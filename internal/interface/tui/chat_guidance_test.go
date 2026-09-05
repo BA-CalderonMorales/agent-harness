@@ -14,18 +14,30 @@ func newEmptyChatTestModel() ChatModel {
 	return m
 }
 
+// emptyStateLines renders the panel and strips the centering padding.
+func emptyStateLines(t *testing.T, m ChatModel) []string {
+	t.Helper()
+	view := m.View()
+	var lines []string
+	for _, line := range strings.Split(view, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed != "" {
+			lines = append(lines, trimmed)
+		}
+	}
+	return lines
+}
+
 // TestChatEmptyStatePanel pins the panel a fresh pane renders: what to
 // ask first (the persona hint), what the agent does, which keys move
 // you — quoted keys, bullet lines, capped height.
 func TestChatEmptyStatePanel(t *testing.T) {
 	m := newEmptyChatTestModel()
-	got := chatEmptyState(m.persona)
+	got := strings.Join(emptyStateLines(t, m), "\n")
 	for _, want := range []string{
 		"The agent is ready.",
-		`"i" to start`,
-		`"/" for commands`,
-		`"?" for the full map`,
-		`"h" jumps Home`,
+		"Ask it to Describe a feature to build or a bug to fix.",
+		`"i" to start · "/" commands · "?" help`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("empty-state panel missing %q:\n%s", want, got)
@@ -43,7 +55,7 @@ func TestChatEmptyStateFollowsPersona(t *testing.T) {
 	m := newEmptyChatTestModel()
 	m.persona = "developer"
 
-	got := chatEmptyState(m.persona)
+	got := strings.Join(emptyStateLines(t, m), "\n")
 	if !strings.Contains(got, "Describe a feature to build or a bug to fix") {
 		t.Fatalf("panel did not carry the developer hint:\n%s", got)
 	}
