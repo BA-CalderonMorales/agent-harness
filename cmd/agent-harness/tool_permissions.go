@@ -152,7 +152,7 @@ func (app *App) logAudit(event tools.ToolAuditEvent) error {
 
 // checkPermissionMode checks tool against permission mode and granular settings.
 func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
-	// First check granular permissions (they override mode presets)
+	// Granular toggles checked first: an explicit off is a hard deny.
 	granular := app.checkGranularPermissions(toolName)
 	if granular.Behavior != tools.Allow {
 		return granular
@@ -160,7 +160,11 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 
 	switch app.config.PermissionMode {
 	case config.PermissionReadOnly:
-		if !isReadOnlyTool(toolName) {
+		// An explicitly enabled toggle outranks the preset's deny —
+		// the user flipped it in settings, and a setting that does not
+		// apply is the lie. The approval flow (interactive/yolo) still
+		// gates the command downstream.
+		if !isReadOnlyTool(toolName) && !app.granularAllows(toolName) {
 			return tools.PermissionDecision{
 				Behavior: tools.Deny,
 				Message:  sprintf("Permission denied: %s", toolName),
@@ -173,6 +177,38 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 				Message:  sprintf("Confirm: %s", toolName),
 			}
 		}
+	}
+	return tools.PermissionDecision{Behavior: tools.Allow}
+}
+
+// granularAllows reports whether the tool maps to a granular toggle
+// and that toggle is enabled.
+func (app *App) granularAllows(toolName string) bool {
+	enabled, mapped := app.granularPermission(toolName)
+	return mapped && enabled
+}
+
+// granularPermission returns the granular toggle for the tool's class
+// and whether the tool maps to one at all.
+func (app *App) granularPermission(toolName string) (enabled, mapped bool) {
+	switch toolName {
+	case "read", "glob", "grep", "search", "web_fetch", "web_search":
+		return app.config.PermRead, true
+	case "write", "edit":
+		return app.config.PermWrite, true
+	case "delete", "rm", "mv":
+		return app.config.PermDelete, true
+	case "bash", "shell", "execute_command":
+		return app.config.PermExecute, true
+	}
+	return false, false
+}
+
+// checkGranularPermissions checks individual permission toggles.
+func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
+	enabled, mapped := app.granularPermission(toolName)
+	if mapped && !enabled {
+		return tools.PermissionDecision{Behavior: tools.Deny, Message: sprintf("%s permission disabled", strings.ToUpper(toolName))}
 	}
 	return tools.PermissionDecision{Behavior: tools.Allow}
 }
@@ -197,29 +233,6 @@ func (app *App) syncGranularPermissions() {
 		app.config.PermDelete = true
 		app.config.PermExecute = true
 	}
-}
-
-// checkGranularPermissions checks individual permission toggles.
-func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
-	switch toolName {
-	case "read", "glob", "grep", "search", "web_fetch", "web_search":
-		if !app.config.PermRead {
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Read permission disabled"}
-		}
-	case "write", "edit":
-		if !app.config.PermWrite {
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Write permission disabled"}
-		}
-	case "delete", "rm", "mv":
-		if !app.config.PermDelete {
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Delete permission disabled"}
-		}
-	case "bash", "shell", "execute_command":
-		if !app.config.PermExecute {
-			return tools.PermissionDecision{Behavior: tools.Deny, Message: "Execute permission disabled"}
-		}
-	}
-	return tools.PermissionDecision{Behavior: tools.Allow}
 }
 
 // handleToolUseStart handles the start of a tool use.
