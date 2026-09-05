@@ -426,7 +426,7 @@ func (m LogsModel) View() string {
 	if len(m.entries) == 0 {
 		// The panel lives BELOW the header: place it in the remaining
 		// rows, or the overflow shoves the tab bar out of view.
-		panel := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center,
+		panel := viewPadded(m.width, m.height-2,
 			strings.Join([]string{
 				HelpTitleStyle.Render("No diagnostics yet"),
 				"",

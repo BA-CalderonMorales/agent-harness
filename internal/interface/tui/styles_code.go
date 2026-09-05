@@ -2,6 +2,8 @@ package tui
 
 import (
 	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/reflow/wordwrap"
+	"github.com/muesli/reflow/wrap"
 	"strings"
 )
 
@@ -32,9 +34,22 @@ func applyCodeStyles() {
 		Foreground(ColorAccent)
 }
 
-// viewPadded centers content within the given width and height.
+// fitBlock hard-caps a multi-line block's row width: word wrap for
+// clean breaks first, a character wrap as the ceiling for unbreakable
+// tokens. lipgloss.Place centers and pads but never shrinks, so an
+// overflowing block would push past the pane and wrap — unbudgeted
+// height. Both reflow wrappers are ANSI-aware; styles survive.
+func fitBlock(width int, content string) string {
+	if width < 1 {
+		width = 1
+	}
+	return wrap.String(wordwrap.String(content, width), width)
+}
+
+// viewPadded centers content within the given width and height, after
+// fitting the block to the width.
 func viewPadded(width, height int, content string) string {
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, fitBlock(width, content))
 }
 
 // ---------------------------------------------------------------------------
