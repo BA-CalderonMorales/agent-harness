@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/messages"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -138,6 +139,10 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 		current,
 		after,
 	)
+	diag.Info("context.compacted", fmt.Sprintf(
+		"summarized %d messages · tokens %d → %d · history now %d messages",
+		len(removedPrefix), current, after, len(state.messages)-len(removedPrefix)+1,
+	))
 	return compactionOutcome{
 		Messages:     append([]types.Message(nil), compacted...),
 		RemovedCount: len(removedPrefix),
