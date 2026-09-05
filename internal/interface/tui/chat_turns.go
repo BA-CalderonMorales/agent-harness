@@ -50,6 +50,19 @@ func (m ChatModel) renderCollapsedMessageAt(msgs []ChatMessage, i int, collapsed
 	return m.renderToolRunAt(msgs[i:j], width), j
 }
 
+// offsetClickRefs shifts block-relative click refs down by n rows —
+// the header (or frame) rows rendered above the clickable block.
+func offsetClickRefs(refs []clickRef, n int) []clickRef {
+	if len(refs) == 0 {
+		return nil
+	}
+	out := make([]clickRef, len(refs))
+	for i, r := range refs {
+		out[i] = clickRef{start: r.start + n, lines: r.lines, msgID: r.msgID}
+	}
+	return out
+}
+
 // indentBlock prefixes every line of a rendered block with a single
 // space — the nesting step under the Agent header. Line counts never
 // change, so click mapping stays honest.
@@ -93,15 +106,19 @@ func (m ChatModel) appendTurnGroupTracked(msgs []ChatMessage, i int, collapsed b
 }
 
 // renderSingleGroup renders one message through the collapse machinery.
+// Assistants render through the tracked path: their click refs (the
+// reasoning frame, the preview line) are constructed while rendering —
+// estimating rows from the raw text drifts the moment a segment wraps.
 func (m ChatModel) renderSingleGroup(msgs []ChatMessage, i int, collapsed bool) (string, int, []clickRef) {
+	msg := msgs[i]
+	if msg.Role == "assistant" {
+		rendered, refs := m.renderAssistantTracked(msg, m.width)
+		return rendered, i + 1, refs
+	}
 	rendered, next := m.renderCollapsedMessage(msgs, i, collapsed)
 	var clicks []clickRef
 	if msgs[i].IsTool {
 		clicks = append(clicks, clickRef{start: 0, lines: strings.Count(rendered, "\n") + 1, msgID: msgs[i].ID})
-	} else if msgs[i].Role == "assistant" {
-		if start, rows, ok := m.assistantReasoningRows(msgs[i]); ok {
-			clicks = append(clicks, clickRef{start: start, lines: rows, msgID: msgs[i].ID})
-		}
 	}
 	return rendered, next, clicks
 }
@@ -154,43 +171,14 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	if width < 1 {
 		width = 1
 	}
-	inner := m.assistantInnerContent(assistant, parts, toolRow)
+	inner, refs := m.assistantInnerContent(assistant, parts, toolRow)
 	bubbles := MessageBubbleAssistant.Width(width).Render(inner)
 	b.WriteString(bubbles)
 
-	// Click ranges: walk the rendered bubble rows and match the tool
-	// rows by their caret content, which survives the border padding.
-	row := 1 // the header row
-	lines := strings.Split(bubbles, "\n")
-	for _, part := range parts {
-		if part.ToolID == "" {
-			continue
-		}
-		for offset, bl := range lines[row:] {
-			if strings.Contains(bl, "✓") || strings.Contains(bl, "→") || strings.Contains(bl, "✗") {
-				// Count the rows of this tool block: the run continues
-				// until a non-tool row (prose or blank).
-				end := offset
-				for end+1 < len(lines[row:]) && !isBubbleProseRow(lines[row+end+1]) {
-					end++
-				}
-				clicks = append(clicks, clickRef{start: row + offset, lines: end - offset + 1, msgID: part.ToolID})
-				row += end + 1
-				break
-			}
-		}
-	}
+	// The inner content is pre-wrapped to the bubble's inner width and
+	// the bubble is left-border only: inner rows are bubble rows, and
+	// the block carries one header row above the bubble.
+	clicks = offsetClickRefs(refs, 1)
 
 	return b.String(), j + 1, clicks
-}
-
-// isBubbleProseRow reports whether a bubble row is prose (markdown
-// text, blank padding) rather than a tool row — tool rows carry the
-// status glyph or caret.
-func isBubbleProseRow(line string) bool {
-	trimmed := strings.TrimLeft(line, " │")
-	if trimmed == "" {
-		return true
-	}
-	return !strings.ContainsAny(trimmed, "✓→✗▸▾")
 }

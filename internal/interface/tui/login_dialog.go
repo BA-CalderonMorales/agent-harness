@@ -334,6 +334,15 @@ func (m LoginDialogModel) View() string {
 			panelWidth = 54
 		}
 	}
+	// The frame is the width plus two border columns; on a narrow pane
+	// the frame must yield or its rows wrap — a broken frame reads as
+	// two dialogs. The body wraps to the inner width to stay inside it.
+	if maxPanel := m.width - 2; panelWidth > maxPanel {
+		panelWidth = maxPanel
+	}
+	if panelWidth < 10 {
+		panelWidth = 10
+	}
 
 	panel := lipgloss.NewStyle().
 		Width(panelWidth).
@@ -341,7 +350,8 @@ func (m LoginDialogModel) View() string {
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel.Render(body.String()))
+	bodyText := fitBlock(panelWidth-4, body.String())
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel.Render(bodyText))
 }
 
 // hasStoredKey reports whether the store holds a key for this provider.

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // The chat empty state: a fresh pane (new session or after /clear)
@@ -29,5 +28,5 @@ func chatEmptyState(personaName string, width, height int) string {
 		"",
 		HelpDimStyle.Render(`"i" to start · "/" commands · "?" help`),
 	}, "\n")
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
+	return viewPadded(width, height, block)
 }

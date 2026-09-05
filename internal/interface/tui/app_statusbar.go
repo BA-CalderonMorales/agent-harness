@@ -22,6 +22,7 @@ func (a App) renderStatusBar() string {
 			style = InfoStyle
 		}
 		content := " " + style.Render(a.statusMessage)
+		content = lipgloss.NewStyle().MaxWidth(a.width).Render(content)
 		return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
 	}
 
@@ -108,6 +109,7 @@ func (a App) renderStatusBar() string {
 		gap = gapMin
 	}
 	content := left + strings.Repeat(" ", gap) + right
+	content = lipgloss.NewStyle().MaxWidth(a.width).Render(content)
 
 	return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
 }
