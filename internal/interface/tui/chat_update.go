@@ -13,9 +13,10 @@ func (m ChatModel) Init() tea.Cmd {
 }
 
 // Update handles messages.
-// viewportTopOffset counts the lines above the message viewport in the
-// chat view: the app tab bar plus the chat view header.
-const viewportTopOffset = 3
+// viewportTopOffset counts the pane rows above the message viewport in
+// the chat view: the tab bar (padding row, label row, border row) plus
+// the chat view header (title row, blank row).
+const viewportTopOffset = 5
 
 func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
@@ -48,8 +49,8 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
-			// viewportTopOffset: app tab bar (1) + chat header (2) sits
-			// above the message viewport.
+			// viewportTopOffset: the tab bar (3 rows) plus the chat header
+			// (2 rows) sit above the message viewport.
 			if id := m.expandableMessageAtRow(msg.Y - viewportTopOffset + m.viewport.YOffset); id != "" {
 				if m.expandedMessageID == id {
 					m.expandedMessageID = ""
@@ -57,6 +58,13 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.expandedMessageID = id
 				}
 				m.refreshViewport()
+				return m, nil
+			}
+			// Tap-to-type: a press on the composer asks to type. The mode
+			// is App state — the request rides a message so the mode line
+			// stays the truth.
+			if m.lastComposerTop > 0 && msg.Y >= m.lastComposerTop && !m.focused {
+				return m, func() tea.Msg { return ComposerFocusMsg{} }
 			}
 			return m, nil
 		}

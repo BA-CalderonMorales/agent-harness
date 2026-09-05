@@ -76,7 +76,7 @@ func defaultApprovalOptions() []ApprovalOption {
 		{
 			Label:       "Reject + Suggest",
 			Key:         "R",
-			Description: "Skip and tell agent what to do instead",
+			Description: "tell the agent what to do instead",
 			Decision:    approval.DecisionRejectAll,
 			IsDangerous: true,
 		},
