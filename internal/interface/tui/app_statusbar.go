@@ -60,6 +60,15 @@ func (a App) renderStatusBar() string {
 	// Right segments in priority order (drop from the end as width shrinks:
 	// hint first, then cost; context usage survives the longest).
 	var telemetry []string
+	mobileTmux := isMobilePane(a.width) && inTmux()
+	if mobileTmux {
+		if a.mouseCapture {
+			telemetry = append(telemetry, `"m" copy`)
+		} else {
+			telemetry = append(telemetry, `"m" gestures`)
+		}
+		telemetry = append(telemetry, `"i" type`)
+	}
 	if a.contextLen > 0 {
 		used := a.estTokens
 		if used > a.contextLen {
@@ -72,17 +81,7 @@ func (a App) renderStatusBar() string {
 	if a.costTotal > 0 {
 		telemetry = append(telemetry, "$"+fmt.Sprintf("%.2f", a.costTotal))
 	}
-	// Hints name the interactions that matter where you are: a phone
-	// pane in tmux needs the type affordance and the touch toggle in
-	// view — desktop's hints would teach the wrong reflexes.
-	if isMobilePane(a.width) && inTmux() {
-		telemetry = append(telemetry, `"i" type`)
-		if a.mouseCapture {
-			telemetry = append(telemetry, `"m" copy`)
-		} else {
-			telemetry = append(telemetry, `"m" gestures`)
-		}
-	} else {
+	if !mobileTmux {
 		telemetry = append(telemetry, `"?" help`, `"m" copy`)
 	}
 
