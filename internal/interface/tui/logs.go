@@ -3,7 +3,9 @@ package tui
 import (
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/charmbracelet/bubbles/viewport"
@@ -40,6 +42,27 @@ var levelFilters = []struct {
 	minLvl int
 }{{"all", 0}, {"warning+", 1}, {"error+", 2}}
 
+const dayKeyFormat = "2006-01-02"
+
+// distinctDays lists the local calendar days present in the stream,
+// newest first — the day filter cycles over exactly these.
+func distinctDays(entries []diag.Entry) []string {
+	seen := map[string]bool{}
+	var keys []string
+	for _, e := range entries {
+		key := e.Timestamp.Local().Format(dayKeyFormat)
+		if !seen[key] {
+			seen[key] = true
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for i, j := 0, len(keys)-1; i < j; i, j = i+1, j-1 {
+		keys[i], keys[j] = keys[j], keys[i]
+	}
+	return keys
+}
+
 func levelRank(level string) int {
 	switch level {
 	case diag.LevelInfo:
@@ -63,6 +86,8 @@ type LogsModel struct {
 	cursor       int          // selected row in visible
 	detail       *diag.Entry  // non-nil: the detail modal is open
 	detailScroll int          // detail modal scroll offset
+	dayIdx       int          // 0: all days, else dayKeys[dayIdx-1]
+	dayKeys      []string     // distinct local days in entries, newest first
 }
 
 // NewLogsModel creates a new logs view model.
@@ -78,6 +103,9 @@ func (m *LogsModel) Blur() { m.focused = false }
 
 // AppendEntry adds a diagnostics entry and follows the tail.
 func (m *LogsModel) AppendEntry(e diag.Entry) {
+	if e.Seq == 0 {
+		e.Seq = diag.AllocateSeq()
+	}
 	m.entries = append(m.entries, e)
 	m.refresh()
 }
@@ -100,12 +128,21 @@ func (m *LogsModel) syncHeight() {
 
 // refresh rebuilds the filtered table and keeps the cursor row in view.
 func (m *LogsModel) refresh() {
+	m.dayKeys = distinctDays(m.entries)
+	if m.dayIdx > len(m.dayKeys) {
+		// Deleted or aged-out entries can retire a day.
+		m.dayIdx = 0
+	}
 	minRank := levelFilters[m.filter].minLvl
 	m.visible = m.visible[:0]
 	for _, e := range m.entries {
-		if levelRank(e.Level) >= minRank {
-			m.visible = append(m.visible, e)
+		if levelRank(e.Level) < minRank {
+			continue
 		}
+		if m.dayIdx > 0 && e.Timestamp.Local().Format(dayKeyFormat) != m.dayKeys[m.dayIdx-1] {
+			continue
+		}
+		m.visible = append(m.visible, e)
 	}
 	if m.cursor >= len(m.visible) {
 		m.cursor = len(m.visible) - 1
@@ -197,6 +234,71 @@ func (m *LogsModel) MoveCursor(lines int) {
 	m.refresh()
 }
 
+// Count reports how many entries the stream holds.
+func (m *LogsModel) Count() int { return len(m.entries) }
+
+// CycleLevel steps the level filter: all, warning+, error+.
+func (m *LogsModel) CycleLevel() {
+	m.filter = (m.filter + 1) % len(levelFilters)
+	m.refresh()
+}
+
+// CycleDay steps the day filter: all days, then each day present in
+// the stream, newest first, then back to all days.
+func (m *LogsModel) CycleDay() {
+	m.dayIdx = (m.dayIdx + 1) % (len(m.dayKeys) + 1)
+	m.refresh()
+}
+
+// DayLabel names the active day filter for the footer.
+func (m LogsModel) DayLabel() string {
+	if m.dayIdx == 0 {
+		return "all days"
+	}
+	key := m.dayKeys[m.dayIdx-1]
+	today := time.Now().Local().Format(dayKeyFormat)
+	yesterday := time.Now().Local().AddDate(0, 0, -1).Format(dayKeyFormat)
+	switch key {
+	case today:
+		return "today"
+	case yesterday:
+		return "yesterday"
+	}
+	if t, err := time.ParseInLocation(dayKeyFormat, key, time.Local); err == nil {
+		return t.Format("Jan 02")
+	}
+	return key
+}
+
+// DeleteSelected removes the entry under the cursor. Returns how many
+// entries went away (identity is the write-time Seq) and whether
+// anything was selected at all.
+func (m *LogsModel) DeleteSelected() (int, bool) {
+	if len(m.visible) == 0 {
+		return 0, false
+	}
+	seq := m.visible[m.cursor].Seq
+	out := make([]diag.Entry, 0, len(m.entries))
+	for _, e := range m.entries {
+		if e.Seq != seq {
+			out = append(out, e)
+		}
+	}
+	removed := len(m.entries) - len(out)
+	m.entries = out
+	m.refresh()
+	return removed, true
+}
+
+// ClearAll empties the stream and returns how many entries it had.
+func (m *LogsModel) ClearAll() int {
+	n := len(m.entries)
+	m.entries = nil
+	m.detail = nil
+	m.refresh()
+	return n
+}
+
 // CursorTop selects the first entry.
 func (m *LogsModel) CursorTop() {
 	m.cursor = 0
@@ -281,8 +383,9 @@ func (m LogsModel) Update(msg tea.Msg) (LogsModel, tea.Cmd) {
 				m.detailScroll = 0
 			}
 		case "f":
-			m.filter = (m.filter + 1) % len(levelFilters)
-			m.refresh()
+			m.CycleLevel()
+		case "d":
+			m.CycleDay()
 		}
 		return m, nil
 	}
@@ -305,6 +408,10 @@ func (m LogsModel) View() string {
 		{Key: "↑/↓", Desc: "Select"},
 		{Key: "Enter", Desc: "Detail"},
 		{Key: "f", Desc: "Filter: " + filterName},
+		{Key: "d", Desc: "Day: " + m.DayLabel()},
+		{Key: "x", Desc: "Delete"},
+		{Key: "X", Desc: "Clear"},
+		{Key: "g/G", Desc: "Ends"},
 	}
 	if len(m.visible) > 0 {
 		hints = append(hints, ActionHint{
@@ -325,7 +432,7 @@ func (m LogsModel) View() string {
 	body.WriteString("\n")
 	body.WriteString(m.viewport.View())
 	if strings.TrimSpace(m.viewport.View()) == "" {
-		body.WriteString(HelpDimStyle.Render("  no entries at this level"))
+		body.WriteString(HelpDimStyle.Render("  no entries match this day and level"))
 	}
 
 	// The hint line pins to the pane's bottom row — bottom-left, one
