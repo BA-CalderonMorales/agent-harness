@@ -228,6 +228,12 @@ func (m ChatModel) assistantReasoningRows(msg ChatMessage) (start, lines int, ok
 }
 
 func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
+	return m.renderAssistantHeader(msg) + "\n" + m.renderAssistantContent(msg)
+}
+
+// renderAssistantHeader is the "Agent 22:24 (22.3s)" line — split from
+// the content so a turn block can nest its tool calls between the two.
+func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	var b strings.Builder
 
 	// Header
@@ -250,7 +256,13 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
 	}
 	b.WriteString(header)
-	b.WriteString("\n")
+	return b.String()
+}
+
+// renderAssistantContent is the answer bubble: markdown, thinking
+// hints, the reasoning preview, and the expanded reasoning record.
+func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
+	var b strings.Builder
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
