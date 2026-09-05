@@ -40,6 +40,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 	var toolInputBuffer string
 	var toolUses []types.ToolUseBlock
 	var currentReasoning strings.Builder
+	sawStop := false
 
 	idle := time.NewTimer(l.idleWindow())
 	defer idle.Stop()
@@ -53,6 +54,30 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 		case ev, ok := <-events:
 			_ = idle.Reset(l.idleWindow())
 			if !ok {
+				// The provider closed the stream without a stop event:
+				// the response is incomplete, and a truncated answer
+				// that looks complete is worse than an error naming it.
+				// The partial prose survives: emit it as a message so
+				// nothing the model said silently vanishes.
+				if !sawStop {
+					if currentText != "" {
+						partial := types.Message{
+							UUID:      msg.UUID,
+							Role:      types.RoleAssistant,
+							Content:   []types.ContentBlock{types.TextBlock{Text: currentText}},
+							Timestamp: time.Now(),
+						}
+						select {
+						case out <- types.StreamMessage{Message: partial}:
+						case <-ctx.Done():
+							return nil, nil, ctx.Err()
+						}
+					}
+					return nil, nil, fmt.Errorf(
+						"provider disconnected before completing the response (received %d chars)",
+						len(currentText),
+					)
+				}
 				if pendingToolUse != nil {
 					if toolInputBuffer != "" {
 						var input map[string]any
@@ -106,6 +131,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				toolInputBuffer += e.Delta
 			case types.LLMMessageStop:
+				sawStop = true
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
 				l.LastUsage = e.Usage
