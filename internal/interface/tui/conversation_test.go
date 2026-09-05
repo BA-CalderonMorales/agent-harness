@@ -304,8 +304,8 @@ func TestClearChatWithFollowUpMsg(t *testing.T) {
 	model, _ := chat.Update(ClearChatMsg{FollowUpMsg: "Session cleared."})
 	chat = model.(ChatModel)
 
-	if len(chat.messages) != 2 {
-		t.Fatalf("expected 2 messages after clear (follow-up + guidance), got %d", len(chat.messages))
+	if len(chat.messages) != 1 {
+		t.Fatalf("expected 1 message after clear (follow-up), got %d", len(chat.messages))
 	}
 
 	if chat.messages[0].Role != "system" {
@@ -317,20 +317,24 @@ func TestClearChatWithFollowUpMsg(t *testing.T) {
 	}
 }
 
-// TestClearChatWithoutFollowUpMsg verifies bare clear removes everything
-// and greets with the navigation guidance block.
+// TestClearChatWithoutFollowUpMsg verifies bare clear removes
+// everything and the empty-state panel takes the stage.
 func TestClearChatWithoutFollowUpMsg(t *testing.T) {
 	chat := NewChatModel()
+	chat.width = 120
+	chat.viewport.Width = 120
+	chat.viewport.Height = 20
+	chat.height = 40
 	chat.AddMessage("user", "hello")
 
 	model, _ := chat.Update(ClearChatMsg{})
 	chat = model.(ChatModel)
 
-	if len(chat.messages) != 1 {
-		t.Errorf("expected 1 guidance message after bare clear, got %d", len(chat.messages))
+	if len(chat.messages) != 0 {
+		t.Errorf("expected a bare transcript after clear, got %d messages", len(chat.messages))
 	}
-	if !strings.Contains(chat.messages[0].Content, `"i" to start chatting`) {
-		t.Errorf("expected navigation guidance after bare clear, got %q", chat.messages[0].Content)
+	if !strings.Contains(chat.View(), "The agent is ready.") {
+		t.Error("expected the empty-state panel after bare clear")
 	}
 }
 

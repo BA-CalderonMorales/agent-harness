@@ -1484,7 +1484,7 @@ var _ = Describe("ChatModel", func() {
 				chat.Blur()
 
 				By("verifying the navigate affordance")
-				Expect(chat.textarea.Placeholder).To(Equal("Press i to type a message"))
+				Expect(chat.textarea.Placeholder).To(Equal(`"i" to type a message`))
 			})
 
 			It("should restore the typing affordance on focus", func() {

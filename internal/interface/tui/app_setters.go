@@ -230,3 +230,10 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 
 // ShortenModelName returns a compact display name for a model.
 // Never returns "default" - always shows something actionable or informative.
+
+// ProviderState reports the last provider readiness verdict — 0=checking,
+// 1=ready, 2=warning, 3=unavailable, 4=misconfigured — with its notice.
+// Diagnostics surfaces read it instead of probing again.
+func (a *App) ProviderState() (int, string) {
+	return a.providerReadiness, a.statusMessage
+}

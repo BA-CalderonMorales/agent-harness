@@ -1,39 +1,33 @@
 package tui
 
-import "strings"
+import (
+	"strings"
 
-// First-run navigation guidance: new users land in the chat pane with a
-// vim-style composer and no map. The guidance is a system message — it
-// scrolls away with the transcript instead of being chrome — and shows
-// once per session, plus again after /clear (a wiped pane is a fresh
-// first run for whoever is sitting there).
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
+	"github.com/charmbracelet/lipgloss"
+)
 
-// navigationGuidance is the compact key map shown on first Chat entry
-// and on /clear. Bullets, one instruction per line, keys in quotes —
-// a run-on line made every instruction blur into the next. Five lines
-// hard cap: guidance that grows is chrome.
-func navigationGuidance() string {
-	return strings.Join([]string{
-		`• "i" to start chatting`,
-		`• "Esc" to stop chatting`,
-		`• "j" and "k" to scroll up and down`,
-		`• "Enter" expands the latest tool or reasoning`,
-		`• "Shift+Tab" cycles agent modes · "/" opens commands`,
-	}, "\n")
-}
+// The chat empty state: a fresh pane (new session or after /clear)
+// should answer three questions before the first keystroke — what can
+// I ask, what will the agent do, and which keys move me. One panel,
+// one home: the old once-per-session guidance message duplicated it
+// and scrolled it away.
 
-// ShowNavigationGuidance appends the guidance block once per session.
-// Later calls are no-ops until ResetNavigationGuidance.
-func (m *ChatModel) ShowNavigationGuidance() {
-	if m.guidanceShown {
-		return
+// chatEmptyState renders the panel shown while the transcript has no
+// messages — centered in the pane, Sessions-style: a title, the
+// persona's seed ask, and the keys that move you.
+func chatEmptyState(personaName string, width, height int) string {
+	p, err := persona.Parse(personaName)
+	if err != nil {
+		p = persona.Default()
 	}
-	m.guidanceShown = true
-	m.AddMessage("system", navigationGuidance())
-}
 
-// ResetNavigationGuidance re-arms the once-per-session guard, so the
-// next ShowNavigationGuidance renders the block again (used by /clear).
-func (m *ChatModel) ResetNavigationGuidance() {
-	m.guidanceShown = false
+	block := strings.Join([]string{
+		HelpTitleStyle.Render("The agent is ready."),
+		"",
+		HelpDimStyle.Render("Ask it to " + p.EmptyStateHint() + "."),
+		"",
+		HelpDimStyle.Render(`"i" to start · "/" commands · "?" help`),
+	}, "\n")
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, block)
 }

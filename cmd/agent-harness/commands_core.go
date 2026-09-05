@@ -186,23 +186,28 @@ func (app *App) initCommandsCore() {
 			return strings.TrimSuffix(b.String(), "\n"), nil
 		})
 
-	app.cmdRegistry.Register("theme", "Show or change the TUI color theme",
+	app.cmdRegistry.Register("theme", "Cycle to the next theme, or set one by name",
 		func(args string) (string, error) {
 			name := strings.TrimSpace(args)
 			if name == "" {
+				// Bare /theme cycles: the next palette in the catalog,
+				// wrapping — the list is one /theme away by name.
+				names := tui.ThemeNames()
+				if len(names) == 0 {
+					return "", fmt.Errorf("no themes available")
+				}
 				current := app.config.Theme
 				if current == "" {
 					current = "default"
 				}
-				var b strings.Builder
-				for _, t := range tui.ThemeNames() {
-					marker := "  "
+				next := names[0]
+				for i, t := range names {
 					if t == current {
-						marker = "→ "
+						next = names[(i+1)%len(names)]
+						break
 					}
-					fmt.Fprintf(&b, "%s%s\n", marker, t)
 				}
-				return strings.TrimSuffix(b.String(), "\n"), nil
+				name = next
 			}
 			applied := false
 			if app.tuiApp != nil {
@@ -220,6 +225,8 @@ func (app *App) initCommandsCore() {
 			app.commitConfigChange()
 			return sprintf("Theme set to %s", theme.Name), nil
 		})
+
+	registerDiagnoseCommand(app)
 
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {

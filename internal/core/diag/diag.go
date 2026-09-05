@@ -19,6 +19,7 @@ import (
 	"runtime/debug"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -63,6 +64,7 @@ const (
 
 // Entry is one diagnostics record.
 type Entry struct {
+	Seq       uint64    `json:"seq,omitempty"` // stable identity, stamped at write
 	Timestamp time.Time `json:"timestamp"`
 	Level     string    `json:"level"`             // "info" | "warning" | "error" | "panic"
 	Site      string    `json:"site"`              // dot-tagged source, e.g. "tui.app_update.panic"
@@ -73,7 +75,10 @@ type Entry struct {
 }
 
 // logDir resolves once per process; tests can point it elsewhere.
-var logDir string
+var (
+	nextSeq atomic.Uint64
+	logDir  string
+)
 
 func init() {
 	logDir = config.DataLogs()
@@ -109,6 +114,10 @@ func SetSink(fn func(Entry)) {
 	sink = fn
 	streamMu.Unlock()
 }
+
+// AllocateSeq returns a fresh stream identity — for entries built
+// outside write() (tests, re-injection) so deletion stays precise.
+func AllocateSeq() uint64 { return nextSeq.Add(1) }
 
 // Recent returns the in-memory entries, oldest first.
 func Recent() []Entry {
@@ -186,6 +195,7 @@ func write(entry Entry) {
 	if logDir == "" {
 		return
 	}
+	entry.Seq = nextSeq.Add(1)
 	entry.Timestamp = time.Now().UTC()
 	entry.Caller = callerOf()
 

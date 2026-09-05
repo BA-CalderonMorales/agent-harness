@@ -38,8 +38,8 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	// Property 2: ModelHandler state transitions and listing
-	properties.Property("ModelHandler: model get/set and list invariants", prop.ForAll(
+	// Property 2: ModelHandler state transitions and cycling
+	properties.Property("ModelHandler: model get/set and cycle invariants", prop.ForAll(
 		func(newModel string) bool {
 			currentModel := "gpt-4o"
 			getModel := func() string { return currentModel }
@@ -54,9 +54,9 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 
 			handler := ModelHandler(getModel, setModel, listModels)
 
-			// Case 1: empty arg lists models
-			listRes, err := handler("")
-			if err != nil || !strings.Contains(listRes, "Available models:") || !strings.Contains(listRes, "● gpt-4o") {
+			// Case 1: bare /model cycles to the next model in the list
+			cycleRes, err := handler("")
+			if err != nil || currentModel != "claude-3-5-sonnet" || !strings.Contains(cycleRes, "Model cycled") {
 				return false
 			}
 
@@ -273,8 +273,16 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 
 			handler := PersonaHandler(getPersona, setPersona, listPersonas)
 
-			// Empty / list
-			listRes, err := handler("")
+			// Bare /persona cycles: developer -> the next catalog
+			// persona (the mock list is a stub; cycling walks
+			// persona.All(), so "designer" follows "developer").
+			cycleRes, err := handler("")
+			if err != nil || currentPersona != "designer" || !strings.Contains(cycleRes, "Persona updated") {
+				return false
+			}
+
+			// "list" remains the catalog
+			listRes, err := handler("list")
 			if err != nil || listRes != listPersonas() {
 				return false
 			}

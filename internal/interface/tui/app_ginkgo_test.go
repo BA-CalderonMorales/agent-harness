@@ -594,21 +594,26 @@ var _ = Describe("App", func() {
 
 	Describe("Clear Chat", func() {
 		Context("Given ClearChatMsg", func() {
-			It("should clear chat messages, leaving the guidance block", func() {
+			BeforeEach(func() {
+				// A real boot delivers the window size; without it the
+				// chat View is still "Initializing chat...".
+				app.Update(tea.WindowSizeMsg{Width: 120, Height: 32})
+			})
+			It("should clear chat messages, leaving the empty-state panel", func() {
 				app.AddMessage("user", "hello")
 				Expect(app.chatModel.messages).ToNot(BeEmpty())
 
 				model, _ := app.Update(ClearChatMsg{})
 				updated := model.(*App)
-				Expect(updated.chatModel.messages).To(HaveLen(1))
-				Expect(updated.chatModel.messages[0].Content).To(ContainSubstring(`"i" to start chatting`))
+				Expect(updated.chatModel.messages).To(BeEmpty())
+				Expect(updated.chatModel.View()).To(ContainSubstring("The agent is ready."))
 			})
 
 			It("should add follow-up message when provided", func() {
 				app.AddMessage("user", "hello")
 				model, _ := app.Update(ClearChatMsg{FollowUpMsg: "Cleared."})
 				updated := model.(*App)
-				Expect(updated.chatModel.messages).To(HaveLen(2))
+				Expect(updated.chatModel.messages).To(HaveLen(1))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Cleared."))
 			})
 		})
@@ -949,12 +954,11 @@ var _ = Describe("App", func() {
 				Expect(updated.chatModel.GetModel()).To(Equal("gpt-4o"))
 				Expect(updated.chatModel.persona).To(Equal("developer"))
 				// The session notice prepends as the first chat message
-				// instead of cluttering the footer; the first-entry
-				// navigation guidance lands after the transcript.
-				Expect(updated.chatModel.messages).To(HaveLen(3))
+				// instead of cluttering the footer; the empty-state
+				// panel is View-time, not a transcript message.
+				Expect(updated.chatModel.messages).To(HaveLen(2))
 				Expect(updated.chatModel.messages[0].Role).To(Equal("system"))
 				Expect(updated.chatModel.messages[0].Content).To(Equal("Loaded session sess-aaa"))
-				Expect(updated.chatModel.messages[2].Content).To(ContainSubstring(`"i" to start chatting`))
 				Expect(updated.activeView).To(Equal(viewChat))
 				Expect(updated.statusMessage).To(Equal(""))
 				Expect(updated.statusType).To(Equal(""))

@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	tea "github.com/charmbracelet/bubbletea"
 )
 
@@ -300,6 +302,20 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			case "ctrl+d":
 				a.scrollActiveView(a.halfPageLines())
 				return a, nil, true
+			case "x", "X":
+				if a.activeView != viewLogs {
+					return a, nil, false
+				}
+				if msg.String() == "x" {
+					if _, ok := a.logsModel.DeleteSelected(); ok {
+						a.ShowStatus(fmt.Sprintf("Log entry deleted — %d left", a.logsModel.Count()), "info")
+						return a, a.statusFlashCmd(), true
+					}
+					return a, nil, true
+				}
+				cleared := a.logsModel.ClearAll()
+				a.ShowStatus(fmt.Sprintf("Diagnostics stream cleared — %d entries gone", cleared), "info")
+				return a, a.statusFlashCmd(), true
 			case "h":
 				if a.activeView != viewSessions {
 					return a, a.switchView(viewHome), true

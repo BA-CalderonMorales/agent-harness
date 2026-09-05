@@ -41,6 +41,22 @@ type ChatDelegate interface {
 // ---------------------------------------------------------------------------
 // ChatMessage represents a message in the chat
 // ---------------------------------------------------------------------------
+// TurnPart is one slice of an assistant response: a prose run or the
+// tool calls that interrupted it.
+type TurnPart struct {
+	Text   string // non-empty for a prose part
+	ToolID string // non-empty for a tool part; matches the tool ChatMessage ID
+}
+
+// turnToolMark records where a tool call interrupted the stream: the
+// call's message ID and its offset into the turn's stream buffer. The
+// prose parts derive from those offsets — the buffer stays whole, so
+// saving and finalizing keep their semantics.
+type turnToolMark struct {
+	ToolID string
+	At     int
+}
+
 type ChatMessage struct {
 	ID              string // Unique identifier for message replacement
 	Role            string
@@ -59,6 +75,12 @@ type ChatMessage struct {
 	StreamedChunks  int           // Token chunks streamed for this response
 	Thinking        bool          // In-progress response (drives the live spinner header)
 	Turn            int           // Agent turn that produced this message (tool-run grouping key)
+
+	// Parts segments the response where tool calls interrupted it:
+	// prose runs alternate with the tool calls that followed them.
+	// Empty on legacy data — Content renders whole. Tool parts resolve
+	// to the tool ChatMessage with the matching ID.
+	Parts []TurnPart
 }
 
 // ToolStatus represents the execution state of a tool
@@ -178,6 +200,10 @@ type ChatModel struct {
 	// they exist for state inspection and are cleared per turn.
 	completedToolMsgs []ChatMessage
 
+	// turnTools marks where tool calls interrupted the streaming
+	// response; the streaming assistant message carries the parts.
+	turnTools []turnToolMark
+
 	// turnCounter stamps tool messages with their agent turn so collapsed
 	// tool runs never merge across turn boundaries.
 	turnCounter int
@@ -186,9 +212,7 @@ type ChatModel struct {
 	// (t toggles); errors, approvals, and running tools never collapse.
 	toolsCollapsed bool
 
-	// guidanceShown gates the first-run navigation block: shown on the
 	// first Chat entry of a session and again after /clear only.
-	guidanceShown bool
 
 	// clickIndex maps viewport rows to the messages a click resolves
 	// to — tool blocks and reasoning preview/frame rows — rebuilt on
@@ -415,7 +439,7 @@ func (m *ChatModel) togglePlaceholder() {
 	if m.focused {
 		m.textarea.Placeholder = "Type a message..."
 	} else {
-		m.textarea.Placeholder = "Press i to type a message"
+		m.textarea.Placeholder = `"i" to type a message`
 	}
 }
 func (m *ChatModel) SetInput(text string) {

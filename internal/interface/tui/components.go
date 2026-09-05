@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
+	"time"
 )
 
 // ---------------------------------------------------------------------------
@@ -402,4 +403,25 @@ func FormatKeyHints(actions []ActionHint) string {
 		parts = append(parts, a.Key+": "+a.Desc)
 	}
 	return strings.Join(parts, "  ")
+}
+
+// RelativeTime renders a timestamp as coarse human distance — "just
+// now", "5m ago", "2h ago", "3d ago", then the date. Coarse on
+// purpose: the list is for recognition, not accounting.
+func RelativeTime(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		return fmt.Sprintf("%dm ago", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh ago", int(d.Hours()))
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
+	}
+	return t.Format("Jan 02")
 }

@@ -90,6 +90,14 @@ func (m SettingsModel) View() string {
 	// Render viewport (scrollable settings list)
 	b.WriteString(m.viewport.View())
 
+	// The selected setting's description pins above the footer: walk
+	// the list, read what each key does — no row-walking with the eye
+	// glued to the right column.
+	if desc := m.selectedDescription(); desc != "" {
+		b.WriteString(HelpDimStyle.Render("  " + desc))
+		b.WriteString("\n")
+	}
+
 	// Footer (always visible, not in viewport)
 	footerActions := []ActionHint{
 		{Key: "↑/↓", Desc: "Navigate"},
@@ -109,6 +117,15 @@ func (m SettingsModel) View() string {
 	b.WriteString(RenderFooter(footerActions))
 
 	return b.String()
+}
+
+// selectedDescription is the description of the row the cursor is on,
+// empty when the list is empty.
+func (m SettingsModel) selectedDescription() string {
+	if m.cursor < 0 || m.cursor >= len(m.settings) {
+		return ""
+	}
+	return m.settings[m.cursor].Description
 }
 
 func (m SettingsModel) renderSetting(setting Setting, selected bool) string {

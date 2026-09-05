@@ -311,13 +311,17 @@ var _ = Describe("Slash Commands", func() {
 		})
 
 		Context("Given no arguments", func() {
-			It("should list models with current marked", func() {
+			It("should cycle to the next model", func() {
 				By("when invoking /model")
 				result, err := handler("")
 				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("gpt-4o"))
-				Expect(result).To(ContainSubstring("● gpt-4o"))
-				Expect(result).To(ContainSubstring("claude-3-5-sonnet"))
+				Expect(result).To(ContainSubstring("Model cycled"))
+				Expect(current).To(Equal("claude-3-5-sonnet"))
+
+				By("when cycling again it wraps to the first")
+				_, err = handler("")
+				Expect(err).ToNot(HaveOccurred())
+				Expect(current).To(Equal("gpt-4o"))
 			})
 		})
 
@@ -356,28 +360,30 @@ var _ = Describe("Slash Commands", func() {
 					func() []string { return []string{} },
 				)
 
-				By("when invoking /model")
+				By("when invoking /model with an empty list")
 				result, err := handler("")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("Current"))
-				Expect(result).To(ContainSubstring("gpt-4o"))
+				Expect(err).To(HaveOccurred())
+				Expect(result).To(BeEmpty())
 			})
 		})
 
 		Context("Given multiple models", func() {
-			It("should mark non-current models with spaces not bullet", func() {
+			It("should cycle through every entry before wrapping", func() {
 				By("given a handler with multiple models")
+				current := "gpt-4o"
 				handler := ModelHandler(
-					func() string { return "gpt-4o" },
-					func(m string) error { return nil },
-					func() []string { return []string{"gpt-4o", "claude-3-5-sonnet"} },
+					func() string { return current },
+					func(m string) error { current = m; return nil },
+					func() []string { return []string{"gpt-4o", "claude-3-5-sonnet", "gemma4:2b"} },
 				)
 
-				By("when invoking /model")
-				result, err := handler("")
-				Expect(err).ToNot(HaveOccurred())
-				Expect(result).To(ContainSubstring("● gpt-4o"))
-				Expect(result).To(ContainSubstring("  claude-3-5-sonnet"))
+				By("cycling visits each model in order, then wraps")
+				want := []string{"claude-3-5-sonnet", "gemma4:2b", "gpt-4o"}
+				for _, expected := range want {
+					_, err := handler("")
+					Expect(err).ToNot(HaveOccurred())
+					Expect(current).To(Equal(expected))
+				}
 			})
 		})
 	})

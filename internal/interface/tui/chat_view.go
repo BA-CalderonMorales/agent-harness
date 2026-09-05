@@ -1,10 +1,12 @@
 package tui
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
+	"time"
 )
 
 func (m ChatModel) View() string {
@@ -39,11 +41,26 @@ func (m ChatModel) View() string {
 	})
 	sections = append(sections, header)
 
-	// Viewport for messages
+	// Viewport for messages — a conversation with no turns yet gets
+	// the full empty-state panel, centered in the pane. System notices
+	// (new-chat notes, session loads) do not count as conversation:
+	// they render as their own lines above the panel. The viewport is
+	// bypassed here — it pads to its own height, and its phantom blank
+	// rows would push the centered panel past MaxHeight's clip.
 	vpContent := m.viewport.View()
-	if strings.TrimSpace(vpContent) == "" {
-		hint := m.emptyStateHint()
-		vpContent = HelpDimStyle.Render("  " + hint)
+	if !m.hasConversation() {
+		var notices []string
+		for _, msg := range m.messages {
+			if msg.Role == "system" && strings.TrimSpace(msg.Content) != "" {
+				notices = append(notices, SystemMessageStyle.Render(msg.Content))
+			}
+		}
+		noticeRows := len(notices)
+		panel := chatEmptyState(m.persona, m.width, vpHeight-noticeRows-1)
+		if len(notices) > 0 {
+			panel = strings.Join(notices, "\n") + "\n\n" + panel
+		}
+		vpContent = panel
 	}
 
 	// Constrain viewport to calculated height
@@ -115,25 +132,64 @@ func (m ChatModel) renderModeLine() string {
 	}
 	modeBit := ModePromptStyle.Render(mode)
 
-	parts := []string{modeBit}
+	// Segment priority when the pane narrows: the mode leads, the
+	// model identifies what is answering; persona, effort, and provider
+	// yield in that order. A clipped mid-word line helps nobody.
+	type segment struct {
+		width int
+		text  string
+		style bool
+	}
+	segments := []segment{}
 	if m.persona != "" {
-		parts = append(parts, m.persona)
+		segments = append(segments, segment{lipgloss.Width(m.persona), m.persona, false})
 	}
 	if m.model != "" {
-		parts = append(parts, ShortenModelName(m.model))
+		name := ShortenModelName(m.model)
+		segments = append(segments, segment{lipgloss.Width(name), name, false})
 	}
 	if m.provider != "" {
-		parts = append(parts, m.provider)
+		segments = append(segments, segment{lipgloss.Width(m.provider), m.provider, false})
 	}
 	if m.agentMode != "" {
-		parts = append(parts, ModePromptStyle.Render(m.agentMode))
+		segments = append(segments, segment{lipgloss.Width(m.agentMode), m.agentMode, true})
 	}
 	effort := m.effort
 	if effort == "" {
 		effort = "medium"
 	}
-	parts = append(parts, "effort "+effort)
+	segments = append(segments, segment{lipgloss.Width("effort " + effort), "effort " + effort, false})
 
+	budget := m.width - lipgloss.Width(mode)
+	keep := make([]bool, len(segments))
+	for i := range segments {
+		keep[i] = true
+		budget -= 3 // separator
+		if i > 0 {
+			budget -= segments[i].width
+		}
+	}
+	// Drop from the least important (effort) up while over budget.
+	for i := len(segments) - 1; i >= 0 && budget < 0; i-- {
+		keep[i] = false
+		budget += segments[i].width + 3
+	}
+	parts := []string{modeBit}
+	for i := range segments {
+		if !keep[i] {
+			continue
+		}
+		text := segments[i].text
+		switch {
+		case segments[i].style && text == "auto":
+			// Yolo wears a warning: tools run without asking, and the
+			// chip should read as a state, not a decoration.
+			text = WarningStyle.Render(text)
+		case segments[i].style:
+			text = ModePromptStyle.Render(text)
+		}
+		parts = append(parts, text)
+	}
 	line := InputMetaStyle.Render(strings.Join(parts, " · "))
 
 	// While typing, the escape hatch rides on the same row,
@@ -149,14 +205,16 @@ func (m ChatModel) renderModeLine() string {
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
-func (m ChatModel) renderMessage(msg ChatMessage) string {
+// renderMessageAt renders one message for a width budget — nested
+// tool rows live inside the response bubble, narrower than the pane.
+func (m ChatModel) renderMessageAt(msg ChatMessage, width int) string {
 	switch msg.Role {
 	case "user":
 		return m.renderUserMessage(msg)
 	case "assistant":
 		return m.renderAssistantMessage(msg)
 	case "tool":
-		return m.renderToolMessage(msg)
+		return m.renderToolMessageAt(msg, width)
 	case "system":
 		return m.renderSystemMessage(msg)
 	default:
@@ -170,7 +228,7 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	// Header
 	header := UserPromptStyle.Render("You")
 	if !msg.Timestamp.IsZero() {
-		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
@@ -228,12 +286,18 @@ func (m ChatModel) assistantReasoningRows(msg ChatMessage) (start, lines int, ok
 }
 
 func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
+	return m.renderAssistantHeader(msg) + "\n" + m.renderAssistantContent(msg)
+}
+
+// renderAssistantHeader is the "Agent 22:24 (22.3s)" line — split from
+// the content so a turn block can nest its tool calls between the two.
+func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	var b strings.Builder
 
 	// Header
 	header := AssistantStyle.Render("Agent")
 	if !msg.Timestamp.IsZero() {
-		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
 	// While the response is in progress the header carries a live status:
 	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
@@ -246,14 +310,26 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	if elapsed > 0 {
 		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
 	}
-	if msg.StreamedChunks > 0 {
-		header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
-	}
 	if msg.Thinking {
 		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
 	}
 	b.WriteString(header)
-	b.WriteString("\n")
+	return b.String()
+}
+
+// renderAssistantContent is the answer bubble: markdown, thinking
+// hints, the reasoning preview, and the expanded reasoning record.
+func (m ChatModel) renderAssistantContent(msg ChatMessage) string {
+	inner := m.assistantInnerContent(msg, msg.Parts, nil)
+	return MessageBubbleAssistant.Width(m.width - 4).Render(inner)
+}
+
+// assistantInnerContent builds the bubble's inner lines: thinking
+// hints, the reasoning frame, then the response — split where tool
+// calls interrupted it, with each call's row injected at its position.
+// toolRow resolves a tool part to its rendered row; nil skips tools.
+func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, toolRow func(id string) (string, bool)) string {
+	var b strings.Builder
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
@@ -297,18 +373,34 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 		b.WriteString(ToolTimeStyle.Render(msg.ReasoningText))
 		b.WriteString("\n")
 	}
-	// The bubble adds a left border and padding (2 columns) on top of
-	// Width(width): rendering at the full width makes lipgloss re-wrap
-	// glamour's output and orphan words onto flush-left lines. Render
-	// at the true inner column instead.
+	// The response renders part by part: prose as markdown, and each
+	// tool call's row where it actually happened. Legacy messages
+	// (no Parts) render Content whole.
+	if len(parts) > 0 && toolRow != nil {
+		for _, part := range parts {
+			if part.ToolID != "" {
+				if row, ok := toolRow(part.ToolID); ok {
+					b.WriteString(row)
+					b.WriteString("\n")
+				}
+				continue
+			}
+			if strings.TrimSpace(part.Text) == "" {
+				continue
+			}
+			b.WriteString(renderMarkdown(part.Text, width-2))
+			b.WriteString("\n")
+		}
+		return strings.TrimRight(b.String(), "\n")
+	}
 	renderedContent := renderMarkdown(msg.Content, width-2)
-	content := MessageBubbleAssistant.Width(width).Render(renderedContent)
-	b.WriteString(content)
+	b.WriteString(renderedContent)
 
-	return b.String()
+	return strings.TrimRight(b.String(), "\n")
 }
 
-func (m ChatModel) renderToolMessage(msg ChatMessage) string {
+// renderToolMessageAt renders the tool row for a width budget.
+func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	// Choose style based on tool status
 	var style lipgloss.Style
 	switch msg.ToolStatus {
@@ -326,7 +418,8 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 	// ▾ open (click folds). formatToolContent reserves the two caret
 	// columns so the right-aligned duration stays put.
 	expanded := m.expandedMessageID != "" && m.expandedMessageID == msg.ID
-	body := style.Render(expandCaret(expanded) + " " + msg.Content)
+	row := m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
+	body := style.Render(expandCaret(expanded) + " " + row)
 
 	// Expanded tool record: the full call beneath the summary line —
 	// exactly what was called, no truncation. Esc (or clicking again)
@@ -350,21 +443,45 @@ func (m ChatModel) renderToolExpansion(msg ChatMessage) string {
 		b.WriteString("\n" + ToolTimeStyle.Render("   │  detail: ") + msg.ToolDetail)
 	}
 	if msg.ToolInputJSON != "" {
-		b.WriteString("\n" + ToolTimeStyle.Render("   │  input:  ") + msg.ToolInputJSON)
+		for _, line := range prettyInputJSON(msg.ToolInputJSON) {
+			b.WriteString("\n" + ToolTimeStyle.Render("   │  "+line))
+		}
 	}
 	b.WriteString("\n" + ToolTimeStyle.Render("   └─ esc to close"))
 	return b.String()
+}
+
+// chatStamp renders a message time: today shows the clock, anything
+// older carries its date — overnight sessions keep their history
+// readable.
+func chatStamp(t time.Time) string {
+	if t.Local().Format(dayKeyFormat) == time.Now().Local().Format(dayKeyFormat) {
+		return t.Format("15:04")
+	}
+	return t.Format("Jan 02 15:04")
+}
+
+// prettyInputJSON formats the raw tool input for the expansion frame:
+// indented JSON when it parses, the raw string when it does not.
+func prettyInputJSON(raw string) []string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, []byte(raw), "", "  "); err == nil {
+		return strings.Split(buf.String(), "\n")
+	}
+	return strings.Split(raw, "\n")
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
 	return SystemMessageStyle.Render(msg.Content)
 }
 
-// emptyStateHint returns a contextual hint based on the current persona.
-func (m ChatModel) emptyStateHint() string {
-	p, err := persona.Parse(m.persona)
-	if err != nil {
-		return persona.Default().EmptyStateHint()
+// hasConversation reports whether the transcript holds anything the
+// agent or the user said — the empty state's trigger.
+func (m ChatModel) hasConversation() bool {
+	for _, msg := range m.messages {
+		if msg.Role == "user" || msg.Role == "assistant" || msg.IsTool {
+			return true
+		}
 	}
-	return p.EmptyStateHint()
+	return false
 }

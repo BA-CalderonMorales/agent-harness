@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 )
 
 // PlanHandler toggles plan mode.
@@ -129,7 +131,7 @@ func AuditHandler(getAudit func() string) SlashHandler {
 // PersonaHandler handles persona switching.
 func PersonaHandler(getPersona func() string, setPersona func(string) error, listPersonas func() string) SlashHandler {
 	return func(args string) (string, error) {
-		if args == "" || args == "list" {
+		if args == "list" {
 			if listPersonas == nil {
 				return "", fmt.Errorf("persona listing is not available")
 			}
@@ -138,6 +140,17 @@ func PersonaHandler(getPersona func() string, setPersona func(string) error, lis
 
 		if getPersona == nil || setPersona == nil {
 			return "", fmt.Errorf("persona switching is not available")
+		}
+
+		// Bare /persona cycles: the next behavior mode wraps, "list"
+		// remains the catalog.
+		if args == "" {
+			current := getPersona()
+			next := NextInList(personaNames(), current)
+			if next == "" {
+				return "", fmt.Errorf("no personas available")
+			}
+			args = next
 		}
 
 		previous := getPersona()
@@ -151,6 +164,15 @@ func PersonaHandler(getPersona func() string, setPersona func(string) error, lis
   Current          %s
   Tip              Personality and tool hints updated for this session`, previous, current), nil
 	}
+}
+
+// personaNames lists the behavior modes in catalog order.
+func personaNames() []string {
+	names := make([]string, 0, len(persona.All()))
+	for _, p := range persona.All() {
+		names = append(names, p.String())
+	}
+	return names
 }
 
 // LoginHandler handles login - starts the login wizard.

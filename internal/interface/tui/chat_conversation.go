@@ -50,12 +50,14 @@ func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 	isTool := false
 	toolName := ""
 	status := ToolStatusComplete
+	var parts []TurnPart
 
 	for _, block := range msg.Content {
 		switch b := block.(type) {
 		case types.TextBlock:
 			if b.Text != "" {
 				content.WriteString(b.Text)
+				parts = append(parts, TurnPart{Text: b.Text})
 			}
 		case types.ToolUseBlock:
 			isTool = true
@@ -69,6 +71,7 @@ func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 			} else {
 				content.WriteString(fmt.Sprintf("→ %s", b.Name))
 			}
+			parts = append(parts, TurnPart{ToolID: b.ID})
 		case types.ToolResultBlock:
 			isTool = true
 			if b.IsError {
@@ -94,6 +97,7 @@ func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 		ID:         msg.UUID,
 		Role:       role,
 		Content:    text,
+		Parts:      parts,
 		Timestamp:  msg.Timestamp,
 		IsTool:     isTool,
 		ToolName:   toolName,

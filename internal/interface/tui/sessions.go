@@ -198,13 +198,15 @@ func (m SessionsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // syncViewportToCursor ensures the selected session is visible
 func (m *SessionsModel) syncViewportToCursor() {
-	cursorLine := m.cursor * 2 // Approximate 2 lines per item
+	// One line per list row (plus its newline): the old ×2 math
+	// scrolled the window twice as fast as the cursor on long lists.
+	cursorLine := m.cursor
 	if cursorLine < m.viewport.YOffset {
 		m.viewport.SetYOffset(cursorLine)
 	}
 	viewportBottom := m.viewport.YOffset + m.viewport.Height
-	if cursorLine+2 > viewportBottom {
-		newOffset := cursorLine + 2 - m.viewport.Height
+	if cursorLine+1 > viewportBottom {
+		newOffset := cursorLine + 1 - m.viewport.Height
 		if newOffset < 0 {
 			newOffset = 0
 		}
