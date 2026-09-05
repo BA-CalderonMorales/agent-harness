@@ -439,12 +439,15 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	// the soft keyboard never rises — the dead end whose only exit was
 	// the host terminal's drawer button. Capture yields unless the
 	// user chose it with m. A narrow desktop pane is not a touch
-	// device and keeps the frozen behavior.
+	// device and keeps the frozen behavior. The flag alone is not the
+	// mode: the terminal was started with cell motion enabled, so the
+	// matching sequence must ride here or taps still report as clicks.
 	if !a.mouseCaptureTouched && (inTmux() || isTermux) {
 		mobile := isMobilePane(width)
 		switch {
 		case mobile && a.mouseCapture:
 			a.mouseCapture = false
+			cmds = append(cmds, func() tea.Msg { return tea.DisableMouse() })
 			if !a.touchModeNoticed {
 				a.touchModeNoticed = true
 				a.ShowStatus("touch mode: tap raises the keyboard · m for gestures", "info")
@@ -452,6 +455,7 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 			}
 		case !mobile && !a.mouseCapture:
 			a.mouseCapture = true
+			cmds = append(cmds, func() tea.Msg { return tea.EnableMouseCellMotion() })
 		}
 	}
 
