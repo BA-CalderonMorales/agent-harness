@@ -186,9 +186,7 @@ type ChatModel struct {
 	// (t toggles); errors, approvals, and running tools never collapse.
 	toolsCollapsed bool
 
-	// guidanceShown gates the first-run navigation block: shown on the
 	// first Chat entry of a session and again after /clear only.
-	guidanceShown bool
 
 	// clickIndex maps viewport rows to the messages a click resolves
 	// to — tool blocks and reasoning preview/frame rows — rebuilt on

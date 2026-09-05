@@ -10,7 +10,7 @@ import (
 // TestSuggestionsRenderDescriptions pins the dropdown contract: the
 // registry descriptions ride right of each command.
 func TestSuggestionsRenderDescriptions(t *testing.T) {
-	m := newGuidanceTestModel()
+	m := newEmptyChatTestModel()
 	m.SetCommandCompletions([]string{"/mode", "/modes"})
 	m.SetCommandDescriptions(map[string]string{
 		"/mode":  "Set or cycle the agent mode (manual/auto/plan/chat)",
@@ -29,7 +29,7 @@ func TestSuggestionsRenderDescriptions(t *testing.T) {
 // long description is clipped to the terminal, never wrapped or
 // shoved off the edge.
 func TestSuggestionDescriptionTruncatedToWidth(t *testing.T) {
-	m := newGuidanceTestModel()
+	m := newEmptyChatTestModel()
 	m.width = 40
 	long := "a very long description that definitely overflows the forty column terminal we are testing with"
 	m.SetCommandCompletions([]string{"/x"})

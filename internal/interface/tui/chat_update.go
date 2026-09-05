@@ -399,8 +399,6 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.FollowUpMsg != "" {
 			m.AddMessage("system", msg.FollowUpMsg)
 		}
-		m.ResetNavigationGuidance()
-		m.ShowNavigationGuidance()
 		m.refreshViewport()
 		return m, nil
 	}

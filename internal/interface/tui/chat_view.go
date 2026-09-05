@@ -39,11 +39,11 @@ func (m ChatModel) View() string {
 	})
 	sections = append(sections, header)
 
-	// Viewport for messages
+	// Viewport for messages — an empty transcript gets the full
+	// empty-state panel, not a bare hint line.
 	vpContent := m.viewport.View()
 	if strings.TrimSpace(vpContent) == "" {
-		hint := m.emptyStateHint()
-		vpContent = HelpDimStyle.Render("  " + hint)
+		vpContent = chatEmptyState(m.persona)
 	}
 
 	// Constrain viewport to calculated height
@@ -245,9 +245,6 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 	}
 	if elapsed > 0 {
 		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
-	}
-	if msg.StreamedChunks > 0 {
-		header += HelpDimStyle.Render(fmt.Sprintf(" [%d chunks]", msg.StreamedChunks))
 	}
 	if msg.Thinking {
 		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
