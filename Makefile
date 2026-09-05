@@ -8,6 +8,11 @@ BUILD_DIR := ./build
 # the limit, not the collector frequency, is what contains the heap.
 export GOMEMLIMIT := 6GiB
 export GOGC := 250
+
+# Hard RSS ceiling for test runs. GOMEMLIMIT is soft — a live-heap leak
+# walks straight past it (tui.test did, twice) — so the memguard kills
+# the run before the kernel's OOM killer takes the host.
+MEMGUARD_MB ?= 8192
 MAIN_PKG := ./cmd/agent-harness
 
 # VERSION comes from the Version constant in main.go — the same line
@@ -63,8 +68,9 @@ release: check-remote build
 
 test:
 	@printf '==> Running Go tests\n'
-	@printf '    GOMEMLIMIT: %s (runaway-heap OOM guard)\n' "$(GOMEMLIMIT)"
-	@go test -v -timeout 15m ./... || { \
+	@printf '    GOMEMLIMIT: %s (soft heap goal)\n' "$(GOMEMLIMIT)"
+	@printf '    memguard:   %sMB RSS ceiling (hard OOM guard)\n' "$(MEMGUARD_MB)"
+	@bash scripts/verify/memguard.sh "$(MEMGUARD_MB)" go test -v -timeout 15m ./... || { \
 		status=$$?; \
 		printf '\n[fail] Go tests failed with exit status %s. Review the failing package output above.\n' "$$status"; \
 		exit $$status; \

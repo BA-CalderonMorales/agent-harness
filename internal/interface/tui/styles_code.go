@@ -1,10 +1,10 @@
 package tui
 
 import (
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/reflow/wordwrap"
-	"github.com/muesli/reflow/wrap"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // ---------------------------------------------------------------------------
@@ -36,30 +36,59 @@ func applyCodeStyles() {
 
 // fitBlock hard-caps a multi-line block's row width: word wrap for
 // clean breaks first, a character wrap as the ceiling for unbreakable
-// tokens. lipgloss.Place centers and pads but never shrinks, so an
-// overflowing block would push past the pane and wrap — unbudgeted
-// height. Both reflow wrappers are ANSI-aware; styles survive.
+// tokens. Both passes are width-true on styled text — the reflow
+// wrappers counted escape bytes and split words mid-token once a line
+// wore a style.
 func fitBlock(width int, content string) string {
 	if width < 1 {
 		width = 1
 	}
-	return wrap.String(wordwrap.String(content, width), width)
+	return ansi.Hardwrap(ansi.Wordwrap(content, width, ""), width, true)
 }
 
 // fitBlockCode wraps code — command lines in an approval view. Spaces
 // are the only break points: a hyphen is semantic in a flag or a
 // hostname, and a token split mid-word invites the reader to approve
-// something they misread. The character ceiling still applies for a
-// single token wider than the line.
+// something they misread. A token wider than the line is hard-wrapped
+// as the last resort; widths are measured on styled text.
 func fitBlockCode(width int, content string) string {
 	if width < 1 {
 		width = 1
 	}
-	ww := wordwrap.NewWriter(width)
-	ww.Breakpoints = []rune{}
-	ww.Write([]byte(content))
-	ww.Close()
-	return wrap.String(ww.String(), width)
+	var out strings.Builder
+	for li, line := range strings.Split(content, "\n") {
+		if li > 0 {
+			out.WriteByte('\n')
+		}
+		col := 0
+		for _, token := range strings.SplitAfter(line, " ") {
+			trimmed := strings.TrimLeft(token, " ")
+			if trimmed == "" {
+				out.WriteString(token)
+				col += ansi.StringWidth(token)
+				continue
+			}
+			w := ansi.StringWidth(trimmed)
+			if col > 0 && col+w > width {
+				out.WriteByte('\n')
+				col = 0
+			}
+			if w > width { // one token wider than the line
+				// Hardwrap folds the whole token in one pass (styles
+				// intact); col tracks the fold's last line so the next
+				// token packs against it. Never loop here: Hardwrap
+				// returns multi-line output, so no prefix of its
+				// stripped text can ever shrink a remainder.
+				wrapped := ansi.Hardwrap(trimmed, width, false)
+				out.WriteString(wrapped)
+				col = ansi.StringWidth(wrapped[strings.LastIndexByte(wrapped, '\n')+1:])
+				continue
+			}
+			out.WriteString(trimmed)
+			col += w
+		}
+	}
+	return out.String()
 }
 
 // viewPadded centers content within the given width and height, after

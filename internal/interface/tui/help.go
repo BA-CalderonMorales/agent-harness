@@ -128,7 +128,7 @@ func (h Help) View() string {
 		Height(h.height - 4).
 		Render(h.title() + h.viewport.View() + "\n" + hintRow)
 
-	return lipgloss.Place(h.width, h.height, lipgloss.Center, lipgloss.Center, panel)
+	return placeOverlay(h.width, h.height, panel)
 }
 
 func (h Help) title() string {

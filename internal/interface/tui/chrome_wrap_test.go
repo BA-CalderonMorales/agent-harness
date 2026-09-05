@@ -127,3 +127,29 @@ func TestDialogFramesNeverOverflow(t *testing.T) {
 		}
 	}
 }
+
+// TestOverlaysTopPinOnPhonePanes: half a phone pane hides behind the
+// soft keyboard — a vertically centered modal is clipped at both ends
+// exactly when the user needs to read it. Overlays pin to the top on
+// a phone pane; desktop keeps the centered seat.
+func TestOverlaysTopPinOnPhonePanes(t *testing.T) {
+	app := NewApp()
+	app.Update(tea.WindowSizeMsg{Width: 55, Height: 20})
+	app.commandPalette.Open(55, 20)
+
+	view := app.View()
+	for row, line := range strings.Split(view, "\n") {
+		if strings.Contains(line, "─") || strings.Contains(line, "═") || ansi.StringWidth(strings.TrimSpace(line)) < 10 {
+			continue
+		}
+		stripped := strings.TrimSpace(ansi.Strip(line))
+		if stripped == "" {
+			continue
+		}
+		if row > 10 {
+			t.Fatalf("phone pane: overlay content first appears at row %d — a keyboard covers that", row)
+		}
+		return
+	}
+	t.Fatalf("phone pane: overlay rendered no content rows:\n%s", view)
+}

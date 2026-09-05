@@ -94,5 +94,5 @@ func (m ProviderPickerModel) View() string {
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)
 
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel.Render(body.String()))
+	return placeOverlay(m.width, m.height, panel.Render(body.String()))
 }

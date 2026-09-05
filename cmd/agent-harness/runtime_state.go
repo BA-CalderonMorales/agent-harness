@@ -73,6 +73,11 @@ func (app *App) persistUserSettings() {
 		"temperature":      app.config.Temperature,
 		"max_tokens":       app.config.MaxTokens,
 		"reasoning_effort": app.config.Effort,
+		"permission_mode":  app.config.PermissionMode.String(),
+		"perm_read":        app.config.PermRead,
+		"perm_write":       app.config.PermWrite,
+		"perm_delete":      app.config.PermDelete,
+		"perm_execute":     app.config.PermExecute,
 	}
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {

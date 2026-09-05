@@ -44,6 +44,22 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case tea.MouseMsg:
 		if tea.MouseEvent(msg).IsWheel() {
+			if isMobilePane(m.width) {
+				// Phone rows are taller, so a fixed 3-line tick
+				// crawls: scroll by a viewport fraction for a
+				// snappy feel that matches the device.
+				step := m.viewport.Height / 3
+				if step < 1 {
+					step = 1
+				}
+				switch tea.MouseEvent(msg).Button {
+				case tea.MouseButtonWheelDown:
+					m.viewport.ScrollDown(step)
+				case tea.MouseButtonWheelUp:
+					m.viewport.ScrollUp(step)
+				}
+				return m, nil
+			}
 			nv, cmd := m.viewport.Update(msg)
 			m.viewport = nv
 			return m, cmd

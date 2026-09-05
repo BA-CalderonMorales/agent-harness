@@ -85,15 +85,23 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		d.handleExecutionModeChange(value)
 	case "perm_read":
 		d.app.config.PermRead = value == "true"
+		d.app.config.PermExplicit = true
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Read permission: %s", boolToEnabled(d.app.config.PermRead)), Type: "info"})
 	case "perm_write":
 		d.app.config.PermWrite = value == "true"
+		d.app.config.PermExplicit = true
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Write permission: %s", boolToEnabled(d.app.config.PermWrite)), Type: "info"})
 	case "perm_delete":
 		d.app.config.PermDelete = value == "true"
+		d.app.config.PermExplicit = true
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Delete permission: %s", boolToEnabled(d.app.config.PermDelete)), Type: "info"})
 	case "perm_execute":
 		d.app.config.PermExecute = value == "true"
+		d.app.config.PermExplicit = true
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Execute permission: %s", boolToEnabled(d.app.config.PermExecute)), Type: "info"})
 	case "session_dir":
 		d.app.config.SessionDir = value
@@ -171,6 +179,11 @@ func (d *tuiSettingsDelegate) handlePermissionModeChange(value string) {
 			d.app.config.PermDelete = true
 			d.app.config.PermExecute = true
 		}
+		// Choosing a preset re-owns the granular toggles: an explicit
+		// toggle from before the switch must not override the preset
+		// the user just picked.
+		d.app.config.PermExplicit = false
+		d.app.commitConfigChange()
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Permission mode: %s", mode.String()), Type: "success"})
 	} else {
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Invalid permission mode: %v", err), Type: "error"})

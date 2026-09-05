@@ -363,5 +363,5 @@ func (m CommandPaletteModel) View(width, height int) string {
 		Padding(0, 1)
 
 	rendered := panel.Render(content)
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, rendered)
+	return placeOverlay(width, height, rendered)
 }

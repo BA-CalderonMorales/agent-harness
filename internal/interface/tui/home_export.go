@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // ExportPickerModel is the Home page's export modal: a session list the
@@ -114,7 +113,7 @@ func (m ExportPickerModel) View(width, height int) string {
 	}
 
 	content := PanelPrimary.Width(panelWidth(width)).Render(b.String())
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
+	return placeOverlay(width, height, content)
 }
 
 // panelWidth sizes the modal: half the terminal with a floor wide

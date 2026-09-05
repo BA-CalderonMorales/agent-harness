@@ -93,7 +93,7 @@ func (m ApprovalDialogModel) View() string {
 	dialog := dialogStyle.Render(content)
 
 	// Center the dialog
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+	return placeOverlay(m.width, m.height, dialog)
 }
 
 // dialogWidth is the frame's outer width: a comfortable read on

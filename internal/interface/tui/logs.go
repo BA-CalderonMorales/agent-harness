@@ -545,7 +545,7 @@ func (m LogsModel) renderDetail() string {
 		Width(m.detailWidth()).
 		Height(bodyRows).
 		Render(strings.Join(body, "\n"))
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, panel)
+	return placeOverlay(m.width, m.height, panel)
 }
 
 // detailWidth caps the modal on huge screens and fits small ones.

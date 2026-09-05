@@ -3,6 +3,8 @@ package tui
 import (
 	"os"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
 )
 
 // Terminal environment knowledge. Mobile and tmux hosts get input and
@@ -38,4 +40,15 @@ const mobilePaneWidth = 68
 // their layout and input behavior are untouched.
 func isMobilePane(width int) bool {
 	return width > 0 && width < mobilePaneWidth
+}
+
+// placeOverlay seats a full-pane overlay. Desktop centers it; a phone
+// pane pins it to the top — half the pane hides behind the soft
+// keyboard, and a vertically centered modal is clipped at both ends
+// exactly when the user needs to read it.
+func placeOverlay(width, height int, content string) string {
+	if isMobilePane(width) {
+		return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Top, content)
+	}
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, content)
 }

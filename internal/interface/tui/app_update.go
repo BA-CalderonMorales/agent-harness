@@ -238,6 +238,19 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		a.mode = ModeInsert
 		a.chatModel.SetModeLabel("typing")
 		a.focusActive()
+		// On a phone pane in gesture mode, typing needs the soft
+		// keyboard, and the keyboard needs capture off — the tap that
+		// asked to type arrived as a click and raised nothing. Yield,
+		// and say so: the next tap raises the keyboard.
+		if a.chatModel.lastComposerTop > 0 && isMobilePane(a.width) && (inTmux() || isTermux) && a.mouseCapture {
+			a.mouseCapture = false
+			a.mouseCaptureTouched = true
+			a.ShowStatus("touch mode: tap raises the keyboard · m for gestures", "info")
+			a.mode = ModeInsert
+			a.focusActive()
+			cmds = append(cmds, func() tea.Msg { return tea.DisableMouse() }, a.statusFlashCmd())
+			return a, tea.Batch(cmds...)
+		}
 
 	// -------------------------------------------------------------------------
 	// Agent cancellation - handle cancel signal
