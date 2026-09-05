@@ -29,8 +29,16 @@ func (m ApprovalDialogModel) View() string {
 	// and the keys that answer it.
 	var sections []string
 
-	title := TitleStyle.Render("Command Approval Required")
-	sections = append(sections, title)
+	// Title row: what is being asked, and of which tool. Destructive
+	// commands wear the warning, never a decoration.
+	title := TitleStyle.Render("Approval required")
+	if m.request.Command.IsDestructive {
+		title = WarningStyle.Render("Approval required · destructive")
+	}
+	tool := ToolCallStyle.Render(" · " + m.request.Command.DisplayName)
+	sections = append(sections, title+tool)
+
+	sections = append(sections, "")
 
 	detailLines := m.detailLines()
 	maxScroll := len(detailLines) - m.visibleDetailRows()
@@ -55,33 +63,50 @@ func (m ApprovalDialogModel) View() string {
 		// reason, so it can adapt instead of retrying blind.
 		prompt := InfoStyle.Render("Message to agent (what to do instead):")
 		input := ListSelectedStyle.Render(m.suggestBuf + "▏")
-		sections = append(sections, prompt, input)
-		help := HelpDimStyle.Render("Enter: send rejection + message · Esc: back to options")
-		sections = append(sections, help)
+		help := HelpDimStyle.Render(fitBlock(m.dialogWidth()-4, "Enter: send rejection + message · Esc: back to options"))
+		sections = append(sections, prompt, input, help)
 	} else {
 		// Options
 		optionsDisplay := m.renderOptions()
 		sections = append(sections, optionsDisplay)
 
-		// Help text
-		help := HelpDimStyle.Render("Number/letter keys act instantly · Arrows + Enter also work · ESC rejects · j/k scroll")
+		// Help text — short enough to hold one row at dialog width,
+		// wrapped where it must. A hint that splits mid-word is strain,
+		// not help.
+		sections = append(sections, "")
+		help := HelpDimStyle.Render(fitBlock(m.dialogWidth()-4, "1-4 instant · esc rejects · j/k detail"))
 		sections = append(sections, help)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
 
-	// Create modal dialog
+	// The frame hugs its content up to a comfortable reading width and
+	// yields to the pane below it — a modal that touches the pane edges
+	// on a phone reads as broken, and a 100-column slab on desktop
+	// reads as lazy.
 	dialogStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
-		Background(ColorSurface).
 		Padding(1, 2).
-		Width(m.width - 10)
+		Width(m.dialogWidth())
 
 	dialog := dialogStyle.Render(content)
 
 	// Center the dialog
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, dialog)
+}
+
+// dialogWidth is the frame's outer width: a comfortable read on
+// desktop, pane-bound on a phone.
+func (m ApprovalDialogModel) dialogWidth() int {
+	w := 66
+	if m.width-2 < w {
+		w = m.width - 2
+	}
+	if w < 10 {
+		w = 10
+	}
+	return w
 }
 
 // visibleDetailRows is how many detail lines fit between the pinned
@@ -108,60 +133,40 @@ func (m ApprovalDialogModel) detailLines() []string {
 }
 
 func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) string {
+	// Widths derive from the dialog, never the pane: the frame yields
+	// to the pane, and everything inside it follows the frame.
+	inner := m.dialogWidth() - 4
+	textW := inner - 2
+	if textW < 10 {
+		textW = 10
+	}
+
 	var sections []string
 
-	// Tool name and warning
-	header := ToolCallStyle.Render("[" + cmd.DisplayName + "]")
-	if cmd.IsDestructive {
-		header = ToolErrorStyle.Render("[" + cmd.DisplayName + " - DESTRUCTIVE]")
-	}
-	sections = append(sections, header)
-
-	// Command itself in code block style
-	cmdStyle := lipgloss.NewStyle().
-		Background(ColorHighlight).
-		Foreground(ColorText).
-		Padding(1, 2).
-		Width(m.width - 16)
-
+	// The command is the thing being approved: prompt glyph + bright
+	// text, wrapped to the frame. No background fill — the command
+	// reads on the terminal's own background like every other block.
 	cmdText := cmd.Command
 	if cmdText == "" {
 		cmdText = "(no command details)"
 	}
+	wrapped := fitBlockCode(textW, cmdText)
+	prompt := PromptStyle.Render("$")
+	sections = append(sections, prompt+" "+CodeStringStyle.Render(wrapped))
 
-	// Wrap long commands
-	wrapped := wrapText(cmdText, m.width-20)
-	sections = append(sections, cmdStyle.Render(wrapped))
-
-	// Description if available
-	if cmd.Description != "" {
-		desc := HelpDimStyle.Render(cmd.Description)
+	// Description if available — bash tools echo the command as the
+	// description, and showing the command twice asks the reader to
+	// diff it; suppress the echo.
+	if cmd.Description != "" && cmd.Description != cmd.Command {
+		desc := HelpDimStyle.Render(fitBlock(inner, cmd.Description))
 		sections = append(sections, desc)
 	}
 
 	// Preview of what will change
 	if cmd.Preview != "" {
 		sections = append(sections, "")
-		previewHeader := WarningStyle.Render("Preview of changes:")
-		sections = append(sections, previewHeader)
-
-		previewWidth := m.width - 16
-		if previewWidth < 1 {
-			previewWidth = 1
-		}
-		wrapWidth := m.width - 20
-		if wrapWidth < 1 {
-			wrapWidth = 1
-		}
-
-		previewStyle := lipgloss.NewStyle().
-			Background(ColorHighlight).
-			Foreground(ColorText).
-			Padding(1, 2).
-			Width(previewWidth)
-
-		wrappedPreview := wrapText(cmd.Preview, wrapWidth)
-		sections = append(sections, previewStyle.Render(wrappedPreview))
+		sections = append(sections, WarningStyle.Render("Preview of changes:"))
+		sections = append(sections, HelpDimStyle.Render(fitBlockCode(inner, wrapText(cmd.Preview, textW))))
 	}
 
 	// Risk assessment for shell commands
@@ -169,11 +174,23 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 		risk := m.assessRisk(cmd.Command)
 		if risk != "" {
 			sections = append(sections, "")
-			sections = append(sections, WarningStyle.Render("Risk assessment: "+risk))
+			sections = append(sections, m.riskStyle(risk).Render(fitBlock(inner, risk)))
 		}
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// riskStyle wears the severity: HIGH burns, MEDIUM warns, LOW dims.
+func (m ApprovalDialogModel) riskStyle(risk string) lipgloss.Style {
+	switch {
+	case strings.HasPrefix(risk, "HIGH"):
+		return ErrorStyle
+	case strings.HasPrefix(risk, "MEDIUM"):
+		return WarningStyle
+	default:
+		return HelpDimStyle
+	}
 }
 
 func (m ApprovalDialogModel) renderOptions() string {
@@ -181,43 +198,29 @@ func (m ApprovalDialogModel) renderOptions() string {
 
 	for i, opt := range m.options {
 		selected := i == m.selected
-		num := i + 1
 
-		var style lipgloss.Style
+		// Keycap + verb: the key is the affordance (instant), the
+		// number is the fallback. The description rides along when the
+		// frame is wide enough to carry it without wrapping.
+		key := PromptStyle.Render(opt.Key)
+		label := opt.Label
+		row := fmt.Sprintf("%s · %s", key, label)
 		if selected {
-			if opt.IsDangerous {
-				style = lipgloss.NewStyle().
-					Background(ColorError).
-					Foreground(ColorText).
-					Padding(0, 1).
-					Bold(true)
-			} else {
-				style = lipgloss.NewStyle().
-					Background(ColorPrimary).
-					Foreground(ColorText).
-					Padding(0, 1).
-					Bold(true)
-			}
+			row = ModePromptStyle.Render("▸ " + row)
 		} else {
-			if opt.IsDangerous {
-				style = lipgloss.NewStyle().
-					Foreground(ColorError).
-					Padding(0, 1)
-			} else {
-				style = lipgloss.NewStyle().
-					Foreground(ColorText).
-					Padding(0, 1)
-			}
+			row = "  " + row
 		}
-
-		label := fmt.Sprintf("%d. %s (%s)", num, opt.Label, opt.Key)
-		if selected {
-			label = "> " + label
-		} else {
-			label = "  " + label
+		if opt.Description != "" && m.dialogWidth() >= 52 {
+			row += HelpDimStyle.Render(" — " + opt.Description)
 		}
+		if opt.IsDangerous {
+			row = ErrorStyle.Render(row)
+		} else if selected {
+			row = ModePromptStyle.Render(row)
+		}
+		row = fitBlock(m.dialogWidth()-4, row)
 
-		option := style.Render(label)
+		option := row
 		options = append(options, option)
 	}
 

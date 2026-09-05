@@ -50,9 +50,18 @@ func fuzzyMatch(query, target string) bool {
 	return qi == len(query)
 }
 
+// suggestionMaxVisible is how many suggestion rows show at once: a
+// phone pane cannot spare six rows of dropdown over the transcript.
+func (m ChatModel) suggestionMaxVisible() int {
+	if isMobilePane(m.width) {
+		return 3
+	}
+	return 6
+}
+
 // SetModel sets the model name.
 func (m *ChatModel) syncSuggestionOffset() {
-	maxVisible := 6
+	maxVisible := m.suggestionMaxVisible()
 	if m.suggestionCursor < m.suggestionOffset {
 		m.suggestionOffset = m.suggestionCursor
 	}
@@ -78,7 +87,7 @@ func (m ChatModel) truncateSuggestionDescription(prefix, description string) str
 // renderSuggestions renders the inline suggestion dropdown.
 func (m ChatModel) renderSuggestions() string {
 	var b strings.Builder
-	maxVisible := 6
+	maxVisible := m.suggestionMaxVisible()
 	if len(m.suggestions) < maxVisible {
 		maxVisible = len(m.suggestions)
 	}

@@ -116,8 +116,16 @@ type App struct {
 
 	// mouseCapture mirrors the terminal's mouse mode: on by default (the
 	// program option enables cell motion), toggled with 'm' so the
-	// terminal's own select-and-copy can take over.
+	// terminal's own select-and-copy can take over. On phone panes the
+	// default yields to the soft keyboard — see resize.
 	mouseCapture bool
+
+	// mouseCaptureTouched flips true the moment the user toggles 'm':
+	// a chosen mode outranks the pane-size default.
+	mouseCaptureTouched bool
+
+	// touchModeNoticed guards the one-time touch-mode notice.
+	touchModeNoticed bool
 }
 
 // AgentModeChangedMsg is emitted after the composer cycles the agent
@@ -125,6 +133,12 @@ type App struct {
 type AgentModeChangedMsg struct {
 	Mode string
 }
+
+// ComposerFocusMsg asks the App to enter insert mode with the composer
+// focused — tap-to-type: a press on the composer is the request, and
+// the mode line must show it (mode state is the App's, never the chat
+// model's).
+type ComposerFocusMsg struct{}
 
 // SetAgentModeChangedHandler registers the host hook for agent mode
 // cycles. The handler runs on the message loop, so its mutations persist.

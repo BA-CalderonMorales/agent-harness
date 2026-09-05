@@ -232,6 +232,14 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 
 	// -------------------------------------------------------------------------
+	// Tap-to-type: a press on the composer asked to type
+	// -------------------------------------------------------------------------
+	case ComposerFocusMsg:
+		a.mode = ModeInsert
+		a.chatModel.SetModeLabel("typing")
+		a.focusActive()
+
+	// -------------------------------------------------------------------------
 	// Agent cancellation - handle cancel signal
 	// -------------------------------------------------------------------------
 	case AgentCancelMsg:
