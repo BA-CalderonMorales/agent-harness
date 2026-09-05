@@ -60,7 +60,11 @@ func (app *App) diagnoseReport() string {
 	}
 
 	b.WriteString("Workspace\n")
-	fmt.Fprintf(&b, "  theme      %s\n", app.config.Theme)
+	theme := app.config.Theme
+	if theme == "" {
+		theme = "default"
+	}
+	fmt.Fprintf(&b, "  theme      %s\n", theme)
 	fmt.Fprintf(&b, "  persona    %s\n", app.config.Persona)
 
 	b.WriteString("Storage\n")
