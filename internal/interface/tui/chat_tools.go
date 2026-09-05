@@ -110,6 +110,13 @@ const toolNameColumn = 8
 // Time · status glyph · tool name (padded) · target detail · right-
 // aligned duration (live calls show a running ellipsis instead).
 func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	return m.formatToolContentAt(m.width, toolDisplayName, command, status, started, elapsed)
+}
+
+// formatToolContentAt renders the record for a width budget — nested
+// rows live inside the response bubble, which is narrower than the
+// pane, and a full-width row wraps its duration onto its own line.
+func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
 	var glyph string
 	switch status {
 	case ToolStatusRunning:
@@ -146,7 +153,7 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 	// len() would over-count and shove the duration off the edge. Two
 	// columns are reserved for the expand caret the render path
 	// prepends (▸ folded / ▾ open) so the line stays exact-width.
-	pad := m.width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
+	pad := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
 	if pad < 2 {
 		pad = 2
 	}

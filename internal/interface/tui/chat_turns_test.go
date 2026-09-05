@@ -18,12 +18,14 @@ func TestToolCallsNestInsideAgentResponse(t *testing.T) {
 		ChatMessage{
 			ID: "t1", Role: "tool", IsTool: true, Turn: 1,
 			ToolName: "ls", ToolDisplayName: "ls", ToolStatus: ToolStatusSuccess,
-			Content: "22:24:11 ✓ ls       Listing directory", Timestamp: base,
+			ToolDetail: "Listing directory",
+			Content:    "22:24:11 ✓ ls       Listing directory", Timestamp: base,
 		},
 		ChatMessage{
 			ID: "t2", Role: "tool", IsTool: true, Turn: 1,
 			ToolName: "read", ToolDisplayName: "Read", ToolStatus: ToolStatusSuccess,
-			Content: "22:24:11 ✓ Read     Reading README.md", Timestamp: base,
+			ToolDetail: "Reading README.md",
+			Content:    "22:24:11 ✓ Read     Reading README.md", Timestamp: base,
 		},
 	)
 	m.AddMessage("assistant", "Here's the picture.")
@@ -68,7 +70,8 @@ func TestStreamingToolsRenderStandaloneThenNest(t *testing.T) {
 	m.messages = append(m.messages, ChatMessage{
 		ID: "t1", Role: "tool", IsTool: true, Turn: 1,
 		ToolName: "ls", ToolDisplayName: "ls", ToolStatus: ToolStatusRunning,
-		Content: "22:24:11 → ls      Listing directory", Timestamp: time.Now(),
+		ToolDetail: "Listing directory",
+		Content:    "22:24:11 → ls      Listing directory", Timestamp: time.Now(),
 	})
 	m.refreshViewport()
 
@@ -100,12 +103,14 @@ func TestToolsNestWhereTheyHappened(t *testing.T) {
 		ChatMessage{
 			ID: "t1", Role: "tool", IsTool: true, Turn: 1,
 			ToolName: "web_fetch", ToolDisplayName: "web_fetch", ToolStatus: ToolStatusSuccess,
-			Content: "22:49:54 ✓ web_fetch  Fetching https://wttr.in/Omaha", Timestamp: base,
+			ToolDetail: "Fetching https://wttr.in/Omaha",
+			Content:    "22:49:54 ✓ web_fetch  Fetching https://wttr.in/Omaha", Timestamp: base,
 		},
 		ChatMessage{
 			ID: "t2", Role: "tool", IsTool: true, Turn: 1,
 			ToolName: "web_search", ToolDisplayName: "web_search", ToolStatus: ToolStatusSuccess,
-			Content: "22:49:54 ✓ web_search  Searching web for: Omaha NE", Timestamp: base,
+			ToolDetail: "Searching web for: Omaha NE",
+			Content:    "22:49:54 ✓ web_search  Searching web for: Omaha NE", Timestamp: base,
 		},
 	)
 	m.AddMessage("assistant", "Got the data — Omaha, tomorrow is a scorcher.")

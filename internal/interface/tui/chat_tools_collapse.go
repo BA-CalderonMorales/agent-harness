@@ -43,7 +43,9 @@ func (m ChatModel) ToolsCollapsed() bool {
 // same shape as a single tool line with the tool column carrying the
 // per-tool counts: "01:20:03 ✓ bash ×3 · read ×5   12.3s". The span
 // comes from the first and last message timestamps.
-func (m ChatModel) renderToolRun(run []ChatMessage) string {
+// renderToolRunAt renders the collapsed run for a width budget —
+// nested runs live inside the response bubble.
+func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 	counts := make(map[string]int)
 	for _, msg := range run {
 		counts[msg.ToolDisplayName]++
@@ -85,7 +87,7 @@ func (m ChatModel) renderToolRun(run []ChatMessage) string {
 	)
 	left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
 	dur := ToolTimeStyle.Render(formatElapsed(span))
-	pad := m.width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
+	pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
 	if pad < 2 {
 		pad = 2
 	}

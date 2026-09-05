@@ -74,3 +74,25 @@ func TestChatEmptyViewRendersPanel(t *testing.T) {
 		t.Fatalf("internal chunk counter leaked into the view:\n%s", view)
 	}
 }
+
+// TestChatEmptyStateSurvivesSystemNotice pins the New-Chat flow: the
+// "Started new chat" notice renders above the panel, and the panel's
+// centering shrinks by the notice's rows — placed at full height the
+// combined block overflows and MaxHeight clips the text out of view.
+func TestChatEmptyStateSurvivesSystemNotice(t *testing.T) {
+	m := newEmptyChatTestModel()
+	m.AddMessage("system", "Started new chat 27059f53")
+	m.refreshViewport()
+
+	lines := emptyStateLines(t, m)
+	joined := strings.Join(lines, "\n")
+	if !strings.Contains(joined, "Started new chat 27059f53") {
+		t.Fatalf("notice missing:\n%s", joined)
+	}
+	if !strings.Contains(joined, "The agent is ready.") {
+		t.Fatalf("panel clipped by the notice:\n%s", joined)
+	}
+	if !strings.Contains(joined, `"i" to start · "/" commands · "?" help`) {
+		t.Fatalf("panel key line clipped:\n%s", joined)
+	}
+}

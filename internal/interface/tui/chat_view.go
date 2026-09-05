@@ -44,12 +44,21 @@ func (m ChatModel) View() string {
 	// Viewport for messages — a conversation with no turns yet gets
 	// the full empty-state panel, centered in the pane. System notices
 	// (new-chat notes, session loads) do not count as conversation:
-	// they render above the panel.
+	// they render as their own lines above the panel. The viewport is
+	// bypassed here — it pads to its own height, and its phantom blank
+	// rows would push the centered panel past MaxHeight's clip.
 	vpContent := m.viewport.View()
 	if !m.hasConversation() {
-		panel := chatEmptyState(m.persona, m.width, vpHeight)
-		if strings.TrimSpace(vpContent) != "" {
-			panel = vpContent + "\n\n" + panel
+		var notices []string
+		for _, msg := range m.messages {
+			if msg.Role == "system" && strings.TrimSpace(msg.Content) != "" {
+				notices = append(notices, SystemMessageStyle.Render(msg.Content))
+			}
+		}
+		noticeRows := len(notices)
+		panel := chatEmptyState(m.persona, m.width, vpHeight-noticeRows-1)
+		if len(notices) > 0 {
+			panel = strings.Join(notices, "\n") + "\n\n" + panel
 		}
 		vpContent = panel
 	}
@@ -196,14 +205,16 @@ func (m ChatModel) renderModeLine() string {
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
-func (m ChatModel) renderMessage(msg ChatMessage) string {
+// renderMessageAt renders one message for a width budget — nested
+// tool rows live inside the response bubble, narrower than the pane.
+func (m ChatModel) renderMessageAt(msg ChatMessage, width int) string {
 	switch msg.Role {
 	case "user":
 		return m.renderUserMessage(msg)
 	case "assistant":
 		return m.renderAssistantMessage(msg)
 	case "tool":
-		return m.renderToolMessage(msg)
+		return m.renderToolMessageAt(msg, width)
 	case "system":
 		return m.renderSystemMessage(msg)
 	default:
@@ -388,7 +399,8 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 	return strings.TrimRight(b.String(), "\n")
 }
 
-func (m ChatModel) renderToolMessage(msg ChatMessage) string {
+// renderToolMessageAt renders the tool row for a width budget.
+func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	// Choose style based on tool status
 	var style lipgloss.Style
 	switch msg.ToolStatus {
@@ -406,7 +418,8 @@ func (m ChatModel) renderToolMessage(msg ChatMessage) string {
 	// ▾ open (click folds). formatToolContent reserves the two caret
 	// columns so the right-aligned duration stays put.
 	expanded := m.expandedMessageID != "" && m.expandedMessageID == msg.ID
-	body := style.Render(expandCaret(expanded) + " " + msg.Content)
+	row := m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
+	body := style.Render(expandCaret(expanded) + " " + row)
 
 	// Expanded tool record: the full call beneath the summary line —
 	// exactly what was called, no truncation. Esc (or clicking again)

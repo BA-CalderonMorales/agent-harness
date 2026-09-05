@@ -12,10 +12,16 @@ import "strings"
 // renderCollapsedMessage renders one message with run merging applied,
 // pure: no writing, no separators. next is the caller's next index.
 func (m ChatModel) renderCollapsedMessage(msgs []ChatMessage, i int, collapsed bool) (string, int) {
+	return m.renderCollapsedMessageAt(msgs, i, collapsed, m.width)
+}
+
+// renderCollapsedMessageAt renders one message with run merging at a
+// width budget — nested rows live inside the response bubble.
+func (m ChatModel) renderCollapsedMessageAt(msgs []ChatMessage, i int, collapsed bool, width int) (string, int) {
 	msg := msgs[i]
 
 	if !collapsed || !toolRunIsCollapsible(msg) {
-		return m.renderMessage(msg), i + 1
+		return m.renderMessageAt(msg, width), i + 1
 	}
 
 	// Gather the contiguous run: same turn, same tool, all final.
@@ -32,16 +38,16 @@ func (m ChatModel) renderCollapsedMessage(msgs []ChatMessage, i int, collapsed b
 	if j-i > 1 {
 		for k := i; k < j; k++ {
 			if m.expandedMessageID != "" && m.expandedMessageID == msgs[k].ID {
-				return m.renderMessage(msg), i + 1
+				return m.renderMessageAt(msg, width), i + 1
 			}
 		}
 	}
 
 	if j-i == 1 {
-		return m.renderMessage(msg), i + 1
+		return m.renderMessageAt(msg, width), i + 1
 	}
 
-	return m.renderToolRun(msgs[i:j]), j
+	return m.renderToolRunAt(msgs[i:j], width), j
 }
 
 // indentBlock prefixes every line of a rendered block with a single
@@ -122,12 +128,18 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	// Tool rows resolve by part ID; a row renders through the collapse
 	// machinery so runs merge and expansions open in place. The lookup
 	// also reports the rendered height for the click index.
+	// The bubble's inner width: pane minus bubble border, padding, and
+	// the nesting step.
+	innerWidth := m.width - 8
+	if innerWidth < 20 {
+		innerWidth = 20
+	}
 	toolRow := func(id string) (string, bool) {
 		for k := i; k < j; k++ {
 			if msgs[k].ID != id {
 				continue
 			}
-			row, _ := m.renderCollapsedMessage(msgs, k, collapsed)
+			row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
 			return indentBlock(row), true
 		}
 		return "", false

@@ -424,7 +424,9 @@ func (m LogsModel) View() string {
 	// furniture. Filters that empty a non-empty stream keep the table
 	// and say so inline.
 	if len(m.entries) == 0 {
-		panel := lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center,
+		// The panel lives BELOW the header: place it in the remaining
+		// rows, or the overflow shoves the tab bar out of view.
+		panel := lipgloss.Place(m.width, m.height-2, lipgloss.Center, lipgloss.Center,
 			strings.Join([]string{
 				HelpTitleStyle.Render("No diagnostics yet"),
 				"",
