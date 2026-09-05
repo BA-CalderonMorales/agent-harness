@@ -37,7 +37,18 @@ func (app *App) wizardModels(provider, apiKey string) ([]tui.ModelItem, error) {
 	if len(ids) == 0 {
 		return getModelsForProvider(provider, getDefaultModel(provider)), nil
 	}
+	// The model the user last ran with this provider outranks the
+	// catalog default, but only when the provider still serves it.
+	lastUsed := app.storedModelForProvider(provider)
 	defaultID := getDefaultModel(provider)
+	if lastUsed != "" {
+		for _, id := range ids {
+			if id == lastUsed {
+				defaultID = lastUsed
+				break
+			}
+		}
+	}
 	items := make([]tui.ModelItem, 0, len(ids))
 	for _, id := range ids {
 		items = append(items, tui.ModelItem{
@@ -48,6 +59,42 @@ func (app *App) wizardModels(provider, apiKey string) ([]tui.ModelItem, error) {
 		})
 	}
 	return items, nil
+}
+
+// storedModelForProvider reads the last model used with a provider
+// from the encrypted store. Empty when the store holds none.
+func (app *App) storedModelForProvider(provider string) string {
+	credManager := config.NewCredentialManager()
+	if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg != nil {
+		if m, ok := secureCfg.ProviderModels[provider]; ok {
+			return m
+		}
+	}
+	return ""
+}
+
+// storeProviderModel persists the last model used with a provider —
+// the retention half of the per-provider credential set: logging back
+// into this provider pre-selects this model.
+func (app *App) storeProviderModel(provider, model string) {
+	if provider == "" || model == "" {
+		return
+	}
+	credManager := config.NewCredentialManager()
+	existing, err := credManager.LoadSecure()
+	if err != nil || existing == nil {
+		existing = &config.SecureConfig{Provider: provider, APIKey: provider}
+		if config.IsLocalProvider(provider) {
+			existing.APIKey = provider
+		}
+	}
+	if existing.ProviderModels == nil {
+		existing.ProviderModels = map[string]string{}
+	}
+	existing.ProviderModels[provider] = model
+	existing.Provider = provider
+	existing.Model = model
+	_ = credManager.SaveSecure(existing)
 }
 
 // completeLogin persists the modal login wizard's result: the provider,
@@ -74,6 +121,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 		app.costTracker.SetModel(model)
 	}
 	app.commitConfigChange()
+	app.storeProviderModel(provider, model)
 
 	// Recreate the LLM client and refresh the TUI state.
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
@@ -136,18 +184,26 @@ func (app *App) applyLoginCredentials(provider, apiKey, model string, tuiApp *tu
 func (app *App) saveTypedCredentials(provider, apiKey, model string, tuiApp *tui.App) {
 	credManager := config.NewCredentialManager()
 	keys := map[string]string{}
-	if existing, err := credManager.LoadSecure(); err == nil && existing != nil {
+	models := map[string]string{}
+	var existing *config.SecureConfig
+	if cfg, err := credManager.LoadSecure(); err == nil && cfg != nil {
+		existing = cfg
 		for p, k := range existing.ProviderKeys {
 			keys[p] = k
 		}
+		for p, m := range existing.ProviderModels {
+			models[p] = m
+		}
 	}
 	keys[provider] = apiKey
+	models[provider] = model
 
 	secureCfg := &config.SecureConfig{
-		Provider:     provider,
-		APIKey:       apiKey,
-		Model:        model,
-		ProviderKeys: keys,
+		Provider:       provider,
+		APIKey:         apiKey,
+		Model:          model,
+		ProviderKeys:   keys,
+		ProviderModels: models,
 	}
 	if err := credManager.SaveSecure(secureCfg); err != nil {
 		tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))

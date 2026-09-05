@@ -48,6 +48,12 @@ type SecureConfig struct {
 	// the keys already entered (the single-slot store used to clobber
 	// them). APIKey is the active key for Provider.
 	ProviderKeys map[string]string
+
+	// ProviderModels holds the last model used with each provider,
+	// keyed by provider: logging back into a provider must pre-select
+	// the model the user last ran with it, not the catalog default
+	// (Model is the active model for Provider).
+	ProviderModels map[string]string
 }
 
 // CredentialManager handles secure credential operations
@@ -191,12 +197,17 @@ func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
 		Model:    store.Model,
 	}
 	var envelope struct {
-		Keys map[string]string `json:"keys"`
+		Keys   map[string]string `json:"keys"`
+		Models map[string]string `json:"models,omitempty"`
 	}
 	if err := json.Unmarshal(plaintext, &envelope); err == nil && envelope.Keys != nil {
 		cfg.ProviderKeys = envelope.Keys
 		if key, ok := envelope.Keys[store.Provider]; ok {
 			cfg.APIKey = key
+		}
+		cfg.ProviderModels = envelope.Models
+		if model, ok := envelope.Models[store.Provider]; ok {
+			cfg.Model = model
 		}
 	}
 	if cfg.ProviderKeys == nil && cfg.APIKey != "" {
@@ -239,9 +250,17 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 		keys = map[string]string{}
 	}
 	keys[cfg.Provider] = cfg.APIKey
+	models := cfg.ProviderModels
+	if models == nil {
+		models = map[string]string{}
+	}
+	if cfg.Model != "" {
+		models[cfg.Provider] = cfg.Model
+	}
 	envelope, err := json.Marshal(struct {
-		Keys map[string]string `json:"keys"`
-	}{Keys: keys})
+		Keys   map[string]string `json:"keys"`
+		Models map[string]string `json:"models,omitempty"`
+	}{Keys: keys, Models: models})
 	if err != nil {
 		return fmt.Errorf("failed to marshal credential set: %w", err)
 	}
