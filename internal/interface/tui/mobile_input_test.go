@@ -25,6 +25,7 @@ func bootAt(t *testing.T, width, height int) *App {
 // with the one-time touch-mode notice; a desktop pane keeps capture
 // on and never notices anything.
 func TestMobilePaneYieldsCapture(t *testing.T) {
+	t.Setenv("TMUX", "/tmp/tmux-0/its,1,0")
 	phone := bootAt(t, 60, 20)
 	if phone.mouseCapture {
 		t.Fatal("phone pane kept mouse capture; taps cannot raise the keyboard")

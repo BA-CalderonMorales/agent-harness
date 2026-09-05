@@ -434,11 +434,13 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	a.approvalDialog.width = width
 	a.approvalDialog.height = height
 
-	// Touch-first default on phone panes: with mouse capture on, a tap
-	// becomes a click event and the soft keyboard never rises — the
-	// dead end whose only exit was the host terminal's drawer button.
-	// Capture yields on a phone pane unless the user chose it with m.
-	if !a.mouseCaptureTouched {
+	// Touch-first default on phone panes in touch hosts (tmux,
+	// Termux): with mouse capture on, a tap becomes a click event and
+	// the soft keyboard never rises — the dead end whose only exit was
+	// the host terminal's drawer button. Capture yields unless the
+	// user chose it with m. A narrow desktop pane is not a touch
+	// device and keeps the frozen behavior.
+	if !a.mouseCaptureTouched && (inTmux() || isTermux) {
 		mobile := isMobilePane(width)
 		switch {
 		case mobile && a.mouseCapture:
