@@ -25,7 +25,7 @@ LDFLAGS := -s -w -X main.Version=$(VERSION) -X main.GitTag=$(GIT_TAG) -X main.Bu
 
 help:
 	@printf 'Agent Harness make targets\n\n'
-	@printf '  make run            Start the local CLI/TUI with go run\n'
+	@printf '  make run            Build (if stale) and run the built binary\n'
 	@printf '  make build          Build %s with git version metadata\n' "$(BINARY_NAME)"
 	@printf '  make test           Run the full Go test suite\n'
 	@printf '  make mutation-test  Run mutation tests for behavior-critical packages\n'
@@ -81,10 +81,10 @@ mutation-test:
 	}
 	@printf '[ok] Mutation tests passed\n'
 
-run:
+run: build
 	@printf '==> Starting Agent Harness\n'
-	@printf '    Command: go run %s\n\n' "$(MAIN_PKG)"
-	@go run "$(MAIN_PKG)" || { \
+	@printf '    Command: %s/%s\n\n' "$(BUILD_DIR)" "$(BINARY_NAME)"
+	@$(BUILD_DIR)/$(BINARY_NAME) || { \
 		status=$$?; \
 		printf '\n[fail] Agent Harness exited with status %s.\n' "$$status"; \
 		printf '       If the app panicked, inspect the panic/output above first.\n'; \
