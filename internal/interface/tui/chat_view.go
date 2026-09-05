@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/lipgloss"
@@ -359,10 +361,22 @@ func (m ChatModel) renderToolExpansion(msg ChatMessage) string {
 		b.WriteString("\n" + ToolTimeStyle.Render("   │  detail: ") + msg.ToolDetail)
 	}
 	if msg.ToolInputJSON != "" {
-		b.WriteString("\n" + ToolTimeStyle.Render("   │  input:  ") + msg.ToolInputJSON)
+		for _, line := range prettyInputJSON(msg.ToolInputJSON) {
+			b.WriteString("\n" + ToolTimeStyle.Render("   │  "+line))
+		}
 	}
 	b.WriteString("\n" + ToolTimeStyle.Render("   └─ esc to close"))
 	return b.String()
+}
+
+// prettyInputJSON formats the raw tool input for the expansion frame:
+// indented JSON when it parses, the raw string when it does not.
+func prettyInputJSON(raw string) []string {
+	var buf bytes.Buffer
+	if err := json.Indent(&buf, []byte(raw), "", "  "); err == nil {
+		return strings.Split(buf.String(), "\n")
+	}
+	return strings.Split(raw, "\n")
 }
 
 func (m ChatModel) renderSystemMessage(msg ChatMessage) string {
