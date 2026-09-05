@@ -7,6 +7,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
+	"time"
 )
 
 func (m ChatModel) View() string {
@@ -117,25 +118,59 @@ func (m ChatModel) renderModeLine() string {
 	}
 	modeBit := ModePromptStyle.Render(mode)
 
-	parts := []string{modeBit}
+	// Segment priority when the pane narrows: the mode leads, the
+	// model identifies what is answering; persona, effort, and provider
+	// yield in that order. A clipped mid-word line helps nobody.
+	type segment struct {
+		width int
+		text  string
+		style bool
+	}
+	segments := []segment{}
 	if m.persona != "" {
-		parts = append(parts, m.persona)
+		segments = append(segments, segment{lipgloss.Width(m.persona), m.persona, false})
 	}
 	if m.model != "" {
-		parts = append(parts, ShortenModelName(m.model))
+		name := ShortenModelName(m.model)
+		segments = append(segments, segment{lipgloss.Width(name), name, false})
 	}
 	if m.provider != "" {
-		parts = append(parts, m.provider)
+		segments = append(segments, segment{lipgloss.Width(m.provider), m.provider, false})
 	}
 	if m.agentMode != "" {
-		parts = append(parts, ModePromptStyle.Render(m.agentMode))
+		segments = append(segments, segment{lipgloss.Width(m.agentMode), m.agentMode, true})
 	}
 	effort := m.effort
 	if effort == "" {
 		effort = "medium"
 	}
-	parts = append(parts, "effort "+effort)
+	segments = append(segments, segment{lipgloss.Width("effort " + effort), "effort " + effort, false})
 
+	budget := m.width - lipgloss.Width(mode)
+	keep := make([]bool, len(segments))
+	for i := range segments {
+		keep[i] = true
+		budget -= 3 // separator
+		if i > 0 {
+			budget -= segments[i].width
+		}
+	}
+	// Drop from the least important (effort) up while over budget.
+	for i := len(segments) - 1; i >= 0 && budget < 0; i-- {
+		keep[i] = false
+		budget += segments[i].width + 3
+	}
+	parts := []string{modeBit}
+	for i := range segments {
+		if !keep[i] {
+			continue
+		}
+		text := segments[i].text
+		if segments[i].style {
+			text = ModePromptStyle.Render(text)
+		}
+		parts = append(parts, text)
+	}
 	line := InputMetaStyle.Render(strings.Join(parts, " · "))
 
 	// While typing, the escape hatch rides on the same row,
@@ -172,7 +207,7 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	// Header
 	header := UserPromptStyle.Render("You")
 	if !msg.Timestamp.IsZero() {
-		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
 	b.WriteString(header)
 	b.WriteString("\n")
@@ -241,7 +276,7 @@ func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	// Header
 	header := AssistantStyle.Render("Agent")
 	if !msg.Timestamp.IsZero() {
-		header += TimestampStyle.Render(" " + msg.Timestamp.Format("15:04"))
+		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
 	// While the response is in progress the header carries a live status:
 	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
@@ -367,6 +402,16 @@ func (m ChatModel) renderToolExpansion(msg ChatMessage) string {
 	}
 	b.WriteString("\n" + ToolTimeStyle.Render("   └─ esc to close"))
 	return b.String()
+}
+
+// chatStamp renders a message time: today shows the clock, anything
+// older carries its date — overnight sessions keep their history
+// readable.
+func chatStamp(t time.Time) string {
+	if t.Local().Format(dayKeyFormat) == time.Now().Local().Format(dayKeyFormat) {
+		return t.Format("15:04")
+	}
+	return t.Format("Jan 02 15:04")
 }
 
 // prettyInputJSON formats the raw tool input for the expansion frame:

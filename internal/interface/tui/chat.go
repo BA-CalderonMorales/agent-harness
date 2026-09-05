@@ -413,7 +413,7 @@ func (m *ChatModel) togglePlaceholder() {
 	if m.focused {
 		m.textarea.Placeholder = "Type a message..."
 	} else {
-		m.textarea.Placeholder = "Press i to type a message"
+		m.textarea.Placeholder = `"i" to type a message`
 	}
 }
 func (m *ChatModel) SetInput(text string) {

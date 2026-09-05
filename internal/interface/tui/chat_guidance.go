@@ -26,6 +26,7 @@ func chatEmptyState(personaName string) string {
 		"",
 		HelpDimStyle.Render(`  • Ask it to ` + p.EmptyStateHint()),
 		HelpDimStyle.Render(`  • It reads the repo, edits files, and runs commands — approvals stack in the dialog`),
+		HelpDimStyle.Render(`  • Tool lines open their full record: click one, or "Enter" for the latest`),
 		HelpDimStyle.Render(`  • Sessions save as you go · "h" jumps Home · "4" opens the diagnostics stream`),
 		"",
 		HelpDimStyle.Render(`  "i" to start · "/" for commands · "?" for the full map`),
