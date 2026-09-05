@@ -98,8 +98,11 @@ func (a App) renderTabBar() string {
 // ---------------------------------------------------------------------------
 
 func (a App) renderActiveView() string {
-	// Reserve space for tab bar (3 with padding) + status bar (2 with padding)
-	contentHeight := a.height - 5
+	// Reserve space for the fixed chrome: tab bar (3 with padding and
+	// border) + status bar (3 with its top and bottom padding). The
+	// reserve must match the chrome's real height — one row short and
+	// the pane scrolls a row of the tab bar off the top.
+	contentHeight := a.height - 6
 	if contentHeight < 1 {
 		contentHeight = 1
 	}

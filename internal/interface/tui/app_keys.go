@@ -368,9 +368,12 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	a.width = width
 	a.height = height
 
-	// Reserve space for tab bar (3: padding top + content + border bottom)
-	// + status bar (2: content + padding bottom) = 5 total
-	reserved := 5
+	// Reserve space for the fixed chrome: tab bar (3: padding top +
+	// content + border bottom) + status bar (3: content + top and
+	// bottom padding) = 6 total. The reserve must match the chrome's
+	// real height — one row short and the pane scrolls the tab bar's
+	// padding row off the top.
+	reserved := 6
 	contentMsg := tea.WindowSizeMsg{
 		Width:  width,
 		Height: height - reserved,
