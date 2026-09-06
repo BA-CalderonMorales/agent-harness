@@ -195,10 +195,23 @@ func (m ChatModel) renderModeLine() string {
 	}
 	line := InputMetaStyle.Render(strings.Join(parts, " · "))
 
-	// While typing, the escape hatch rides on the same row,
-	// right-aligned: "Esc" to navigate.
+	// Symmetric hints on the same row, right-aligned. While typing,
+	// "Esc" is the exit hatch; while navigating, "i" (or a tap on
+	// mobile panes, which have no `i` affordance) re-enters typing.
 	if m.focused {
 		hint := HelpDimStyle.Render(`"Esc" to navigate`)
+		pad := m.width - lipgloss.Width(line) - lipgloss.Width(hint)
+		if pad > 0 {
+			line += strings.Repeat(" ", pad) + hint
+		}
+	} else {
+		word := `"i" to type`
+		if isMobilePane(m.width) {
+			// Mobile panes enter the composer by tap-to-type
+			// (chat_update.go mouse handling), not via `i`.
+			word = `tap to type`
+		}
+		hint := HelpDimStyle.Render(word)
 		pad := m.width - lipgloss.Width(line) - lipgloss.Width(hint)
 		if pad > 0 {
 			line += strings.Repeat(" ", pad) + hint
