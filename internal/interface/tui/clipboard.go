@@ -100,11 +100,14 @@ func (m *ChatModel) CopyConversation() (string, int) {
 	var b strings.Builder
 	n := 0
 	for _, msg := range m.messages {
-		content := strings.TrimSpace(msg.Content)
+		// TrimSpace is only the emptiness test — message content is
+		// copied verbatim (same contract as CopyRecord), so
+		// indentation-sensitive blocks survive the round trip.
+		content := msg.Content
 		if msg.IsTool && msg.ToolDetail != "" {
-			content = strings.TrimSpace(msg.ToolDetail) + "\n" + content
+			content = msg.ToolDetail + "\n" + content
 		}
-		if content == "" {
+		if strings.TrimSpace(content) == "" {
 			continue
 		}
 		fmt.Fprintf(&b, "[%s]\n%s\n\n", msg.Role, content)

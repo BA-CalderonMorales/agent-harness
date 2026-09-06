@@ -124,3 +124,26 @@ func TestCopyConversationEmpty(t *testing.T) {
 		t.Fatalf("empty conversation copied %q (%d)", text, n)
 	}
 }
+
+// Message content must be copied verbatim (same contract as
+// CopyRecord): leading whitespace can be semantically meaningful
+// (indentation-based code blocks), so only the emptiness check trims.
+func TestCopyConversationPreservesWhitespace(t *testing.T) {
+	chat := NewChatModel()
+	chat.AddMessage("user", "  indented\n    block  ")
+	chat.AddMessage("assistant", "\ttabbed start\nend  ")
+
+	text, n := chat.CopyConversation()
+	if n != 2 {
+		t.Fatalf("count = %d, want 2", n)
+	}
+	if !strings.Contains(text, "[user]\n  indented\n    block  \n\n") {
+		t.Fatalf("user content was trimmed: %q", text)
+	}
+	// The final message is not followed by the "\n\n" separator
+	// (single trailing trim on the assembled transcript), but its own
+	// whitespace must be intact.
+	if !strings.HasSuffix(text, "[assistant]\n\ttabbed start\nend  ") {
+		t.Fatalf("assistant content was trimmed: %q", text)
+	}
+}
