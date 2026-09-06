@@ -89,3 +89,26 @@ func recordLabel(msg ChatMessage) string {
 	}
 	return "expanded record"
 }
+
+// CopyConversation returns the entire transcript in order, one labeled
+// block per message, ready for pasting into a bug report or a follow-up
+// chat. The count of copied messages comes back for the status flash.
+func (m *ChatModel) CopyConversation() (string, int) {
+	if len(m.messages) == 0 {
+		return "", 0
+	}
+	var b strings.Builder
+	n := 0
+	for _, msg := range m.messages {
+		content := strings.TrimSpace(msg.Content)
+		if msg.IsTool && msg.ToolDetail != "" {
+			content = strings.TrimSpace(msg.ToolDetail) + "\n" + content
+		}
+		if content == "" {
+			continue
+		}
+		fmt.Fprintf(&b, "[%s]\n%s\n\n", msg.Role, content)
+		n++
+	}
+	return strings.TrimRight(b.String(), "\n"), n
+}

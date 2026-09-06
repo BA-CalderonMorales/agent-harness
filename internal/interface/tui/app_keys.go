@@ -287,6 +287,18 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 					}
 					return a, nil, true
 				}
+			case "Y":
+				// Chat: copy the WHOLE conversation, first message to
+				// last, role-labeled — for bug reports and hand-offs.
+				if a.activeView == viewChat {
+					if text, n := a.chatModel.CopyConversation(); n > 0 {
+						copied := copyToClipboard(text)
+						a.flashCopyStatus(fmt.Sprintf("conversation (%d messages, %d chars)", n, len(text)), copied)
+					} else {
+						a.flashCopyStatus("", false)
+					}
+					return a, nil, true
+				}
 			case "j", "down":
 				a.scrollActiveView(1)
 				return a, nil, true
