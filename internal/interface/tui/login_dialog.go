@@ -23,7 +23,7 @@ const (
 )
 
 // loginProviders are the selectable providers in the modal.
-var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia"}
+var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia", "omniroute"}
 
 // providerBlurbs give each provider a one-line "what is this / pick when"
 // so the first-run user never faces a bare list (requirement #3).
@@ -36,6 +36,7 @@ var providerBlurbs = map[string]string{
 	"flm":        "FastFlowLM on AMD Ryzen AI NPUs - no API key needed",
 	"fireworks":  "Fireworks fast hosted inference - needs an API key",
 	"nvidia":     "NVIDIA NIM hosted models (nemotron family)",
+	"omniroute":  "Omniroute: needs API key",
 }
 
 // LoginModelsProvider resolves the model list the wizard's model step
