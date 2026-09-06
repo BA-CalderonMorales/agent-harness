@@ -17,9 +17,9 @@ import (
 // renderTermuxMarkdown on mobile, because both live inside
 // renderMarkdown.
 //
-// Bounded LRU: marathon sessions must not grow memory without limit
-// (the harness has an OOM history — see styles_code_test.go's
-// fitBlockCode incident). A hard cap on per-entry output size keeps a
+// Bounded LRU: marathon sessions must not grow memory without limit —
+// the harness has an OOM history (the fitBlockCode wrapping incident,
+// see styles_code.go). A hard cap on per-entry output size keeps a
 // pathological giant record from dominating the budget.
 
 const (
