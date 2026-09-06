@@ -66,6 +66,8 @@ func defaultBaseURL(provider string) string {
 		baseURL = "https://api.fireworks.ai/inference/v1"
 	case "nvidia":
 		baseURL = "https://integrate.api.nvidia.com/v1"
+	case "omniroute":
+		baseURL = "https://api.cheaperinference.com/v1"
 	}
 	return baseURL
 }

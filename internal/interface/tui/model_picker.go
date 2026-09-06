@@ -284,6 +284,8 @@ func (m ModelPickerModel) renderModelLine(model ModelItem, isSelected bool) stri
 		providerLabel = "[FW] "
 	case "nvidia":
 		providerLabel = "[NVIDIA] "
+	case "omniroute":
+		providerLabel = "[Omni] "
 	default:
 		providerLabel = "[" + model.Provider + "] "
 	}

@@ -84,10 +84,10 @@ func (c *HTTPClient) applyReasoningParams(payload map[string]any, req Request) {
 				"budget_tokens": anthropicReasoningBudget(req.ReasoningEffort),
 			}
 		}
-	case "openai", "openrouter":
+	case "openai", "openrouter", "omniroute":
 		// OpenAI-documented reasoning_effort (o-series and reasoning
-		// models); OpenRouter passes it through to models that support
-		// it. Ignored when unset or off.
+		// models); OpenRouter and Omniroute pass it through to models
+		// that support it. Ignored when unset or off.
 		switch req.ReasoningEffort {
 		case "low", "medium", "high":
 			payload["reasoning_effort"] = req.ReasoningEffort

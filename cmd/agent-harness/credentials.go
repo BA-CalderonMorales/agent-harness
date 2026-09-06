@@ -96,6 +96,8 @@ func envPinnedKey(provider string) bool {
 		return os.Getenv("OPENROUTER_API_KEY") != ""
 	case "nvidia":
 		return os.Getenv("NVIDIA_API_KEY") != ""
+	case "omniroute":
+		return os.Getenv("OMNITROUTE_API_KEY") != ""
 	}
 	return false
 }
