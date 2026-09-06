@@ -61,6 +61,8 @@ func DefaultModelForProvider(provider string) string {
 		return "accounts/fireworks/models/llama-v3p3-70b-instruct"
 	case "nvidia":
 		return "nvidia/nemotron-3.5-lightning"
+	case "omniroute":
+		return "gemini-3.7-flash"
 	default:
 		return "nvidia/nemotron-3-super-120b-a12b:free"
 	}
@@ -78,6 +80,8 @@ func DefaultEndpointForProvider(provider string) string {
 		return "https://api.fireworks.ai/inference/v1"
 	case "nvidia":
 		return "https://integrate.api.nvidia.com/v1"
+	case "omniroute":
+		return "https://api.cheaperinference.com/v1"
 	case "ollama":
 		return "http://127.0.0.1:11434/v1"
 	case "flm":

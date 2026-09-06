@@ -161,6 +161,14 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "accounts/fireworks/models/glm-5p3", Name: "GLM 5.3", Provider: "fireworks", ContextLen: 1048576, IsDefault: currentModel == "accounts/fireworks/models/glm-5p3"},
 			{ID: "accounts/fireworks/models/deepseek-v4-flash-0731", Name: "DeepSeek V4 Flash", Provider: "fireworks", ContextLen: 1048576, IsDefault: currentModel == "accounts/fireworks/models/deepseek-v4-flash-0731"},
 		}
+	case "omniroute":
+		// Omniroute (api.cheaperinference.com) serves an OpenAI-compatible
+		// chat/completions endpoint with model IDs passed through verbatim
+		// (e.g. "gemini-3.7-flash"). The catalog is the offline fallback;
+		// the live /v1/models list wins whenever it is reachable.
+		return []tui.ModelItem{
+			{ID: "gemini-3.7-flash", Name: "Gemini 3.7 Flash", Provider: "omniroute", ContextLen: 1048576, IsDefault: currentModel == "gemini-3.7-flash"},
+		}
 	default:
 		return []tui.ModelItem{
 			{ID: "nvidia/nemotron-3-super-120b-a12b:free", Name: "Nemotron 3 Super 120B (free)", Provider: "openrouter", ContextLen: 128000, IsDefault: currentModel == "nvidia/nemotron-3-super-120b-a12b:free"},
