@@ -177,6 +177,14 @@ func normalizeSoftBreaks(content string) string {
 // The recovered panic also evicts the cached renderer for this width:
 // a glamour panic mid-render leaves the TermRenderer's internal state
 // dirty, and every later render sharing that instance panics too (the
+// renderCache memoizes renderMarkdown across frames. Without it every
+// repaint re-rendered every message via glamour — lag grew with
+// transcript length × frame rate. Pure function of (content, width), so
+// cached output is byte-identical; streaming messages miss naturally
+// because their content changes per chunk. Covers the Termux path too,
+// since renderTermuxMarkdown lives inside this function.
+var renderCacheStore = newRenderCache()
+
 // cascading "index out of range" storms in the diagnostics log).
 func renderMarkdown(content string, width int) (result string) {
 	defer func() {
@@ -195,6 +203,21 @@ func renderMarkdown(content string, width int) (result string) {
 	if strings.TrimSpace(content) == "" {
 		return content
 	}
+
+	// Cache lookup: completed messages render identically frame over
+	// frame, so the hit rate approaches 100% on static transcripts.
+	if cached, ok := renderCacheStore.get(content, width); ok {
+		return cached
+	}
+
+	result = renderMarkdownUncached(content, width)
+	renderCacheStore.put(content, width, result)
+	return result
+}
+
+// renderMarkdownUncached is the original renderMarkdown body: glamour on
+// desktop, regex styling on Termux.
+func renderMarkdownUncached(content string, width int) (result string) {
 
 	// Skip expensive glamour rendering in Termux for better performance, but
 	// keep core markdown affordances visible in plain terminal styling.
