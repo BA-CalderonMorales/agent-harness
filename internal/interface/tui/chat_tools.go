@@ -117,6 +117,11 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 // formatToolContentAt renders the record for a width budget — nested
 // rows live inside the response bubble, which is narrower than the
 // pane, and a full-width row wraps its duration onto its own line.
+// The command truncates to THIS width (the caller's actual budget),
+// not the pane width baked in at creation time: a record created at
+// pane width and re-rendered inside the bubble used to exceed the
+// bubble's inner budget and wrap its duration onto a second line
+// (goal 0.3.29 Task 3b).
 func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
 	var glyph string
 	switch status {
@@ -130,7 +135,7 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 
 	detail := command
 	if detail != "" {
-		detail = m.truncateCommandForWidth(toolDisplayName, detail)
+		detail = m.truncateCommandForWidthAt(width, toolDisplayName, detail)
 	}
 
 	timeStr := started.Format("15:04:05")
@@ -156,7 +161,22 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 	// prepends (▸ folded / ▾ open) so the line stays exact-width.
 	pad := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
 	if pad < 2 {
-		pad = 2
+		// The detail overran its budget (e.g. compact path produced a
+		// longer result, or a caller passed a narrower width than the
+		// truncation saw): re-truncate rather than wrap the duration
+		// onto a second line (goal 0.3.29 Task 3b).
+		budget := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(dur) - 8
+		if budget < 1 {
+			budget = 1
+		}
+		detail = fitBlock(budget, detail)
+		if over := lipgloss.Width(detail) - budget; over > 0 {
+			detail = detail[:len(detail)-over]
+		}
+		pad = width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
+		if pad < 2 {
+			pad = 2
+		}
 	}
 	return line + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
 }
@@ -254,8 +274,26 @@ func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 // within the current terminal width, preserving space for the status indicator
 // and tool display name.
 func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string {
-	// Reserve space for indicator (2), spaces (2), tool name, and padding (4)
-	maxCmdLen := m.width - len(toolDisplayName) - 8
+	return m.truncateCommandForWidthAt(m.width, toolDisplayName, cmd)
+}
+
+// truncateCommandForWidthAt is the width-parameterized form: the budget
+// comes from the caller's render width (pane or bubble inner width), so
+// a nested re-render truncates to the space it actually has.
+//
+// The reservation accounts for the row's real fixed costs: timestamp
+// (8) + space (1) + glyph+name column + spaces (2) + the two caret
+// columns the render path prepends + minimum padding (2) + duration
+// (up to 5). The old `width − name − 8` ignored the timestamp and
+// duration entirely, so the pad floor of 2 shipped an over-wide row
+// and the duration wrapped (goal 0.3.29 Task 3b).
+func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd string) string {
+	name := toolDisplayName
+	if pad := toolNameColumn - len(name); pad > 0 {
+		name += strings.Repeat(" ", pad)
+	}
+	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur
+	maxCmdLen := width - 8 - 1 - lipgloss.Width(name) - 1 - 2 - 2 - 5
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}

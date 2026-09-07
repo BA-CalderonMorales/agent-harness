@@ -80,7 +80,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		case ToolStatusError:
 			glyph, style = "✗", ToolErrorStyle
 		}
-		rows := m.toolGroupRows(msg)
+		rows := m.toolGroupRowsAt(msg, width)
 		for _, r := range rows {
 			current.rows = append(current.rows, style.Render(glyph)+" "+r)
 		}
@@ -133,7 +133,10 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 // toolGroupRows renders the sub-list rows for one tool call within a
 // group: codex-style summary rows — shell-like tools show `$ <command>`,
 // todo shows its checklist, everything else shows the detail target.
-func (m ChatModel) toolGroupRows(msg ChatMessage) []string {
+// Rows truncate to the run's width budget (width minus the group
+// indent): a sub-row wider than its line wraps inside the bubble and
+// shifts every row below it (goal 0.3.29 Task 3b).
+func (m ChatModel) toolGroupRowsAt(msg ChatMessage, width int) []string {
 	if rows := m.todoChecklistRows(msg); rows != nil {
 		return rows
 	}
@@ -141,10 +144,25 @@ func (m ChatModel) toolGroupRows(msg ChatMessage) []string {
 	if detail == "" {
 		detail = msg.ToolName
 	}
+	// Reserve for the indent, status glyph and spaces the group
+	// renderer prepends.
+	budget := width - 6
+	if budget < 20 {
+		budget = 20
+	}
+	if len(detail) > budget {
+		detail = detail[:budget-1] + "…"
+	}
 	if msg.ToolName == "bash" || msg.ToolName == "BashTool" {
 		return []string{"$ " + detail}
 	}
 	return []string{detail}
+}
+
+// toolGroupRows renders at the model's pane width (single standalone
+// records created before the width-aware path existed).
+func (m ChatModel) toolGroupRows(msg ChatMessage) []string {
+	return m.toolGroupRowsAt(msg, m.width)
 }
 
 // todoChecklistRows renders a todo-list tool call as a visible
