@@ -23,7 +23,15 @@ import (
 // pathological giant record from dominating the budget.
 
 const (
-	renderCacheCapacity  = 4096    // entries
+	// renderCacheCapacity must exceed the group count of a realistic
+	// marathon transcript. At 4096 a 10k-event session (~7,500 groups)
+	// thrashed the LRU: every frame evicted entries it was about to
+	// need, and the "100% hit rate on static transcripts" contract
+	// silently degraded into a full glamour re-render per frame (62%
+	// of streaming-frame CPU in the 0.3.28 profile). 32768 covers a
+	// 10k-event session 4x over; memory stays bounded by the per-entry
+	// output cap below.
+	renderCacheCapacity  = 32768   // entries
 	renderCacheMaxOutput = 1 << 20 // 1 MiB per entry — beyond that, don't cache
 )
 

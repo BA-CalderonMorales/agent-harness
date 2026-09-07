@@ -59,11 +59,16 @@ func TestToolRunCollapseThreeBashCallsToOneLine(t *testing.T) {
 		{"bash", ToolStatusSuccess, false},
 	})
 	lines := renderedLines(content)
-	if len(lines) != 1 {
-		t.Fatalf("3 bash calls rendered %d lines, want 1 collapsed line:\n%s", len(lines), content)
+	// Codex-style grouping (Task 4): one "Shell" header with each call
+	// as an indented sub-list row beneath it — 4 lines, not a count line.
+	if len(lines) != 4 {
+		t.Fatalf("3 bash calls rendered %d lines, want header + 3 sub-rows:\n%s", len(lines), content)
 	}
-	if !strings.Contains(lines[0], "bash ×3") {
-		t.Fatalf("collapsed line missing count: %q", lines[0])
+	if !strings.Contains(lines[0], "Shell") {
+		t.Fatalf("group header missing display name: %q", lines[0])
+	}
+	if n := strings.Count(content, "$ echo"); n != 3 {
+		t.Fatalf("sub-list rows missing ($ echo ×3), got %d:\n%s", n, content)
 	}
 }
 
@@ -97,17 +102,19 @@ func TestToolRunMixedBurstCollapsesRuns(t *testing.T) {
 		{"grep", ToolStatusSuccess, false},
 	})
 	lines := renderedLines(content)
-	if len(lines) != 3 {
-		t.Fatalf("mixed burst rendered %d lines, want 3 (bash(2) read(3) grep(1)):\n%s", len(lines), content)
+	// bash(2) + read(3) + grep(1): 3 group headers + 6 sub-list rows
+	// (grep's detail falls back to its name — 8 non-blank lines total).
+	if len(lines) != 8 {
+		t.Fatalf("mixed burst rendered %d lines, want 3 headers + 5 sub-rows (grep detail = its name):\n%s", len(lines), content)
 	}
 	joined := strings.Join(lines, "\n")
-	for _, want := range []string{"bash ×2", "read ×3", "grep"} {
+	// Group headers carry display names for multi-call runs; the
+	// single grep call renders its own line (single calls never group),
+	// and sub-rows carry the details.
+	for _, want := range []string{"Shell", "Read File", "grep", "$ echo"} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("missing %q in:\n%s", want, joined)
 		}
-	}
-	if strings.Contains(joined, "grep (1)") {
-		t.Fatalf("single-call runs render plain, not count lines: %q", joined)
 	}
 }
 
@@ -157,15 +164,20 @@ func TestToolRunRunningNeverFoldedIntoFinalCount(t *testing.T) {
 		{"bash", ToolStatusRunning, true},
 	})
 	lines := renderedLines(content)
-	if len(lines) != 2 {
-		t.Fatalf("2 done + 1 running rendered %d lines, want 2 (running separate):\n%s", len(lines), content)
+	// 2 done render as one collapsed group (header + 2 sub-rows); the
+	// running call stays on its own line — never folded into the group.
+	if len(lines) != 4 {
+		t.Fatalf("2 done + 1 running rendered %d lines, want 3 group rows + running line:\n%s", len(lines), content)
+	}
+	if !strings.Contains(lines[3], "→") {
+		t.Fatalf("running tool line missing running glyph:\n%s", content)
 	}
 	if strings.Contains(lines[0], "(3)") {
 		t.Fatalf("running tool folded into the finalized count: %q", lines[0])
 	}
 }
 
-func TestToolRunTwentyBashCallsCollapseToOneLine(t *testing.T) {
+func TestToolRunTwentyBashCallsCollapseToOneHeader(t *testing.T) {
 	pairs := make([]struct {
 		name    string
 		status  ToolStatus
@@ -178,10 +190,32 @@ func TestToolRunTwentyBashCallsCollapseToOneLine(t *testing.T) {
 			running bool
 		}{"bash", ToolStatusSuccess, false}
 	}
-	content := driveBurst(t, pairs)
-	lines := renderedLines(content)
-	if len(lines) != 1 {
-		t.Fatalf("20 bash calls rendered %d lines (L metric), want 1:\n%s", len(lines), content)
+	// 21 rendered rows need a viewport that fits them; resize() sizes
+	// the viewport from the model height (a bare m.height doesn't).
+	m := NewChatModel()
+	m.width = 120
+	m.resize(120, 60)
+	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
+	m = model.(ChatModel)
+	for i, p := range pairs {
+		id := fmt.Sprintf("t%d", i)
+		model, _ = m.Update(AgentToolStartMsg{
+			ToolID: id, ToolName: p.name, DisplayName: p.name,
+			Input: map[string]any{"command": fmt.Sprintf("echo %d", i)},
+		})
+		m = model.(ChatModel)
+		model, _ = m.Update(AgentToolDoneMsg{ToolID: id, Success: p.status != ToolStatusError && !p.running})
+		m = model.(ChatModel)
+	}
+	m.refreshViewportWithFollow(true)
+	content := m.viewport.View()
+	// With no clipping, assert the full structure: one header for the
+	// whole run, every call as an indented sub-list row.
+	if n := strings.Count(content, "✓ Shell"); n != 1 {
+		t.Fatalf("expected exactly one Shell header, got %d:\n%s", n, content)
+	}
+	if n := strings.Count(content, "$ echo"); n != 20 {
+		t.Fatalf("expected 20 sub-list rows, got %d:\n%s", n, content)
 	}
 }
 
@@ -203,8 +237,9 @@ func TestToolRunCollapseToggles(t *testing.T) {
 	if !m.ToolsCollapsed() {
 		t.Fatal("collapse should default to on (the wall is the pain)")
 	}
-	if n := len(renderedLines(m.viewport.View())); n != 1 {
-		t.Fatalf("collapsed render = %d lines, want 1", n)
+	// Collapsed: one Shell header + 3 indented sub-list rows.
+	if n := len(renderedLines(m.viewport.View())); n != 4 {
+		t.Fatalf("collapsed render = %d lines, want 1 header + 3 sub-rows", n)
 	}
 
 	m.ToggleToolsCollapsed()
@@ -216,8 +251,8 @@ func TestToolRunCollapseToggles(t *testing.T) {
 	}
 
 	m.ToggleToolsCollapsed()
-	if n := len(renderedLines(m.viewport.View())); n != 1 {
-		t.Fatalf("re-collapsed render = %d lines, want 1", n)
+	if n := len(renderedLines(m.viewport.View())); n != 4 {
+		t.Fatalf("re-collapsed render = %d lines, want 1 header + 3 sub-rows", n)
 	}
 }
 
@@ -252,11 +287,14 @@ func TestToolRunNeverMergesAcrossTurns(t *testing.T) {
 
 	lines := renderedLines(m.viewport.View())
 	joined := strings.Join(lines, "\n")
-	if strings.Contains(joined, "bash (4)") {
-		t.Fatalf("runs merged across turns: %q", joined)
+	// Each turn renders its own group; the two turns' calls must not
+	// share one sub-list. Two headers total (one per turn), 4 sub-rows.
+	headers := strings.Count(joined, "✓ Shell")
+	if headers != 2 {
+		t.Fatalf("runs merged across turns: %d headers, want 2:\n%s", headers, joined)
 	}
-	if !strings.Contains(joined, "bash ×2") {
-		t.Fatalf("per-turn runs missing: %q", joined)
+	if n := strings.Count(joined, "$ ls"); n != 4 {
+		t.Fatalf("per-turn sub-rows missing: %d '$ ls' rows, want 4:\n%s", n, joined)
 	}
 }
 

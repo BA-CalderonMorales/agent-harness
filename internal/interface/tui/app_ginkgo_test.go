@@ -1169,8 +1169,12 @@ var _ = Describe("getToolDisplayName", func() {
 			Expect(getToolDisplayName("write")).To(Equal("Write File"))
 		})
 
-		It("should return Edit File for edit", func() {
-			Expect(getToolDisplayName("edit")).To(Equal("Edit File"))
+		It("should return Update for edit (never lowercase 'edit')", func() {
+			Expect(getToolDisplayName("edit")).To(Equal("Update"))
+		})
+
+		It("should classify ls under the Shell class", func() {
+			Expect(getToolDisplayName("ls")).To(Equal("Shell"))
 		})
 
 		It("should return Find Files for glob", func() {

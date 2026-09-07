@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -59,6 +60,10 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case tea.MouseMsg:
 		if tea.MouseEvent(msg).IsWheel() {
+			// Flush any pending rebuild first: scrolling stale content
+			// silently loses the wheel event's effect when the rebuild
+			// lands on the next frame.
+			m.flushDeferredRefresh()
 			if isMobilePane(m.width) {
 				// Phone rows are taller, so a fixed 3-line tick
 				// crawls: scroll by a viewport fraction for a
@@ -224,6 +229,16 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		// MULTI-TOOL DISPLAY: Do NOT clear previous completed tools when a new tool
 		// starts within the same turn. Users want to see the full chain of tool calls.
 
+		// Carry the raw input JSON: the expandable record and the todo
+		// checklist renderer read from it (never populated before
+		// 0.3.28, so expanded records showed no input).
+		inputJSON := ""
+		if len(msg.Input) > 0 {
+			if raw, err := json.Marshal(msg.Input); err == nil {
+				inputJSON = string(raw)
+			}
+		}
+
 		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
@@ -235,6 +250,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			ToolStatus:      ToolStatusRunning,
 			ToolStartedAt:   time.Now(),
 			ToolDetail:      command,
+			ToolInputJSON:   inputJSON,
 			Turn:            m.turnCounter,
 		}
 		m.appendToolMessage(toolMsg)
@@ -361,7 +377,25 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.turnInterrupted = true
 		m.streamBuffer = ""
 		m.placeholderPending = false
-		m.dropPlaceholderIfEmpty()
+		// A streaming assistant message with content must finalize with
+		// Thinking=false: left as-is, it renders the animated thinking
+		// badge with a frozen elapsed time forever — and the next turn's
+		// first events inherit the dead turn's live-header state in the
+		// group cache. Empty placeholders are dropped outright.
+		if msg := m.streamingAssistant(); msg != nil {
+			if strings.TrimSpace(msg.Content) == "" {
+				m.dropPlaceholderIfEmpty()
+			} else {
+				msg.Thinking = false
+				msg.ResponseTime = m.elapsed
+				msg.bumpRev()
+				m.currentStreamingAssistantID = ""
+				m.currentStreamingAssistantIdx = -1
+				m.refreshViewport()
+			}
+		} else {
+			m.dropPlaceholderIfEmpty()
+		}
 		m.currentTool = nil
 		m.currentToolMsg = nil
 		m.toolAnimation = nil

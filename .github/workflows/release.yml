@@ -60,6 +60,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Verify tag matches main.go version
+        # Fail fast BEFORE building: a tag cut without a bump commit would
+        # otherwise ship binaries reporting a stale version (0.3.25/0.3.26
+        # shipped 0.3.24 this way). Tag minus v must equal main.go Version.
+        if: github.event_name == 'push'
+        shell: bash
+        run: |
+          TAG_VERSION="${GITHUB_REF#refs/tags/v}"
+          ./scripts/check-version-matches.sh "$TAG_VERSION" cmd/agent-harness/main.go
+
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
