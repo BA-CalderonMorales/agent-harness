@@ -365,7 +365,25 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.turnInterrupted = true
 		m.streamBuffer = ""
 		m.placeholderPending = false
-		m.dropPlaceholderIfEmpty()
+		// A streaming assistant message with content must finalize with
+		// Thinking=false: left as-is, it renders the animated thinking
+		// badge with a frozen elapsed time forever — and the next turn's
+		// first events inherit the dead turn's live-header state in the
+		// group cache. Empty placeholders are dropped outright.
+		if msg := m.streamingAssistant(); msg != nil {
+			if strings.TrimSpace(msg.Content) == "" {
+				m.dropPlaceholderIfEmpty()
+			} else {
+				msg.Thinking = false
+				msg.ResponseTime = m.elapsed
+				msg.bumpRev()
+				m.currentStreamingAssistantID = ""
+				m.currentStreamingAssistantIdx = -1
+				m.refreshViewport()
+			}
+		} else {
+			m.dropPlaceholderIfEmpty()
+		}
 		m.currentTool = nil
 		m.currentToolMsg = nil
 		m.toolAnimation = nil
