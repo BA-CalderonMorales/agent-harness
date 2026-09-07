@@ -115,7 +115,6 @@ jobs:
       # A release/* PR legitimately carries no bump commit yet — the bump
       # lands at release time, and the tag is the release promise. The
       # gate lives in release.yml (tag push), before any build.
-        run: sh scripts/test-check-version-matches.sh
 
   # SBOM Generation
   sbom:
