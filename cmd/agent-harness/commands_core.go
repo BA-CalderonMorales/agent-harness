@@ -77,6 +77,12 @@ func (app *App) initCommandsCore() {
 					diag.Error("session.save.model", err)
 				}
 				app.refreshTelemetry(app.tuiApp)
+				// Mirror the settings-delegate path: the composer mode
+				// line reads chatModel.model, so the TUI must hear about
+				// the switch or it keeps showing the old model.
+				if app.tuiApp != nil {
+					app.tuiApp.Send(tui.ModelChangedMsg{Model: m})
+				}
 				return nil
 			},
 			func() []string {
