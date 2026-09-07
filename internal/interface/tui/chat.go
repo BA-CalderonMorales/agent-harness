@@ -81,6 +81,37 @@ type ChatMessage struct {
 	// Empty on legacy data — Content renders whole. Tool parts resolve
 	// to the tool ChatMessage with the matching ID.
 	Parts []TurnPart
+
+	// Memoized content fingerprints for the group render cache
+	// (chat_turns.go groupSignature). Length-change detection: a text
+	// that grew or shrank refingerprints; a text replaced with exactly
+	// the same length refingerprints too (hash runs on the new bytes).
+	// Steady-state frames pay two integer compares per message instead
+	// of hashing whole transcripts — the O(content) scan per frame was
+	// itself quadratic on marathon sessions.
+	sigFP   uint64 // fingerprint of Content when sigLen == len(Content)
+	sigLen  int
+	sigRFP  uint64 // fingerprint of ReasoningText when sigRLen == len
+	sigRLen int
+}
+
+// contentFP returns a stable fingerprint of Content, recomputing only
+// when the text length changed since the last call.
+func (msg *ChatMessage) contentFP() uint64 {
+	if len(msg.Content) != msg.sigLen {
+		msg.sigFP = contentHash(msg.Content)
+		msg.sigLen = len(msg.Content)
+	}
+	return msg.sigFP
+}
+
+// reasoningFP is contentFP for the reasoning record.
+func (msg *ChatMessage) reasoningFP() uint64 {
+	if len(msg.ReasoningText) != msg.sigRLen {
+		msg.sigRFP = contentHash(msg.ReasoningText)
+		msg.sigRLen = len(msg.ReasoningText)
+	}
+	return msg.sigRFP
 }
 
 // ToolStatus represents the execution state of a tool
@@ -228,6 +259,15 @@ type ChatModel struct {
 	// transcript is unchanged.
 	lastPainted         string
 	lastPaintedAtBottom bool
+
+	// refreshPending marks that transcript state changed since the
+	// last frame. High-frequency mutators (AddMessage, per-chunk
+	// stream updates, per-append refreshes during session load) only
+	// set this flag; View flushes once per frame. Without the flag,
+	// every append paid a full O(transcript) assembly — quadratic on
+	// marathon sessions and the dominant cost of the 10k-event
+	// benchmark (24s of pure assembly for 3,000 messages).
+	refreshPending bool
 
 	// expandedMessageID is the message whose full record is expanded
 	// inline (click the line, or Enter on the latest; Esc closes). It

@@ -207,7 +207,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 	m.currentStreamingAssistantIdx = -1
 	m.currentStreamingAssistantID = ""
 	m.turnTools = nil
-	m.refreshViewport()
+	m.refreshDeferred()
 }
 
 // refreshViewport refreshes the viewport content.

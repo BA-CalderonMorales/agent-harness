@@ -1,6 +1,9 @@
 package tui
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 // Turn grouping: the agent's tool calls belong to its response, not to
 // the transcript at large. A turn renders as one block — the Agent
@@ -82,9 +85,110 @@ type clickRef struct {
 	msgID        string
 }
 
+// groupExtent returns the end index (exclusive) of the render group
+// starting at i — the same boundary appendTurnGroupTracked renders to:
+// a run of tool messages plus the assistant response that follows them,
+// or a single message. Shared with the group cache so the signature and
+// the render always describe the same block.
+func groupExtent(msgs []ChatMessage, i int) int {
+	if i < len(msgs) && msgs[i].Role == "tool" {
+		j := i
+		for j < len(msgs) && msgs[j].Role == "tool" {
+			j++
+		}
+		if j < len(msgs) && msgs[j].Role == "assistant" {
+			return j + 1
+		}
+		return j
+	}
+	return i + 1
+}
+
+// groupSignature builds the group cache key for msgs[i:j]: every field
+// a render reads, plus the model state the live block depends on.
+//
+// Cost discipline: this runs once per group per frame, so it must be
+// O(1) per message — never O(content). Message text enters the key
+// through a memoized fingerprint carried on the message itself
+// (sigFP/sigLen, sigRFP/sigRLen): recomputed only when the text length
+// changed, which catches appends and replacements while making the
+// steady-state frame pay a few integer writes per message.
+func (m ChatModel) groupSignature(msgs []ChatMessage, i, j int) string {
+	var b strings.Builder
+	b.Grow(64 * (j - i))
+	b.WriteByte('{')
+	for k := i; k < j; k++ {
+		msg := &msgs[k]
+		b.WriteString(msg.ID)
+		b.WriteByte('|')
+		b.WriteString(msg.Role)
+		b.WriteByte('|')
+		b.WriteString(msg.ToolName)
+		b.WriteByte('|')
+		b.WriteString(msg.ToolDisplayName)
+		b.WriteByte('|')
+		b.WriteString(msg.ToolDetail)
+		b.WriteByte('|')
+		b.WriteString(string(msg.ToolStatus))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatUint(msg.contentFP(), 16))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatUint(msg.reasoningFP(), 16))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatInt(msg.Timestamp.UnixNano(), 10))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatInt(int64(msg.ToolElapsed), 10))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatInt(int64(msg.ResponseTime), 10))
+		b.WriteByte('|')
+		b.WriteString(strconv.Itoa(msg.Turn))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatBool(msg.IsTool))
+		b.WriteByte('|')
+		// Parts drive the turn block's tool-row nesting; ToolInputJSON
+		// the expanded record. A part change must re-render: IDs and
+		// text lengths catch the structural moves.
+		b.WriteString(strconv.Itoa(len(msg.Parts)))
+		for _, p := range msg.Parts {
+			b.WriteByte('~')
+			b.WriteString(p.ToolID)
+			b.WriteByte('~')
+			b.WriteString(strconv.Itoa(len(p.Text)))
+		}
+		b.WriteByte('|')
+		b.WriteString(strconv.Itoa(len(msg.ToolInputJSON)))
+		b.WriteByte('|')
+		b.WriteString(strconv.FormatBool(m.expandedMessageID == msg.ID))
+		b.WriteByte(0x1f)
+	}
+	b.WriteString("w")
+	b.WriteString(strconv.Itoa(m.width))
+	b.WriteString("c")
+	b.WriteString(strconv.FormatBool(m.toolsCollapsed))
+	// The live block animates: thinking badge, spinner, streaming text.
+	if m.streaming || m.thinking || m.placeholderPending {
+		for k := i; k < j; k++ {
+			if msgs[k].ID == m.currentStreamingAssistantID {
+				b.WriteString("live")
+				b.WriteString(strconv.FormatInt(int64(m.elapsed.Seconds()), 10))
+				b.WriteString(strconv.Itoa(len(m.streamBuffer)))
+				b.WriteString(strconv.Itoa(len(m.thinkingText)))
+				b.WriteString(strconv.FormatBool(m.thinkingIsStatus))
+				b.WriteString(strconv.FormatBool(m.expandedMessageID == m.currentStreamingAssistantID))
+				break
+			}
+		}
+	}
+	b.WriteByte('}')
+	return b.String()
+}
+
 // appendTurnGroupTracked renders the next render group starting at i
 // and reports the clickable line ranges within the block (row offsets
 // relative to the block's first row). next is the loop's next index.
+// The group render memoizes on the group signature: a transcript of n
+// groups repaints only groups whose inputs changed since the last
+// frame (append, finalize, expand, stream tail) instead of all n.
 func (m ChatModel) appendTurnGroupTracked(msgs []ChatMessage, i int, collapsed bool) (string, int, []clickRef) {
 	msg := msgs[i]
 
@@ -103,6 +207,29 @@ func (m ChatModel) appendTurnGroupTracked(msgs []ChatMessage, i int, collapsed b
 	}
 
 	return m.renderSingleGroup(msgs, i, collapsed)
+}
+
+// appendTurnGroupCached renders the group at i through the group cache:
+// a hit returns the memoized block, a miss renders and memoizes.
+// Cache-invalidation correctness rests on groupSignature covering every
+// field the render reads (verified by the signature-completeness test)
+// and on always consulting the cache with the same extent.
+func (m ChatModel) appendTurnGroupCached(msgs []ChatMessage, i int) (string, int, []clickRef) {
+	j := groupExtent(msgs, i)
+	sig := m.groupSignature(msgs, i, j)
+	if cached, ok := groupCacheStore.get(sig); ok {
+		return cached, j, groupRefStore.get(sig)
+	}
+	rendered, next, refs := m.appendTurnGroupTracked(msgs, i, m.toolsCollapsed)
+	if next != j {
+		// Signature/extent disagreement: bail out of caching, render
+		// wins. (Extent derivation is shared, so this is belt-and-
+		// suspenders — the signature test pins it anyway.)
+		return rendered, next, refs
+	}
+	groupCacheStore.put(sig, rendered)
+	groupRefStore.put(sig, refs)
+	return rendered, j, refs
 }
 
 // renderSingleGroup renders one message through the collapse machinery.
@@ -182,3 +309,70 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 
 	return b.String(), j + 1, clicks
 }
+
+// groupCacheStore memoizes rendered turn blocks between frames. A
+// marathon transcript re-rendered every message on every agent event
+// (and every AddMessage) because refreshViewport walks the whole
+// transcript; with the group cache a frame's cost is O(changed groups)
+// instead of O(transcript). Keys are the signature strings themselves:
+// a map[string] over bounded entries is cheap, collisions impossible,
+// and the LRU keeps memory flat (this harness has an OOM history).
+const (
+	groupCacheCapacity  = 8192
+	groupCacheMaxOutput = 1 << 20 // 1 MiB per block — beyond that, don't cache
+)
+
+type groupCache struct {
+	ents map[string]string
+	lru  []string // signature strings, front = most recent
+}
+
+func newGroupCache() *groupCache {
+	return &groupCache{ents: make(map[string]string, groupCacheCapacity)}
+}
+
+func (c *groupCache) get(sig string) (string, bool) {
+	block, ok := c.ents[sig]
+	return block, ok
+}
+
+func (c *groupCache) put(sig, block string) {
+	if len(block) > groupCacheMaxOutput {
+		return
+	}
+	if _, ok := c.ents[sig]; !ok {
+		c.lru = append([]string{sig}, c.lru...)
+	}
+	c.ents[sig] = block
+	if len(c.lru) > groupCacheCapacity {
+		oldest := c.lru[len(c.lru)-1]
+		delete(c.ents, oldest)
+		c.lru = c.lru[:len(c.lru)-1]
+	}
+}
+
+var groupCacheStore = newGroupCache()
+
+// groupRefStore memoizes the click refs alongside the block: the refs
+// are row offsets relative to the block's first row, so they belong to
+// the same cache entry as the rendered text they describe.
+type groupRefCache struct {
+	ents map[string][]clickRef
+}
+
+func newGroupRefCache() *groupRefCache {
+	return &groupRefCache{ents: make(map[string][]clickRef, groupCacheCapacity)}
+}
+
+func (c *groupRefCache) get(sig string) []clickRef {
+	return c.ents[sig]
+}
+
+func (c *groupRefCache) put(sig string, refs []clickRef) {
+	if len(refs) == 0 {
+		return
+	}
+	c.ents[sig] = refs
+}
+
+var groupRefStore = newGroupRefCache()

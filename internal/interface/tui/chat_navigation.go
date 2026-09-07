@@ -22,8 +22,10 @@ func (m ChatModel) CapturesAllKeys() bool {
 	return m.focused
 }
 
-// Scroll scrolls the viewport.
+// Scroll scrolls the viewport. Pending rebuilds flush first: scrolling
+// must operate on the content the user actually sees.
 func (m *ChatModel) Scroll(lines int) {
+	m.flushDeferredRefresh()
 	if lines > 0 {
 		m.viewport.ScrollDown(lines)
 	} else {
@@ -33,11 +35,13 @@ func (m *ChatModel) Scroll(lines int) {
 
 // GotoTop scrolls to top.
 func (m *ChatModel) GotoTop() {
+	m.flushDeferredRefresh()
 	m.viewport.GotoTop()
 }
 
 // GotoBottom scrolls to bottom.
 func (m *ChatModel) GotoBottom() {
+	m.flushDeferredRefresh()
 	m.viewport.GotoBottom()
 }
 
@@ -54,6 +58,26 @@ func (m *ChatModel) refreshViewportFollow() {
 	m.refreshViewportWithFollow(true)
 }
 
+// refreshDeferred marks the transcript dirty and defers the rebuild to
+// the next View() — the frame coalesces all pending refreshes into
+// one. Mutators that fire many times per frame (per-chunk stream
+// updates, session load appends) must use this path; the O(transcript)
+// assembly runs at most once per frame instead of once per mutation.
+func (m *ChatModel) refreshDeferred() {
+	m.refreshPending = true
+}
+
+// flushDeferredRefresh performs the deferred rebuild if one is pending.
+// forceBottom preserves the follow-the-stream semantics of the calls
+// that deferred it.
+func (m *ChatModel) flushDeferredRefresh() {
+	if !m.refreshPending {
+		return
+	}
+	m.refreshPending = false
+	m.refreshViewportWithFollow(true)
+}
+
 func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	wasAtBottom := m.viewport.AtBottom()
 	previousOffset := m.viewport.YOffset
@@ -67,7 +91,7 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	m.clickIndex = m.clickIndex[:0]
 	line := 0
 	for i := 0; i < len(m.messages); {
-		rendered, next, clicks := m.appendTurnGroupTracked(m.messages, i, m.toolsCollapsed)
+		rendered, next, clicks := m.appendTurnGroupCached(m.messages, i)
 		content.WriteString(rendered)
 		content.WriteString("\n\n")
 		for _, cr := range clicks {

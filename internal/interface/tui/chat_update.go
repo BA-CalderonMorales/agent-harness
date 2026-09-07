@@ -100,8 +100,10 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// The thinking badge animates on this clock — without a
 			// repaint per tick the ✦ twinkle and rotating quip freeze
-			// until the next chunk happens to trigger a refresh.
-			m.refreshViewport()
+			// until the next chunk happens to trigger a refresh. The
+			// tick is also what flushes chunk-deferred rebuilds: one
+			// assembly per tick, not per chunk.
+			m.refreshDeferred()
 			return m, m.startTimer()
 		}
 		return m, nil

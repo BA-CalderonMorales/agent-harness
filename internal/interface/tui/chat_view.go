@@ -14,6 +14,13 @@ func (m ChatModel) View() string {
 		return "  Initializing chat..."
 	}
 
+	// One transcript rebuild per frame, whatever mutated since the
+	// last (appends, chunks, tool finalize). Value receiver: the flush
+	// copies the model, so the painted string must persist — the
+	// viewport pointer keeps the content, and lastPainted lives on the
+	// copy that BubbleTea stores back.
+	m.flushDeferredRefresh()
+
 	m.syncTextareaHeight()
 	inputHeight := m.inputAreaHeight()
 
