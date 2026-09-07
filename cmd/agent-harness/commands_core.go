@@ -98,6 +98,32 @@ func (app *App) initCommandsCore() {
 	app.cmdRegistry.Register("current-model", "Show the current model",
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
 
+	app.cmdRegistry.Register("cleanup", "List saved sessions by size/age; delete with --confirm",
+		commands.CleanupHandler(
+			func() []commands.CleanupSession {
+				rows, err := app.sessionManager.ListSessionsWithSize()
+				if err != nil {
+					return nil
+				}
+				out := make([]commands.CleanupSession, 0, len(rows))
+				for _, r := range rows {
+					out = append(out, commands.CleanupSession{
+						ID:           r.ID,
+						UpdatedAt:    r.UpdatedAt,
+						MessageCount: r.MessageCount,
+						SizeBytes:    r.SizeBytes,
+					})
+				}
+				return out
+			},
+			func(id string) error {
+				// SessionManager.DeleteSession: refuses the active
+				// session and keeps the audit trail — never raw
+				// os.Remove here.
+				return app.sessionManager.DeleteSession(id)
+			},
+		))
+
 	app.cmdRegistry.Register("effort", "Show or cycle reasoning effort (usage: /effort [low|medium|high])",
 		commands.ModelHandler(
 			func() string { return app.config.Effort },

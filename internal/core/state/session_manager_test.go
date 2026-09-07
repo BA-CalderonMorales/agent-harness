@@ -104,3 +104,62 @@ func TestSessionManagerRejectsInvalidLifecycleOperations(t *testing.T) {
 		t.Fatalf("DeleteSession(missing) error = %v, want not found", err)
 	}
 }
+
+// TestListSessionsWithSizeOrderAndSizes: /cleanup's listing backend —
+// oldest first, sizes present, and the active session's delete refusal
+// still holds through the same path.
+func TestListSessionsWithSizeOrderAndSizes(t *testing.T) {
+	sessionsDir := t.TempDir()
+	t.Setenv("AGENT_HARNESS_SESSION_DIR", sessionsDir)
+
+	manager, err := NewSessionManager()
+	if err != nil {
+		t.Fatalf("NewSessionManager() error = %v", err)
+	}
+
+	first := manager.CreateSession("m")
+	first.ID = "aaa-older"
+	first.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: strings.Repeat("x", 2000)}}})
+	firstPath, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent(first) error = %v", err)
+	}
+
+	second := manager.CreateSession("m")
+	second.ID = "bbb-newer"
+	second.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "y"}}})
+	if _, err := manager.SaveCurrent(); err != nil {
+		t.Fatalf("SaveCurrent(second) error = %v", err)
+	}
+
+	older := time.Now().Add(-2 * time.Hour)
+	if err := os.Chtimes(firstPath, older, older); err != nil {
+		t.Fatalf("touch first session: %v", err)
+	}
+
+	rows, err := manager.ListSessionsWithSize()
+	if err != nil {
+		t.Fatalf("ListSessionsWithSize() error = %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("rows = %d, want 2", len(rows))
+	}
+	if rows[0].ID != "aaa-older" || rows[1].ID != "bbb-newer" {
+		t.Fatalf("order = [%s, %s], want oldest first", rows[0].ID, rows[1].ID)
+	}
+	for _, r := range rows {
+		if r.SizeBytes <= 0 {
+			t.Fatalf("row %s has size %d, want >0", r.ID, r.SizeBytes)
+		}
+	}
+	// The bigger session reports the bigger size.
+	if rows[0].SizeBytes <= rows[1].SizeBytes {
+		t.Fatalf("sizes not ordered with content: %d <= %d", rows[0].SizeBytes, rows[1].SizeBytes)
+	}
+
+	// Active-session guard through the cleanup path: the current
+	// session is bbb-newer; deleting it must be refused.
+	if err := manager.DeleteSession("bbb-newer"); err == nil || !strings.Contains(err.Error(), "cannot delete the active session") {
+		t.Fatalf("DeleteSession(active) error = %v, want refusal", err)
+	}
+}

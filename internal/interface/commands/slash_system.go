@@ -3,9 +3,22 @@ package commands
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 )
+
+// humanSize renders a byte count for the /cleanup listing.
+func humanSize(n int64) string {
+	switch {
+	case n >= 1<<20:
+		return fmt.Sprintf("%.1fM", float64(n)/(1<<20))
+	case n >= 1<<10:
+		return fmt.Sprintf("%.1fK", float64(n)/(1<<10))
+	default:
+		return fmt.Sprintf("%dB", n)
+	}
+}
 
 // PlanHandler toggles plan mode.
 func PlanHandler(getMode func() bool, setMode func(bool) string) SlashHandler {
@@ -109,6 +122,90 @@ func ResetHandler(resetFn func() error) SlashHandler {
 		}
 		return "__RESET__", nil
 	}
+}
+
+// CleanupHandler lists saved sessions by size and age, or deletes them
+// with confirmation (goal 0.3.28 Task 8). Deletion goes through the
+// caller-provided function (SessionManager.DeleteSession — never raw
+// os.Remove) so the audit trail and the active-session guard hold.
+// Forms:
+//
+//	/cleanup            — list sessions with size/age, no deletion
+//	/cleanup <id>...    — dry-run preview of what would be deleted
+//	/cleanup <id>... --confirm — delete the named sessions
+//	/cleanup --all --confirm   — delete every non-active session
+func CleanupHandler(list func() []CleanupSession, del func(id string) error) SlashHandler {
+	return func(args string) (string, error) {
+		confirm := false
+		all := false
+		var ids []string
+		for _, tok := range strings.Fields(args) {
+			switch tok {
+			case "--confirm", "-y":
+				confirm = true
+			case "--all", "-a":
+				all = true
+			default:
+				ids = append(ids, tok)
+			}
+		}
+
+		sessions := list()
+		if len(sessions) == 0 {
+			return "No saved sessions to clean up.", nil
+		}
+
+		if !confirm {
+			var b strings.Builder
+			b.WriteString("Saved sessions (oldest first):\n")
+			for _, s := range sessions {
+				b.WriteString(fmt.Sprintf("  %s  %6s  %d msgs  %s\n",
+					s.ID, humanSize(s.SizeBytes), s.MessageCount, s.UpdatedAt.Format("2006-01-02 15:04")))
+			}
+			if all {
+				b.WriteString("\nRerun with --confirm to delete ALL non-active sessions.")
+			} else if len(ids) > 0 {
+				b.WriteString("\nRerun with --confirm to delete the listed sessions.")
+			} else {
+				b.WriteString("\n/cleanup <id>... --confirm to delete, or /cleanup --all --confirm for everything non-active.")
+			}
+			return b.String(), nil
+		}
+
+		var targets []string
+		if all {
+			for _, s := range sessions {
+				targets = append(targets, s.ID)
+			}
+		} else {
+			targets = ids
+		}
+		if len(targets) == 0 {
+			return "cleanup: nothing to delete (name session IDs, or use --all).", nil
+		}
+
+		var deleted, failed int
+		var b strings.Builder
+		for _, id := range targets {
+			if err := del(id); err != nil {
+				failed++
+				b.WriteString(fmt.Sprintf("  ✗ %s: %v\n", id, err))
+			} else {
+				deleted++
+			}
+		}
+		return fmt.Sprintf("cleanup: deleted %d, failed %d\n%s", deleted, failed, b.String()), nil
+	}
+}
+
+// CleanupSession is one row of the /cleanup listing: the metadata the
+// sessions view already carries, plus the on-disk size the metadata
+// cache tracks.
+type CleanupSession struct {
+	ID           string
+	UpdatedAt    time.Time
+	MessageCount int
+	SizeBytes    int64
 }
 
 // LogoutHandler handles logout - clears credentials from memory and storage.

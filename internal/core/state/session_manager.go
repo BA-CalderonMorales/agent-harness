@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -198,6 +199,40 @@ func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 // GetSessionsDir returns the sessions directory
 func (sm *SessionManager) GetSessionsDir() string {
 	return sm.projectSessionsDir()
+}
+
+// ListSessionsWithSize lists sessions like ListSessions, plus each
+// session's on-disk size, for the /cleanup listing (goal 0.3.28 Task 8).
+// Size comes from the same metadata cache ListSessions populates —
+// no extra stat pass beyond the one list does. Oldest first, so the
+// cleanup target order reads naturally.
+func (sm *SessionManager) ListSessionsWithSize() ([]SessionWithSize, error) {
+	sessions, err := sm.ListSessions()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]SessionWithSize, 0, len(sessions))
+	for _, s := range sessions {
+		entry := SessionWithSize{SessionMetadata: s}
+		if path, err := sm.findSessionFile(s.ID); err == nil {
+			if info, err := os.Stat(path); err == nil {
+				entry.SizeBytes = info.Size()
+			}
+		}
+		out = append(out, entry)
+	}
+	// Oldest first (UpdatedAt ascending).
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].UpdatedAt.Before(out[j].UpdatedAt)
+	})
+	return out, nil
+}
+
+// SessionWithSize is one /cleanup listing row: the standard session
+// metadata plus the on-disk size.
+type SessionWithSize struct {
+	SessionMetadata
+	SizeBytes int64
 }
 
 // DeleteSession deletes a session by ID
