@@ -108,17 +108,13 @@ jobs:
       - name: Run naming-gate unit tests
         run: sh scripts/test-check-branch-name.sh
 
-      - name: Validate release branch version bump
-        if: startsWith(github.head_ref, 'release/')
-        # release/X.Y.Z -> X.Y.Z must equal main.go Version: a PR from a
-        # release branch whose bump commit is missing or reverted fails
-        # here instead of shipping a mislabeled binary (the 0.3.25/0.3.26
-        # failure mode).
-        run: |
-          VERSION="${GITHUB_HEAD_REF#release/}"
-          ./scripts/check-version-matches.sh "$VERSION" cmd/agent-harness/main.go
-
       - name: Run version-gate unit tests
+        run: sh scripts/test-check-version-matches.sh
+
+      # Note: version-bump verification intentionally does NOT run here.
+      # A release/* PR legitimately carries no bump commit yet — the bump
+      # lands at release time, and the tag is the release promise. The
+      # gate lives in release.yml (tag push), before any build.
         run: sh scripts/test-check-version-matches.sh
 
   # SBOM Generation
