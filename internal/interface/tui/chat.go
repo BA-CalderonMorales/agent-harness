@@ -464,7 +464,13 @@ func (m ChatModel) inputRows() int {
 func (m ChatModel) inputAreaHeight() int {
 	// The solid block: border + top padding + editor rows + bottom padding.
 	// The mode line below the block adds one more row to the reserved area.
+	// The working indicator (goal 0.3.29 Task 4) reserves its row here when
+	// live, so its appearance shrinks the viewport instead of pushing the
+	// composer + mode line off the pane on short terminals.
 	height := 1 + ComposerTopPadding + m.inputRows() + ComposerBottomPadding + 1
+	if m.workingStatusHeight() > 0 {
+		height++
+	}
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
