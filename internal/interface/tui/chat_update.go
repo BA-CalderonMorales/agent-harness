@@ -18,10 +18,25 @@ func (m ChatModel) Init() tea.Cmd {
 // the chat view header (title row, blank row).
 const viewportTopOffset = 5
 
-func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
+	// Deferred rebuilds flush on every exit path: the returned model
+	// is what BubbleTea persists, so the rebuilt viewport content,
+	// clickIndex, and the cleared refreshPending flag must survive the
+	// frame. (A flush in View would mutate only a value-receiver copy
+	// — stale clickIndex and a forever-pending flag.) Handlers may
+	// defer mid-handling and early-return; the defer catches all of
+	// them.
+	defer func() {
+		if cm, ok := model.(ChatModel); ok {
+			cm.flushDeferredRefresh()
+			model = cm
+		}
+	}()
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
+
 	case tea.WindowSizeMsg:
 		m.resize(msg.Width, msg.Height)
 
@@ -267,6 +282,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
 				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+				m.messages[i].bumpRev()
 				m.messages[i].ToolStatus = status
 				break
 			}
@@ -336,6 +352,7 @@ func (m ChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.currentToolMsg.ToolElapsed = time.Since(started)
 			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError, started, m.currentToolMsg.ToolElapsed)
+			m.currentToolMsg.bumpRev()
 			m.currentToolMsg.ToolStatus = ToolStatusError
 		}
 		m.thinking = false

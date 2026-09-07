@@ -218,7 +218,7 @@ func (m ChatModel) appendTurnGroupCached(msgs []ChatMessage, i int) (string, int
 	j := groupExtent(msgs, i)
 	sig := m.groupSignature(msgs, i, j)
 	if cached, ok := groupCacheStore.get(sig); ok {
-		return cached, j, groupRefStore.get(sig)
+		return cached.block, j, cached.refs
 	}
 	rendered, next, refs := m.appendTurnGroupTracked(msgs, i, m.toolsCollapsed)
 	if next != j {
@@ -227,8 +227,7 @@ func (m ChatModel) appendTurnGroupCached(msgs []ChatMessage, i int) (string, int
 		// suspenders — the signature test pins it anyway.)
 		return rendered, next, refs
 	}
-	groupCacheStore.put(sig, rendered)
-	groupRefStore.put(sig, refs)
+	groupCacheStore.put(sig, rendered, refs)
 	return rendered, j, refs
 }
 
@@ -323,27 +322,34 @@ const (
 )
 
 type groupCache struct {
-	ents map[string]string
+	ents map[string]cachedGroup
 	lru  []string // signature strings, front = most recent
 }
 
+// cachedGroup is one memoized render: the styled block and the click
+// refs that belong to it. They live together so eviction removes both.
+type cachedGroup struct {
+	block string
+	refs  []clickRef
+}
+
 func newGroupCache() *groupCache {
-	return &groupCache{ents: make(map[string]string, groupCacheCapacity)}
+	return &groupCache{ents: make(map[string]cachedGroup, groupCacheCapacity)}
 }
 
-func (c *groupCache) get(sig string) (string, bool) {
-	block, ok := c.ents[sig]
-	return block, ok
+func (c *groupCache) get(sig string) (cachedGroup, bool) {
+	g, ok := c.ents[sig]
+	return g, ok
 }
 
-func (c *groupCache) put(sig, block string) {
+func (c *groupCache) put(sig, block string, refs []clickRef) {
 	if len(block) > groupCacheMaxOutput {
 		return
 	}
 	if _, ok := c.ents[sig]; !ok {
 		c.lru = append([]string{sig}, c.lru...)
 	}
-	c.ents[sig] = block
+	c.ents[sig] = cachedGroup{block: block, refs: refs}
 	if len(c.lru) > groupCacheCapacity {
 		oldest := c.lru[len(c.lru)-1]
 		delete(c.ents, oldest)
@@ -352,27 +358,3 @@ func (c *groupCache) put(sig, block string) {
 }
 
 var groupCacheStore = newGroupCache()
-
-// groupRefStore memoizes the click refs alongside the block: the refs
-// are row offsets relative to the block's first row, so they belong to
-// the same cache entry as the rendered text they describe.
-type groupRefCache struct {
-	ents map[string][]clickRef
-}
-
-func newGroupRefCache() *groupRefCache {
-	return &groupRefCache{ents: make(map[string][]clickRef, groupCacheCapacity)}
-}
-
-func (c *groupRefCache) get(sig string) []clickRef {
-	return c.ents[sig]
-}
-
-func (c *groupRefCache) put(sig string, refs []clickRef) {
-	if len(refs) == 0 {
-		return
-	}
-	c.ents[sig] = refs
-}
-
-var groupRefStore = newGroupRefCache()

@@ -83,33 +83,48 @@ type ChatMessage struct {
 	Parts []TurnPart
 
 	// Memoized content fingerprints for the group render cache
-	// (chat_turns.go groupSignature). Length-change detection: a text
-	// that grew or shrank refingerprints; a text replaced with exactly
-	// the same length refingerprints too (hash runs on the new bytes).
-	// Steady-state frames pay two integer compares per message instead
-	// of hashing whole transcripts — the O(content) scan per frame was
-	// itself quadratic on marathon sessions.
-	sigFP   uint64 // fingerprint of Content when sigLen == len(Content)
-	sigLen  int
-	sigRFP  uint64 // fingerprint of ReasoningText when sigRLen == len
-	sigRLen int
+	// (chat_turns.go groupSignature). A content replacement (any of
+	// the five wholesale-assignment sites) bumps rev; a fingerprint
+	// recomputes when rev or length differs from the memoized values.
+	// Length alone cannot catch a same-length replacement (the
+	// fingerprint would go stale); rev makes the guarantee structural
+	// rather than argued-from-the-call-graph. Steady-state frames pay
+	// two integer compares per message instead of hashing whole
+	// transcripts.
+	sigFP     uint64 // fingerprint of Content
+	sigRev    uint64 // bumped by bumpRev on content replacement
+	sigFPLen  int    // len(Content) when fingerprinted
+	sigFPRev  uint64 // rev when fingerprinted
+	sigRFP    uint64 // fingerprint of ReasoningText
+	sigRRev   uint64 // bumped by bumpRev on reasoning replacement
+	sigRFPLen int    // len(ReasoningText) when fingerprinted
+	sigRFPRev uint64 // rev when fingerprinted
 }
 
-// contentFP returns a stable fingerprint of Content, recomputing only
-// when the text length changed since the last call.
+// bumpRev invalidates memoized fingerprints after a content or
+// reasoning replacement. Call it at every wholesale assignment site.
+func (msg *ChatMessage) bumpRev() {
+	msg.sigRev++
+	msg.sigRRev++
+}
+
+// contentFP returns a stable fingerprint of Content, recomputing when
+// the revision or length changed since the last call.
 func (msg *ChatMessage) contentFP() uint64 {
-	if len(msg.Content) != msg.sigLen {
+	if msg.sigRev != msg.sigFPRev || len(msg.Content) != msg.sigFPLen {
 		msg.sigFP = contentHash(msg.Content)
-		msg.sigLen = len(msg.Content)
+		msg.sigFPLen = len(msg.Content)
+		msg.sigFPRev = msg.sigRev
 	}
 	return msg.sigFP
 }
 
 // reasoningFP is contentFP for the reasoning record.
 func (msg *ChatMessage) reasoningFP() uint64 {
-	if len(msg.ReasoningText) != msg.sigRLen {
+	if msg.sigRRev != msg.sigRFPRev || len(msg.ReasoningText) != msg.sigRFPLen {
 		msg.sigRFP = contentHash(msg.ReasoningText)
-		msg.sigRLen = len(msg.ReasoningText)
+		msg.sigRFPLen = len(msg.ReasoningText)
+		msg.sigRFPRev = msg.sigRRev
 	}
 	return msg.sigRFP
 }

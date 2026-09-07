@@ -100,7 +100,12 @@ func BenchmarkComposerKeystroke10000(b *testing.B) {
 // now only the streaming tail re-renders.
 func BenchmarkStreamFrame10000(b *testing.B) {
 	chat := benchBulkTranscript(b, 10000)
-	chat.Update(AgentStartMsg{})
+	// Capture the returned model: Update has a value receiver, so the
+	// streaming/timer state AgentStartMsg enables only persists on the
+	// returned value. Without this the benchmarked frames would be
+	// no-ops and the numbers meaningless.
+	started, _ := chat.Update(AgentStartMsg{})
+	*chat = started.(ChatModel)
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		streamBurst(chat)

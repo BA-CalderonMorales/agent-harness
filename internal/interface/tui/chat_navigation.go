@@ -79,6 +79,8 @@ func (m *ChatModel) flushDeferredRefresh() {
 }
 
 func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
+	// Any immediate rebuild supersedes a pending deferred one.
+	m.refreshPending = false
 	wasAtBottom := m.viewport.AtBottom()
 	previousOffset := m.viewport.YOffset
 	var content strings.Builder
