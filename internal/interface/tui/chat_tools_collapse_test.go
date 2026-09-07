@@ -316,3 +316,83 @@ func TestToolRunElapsedShownForLongRuns(t *testing.T) {
 		t.Fatalf("elapsed span missing from collapsed line: %q", line)
 	}
 }
+
+// TestBurstSpanningInterleavedProseIsOneGroup pins goal 0.3.29 Task 3a:
+// bash + prose + bash within one turn renders ONE Shell header with two
+// sub-rows. Codex groups the whole burst per class; the old contiguous
+// scan split at the interleaved narration (or a live-block boundary),
+// rendering two "▸ ✓ Shell" headers for one continuous shell burst.
+func TestBurstSpanningInterleavedProseIsOneGroup(t *testing.T) {
+	m := NewChatModel()
+	m.width = 120
+	m.viewport.Width = 120
+	m.height = 40
+	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
+	m = model.(ChatModel)
+
+	// Tool 1, then interleaved prose (the model narrates between calls),
+	// then tool 2 — all within one turn.
+	model, _ = m.Update(AgentToolStartMsg{ToolID: "t0", ToolName: "bash", DisplayName: "Bash", Input: map[string]any{"command": "echo one"}})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolDoneMsg{ToolID: "t0", Success: true})
+	m = model.(ChatModel)
+
+	model, _ = m.Update(AgentChunkMsg{Text: "Now checking the second path.", Timestamp: time.Now()})
+	m = model.(ChatModel)
+
+	model, _ = m.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "bash", DisplayName: "Bash", Input: map[string]any{"command": "echo two"}})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
+	m = model.(ChatModel)
+
+	m.refreshViewportWithFollow(true)
+	content := m.viewport.View()
+
+	headers := 0
+	for _, l := range renderedLines(content) {
+		if strings.Contains(l, "Shell") {
+			headers++
+		}
+	}
+	if headers != 1 {
+		t.Fatalf("bash+prose+bash rendered %d Shell headers, want 1:\n%s", headers, content)
+	}
+	if !strings.Contains(content, "$ echo one") || !strings.Contains(content, "$ echo two") {
+		t.Fatalf("burst sub-rows missing both commands:\n%s", content)
+	}
+}
+
+// TestSystemNoteDoesNotSplitBurst pins the live-block boundary case from
+// the 0.3.29 dogfood pass: a [Tool loop detected: ...] system note
+// landing between two Shell calls must not split the burst into two
+// headers (same class-grouping rule as prose, verified through the real
+// update path with AgentSystemNoteMsg between the done/start pairs).
+func TestSystemNoteDoesNotSplitBurst(t *testing.T) {
+	m := NewChatModel()
+	m.width = 120
+	m.viewport.Width = 120
+	m.height = 40
+	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolStartMsg{ToolID: "t0", ToolName: "bash", DisplayName: "bash", Input: map[string]any{"command": "echo one"}})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolDoneMsg{ToolID: "t0", Success: true})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentSystemNoteMsg{Text: "[Tool loop detected: bash was called 2 times with identical input.]"})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolStartMsg{ToolID: "t1", ToolName: "bash", DisplayName: "bash", Input: map[string]any{"command": "echo two"}})
+	m = model.(ChatModel)
+	model, _ = m.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
+	m = model.(ChatModel)
+	m.refreshViewportWithFollow(true)
+	content := m.viewport.View()
+	headers := 0
+	for _, l := range renderedLines(content) {
+		if strings.Contains(l, "Shell") {
+			headers++
+		}
+	}
+	if headers != 1 {
+		t.Fatalf("bash+note+bash rendered %d Shell headers, want 1:\n%s", headers, content)
+	}
+}

@@ -29,12 +29,22 @@ func (m ChatModel) renderCollapsedMessageAt(msgs []ChatMessage, i int, collapsed
 
 	// Gather the contiguous run: same turn, same display class (not raw
 	// tool name — bash/ls/ls_recursive all render as "Shell", Task 4.2),
-	// all final.
+	// all final. Same-turn system notes (loop-detected markers) skip
+	// past: they render inline in the turn block, not as run breaks
+	// (goal 0.3.29 Task 3a).
 	j := i + 1
-	for j < len(msgs) && msgs[j].Role == "tool" &&
-		msgs[j].Turn == msg.Turn &&
-		getToolDisplayName(msgs[j].ToolName) == getToolDisplayName(msg.ToolName) &&
-		toolRunIsCollapsible(msgs[j]) {
+	for j < len(msgs) {
+		n := msgs[j]
+		if n.Role == "system" && n.Turn != 0 && n.Turn == msg.Turn {
+			j++
+			continue
+		}
+		if n.Role != "tool" ||
+			n.Turn != msg.Turn ||
+			getToolDisplayName(n.ToolName) != getToolDisplayName(msg.ToolName) ||
+			!toolRunIsCollapsible(n) {
+			break
+		}
 		j++
 	}
 
@@ -52,7 +62,25 @@ func (m ChatModel) renderCollapsedMessageAt(msgs []ChatMessage, i int, collapsed
 		return m.renderMessageAt(msg, width), i + 1
 	}
 
-	return m.renderToolRunAt(msgs[i:j], width), j
+	// The run may carry skipped same-turn system notes: they render as
+	// dim rows after the group (block metadata, not call rows), and the
+	// members passed to the group renderer are tools only.
+	members := make([]ChatMessage, 0, j-i)
+	var notes []ChatMessage
+	for k := i; k < j; k++ {
+		if msgs[k].Role == "system" {
+			notes = append(notes, msgs[k])
+			continue
+		}
+		members = append(members, msgs[k])
+	}
+	rendered := m.renderToolRunAt(members, width)
+	for _, n := range notes {
+		if text := strings.TrimSpace(n.Content); text != "" {
+			rendered += "\n" + HelpDimStyle.Render(fitBlock(width, text))
+		}
+	}
+	return rendered, j
 }
 
 // offsetClickRefs shifts block-relative click refs down by n rows —
@@ -95,7 +123,16 @@ type clickRef struct {
 func groupExtent(msgs []ChatMessage, i int) int {
 	if i < len(msgs) && msgs[i].Role == "tool" {
 		j := i
-		for j < len(msgs) && msgs[j].Role == "tool" {
+		for j < len(msgs) {
+			// Same-turn system notes (loop-detected, notices) are part
+			// of the block: skipping them keeps the burst contiguous.
+			if msgs[j].Role == "system" && msgs[j].Turn != 0 && msgs[j].Turn == msgs[i].Turn {
+				j++
+				continue
+			}
+			if msgs[j].Role != "tool" {
+				break
+			}
 			j++
 		}
 		if j < len(msgs) && msgs[j].Role == "assistant" {
@@ -283,13 +320,71 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	if innerWidth < 20 {
 		innerWidth = 20
 	}
+
+	// Class grouping spans interleaved narration (goal 0.3.29 Task 3a):
+	// a shell burst with prose between calls renders ONE Shell header
+	// with all its sub-rows, not a header per prose-separated fragment.
+	// The first tool of each display class (in message order) renders
+	// the whole class group; later members render nothing here — their
+	// rows already appeared under the group header, and the prose part
+	// between them still renders in its chronological place. Class
+	// membership spans the whole turn block (same boundary the collapse
+	// machinery uses for runs), never across turns.
+	groupStart := make(map[string]bool)   // display class → seen
+	groupMembers := make(map[string]bool) // tool ID → belongs to a rendered group
+	type classRun struct {
+		class string
+		ids   []string
+	}
+	runs := map[string]*classRun{}
+	var runOrder []string
+	for k := i; k < j; k++ {
+		if msgs[k].Role != "tool" {
+			continue
+		}
+		class := getToolDisplayName(msgs[k].ToolName)
+		r, ok := runs[class]
+		if !ok {
+			r = &classRun{class: class}
+			runs[class] = r
+			runOrder = append(runOrder, class)
+		}
+		r.ids = append(r.ids, msgs[k].ID)
+	}
+
 	toolRow := func(id string) (string, bool) {
 		for k := i; k < j; k++ {
 			if msgs[k].ID != id {
 				continue
 			}
-			row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
-			return indentBlock(row), true
+			class := getToolDisplayName(msgs[k].ToolName)
+			r := runs[class]
+			// First member of the class renders the group header plus
+			// every member's sub-row, pulled through the collapse
+			// machinery so widths, statuses, and expansions stay honest.
+			if !groupStart[class] {
+				groupStart[class] = true
+				var members []ChatMessage
+				for _, mid := range r.ids {
+					for q := i; q < j; q++ {
+						if msgs[q].ID == mid {
+							members = append(members, msgs[q])
+							groupMembers[mid] = true
+						}
+					}
+				}
+				// A class with one member renders as its plain line
+				// (single calls never group — same rule as runs).
+				if len(members) == 1 {
+					row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
+					return indentBlock(row), true
+				}
+				row := m.renderToolRunAt(members, innerWidth)
+				return indentBlock(row), true
+			}
+			// Later member of an already-rendered class group: nothing —
+			// the header above carries its row.
+			return "", true
 		}
 		return "", false
 	}
@@ -298,6 +393,21 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	b := strings.Builder{}
 	b.WriteString(m.renderAssistantHeader(assistant))
 	b.WriteString("\n")
+
+	// Same-turn system notes (loop-detected markers, mid-turn notices)
+	// render as dim inline rows under the header, before the bubble:
+	// chronology-critical text lives in the bubble; the note is block
+	// metadata and must not split the tool burst into separate headers
+	// (goal 0.3.29 Task 3a, the [Tool loop detected: ...] dogfood case).
+	for k := i; k < j; k++ {
+		if msgs[k].Role == "system" && msgs[k].Turn == assistant.Turn {
+			note := strings.TrimSpace(msgs[k].Content)
+			if note != "" {
+				b.WriteString(HelpDimStyle.Render(fitBlock(innerWidth, note)))
+				b.WriteString("\n")
+			}
+		}
+	}
 
 	width := m.width - 4
 	if width < 1 {

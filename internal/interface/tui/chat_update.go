@@ -182,6 +182,15 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 
 	case AgentSystemNoteMsg:
 		m.AddMessage("system", msg.Text)
+		// Stamp the note with the in-flight turn so the turn block can
+		// carry it as an inline row instead of splitting the tool burst
+		// (goal 0.3.29 Task 3a — the [Tool loop detected: ...] case).
+		if m.streaming {
+			if n := len(m.messages); n > 0 && m.messages[n-1].Role == "system" {
+				m.messages[n-1].Turn = m.turnCounter
+				m.messages[n-1].bumpRev()
+			}
+		}
 		return m, nil
 
 	case AgentChunkMsg:
