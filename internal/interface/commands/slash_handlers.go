@@ -73,7 +73,7 @@ func CurrentModelHandler(getModel func() string) SlashHandler {
 // session only; anything else is rejected honestly.
 func LimitHandler(getLimit func() int, setLimit func(int) error) SlashHandler {
 	const defaultLimit = 15
-	const maxLimit = 100
+	const maxLimit = 500
 	return func(args string) (string, error) {
 		if args == "" {
 			current := getLimit()

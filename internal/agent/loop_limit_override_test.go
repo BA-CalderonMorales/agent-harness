@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -100,4 +101,50 @@ func containsText(m types.Message, substr string) bool {
 		}
 	}
 	return false
+}
+
+// TestQueryLimitSuggestionMath pins the limit-reached suggestion (goal
+// 0.3.29 Task 5): the suggested bump is five times the current limit,
+// clamped to maxToolLimit — the old ×2 suggestion (15→30) still ground
+// the session into "keep saying continue".
+func TestQueryLimitSuggestionMath(t *testing.T) {
+	client := &toolBatchClient{first: true, batchSize: 5}
+	loop := NewLoop(client)
+	loop.Config.MaxToolCalls = 4
+	loop.Config.MaxIdenticalToolUses = 1000 // keep the convergence guard out of the way
+
+	params := QueryParams{
+		Messages: []types.Message{{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "go"}}}},
+		CanUseTool: func(name string, input map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
+			return tools.PermissionDecision{Behavior: tools.Allow}, nil
+		},
+		ToolUseContext: tools.Context{
+			Options:         tools.Options{Tools: []tools.Tool{echoTool()}},
+			AbortController: context.Background(),
+		},
+	}
+
+	stream, err := loop.Query(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	var suggestion string
+	for ev := range stream {
+		if sm, ok := ev.(types.StreamMessage); ok && sm.Message.Role == types.RoleSystem {
+			if containsText(sm.Message, "/limit") {
+				for _, b := range sm.Message.Content {
+					if tb, ok := b.(types.TextBlock); ok {
+						suggestion = tb.Text
+					}
+				}
+			}
+		}
+	}
+	if suggestion == "" {
+		t.Fatal("no limit-reached suggestion emitted")
+	}
+	// 5 * 5 = 25, under the ceiling: the suggestion must be the ×5 bump.
+	if !strings.Contains(suggestion, "/limit 20") {
+		t.Fatalf("suggestion = %q, want /limit 25 (5×5, clamped to ceiling)", suggestion)
+	}
 }

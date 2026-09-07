@@ -14,7 +14,7 @@ import (
 // maxToolLimit caps the session /limit knob: the bump is a rescope for a
 // long task, not a runaway jailbreak - the convergence guard
 // (MaxIdenticalToolUses) stays the real backstop regardless.
-const maxToolLimit = 100
+const maxToolLimit = 500
 
 // toolCallSignature canonicalizes a tool use for loop detection: name plus
 // the JSON of the input (Go serializes map keys deterministically).
@@ -197,7 +197,10 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			maxToolCalls = 15
 		}
 		if state.toolCallCount+len(toolUses) > maxToolCalls {
-			suggested := maxToolCalls * 2
+			// Suggest a meaningful next step: the default 15 doubling to
+			// 30 still grinds ("keep saying continue"). Five times the
+			// current limit is a real rescope; the ceiling clamps it.
+			suggested := maxToolCalls * 5
 			if suggested > maxToolLimit {
 				suggested = maxToolLimit
 			}

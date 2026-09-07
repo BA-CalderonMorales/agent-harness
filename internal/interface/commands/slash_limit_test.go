@@ -48,7 +48,30 @@ func TestLimitHandlerCapsAtMax(t *testing.T) {
 	if got != 0 {
 		t.Fatalf("cap: set called with %d, want no set", got)
 	}
-	if !strings.Contains(result, "capped at 100") {
+	if !strings.Contains(result, "capped at 500") {
 		t.Fatalf("cap message = %q", result)
+	}
+}
+
+// TestLimitHandlerAcceptsNewCeiling pins the 0.3.29 ceiling raise:
+// /limit 500 is exactly at the cap and must be accepted; 501 rejected
+// with the ceiling in the message.
+func TestLimitHandlerAcceptsNewCeiling(t *testing.T) {
+	var got int
+	h := LimitHandler(func() int { return 15 }, func(n int) error { got = n; return nil })
+	result, err := h("500")
+	if err != nil || got != 500 {
+		t.Fatalf("/limit 500: set = %d err = %v, want accepted at the 500 ceiling", got, err)
+	}
+	if !strings.Contains(result, "500") {
+		t.Fatalf("accept message = %q", result)
+	}
+	got = 0
+	result, _ = h("501")
+	if got != 0 {
+		t.Fatalf("/limit 501: set called with %d, want rejected", got)
+	}
+	if !strings.Contains(result, "capped at 500") {
+		t.Fatalf("reject message = %q, want the 500 ceiling", result)
 	}
 }
