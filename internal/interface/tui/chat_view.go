@@ -82,6 +82,14 @@ func (m ChatModel) View() string {
 		Render(vpContent)
 	sections = append(sections, vpRendered)
 
+	// Agent working indicator: the live "what is the agent doing" line
+	// above the composer (Codex parity). Renders in the chrome, not the
+	// transcript; hidden entirely when idle so geometry is unchanged.
+	tick := int(time.Since(m.startTime).Milliseconds() / 250)
+	if status := m.renderWorkingStatus(tick, m.width); status != "" {
+		sections = append(sections, status)
+	}
+
 	// Composer: centered column with padding above and below the input text,
 	// a mode line (mode · model · provider · reasoning effort) under it, and
 	// optional inline suggestions between the editor and the mode line.
@@ -300,29 +308,24 @@ func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, [
 	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
 
-// renderAssistantHeader is the "Agent 22:24 (22.3s)" line — split from
-// the content so a turn block can nest its tool calls between the two.
+// renderAssistantHeader is the "Agent 22:24" line — split from the
+// content so a turn block can nest its tool calls between the two.
+// Live turn state (elapsed clock, thinking badge) moved to the working
+// indicator above the composer: the header is the record ("this reply
+// landed at 22:24"), the status line is the live signal. On finalize,
+// the settled ResponseTime renders again.
 func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	var b strings.Builder
 
-	// Header
 	header := AssistantStyle.Render("Agent")
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
-	// While the response is in progress the header carries a live status:
-	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
-	// from the model's clock, the chunk counter updates per chunk, and the
-	// spinner animates on the same clock.
-	elapsed := msg.ResponseTime
-	if msg.Thinking {
-		elapsed = m.elapsed
-	}
-	if elapsed > 0 {
-		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
-	}
-	if msg.Thinking {
-		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
+	// Live turns render a bare header; the elapsed clock and activity
+	// live in the working indicator above the composer (chat_working.go).
+	// Settled turns show how long the response took.
+	if !msg.Thinking && msg.ResponseTime > 0 {
+		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
 	}
 	b.WriteString(header)
 	return b.String()

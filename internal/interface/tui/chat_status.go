@@ -52,22 +52,6 @@ func formatElapsed(d time.Duration) string {
 	return fmt.Sprintf("%dm%ds", mins, secs)
 }
 
-// thinkingQuips is the rotating verb behind the thinking badge. One
-// slice, one clock — the whole personality of the wait state, and
-// deliberately nothing more. No leading glyph: the animated elapsed
-// clock in the header already says "live", and a star glyph read as
-// decoration rather than signal (live 0.3.28 finding).
-var thinkingQuips = []string{"thinking", "pondering", "brewing", "scheming", "conjuring"}
-
-// thinkingBadge renders the live wait state: a rotating quip in bright
-// info color and a cycling dot trail. tick steps at 250ms from the
-// header clock.
-func (m ChatModel) thinkingBadge(tick int) string {
-	quip := thinkingQuips[tick/8%len(thinkingQuips)] // full cycle ≈ 2s per word
-	dots := strings.Repeat("·", 1+tick%3)
-	return InfoStyle.Render(quip) + HelpDimStyle.Render(dots)
-}
-
 // reasoningPreviewTruncate is the visible tail length of the live
 // reasoning stream. The head of a reasoning trace is stale by the time
 // it renders; the tail is where the model is now.

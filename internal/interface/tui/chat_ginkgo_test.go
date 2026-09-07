@@ -139,22 +139,25 @@ var _ = Describe("ChatModel", func() {
 				view := chat.View()
 				Expect(view).ToNot(ContainSubstring("thinking"))
 
-				By("letting the placeholder delay elapse and confirming the badge appears")
+				By("letting the placeholder delay elapse and confirming the working indicator appears")
 				chat.startTime = time.Now().Add(-1500 * time.Millisecond)
 				model, _ = chat.Update(timerTickMsg{})
 				chat = model.(ChatModel)
 				view = chat.View()
-				Expect(view).ToNot(ContainSubstring("✦")) // glyph removed: no star on the badge
+				// The live header is bare ("Agent HH:MM"): the animated
+				// word moved to the working indicator above the composer.
+				Expect(view).ToNot(ContainSubstring("✦")) // glyph removed earlier
 				Expect(view).ToNot(ContainSubstring("✧"))
-				Expect(view).To(ContainSubstring("thinking")) // quip rotates on a 2s clock
+				Expect(view).To(ContainSubstring("working"))
+				Expect(view).ToNot(ContainSubstring("thinking"))
 
 				By("finishing the turn")
 				model, _ = chat.Update(AgentDoneMsg{Timestamp: time.Now()})
 				chat = model.(ChatModel)
 
-				By("verifying the thinking indicator is gone")
+				By("verifying the working indicator is gone (idle hides the line)")
 				view = chat.View()
-				Expect(view).ToNot(ContainSubstring("(thinking"))
+				Expect(view).ToNot(ContainSubstring("working"))
 			})
 		})
 
