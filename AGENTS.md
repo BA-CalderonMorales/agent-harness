@@ -58,6 +58,8 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 
 - `main` and `develop` are protected (restrict deletions; local `git del`
   honors protection, `./scripts/prune-branches.sh` prunes merged branches).
+- Release branches are named exactly `release/X.Y.Z` (no suffixes) — CI and
+  the pre-push hook both reject any other `release/*` name.
 - Feature and fix work lives on `release/<next-patch>` branches cut from
   `develop`; the branch accumulates the release, then merges into `develop`
   and is tagged from `main`.

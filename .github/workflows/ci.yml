@@ -92,6 +92,22 @@ jobs:
           version: "latest"
           install-go: false
 
+  # Release-branch naming discipline: any release/* branch must be named
+  # exactly release/X.Y.Z — free-form suffixes broke the version story in
+  # 0.3.25/0.3.26 (tag derived from branch no longer matched what shipped).
+  branch-naming:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate release branch name
+        if: github.head_ref != ''
+        run: ./scripts/check-branch-name.sh "${{ github.head_ref }}"
+
+      - name: Run naming-gate unit tests
+        run: sh scripts/test-check-branch-name.sh
+
   # SBOM Generation
   sbom:
     runs-on: ubuntu-latest
