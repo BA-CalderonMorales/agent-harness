@@ -323,7 +323,13 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 // a map[string] over bounded entries is cheap, collisions impossible,
 // and the LRU keeps memory flat (this harness has an OOM history).
 const (
-	groupCacheCapacity  = 8192
+	// groupCacheCapacity must exceed the group count of a marathon
+	// transcript: a 10k-event session produces 10,000 groups, and at
+	// 8192 the LRU evicted entries the next frame needed — the same
+	// thrash the markdown cache had (see chat_render_cache.go). 65536
+	// covers 10k events 6x over; per-block output stays capped at
+	// groupCacheMaxOutput so memory remains bounded.
+	groupCacheCapacity  = 65536
 	groupCacheMaxOutput = 1 << 20 // 1 MiB per block — beyond that, don't cache
 )
 
