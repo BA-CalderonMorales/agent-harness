@@ -39,7 +39,7 @@ func (m *ChatModel) PrependSystemNote(content string) {
 func (m *ChatModel) SetMessages(messages []types.Message) {
 	m.messages = make([]ChatMessage, 0, len(messages))
 	for _, msg := range messages {
-		chatMsg, ok := chatMessageFromSessionMessage(msg)
+		chatMsg, ok := m.chatMessageFromSessionMessage(msg)
 		if ok {
 			m.messages = append(m.messages, chatMsg)
 		}
@@ -47,7 +47,12 @@ func (m *ChatModel) SetMessages(messages []types.Message) {
 	m.refreshViewportFollow()
 }
 
-func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
+// chatMessageFromSessionMessage maps one persisted message onto its
+// chat-render form. Tool calls must carry the same display fields the
+// live path populates (getToolDisplayName / extractCommandFromToolInput):
+// without them the collapse machinery renders bare carets — no tool
+// name, no detail, no duration — after a session reload.
+func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 	var content strings.Builder
 	isTool := false
 	toolName := ""
@@ -95,7 +100,7 @@ func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 	if isTool {
 		role = "tool"
 	}
-	return ChatMessage{
+	msgOut := ChatMessage{
 		ID:         msg.UUID,
 		Role:       role,
 		Content:    text,
@@ -104,7 +109,27 @@ func chatMessageFromSessionMessage(msg types.Message) (ChatMessage, bool) {
 		IsTool:     isTool,
 		ToolName:   toolName,
 		ToolStatus: status,
-	}, true
+	}
+	if isTool && toolName != "" {
+		msgOut.ToolDisplayName = getToolDisplayName(toolName)
+		msgOut.ToolDetail = m.extractCommandFromToolInput(toolName, toolInputForSession(msg))
+		if !msg.Timestamp.IsZero() {
+			msgOut.ToolStartedAt = msg.Timestamp
+		}
+	}
+	return msgOut, true
+}
+
+// toolInputForSession recovers the tool's input map from the message's
+// tool-use block so the session-reload path can rebuild the same detail
+// string the live path showed.
+func toolInputForSession(msg types.Message) map[string]any {
+	for _, block := range msg.Content {
+		if b, ok := block.(types.ToolUseBlock); ok {
+			return b.Input
+		}
+	}
+	return nil
 }
 
 // AddToolMessage adds a tool message to the chat.
