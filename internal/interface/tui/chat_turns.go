@@ -311,9 +311,6 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 		}
 	}
 
-	// Tool rows resolve by part ID; a row renders through the collapse
-	// machinery so runs merge and expansions open in place. The lookup
-	// also reports the rendered height for the click index.
 	// The bubble's inner width: pane minus bubble border, padding, and
 	// the nesting step.
 	innerWidth := m.width - 8
@@ -321,70 +318,19 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 		innerWidth = 20
 	}
 
-	// Class grouping spans interleaved narration (goal 0.3.29 Task 3a):
-	// a shell burst with prose between calls renders ONE Shell header
-	// with all its sub-rows, not a header per prose-separated fragment.
-	// The first tool of each display class (in message order) renders
-	// the whole class group; later members render nothing here — their
-	// rows already appeared under the group header, and the prose part
-	// between them still renders in its chronological place. Class
-	// membership spans the whole turn block (same boundary the collapse
-	// machinery uses for runs), never across turns.
-	groupStart := make(map[string]bool)   // display class → seen
-	groupMembers := make(map[string]bool) // tool ID → belongs to a rendered group
-	type classRun struct {
-		class string
-		ids   []string
-	}
-	runs := map[string]*classRun{}
-	var runOrder []string
-	for k := i; k < j; k++ {
-		if msgs[k].Role != "tool" {
-			continue
-		}
-		class := getToolDisplayName(msgs[k].ToolName)
-		r, ok := runs[class]
-		if !ok {
-			r = &classRun{class: class}
-			runs[class] = r
-			runOrder = append(runOrder, class)
-		}
-		r.ids = append(r.ids, msgs[k].ID)
-	}
-
+	// Tool rows render in natural arrival order: each call appears at
+	// its chronological position through the collapse machinery, so
+	// back-to-back same-category calls merge into one group header
+	// while interleaved narration splits them — the user watches calls
+	// come in naturally, grouped only when a category repeats
+	// consecutively (goal 0.3.29 live feedback on Task 3a's spanning).
 	toolRow := func(id string) (string, bool) {
 		for k := i; k < j; k++ {
 			if msgs[k].ID != id {
 				continue
 			}
-			class := getToolDisplayName(msgs[k].ToolName)
-			r := runs[class]
-			// First member of the class renders the group header plus
-			// every member's sub-row, pulled through the collapse
-			// machinery so widths, statuses, and expansions stay honest.
-			if !groupStart[class] {
-				groupStart[class] = true
-				var members []ChatMessage
-				for _, mid := range r.ids {
-					for q := i; q < j; q++ {
-						if msgs[q].ID == mid {
-							members = append(members, msgs[q])
-							groupMembers[mid] = true
-						}
-					}
-				}
-				// A class with one member renders as its plain line
-				// (single calls never group — same rule as runs).
-				if len(members) == 1 {
-					row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
-					return indentBlock(row), true
-				}
-				row := m.renderToolRunAt(members, innerWidth)
-				return indentBlock(row), true
-			}
-			// Later member of an already-rendered class group: nothing —
-			// the header above carries its row.
-			return "", true
+			row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
+			return indentBlock(row), true
 		}
 		return "", false
 	}

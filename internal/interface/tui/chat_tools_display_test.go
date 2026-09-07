@@ -108,15 +108,28 @@ func TestDurationRightAlignedConsistently(t *testing.T) {
 	if !strings.Contains(line, "2.0s") {
 		t.Fatalf("duration missing from group header: %q", line)
 	}
-	// Right-aligned: the duration is the last visible token on the row
-	// — at most the 2 reserved caret/pad columns of trailing space
-	// after it. (Terminal-edge padding is stripped before measuring.)
+	// Right-aligned within the row's own render width: the duration
+	// (plus the stable short tag, Task 3c — the tag is the new
+	// right-most token by design) ends at the row's content edge. The
+	// viewport pads bubble-nested rows out to the pane width, so
+	// measure the trailing gap against the row's rendered width, not
+	// the pane: at most the 2 reserved caret/pad columns of trailing
+	// space before the viewport padding.
 	trimmed := strings.TrimRight(line, " ")
-	if lipgloss.Width(line)-lipgloss.Width(trimmed) > 2 {
-		t.Fatalf("duration not right-aligned (more than 2 trailing columns): %q", line)
+	contentW := lipgloss.Width(trimmed)
+	trail := lipgloss.Width(line) - contentW
+	// Trail = (pane − row render width) + at most 2 internal pad cols.
+	// The row render width is pane−8−1 (bubble inner minus left
+	// border), so the gap can be up to 9+2; assert the tag/duration
+	// ends within the row's own budget by checking the gap never
+	// exceeds the bubble slack (9) plus the 2 internal pad columns.
+	if trail > 11 {
+		t.Fatalf("duration not right-aligned (more than bubble slack + 2 trailing columns): %q", line)
 	}
-	if !strings.HasSuffix(ansiStrip(trimmed), "2.0s") {
-		t.Fatalf("duration is not the last visible token on the row: %q", trimmed)
+	last := strings.TrimRight(ansiStrip(trimmed), " ")
+	if !strings.HasSuffix(last, "#5e16") {
+		// The tag is the row's last visible token (Task 3c).
+		t.Fatalf("tag is not the row's last visible token: %q", last)
 	}
 }
 

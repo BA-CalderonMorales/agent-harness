@@ -55,6 +55,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 	type group struct {
 		name  string
 		start time.Time
+		tag   string // short identifier of the first member (Task 3c)
 		rows  []string
 	}
 	var groups []*group
@@ -66,7 +67,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		// `ls` belongs to "Shell" wherever it came from.
 		name := getToolDisplayName(msg.ToolName)
 		if current == nil || current.name != name {
-			current = &group{name: name, start: msg.ToolStartedAt}
+			current = &group{name: name, start: msg.ToolStartedAt, tag: shortToolTag(msg.ID)}
 			if current.start.IsZero() {
 				current.start = msg.Timestamp
 			}
@@ -113,6 +114,11 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		)
 		left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
 		if dur != "" {
+			// The group header carries the first member's short tag
+			// (Task 3c): the pointer to the full record in Logs.
+			if g.tag != "" {
+				dur = dur + "  " + g.tag
+			}
 			pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
 			if pad < 2 {
 				pad = 2
@@ -121,9 +127,15 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		} else {
 			b.WriteString(left)
 		}
-		// Indented sub-list of each call beneath its group header.
-		for _, row := range g.rows {
+		// Indented sub-list of each call beneath the group header, with
+		// a blank line between calls: horizontal breathing room keeps
+		// consecutive calls visually separate instead of a dense wall
+		// (goal 0.3.29 live feedback on grouping).
+		for ri, row := range g.rows {
 			b.WriteString("\n")
+			if ri > 0 {
+				b.WriteString("\n")
+			}
 			b.WriteString(" " + indentBlock(row))
 		}
 	}

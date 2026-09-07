@@ -251,7 +251,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
-			Content:         m.formatToolContent(displayName, command, ToolStatusRunning, time.Now(), 0),
+			Content:         m.formatToolContent(displayName, command, shortToolTag(msg.ToolID), ToolStatusRunning, time.Now(), 0),
 			Timestamp:       time.Now(),
 			IsTool:          true,
 			ToolName:        msg.ToolName,
@@ -306,7 +306,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 					m.messages[i].ToolDetail = detail
 				}
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
-				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, detail, shortToolTag(m.messages[i].ID), status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 				m.messages[i].bumpRev()
 				m.messages[i].ToolStatus = status
 				break
@@ -376,7 +376,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 				started = m.currentToolMsg.Timestamp
 			}
 			m.currentToolMsg.ToolElapsed = time.Since(started)
-			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError, started, m.currentToolMsg.ToolElapsed)
+			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, shortToolTag(m.currentToolMsg.ID), ToolStatusError, started, m.currentToolMsg.ToolElapsed)
 			m.currentToolMsg.bumpRev()
 			m.currentToolMsg.ToolStatus = ToolStatusError
 		}

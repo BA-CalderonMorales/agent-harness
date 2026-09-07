@@ -444,7 +444,7 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	// summary row stays (time, glyph, name, duration), and each todo
 	// becomes an indented checkbox row beneath it.
 	if rows := m.todoChecklistRows(msg); rows != nil {
-		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
+		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
 		for _, r := range rows {
 			body += "\n " + r
 		}
@@ -454,7 +454,7 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 		return body
 	}
 
-	row := m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
+	row := m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
 	body := style.Render(expandCaret(expanded) + " " + row)
 
 	// Expanded tool record: the full call beneath the summary line —

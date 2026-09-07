@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
@@ -72,7 +73,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
 			}
 			m.messages[i].ToolStatus = status
-			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, shortToolTag(id), status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 			m.messages[i].bumpRev()
 			m.refreshViewport()
 			return
@@ -84,7 +85,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	msg := ChatMessage{
 		ID:              id,
 		Role:            "tool",
-		Content:         m.formatToolContent(toolDisplayName, command, status, started, 0),
+		Content:         m.formatToolContent(toolDisplayName, command, shortToolTag(id), status, started, 0),
 		Timestamp:       started,
 		IsTool:          true,
 		ToolName:        toolName,
@@ -101,17 +102,35 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 // structured tool line, so the detail column aligns down a turn.
 const toolNameColumn = 8
 
+// shortToolTag derives the stable short identifier rendered on tool
+// rows (goal 0.3.29 Task 3c, Slice 1): the first four hex characters
+// of the FNV-1a 64 hash of the tool-use ID — the same ID the audit log
+// records as ToolCallID, so a tag typed into the Logs filter (Slice 2)
+// joins the chat row to the full command, permission decision, and
+// audit trail. Always derived, never stored: a scheme change never
+// migrates data. An empty ID yields an empty tag (rows that have no
+// tool-use ID — legacy records — render without one).
+func shortToolTag(toolID string) string {
+	if toolID == "" {
+		return ""
+	}
+	h := fnv.New64a()
+	h.Write([]byte(toolID))
+	return fmt.Sprintf("#%04x", h.Sum64()&0xffff)
+}
+
 // formatToolContent renders one tool event as a structured log record,
 // Splunk-shaped but readable at a glance:
 //
-//	01:20:03 ✓ bash     git log --oneline -8                          0.4s
-//	01:20:05 ✓ read     pkg/format/format.go                          0.1s
-//	01:20:07 → grep     "ToolStatus" in internal/                        …
+//	01:20:03 ✓ bash     git log --oneline -8                  0.4s  #a1b2
+//	01:20:05 ✓ read     pkg/format/format.go                  0.1s  #c93f
+//	01:20:07 → grep     "ToolStatus" in internal/               …
 //
 // Time · status glyph · tool name (padded) · target detail · right-
-// aligned duration (live calls show a running ellipsis instead).
-func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
-	return m.formatToolContentAt(m.width, toolDisplayName, command, status, started, elapsed)
+// aligned duration (live calls show a running ellipsis instead) · the
+// stable short tag (Task 3c) that joins the row to its Logs records.
+func (m *ChatModel) formatToolContent(toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	return m.formatToolContentAt(m.width, toolDisplayName, command, tag, status, started, elapsed)
 }
 
 // formatToolContentAt renders the record for a width budget — nested
@@ -122,7 +141,7 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 // pane width and re-rendered inside the bubble used to exceed the
 // bubble's inner budget and wrap its duration onto a second line
 // (goal 0.3.29 Task 3b).
-func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
 	var glyph string
 	switch status {
 	case ToolStatusRunning:
@@ -155,28 +174,37 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 		return line + ToolTimeStyle.Render("  …")
 	}
 	dur := formatElapsed(elapsed)
+	// The short tag rides at the row's right end, after the duration:
+	// it is the pointer to the full record (Logs filter, Task 3c) and
+	// must survive truncation of the command text.
+	if tag != "" {
+		dur = dur + "  " + tag
+	}
 	// Display-width padding: glyph and dot runes are multi-byte, so
-	// len() would over-count and shove the duration off the edge. Two
-	// columns are reserved for the expand caret the render path
-	// prepends (▸ folded / ▾ open) so the line stays exact-width.
-	pad := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
-	if pad < 2 {
-		// The detail overran its budget (e.g. compact path produced a
-		// longer result, or a caller passed a narrower width than the
-		// truncation saw): re-truncate rather than wrap the duration
-		// onto a second line (goal 0.3.29 Task 3b).
-		budget := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(dur) - 8
-		if budget < 1 {
-			budget = 1
-		}
-		detail = fitBlock(budget, detail)
-		if over := lipgloss.Width(detail) - budget; over > 0 {
-			detail = detail[:len(detail)-over]
-		}
-		pad = width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
-		if pad < 2 {
-			pad = 2
-		}
+	// len() would over-count and shove the duration off the edge. The
+	// fixed reservation: two caret columns the render path prepends
+	// (▸ folded / ▾ open), two leading spaces before the timestamp, and
+	// the tag width when present (2-space separator + tag) — the tag
+	// rides at the row's right end after the duration (Task 3c).
+	tagWidth := 0
+	if tag != "" {
+		tagWidth = 2 + lipgloss.Width(tag)
+	}
+	// The detail budget is the authority: whatever is left after the
+	// fixed columns and a 2-column pad. Overruns re-truncate here —
+	// the pad is never allowed to go negative and push the duration
+	// onto a second line (goal 0.3.29 Task 3b).
+	fixed := lipgloss.Width(timeStr) + lipgloss.Width(glyphAndName) + lipgloss.Width(dur) + tagWidth + 8
+	budget := width - fixed
+	if budget < 1 {
+		budget = 1
+	}
+	if lipgloss.Width(detail) > budget {
+		detail = detail[:len(detail)-(lipgloss.Width(detail)-budget)]
+	}
+	pad := width - fixed - lipgloss.Width(detail)
+	if pad < 1 {
+		pad = 1
 	}
 	return line + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
 }
@@ -293,7 +321,8 @@ func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd st
 		name += strings.Repeat(" ", pad)
 	}
 	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur
-	maxCmdLen := width - 8 - 1 - lipgloss.Width(name) - 1 - 2 - 2 - 5
+	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur + 7 tag
+	maxCmdLen := width - 8 - 1 - lipgloss.Width(name) - 1 - 2 - 2 - 5 - 7
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}

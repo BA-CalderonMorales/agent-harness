@@ -69,30 +69,14 @@ func (m ChatModel) workingStatusLine(tick int) string {
 	if !m.thinking && !m.streaming {
 		return ""
 	}
-	elapsed := formatElapsed(m.elapsed)
-	if m.currentToolMsg != nil {
-		// Working: tool call(s) in flight. Count every call this turn
-		// has made (completed + the one running) so the line answers
-		// "how far along is it".
-		n := len(m.completedToolMsgs)
-		if n == 0 {
-			n = len(m.turnTools)
-		}
-		if n == 0 {
-			n = 1
-		}
-		class := m.currentToolMsg.ToolDisplayName
-		if class == "" {
-			class = m.currentToolMsg.ToolName
-		}
-		return fmt.Sprintf("%s · %s ×%d · %s",
-			workingAnim(workingWord(), tick),
-			class, n, elapsed)
-	}
-	// Thinking: no tool running. The animated word + elapsed clock.
+	// The animated word + elapsed clock, whether or not a tool is
+	// running. Live feedback: the "Shell ×2" class-and-count read as
+	// content, not status — the user watches the transcript for WHAT
+	// is running; the indicator only needs to say work is happening
+	// and for how long.
 	return fmt.Sprintf("%s · %s",
 		workingAnim(workingWord(), tick),
-		elapsed)
+		formatElapsed(m.elapsed))
 }
 
 // workingStatusHeight reports how many rows the status line occupies in

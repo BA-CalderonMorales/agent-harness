@@ -42,7 +42,10 @@ func TestWorkingIndicatorStates(t *testing.T) {
 		}
 	}
 
-	// Working: tool call in flight — class + count + elapsed.
+	// Working: a tool call in flight does NOT change the line — live
+	// feedback removed the class-and-count ("Shell ×2" read as
+	// content); the transcript shows what's running, the indicator
+	// only says work is happening and for how long.
 	tool := ChatMessage{
 		ID: "tool-1", Role: "tool", IsTool: true,
 		ToolName: "Bash", ToolDisplayName: "Shell", ToolStatus: ToolStatusRunning,
@@ -51,8 +54,8 @@ func TestWorkingIndicatorStates(t *testing.T) {
 	m.completedToolMsgs = nil
 	m.turnTools = []turnToolMark{{ToolID: "t1", At: 0}, {ToolID: "t2", At: 1}}
 	line = m.workingStatusLine(1)
-	if !strings.Contains(line, "Shell ×2") {
-		t.Fatalf("working status = %q, want class and count", line)
+	if strings.Contains(line, "Shell") || strings.Contains(line, "×") {
+		t.Fatalf("working status = %q, class-and-count was removed (word + elapsed only)", line)
 	}
 	if !strings.Contains(line, "Working") {
 		t.Fatalf("working status = %q, want the animated word", line)
