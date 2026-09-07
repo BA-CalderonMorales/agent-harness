@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.3.28] - 2026-09-07
+
+### Added
+- Codex-style tool-call display: consecutive same-class tool calls group
+  under one header (Shell/Read File/Search) with each call as an indented
+  sub-list row; `ls` renders under Shell, `edit` renames to Update, todo
+  calls render as a visible ✓/→/○ checklist, shell calls show
+  `$ <command>` rows, and the duration column right-aligns consistently
+  (PR #22).
+- `/cleanup`: list saved sessions by size/age; delete named sessions or
+  everything non-active with `--confirm`. Deletion goes through
+  SessionManager.DeleteSession (active-session guard, audit trail).
+- Release-flow gates: release branches must be named exactly
+  `release/X.Y.Z` (CI job + pre-push hook + script unit tests), and tag
+  pushes are verified against `main.go` Version before any binary is
+  built — the 0.3.25/0.3.26 shipped-as-0.3.24 failure mode is now a
+  fast CI failure (PR #22).
+
+### Changed
+- ToolInputJSON is now populated on both the live path and session
+  reload, so expanded tool records show the real input and todo
+  checklists survive a reload (PR #22).
+
+### Fixed
+- Scroll-back was impossible during a live turn: the 0.3.27 deferred
+  refresh flushed with force-bottom, so timer ticks yanked scrolled-up
+  users back to the bottom; wheel events also scrolled stale content.
+  Follow semantics restored, wheel flushes pending rebuilds first
+  (PR #22).
+- ESC on a streaming turn left a frozen thinking spinner on the
+  cancelled message; cancel now finalizes partial content and clears
+  the streaming state (PR #22).
+- /model slash switches left the composer mode line showing the old
+  model; the slash path now notifies the TUI like the settings path
+  (PR #22).
+- Session reload rendered tool rows as bare carets (no tool name);
+  the reload mapping now populates the same display fields as the
+  live path (PR #22).
+
+### Performance
+- Marathon lag eliminated: the markdown render cache (4096) and group
+  cache (8192) were both smaller than a 10k-event session's working
+  set (~10,000 groups), thrashing the LRU into a full glamour
+  re-render every frame. Capacities raised to 32768/65536: streaming
+  frames at 10k events 2.60s/op → 71.6ms/op, allocations 16.6M →
+  52.8K per frame; composer keystrokes stay flat (~0.4ms) (PR #22).
+
 ## [0.3.27] - 2026-09-06
 
 ### Added
