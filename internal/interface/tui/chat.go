@@ -4,7 +4,6 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
@@ -191,7 +190,7 @@ type ChatModel struct {
 	width    int
 	height   int
 	messages []ChatMessage
-	viewport viewport.Model
+	viewport fastViewport
 	textarea textarea.Model
 	focused  bool
 
@@ -330,6 +329,14 @@ type ChatModel struct {
 	historyCursor     int    // position in inputHistory; len() = at the draft
 	historyNavigating bool   // ↑ was pressed; ↓ returns to the draft
 	historyDraft      string // composer content when history navigation began
+
+	// Structural prefix reuse (Task 5): the previous frame's rendered
+	// blocks and their painted form. A new frame compares its block
+	// list with lastBlocks (identity through the group cache) and
+	// reuses lastPainted's unchanged head bytes instead of re-joining
+	// the whole transcript.
+	blockScratch []string
+	lastBlocks   []string
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -381,7 +388,7 @@ func NewChatModel() ChatModel {
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
-	vp := newViewport(80, 20)
+	vp := fastViewport{Width: 80, Height: 20}
 
 	return ChatModel{
 		textarea: ta,

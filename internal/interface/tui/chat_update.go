@@ -80,9 +80,8 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 				}
 				return m, nil
 			}
-			nv, cmd := m.viewport.Update(msg)
-			m.viewport = nv
-			return m, cmd
+			m.viewport.Update(msg)
+			return m, nil
 		}
 		if msg.Action == tea.MouseActionPress && msg.Button == tea.MouseButtonLeft {
 			// viewportTopOffset: the tab bar (3 rows) plus the chat header
@@ -452,9 +451,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	}
 
 	// Update viewport for all other message types
-	newVP, cmd := m.viewport.Update(msg)
-	m.viewport = newVP
-	cmds = append(cmds, cmd)
+	m.viewport.Update(msg)
 
 	return m, tea.Batch(cmds...)
 }
