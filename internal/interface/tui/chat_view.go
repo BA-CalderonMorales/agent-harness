@@ -14,6 +14,15 @@ func (m ChatModel) View() string {
 		return "  Initializing chat..."
 	}
 
+	// Deferred rebuilds flush in Update (the persisted model), not
+	// here: View has a value receiver, so mutations would not survive
+	// the frame. Update() flushes before handling the message; the
+	// viewport content View reads is therefore current. The one gap —
+	// mutations made without an Update in between (none today; every
+	// mutator path is reached from Update or from a delegate cmd that
+	// lands as a message) — would paint one frame stale and correct
+	// on the next Update.
+
 	m.syncTextareaHeight()
 	inputHeight := m.inputAreaHeight()
 

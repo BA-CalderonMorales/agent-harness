@@ -128,6 +128,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
+		msg.bumpRev()
 		msg.Parts = parts
 		msg.ReasoningText = m.currentReasoningText()
 		msg.ResponseTime = m.elapsed
@@ -185,6 +186,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
+		msg.bumpRev()
 		msg.Parts = parts
 		msg.ReasoningText = m.currentReasoningText()
 		msg.Timestamp = time.Now()
@@ -207,7 +209,7 @@ func (m *ChatModel) finalizeStreamingMessage(content string) {
 	m.currentStreamingAssistantIdx = -1
 	m.currentStreamingAssistantID = ""
 	m.turnTools = nil
-	m.refreshViewport()
+	m.refreshDeferred()
 }
 
 // refreshViewport refreshes the viewport content.
