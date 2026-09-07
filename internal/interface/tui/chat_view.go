@@ -343,18 +343,11 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
-	// hidden so only the animated header shows. Once the first token has
-	// been pending long enough to suggest a slow local model, an explanatory
-	// progress line fills the gap. When reasoning deltas are streaming
-	// (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning text
-	// previews under the badge — unless the record is expanded, which
+	// hidden so only the animated header shows. When reasoning deltas are
+	// streaming (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning
+	// text previews under the badge — unless the record is expanded, which
 	// shows the full reasoning like an expanded tool call.
 	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
-		if hint := thinkingHint(m.elapsed); hint != "" {
-			b.WriteString(HelpDimStyle.Render(hint))
-			b.WriteString("\n")
-			rows++
-		}
 		if m.expandedMessageID == msg.ID {
 			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
 				wrapped := fitBlock(m.width-4, full)
