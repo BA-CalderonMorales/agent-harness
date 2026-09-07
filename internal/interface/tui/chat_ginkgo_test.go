@@ -148,7 +148,7 @@ var _ = Describe("ChatModel", func() {
 				// word moved to the working indicator above the composer.
 				Expect(view).ToNot(ContainSubstring("✦")) // glyph removed earlier
 				Expect(view).ToNot(ContainSubstring("✧"))
-				Expect(view).To(ContainSubstring("working"))
+				Expect(view).To(ContainSubstring("Working"))
 				Expect(view).ToNot(ContainSubstring("thinking"))
 
 				By("finishing the turn")
@@ -157,7 +157,7 @@ var _ = Describe("ChatModel", func() {
 
 				By("verifying the working indicator is gone (idle hides the line)")
 				view = chat.View()
-				Expect(view).ToNot(ContainSubstring("working"))
+				Expect(view).ToNot(ContainSubstring("Working"))
 			})
 		})
 

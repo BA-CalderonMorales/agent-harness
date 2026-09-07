@@ -22,7 +22,7 @@ import (
 // never changes — letters shimmer under it instead — so the line reads
 // as one stable state, not a ticker (live feedback on 0.3.29 develop:
 // the rotating quips read as content, not progress).
-var workingVerbs = []string{"working"}
+var workingVerbs = []string{"Working"}
 
 // workingWord returns the (single) verb for the status line.
 func workingWord() string { return workingVerbs[0] }

@@ -27,7 +27,7 @@ func TestWorkingIndicatorStates(t *testing.T) {
 	m.startTime = time.Now().Add(-1500 * time.Millisecond)
 	m.elapsed = 1500 * time.Millisecond
 	line := m.workingStatusLine(3)
-	if !strings.Contains(line, "working") {
+	if !strings.Contains(line, "Working") {
 		t.Fatalf("thinking status = %q, want the animated word", line)
 	}
 	if !strings.Contains(line, "1.5s") {
@@ -54,7 +54,7 @@ func TestWorkingIndicatorStates(t *testing.T) {
 	if !strings.Contains(line, "Shell ×2") {
 		t.Fatalf("working status = %q, want class and count", line)
 	}
-	if !strings.Contains(line, "working") {
+	if !strings.Contains(line, "Working") {
 		t.Fatalf("working status = %q, want the animated word", line)
 	}
 
@@ -74,7 +74,7 @@ func TestWorkingIndicatorStates(t *testing.T) {
 // observable here; the sweep order is the behavior.
 func TestWorkingAnimShimmers(t *testing.T) {
 	word := workingWord()
-	if word != "working" {
+	if word != "Working" {
 		t.Fatalf("word = %q, want the single stable word", word)
 	}
 	n := len([]rune(word))
