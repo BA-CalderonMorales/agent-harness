@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -198,6 +200,65 @@ func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 // GetSessionsDir returns the sessions directory
 func (sm *SessionManager) GetSessionsDir() string {
 	return sm.projectSessionsDir()
+}
+
+// ListSessionsWithSize lists sessions like ListSessions, plus each
+// session's on-disk size, for the /cleanup listing. One directory
+// listing pass builds the ID→path map (the same files ListSessions
+// reads), then one os.Stat per session — O(n) overall, never a
+// findSessionFile-per-row loop (that re-lists the directory per call,
+// O(n²) disk I/O). Oldest first, so the cleanup target order reads
+// naturally.
+func (sm *SessionManager) ListSessionsWithSize() ([]SessionWithSize, error) {
+	sessions, err := sm.ListSessions()
+	if err != nil {
+		return nil, err
+	}
+	paths, err := sm.listProjectSessionFiles()
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]string, len(paths))
+	for _, path := range paths {
+		base := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+		if suffix := strings.SplitN(base, "_", 2); len(suffix) == 2 {
+			base = suffix[1]
+		}
+		byID[base] = path
+	}
+	out := make([]SessionWithSize, 0, len(sessions))
+	for _, s := range sessions {
+		entry := SessionWithSize{SessionMetadata: s}
+		// Exact ID, then prefix match — the same resolution rules
+		// findSessionFile applies, without the per-row directory walk.
+		if path, ok := byID[s.ID]; ok {
+			if info, err := os.Stat(path); err == nil {
+				entry.SizeBytes = info.Size()
+			}
+		} else {
+			for base, path := range byID {
+				if strings.HasPrefix(base, s.ID) {
+					if info, err := os.Stat(path); err == nil {
+						entry.SizeBytes = info.Size()
+					}
+					break
+				}
+			}
+		}
+		out = append(out, entry)
+	}
+	// Oldest first (UpdatedAt ascending).
+	sort.Slice(out, func(i, j int) bool {
+		return out[i].UpdatedAt.Before(out[j].UpdatedAt)
+	})
+	return out, nil
+}
+
+// SessionWithSize is one /cleanup listing row: the standard session
+// metadata plus the on-disk size.
+type SessionWithSize struct {
+	SessionMetadata
+	SizeBytes int64
 }
 
 // DeleteSession deletes a session by ID

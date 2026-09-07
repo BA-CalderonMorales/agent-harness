@@ -68,14 +68,16 @@ func (m *ChatModel) refreshDeferred() {
 }
 
 // flushDeferredRefresh performs the deferred rebuild if one is pending.
-// forceBottom preserves the follow-the-stream semantics of the calls
-// that deferred it.
+// Follow semantics (wasAtBottom → follow, scrolled-up → preserve offset)
+// are the viewport's own job; forcing the bottom here would yank a
+// scrolled-up user back down on the next chunk or timer tick, making
+// scroll-back impossible while a turn is live.
 func (m *ChatModel) flushDeferredRefresh() {
 	if !m.refreshPending {
 		return
 	}
 	m.refreshPending = false
-	m.refreshViewportWithFollow(true)
+	m.refreshViewportWithFollow(false)
 }
 
 func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {

@@ -22,12 +22,18 @@ func getToolDisplayName(toolName string) string {
 	switch toolName {
 	case "bash", "BashTool":
 		return "Shell"
+	case "ls", "ls_recursive", "list_files", "LsTool":
+		// Low-level directory listing belongs to the shell class —
+		// its own header for `ls` is noise (goal 0.3.28 Task 4.2).
+		return "Shell"
 	case "read", "ReadTool":
 		return "Read File"
 	case "write", "WriteTool":
 		return "Write File"
 	case "edit", "EditTool":
-		return "Edit File"
+		// "Update" reads as an action, never show lowercase "edit"
+		// (goal 0.3.28 Task 4.3).
+		return "Update"
 	case "glob", "GlobTool":
 		return "Find Files"
 	case "grep", "GrepTool":

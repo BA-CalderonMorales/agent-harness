@@ -187,15 +187,16 @@ func TestCollapsedRunRowsClickThroughRealDispatch(t *testing.T) {
 		}
 		m.refreshViewportWithFollow(true)
 
-		if !strings.Contains(m.viewport.View(), "bash ×3") {
-			t.Fatalf("w%d: run not collapsed:\n%s", width, m.viewport.View())
+		if !strings.Contains(m.viewport.View(), "✓ Shell") {
+			t.Fatalf("w%d: run not collapsed to a group header:\n%s", width, m.viewport.View())
 		}
-		// The run line itself unfolds the run.
+		// The run header itself unfolds the run.
 		m = mouseClickAt(m, 0)
 		if m.expandedMessageID == "" {
 			t.Fatalf("w%d: click on run line did not unfold", width)
 		}
-		if strings.Contains(m.viewport.View(), "bash ×3") {
+		if strings.Contains(m.viewport.View(), "esc to close") == false &&
+			strings.Count(m.viewport.View(), "✓ Shell") != 0 {
 			t.Fatalf("w%d: run still collapsed after click:\n%s", width, m.viewport.View())
 		}
 	}

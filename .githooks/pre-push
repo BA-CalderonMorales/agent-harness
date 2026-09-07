@@ -1,5 +1,8 @@
 #!/bin/sh
-# pre-push hook - Prevent pushing tags if versions don't match remote
+# pre-push hook - Push-time release discipline.
+# 1. Rejects release/* branches not named exactly release/X.Y.Z (the same
+#    rule CI enforces; see scripts/check-branch-name.sh).
+# 2. Prevents pushing tags if versions don't match remote.
 # Install: git config core.hooksPath .githooks
 
 remote="$1"
@@ -9,6 +12,17 @@ url="$2"
 while read local_ref local_sha remote_ref remote_sha
 do
     case "$local_ref" in
+    refs/heads/*)
+        # Branch naming: release branches must be exactly release/X.Y.Z.
+        # POSIX-safe: no `--` end-of-options (dash's cd/dirname reject it);
+        # $0 in a git hook always starts with ./ or / so plain quoting is
+        # sufficient.
+        HOOK_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+        BRANCH="${local_ref#refs/heads/}"
+        if ! "$HOOK_DIR/../scripts/check-branch-name.sh" "$BRANCH"; then
+            exit 1
+        fi
+        ;;
     refs/tags/*)
         TAG="${local_ref#refs/tags/}"
         

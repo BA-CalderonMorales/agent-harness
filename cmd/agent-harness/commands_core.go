@@ -77,6 +77,12 @@ func (app *App) initCommandsCore() {
 					diag.Error("session.save.model", err)
 				}
 				app.refreshTelemetry(app.tuiApp)
+				// Mirror the settings-delegate path: the composer mode
+				// line reads chatModel.model, so the TUI must hear about
+				// the switch or it keeps showing the old model.
+				if app.tuiApp != nil {
+					app.tuiApp.Send(tui.ModelChangedMsg{Model: m})
+				}
 				return nil
 			},
 			func() []string {
@@ -91,6 +97,34 @@ func (app *App) initCommandsCore() {
 
 	app.cmdRegistry.Register("current-model", "Show the current model",
 		commands.CurrentModelHandler(func() string { return app.session.Model }))
+
+	app.cmdRegistry.Register("cleanup", "List saved sessions by size/age; delete with --confirm",
+		commands.CleanupHandler(
+			func() ([]commands.CleanupSession, error) {
+				rows, err := app.sessionManager.ListSessionsWithSize()
+				if err != nil {
+					// Surface the listing failure: the handler turns it
+					// into a command error instead of "no sessions".
+					return nil, err
+				}
+				out := make([]commands.CleanupSession, 0, len(rows))
+				for _, r := range rows {
+					out = append(out, commands.CleanupSession{
+						ID:           r.ID,
+						UpdatedAt:    r.UpdatedAt,
+						MessageCount: r.MessageCount,
+						SizeBytes:    r.SizeBytes,
+					})
+				}
+				return out, nil
+			},
+			func(id string) error {
+				// SessionManager.DeleteSession: refuses the active
+				// session and keeps the audit trail — never raw
+				// os.Remove here.
+				return app.sessionManager.DeleteSession(id)
+			},
+		))
 
 	app.cmdRegistry.Register("effort", "Show or cycle reasoning effort (usage: /effort [low|medium|high])",
 		commands.ModelHandler(

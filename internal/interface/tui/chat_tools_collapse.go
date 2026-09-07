@@ -1,9 +1,10 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
-	"sort"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/lipgloss"
 )
@@ -39,26 +40,50 @@ func (m ChatModel) ToolsCollapsed() bool {
 	return m.toolsCollapsed
 }
 
-// renderToolRun renders a collapsed run as one structured record, the
-// same shape as a single tool line with the tool column carrying the
-// per-tool counts: "01:20:03 ✓ bash ×3 · read ×5   12.3s". The span
-// comes from the first and last message timestamps.
+// renderToolRunAt renders a collapsed run as a codex-style group: one
+// header line per display name present in the run ("✓ Shell"), with
+// each call indented beneath it as a sub-list row ("$ git status" or
+// the call's detail). Timestamps stay on the header; each sub-row
+// carries its status glyph; the run's duration is right-aligned on the
+// header (goal 0.3.28 Task 4.1/4.5/4.6).
 // renderToolRunAt renders the collapsed run for a width budget —
 // nested runs live inside the response bubble.
 func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
-	counts := make(map[string]int)
+	// Group consecutive sub-list rows under one header per display
+	// name, preserving call order: Grep → "Grep" header + its calls,
+	// then Read → "Read File" header + its calls.
+	type group struct {
+		name  string
+		start time.Time
+		rows  []string
+	}
+	var groups []*group
+	var current *group
 	for _, msg := range run {
-		counts[msg.ToolDisplayName]++
-	}
-	names := make([]string, 0, len(counts))
-	for name := range counts {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-
-	parts := make([]string, 0, len(names))
-	for _, name := range names {
-		parts = append(parts, fmt.Sprintf("%s ×%d", name, counts[name]))
+		// Normalize through the display-name mapping so every entry
+		// path (registry UserFacingName like "ls", ToolExecutingMsg,
+		// session reload) classifies under the same group header —
+		// `ls` belongs to "Shell" wherever it came from.
+		name := getToolDisplayName(msg.ToolName)
+		if current == nil || current.name != name {
+			current = &group{name: name, start: msg.ToolStartedAt}
+			if current.start.IsZero() {
+				current.start = msg.Timestamp
+			}
+			groups = append(groups, current)
+		}
+		glyph := "✓"
+		style := ToolDoneStyle
+		switch msg.ToolStatus {
+		case ToolStatusRunning:
+			glyph, style = "→", ToolRunningStyle
+		case ToolStatusError:
+			glyph, style = "✗", ToolErrorStyle
+		}
+		rows := m.toolGroupRows(msg)
+		for _, r := range rows {
+			current.rows = append(current.rows, style.Render(glyph)+" "+r)
+		}
 	}
 
 	first := run[0]
@@ -75,21 +100,92 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 	}
 	span := end.Sub(start)
 
-	detail := strings.Join(parts, " · ")
-	// Right-align the duration at the terminal edge with display-width
-	// math: rune-byte and ANSI-byte lengths would push the column off
-	// the edge. The expand caret opens the line (click toggles the
-	// record), and its two columns count toward the left width.
-	left := fmt.Sprintf("%s %s %s",
-		ToolTimeStyle.Render(start.Format("15:04:05")),
-		ToolDoneStyle.Render("✓"),
-		detail,
-	)
-	left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
-	dur := ToolTimeStyle.Render(formatElapsed(span))
-	pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
-	if pad < 2 {
-		pad = 2
+	var b strings.Builder
+	for gi, g := range groups {
+		dur := ""
+		if gi == len(groups)-1 {
+			dur = ToolTimeStyle.Render(formatElapsed(span))
+		}
+		left := fmt.Sprintf("%s %s %s",
+			ToolTimeStyle.Render(g.start.Format("15:04:05")),
+			ToolDoneStyle.Render("✓"),
+			g.name,
+		)
+		left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
+		if dur != "" {
+			pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
+			if pad < 2 {
+				pad = 2
+			}
+			b.WriteString(left + strings.Repeat(" ", pad) + dur)
+		} else {
+			b.WriteString(left)
+		}
+		// Indented sub-list of each call beneath its group header.
+		for _, row := range g.rows {
+			b.WriteString("\n")
+			b.WriteString(" " + indentBlock(row))
+		}
 	}
-	return left + strings.Repeat(" ", pad) + dur
+	return b.String()
+}
+
+// toolGroupRows renders the sub-list rows for one tool call within a
+// group: codex-style summary rows — shell-like tools show `$ <command>`,
+// todo shows its checklist, everything else shows the detail target.
+func (m ChatModel) toolGroupRows(msg ChatMessage) []string {
+	if rows := m.todoChecklistRows(msg); rows != nil {
+		return rows
+	}
+	detail := msg.ToolDetail
+	if detail == "" {
+		detail = msg.ToolName
+	}
+	if msg.ToolName == "bash" || msg.ToolName == "BashTool" {
+		return []string{"$ " + detail}
+	}
+	return []string{detail}
+}
+
+// todoChecklistRows renders a todo-list tool call as a visible
+// checklist (goal 0.3.28 Task 4.4): each todo becomes an indented
+// checkbox row — ✓ done, → in-progress, ○ pending. Returns nil when
+// the message is not a todo call or its input carries no todos.
+func (m ChatModel) todoChecklistRows(msg ChatMessage) []string {
+	if msg.ToolName != "todo_write" && msg.ToolName != "todo" && msg.ToolName != "TodoTool" {
+		return nil
+	}
+	if msg.ToolInputJSON == "" {
+		return nil
+	}
+	var input struct {
+		Todos []struct {
+			Text   string `json:"text"`
+			Status string `json:"status"`
+		} `json:"todos"`
+	}
+	if err := json.Unmarshal([]byte(msg.ToolInputJSON), &input); err != nil {
+		return nil
+	}
+	if len(input.Todos) == 0 {
+		return nil
+	}
+	rows := make([]string, 0, len(input.Todos))
+	for _, td := range input.Todos {
+		if td.Text == "" {
+			continue
+		}
+		switch td.Status {
+		case "completed", "done":
+			rows = append(rows, ToolDoneStyle.Render("✓")+" "+td.Text)
+		case "in_progress", "active":
+			rows = append(rows, ToolRunningStyle.Render("→")+" "+td.Text)
+		default:
+			rows = append(rows, HelpDimStyle.Render("○")+" "+td.Text)
+		}
+	}
+	if len(rows) == 0 {
+		return nil
+	}
+	return rows
 }
