@@ -27,11 +27,13 @@ func (m ChatModel) renderCollapsedMessageAt(msgs []ChatMessage, i int, collapsed
 		return m.renderMessageAt(msg, width), i + 1
 	}
 
-	// Gather the contiguous run: same turn, same tool, all final.
+	// Gather the contiguous run: same turn, same display class (not raw
+	// tool name — bash/ls/ls_recursive all render as "Shell", Task 4.2),
+	// all final.
 	j := i + 1
 	for j < len(msgs) && msgs[j].Role == "tool" &&
 		msgs[j].Turn == msg.Turn &&
-		msgs[j].ToolName == msg.ToolName &&
+		getToolDisplayName(msgs[j].ToolName) == getToolDisplayName(msg.ToolName) &&
 		toolRunIsCollapsible(msgs[j]) {
 		j++
 	}
@@ -244,6 +246,10 @@ func (m ChatModel) renderSingleGroup(msgs []ChatMessage, i int, collapsed bool) 
 	rendered, next := m.renderCollapsedMessage(msgs, i, collapsed)
 	var clicks []clickRef
 	if msgs[i].IsTool {
+		// One clickable block for the whole run, mapped to the run
+		// head: expanding any member unfolds the run message-by-
+		// message (see renderCollapsedMessageAt), so block-level
+		// granularity is the honest click map here.
 		clicks = append(clicks, clickRef{start: 0, lines: strings.Count(rendered, "\n") + 1, msgID: msgs[i].ID})
 	}
 	return rendered, next, clicks

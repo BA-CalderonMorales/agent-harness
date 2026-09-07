@@ -202,6 +202,13 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 			// Truncate long commands for display
 			return m.truncateCommand(cmd, 60)
 		}
+	case "ls", "ls_recursive", "list_files", "LsTool":
+		if path, ok := input["path"].(string); ok && path != "" {
+			return fmt.Sprintf("ls %s", path)
+		}
+		if cmd, ok := input["command"].(string); ok && cmd != "" {
+			return m.truncateCommand(cmd, 60)
+		}
 	case "read", "ReadTool":
 		if path, ok := input["path"].(string); ok && path != "" {
 			return fmt.Sprintf("cat %s", path)
@@ -212,7 +219,7 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 		}
 	case "edit", "EditTool":
 		if path, ok := input["path"].(string); ok && path != "" {
-			return fmt.Sprintf("edit %s", path)
+			return fmt.Sprintf("update %s", path)
 		}
 	case "glob", "GlobTool":
 		if pattern, ok := input["pattern"].(string); ok && pattern != "" {

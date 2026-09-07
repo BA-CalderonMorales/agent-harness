@@ -144,15 +144,15 @@ func TestToolRunClickUnfoldsRun(t *testing.T) {
 	}
 	m.refreshViewportWithFollow(true)
 
-	if !strings.Contains(m.viewport.View(), "bash ×3") {
-		t.Fatalf("run not collapsed:\n%s", m.viewport.View())
+	if !strings.Contains(m.viewport.View(), "✓ Shell") || !strings.Contains(m.viewport.View(), "$ echo hi") {
+		t.Fatalf("run not collapsed to a header + sub-rows:\n%s", m.viewport.View())
 	}
 
 	m = mouseClickAt(m, 0)
 	if m.expandedMessageID == "" {
 		t.Fatal("click on run line did not expand")
 	}
-	if got := m.viewport.View(); strings.Contains(got, "bash ×3") {
+	if got := m.viewport.View(); strings.Contains(got, "✓ Shell") && !strings.Contains(got, "esc to close") {
 		t.Fatalf("expanded run still renders collapsed:\n%s", got)
 	}
 	if !strings.Contains(m.viewport.View(), "esc to close") {

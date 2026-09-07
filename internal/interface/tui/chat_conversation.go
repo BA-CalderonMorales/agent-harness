@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"strings"
@@ -115,6 +116,11 @@ func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage
 		msgOut.ToolDetail = m.extractCommandFromToolInput(toolName, toolInputForSession(msg))
 		if !msg.Timestamp.IsZero() {
 			msgOut.ToolStartedAt = msg.Timestamp
+		}
+		if input := toolInputForSession(msg); len(input) > 0 {
+			if raw, err := json.Marshal(input); err == nil {
+				msgOut.ToolInputJSON = string(raw)
+			}
 		}
 	}
 	return msgOut, true

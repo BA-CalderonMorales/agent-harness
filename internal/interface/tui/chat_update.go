@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"encoding/json"
 	"fmt"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -228,6 +229,16 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		// MULTI-TOOL DISPLAY: Do NOT clear previous completed tools when a new tool
 		// starts within the same turn. Users want to see the full chain of tool calls.
 
+		// Carry the raw input JSON: the expandable record and the todo
+		// checklist renderer read from it (never populated before
+		// 0.3.28, so expanded records showed no input).
+		inputJSON := ""
+		if len(msg.Input) > 0 {
+			if raw, err := json.Marshal(msg.Input); err == nil {
+				inputJSON = string(raw)
+			}
+		}
+
 		toolMsg := ChatMessage{
 			ID:              msg.ToolID,
 			Role:            "tool",
@@ -239,6 +250,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			ToolStatus:      ToolStatusRunning,
 			ToolStartedAt:   time.Now(),
 			ToolDetail:      command,
+			ToolInputJSON:   inputJSON,
 			Turn:            m.turnCounter,
 		}
 		m.appendToolMessage(toolMsg)

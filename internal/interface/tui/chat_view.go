@@ -443,6 +443,21 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	// ▾ open (click folds). formatToolContent reserves the two caret
 	// columns so the right-aligned duration stays put.
 	expanded := m.expandedMessageID != "" && m.expandedMessageID == msg.ID
+
+	// A todo-list call renders as a visible checklist (Task 4.4): the
+	// summary row stays (time, glyph, name, duration), and each todo
+	// becomes an indented checkbox row beneath it.
+	if rows := m.todoChecklistRows(msg); rows != nil {
+		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
+		for _, r := range rows {
+			body += "\n " + r
+		}
+		if expanded {
+			body += "\n" + fitBlock(width, m.renderToolExpansion(msg))
+		}
+		return body
+	}
+
 	row := m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
 	body := style.Render(expandCaret(expanded) + " " + row)
 
