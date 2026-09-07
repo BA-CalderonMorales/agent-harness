@@ -108,6 +108,19 @@ jobs:
       - name: Run naming-gate unit tests
         run: sh scripts/test-check-branch-name.sh
 
+      - name: Validate release branch version bump
+        if: startsWith(github.head_ref, 'release/')
+        # release/X.Y.Z -> X.Y.Z must equal main.go Version: a PR from a
+        # release branch whose bump commit is missing or reverted fails
+        # here instead of shipping a mislabeled binary (the 0.3.25/0.3.26
+        # failure mode).
+        run: |
+          VERSION="${GITHUB_HEAD_REF#release/}"
+          ./scripts/check-version-matches.sh "$VERSION" cmd/agent-harness/main.go
+
+      - name: Run version-gate unit tests
+        run: sh scripts/test-check-version-matches.sh
+
   # SBOM Generation
   sbom:
     runs-on: ubuntu-latest
