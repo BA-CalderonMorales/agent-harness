@@ -128,13 +128,15 @@ func ResetHandler(resetFn func() error) SlashHandler {
 // with confirmation (goal 0.3.28 Task 8). Deletion goes through the
 // caller-provided function (SessionManager.DeleteSession — never raw
 // os.Remove) so the audit trail and the active-session guard hold.
+// The list function reports errors: a listing failure is surfaced as a
+// command error, never disguised as "no sessions".
 // Forms:
 //
 //	/cleanup            — list sessions with size/age, no deletion
 //	/cleanup <id>...    — dry-run preview of what would be deleted
 //	/cleanup <id>... --confirm — delete the named sessions
 //	/cleanup --all --confirm   — delete every non-active session
-func CleanupHandler(list func() []CleanupSession, del func(id string) error) SlashHandler {
+func CleanupHandler(list func() ([]CleanupSession, error), del func(id string) error) SlashHandler {
 	return func(args string) (string, error) {
 		confirm := false
 		all := false
@@ -150,7 +152,10 @@ func CleanupHandler(list func() []CleanupSession, del func(id string) error) Sla
 			}
 		}
 
-		sessions := list()
+		sessions, listErr := list()
+		if listErr != nil {
+			return "", fmt.Errorf("cleanup: listing sessions failed: %w", listErr)
+		}
 		if len(sessions) == 0 {
 			return "No saved sessions to clean up.", nil
 		}

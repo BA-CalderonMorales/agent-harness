@@ -14,7 +14,10 @@ do
     case "$local_ref" in
     refs/heads/*)
         # Branch naming: release branches must be exactly release/X.Y.Z.
-        HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+        # POSIX-safe: no `--` end-of-options (dash's cd/dirname reject it);
+        # $0 in a git hook always starts with ./ or / so plain quoting is
+        # sufficient.
+        HOOK_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
         BRANCH="${local_ref#refs/heads/}"
         if ! "$HOOK_DIR/../scripts/check-branch-name.sh" "$BRANCH"; then
             exit 1

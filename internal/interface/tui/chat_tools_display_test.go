@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // These tests pin the 0.3.28 codex-style tool-call display (Task 4):
@@ -104,16 +105,21 @@ func TestDurationRightAlignedConsistently(t *testing.T) {
 	}
 	m.refreshViewportWithFollow(true)
 	line := renderedLines(m.viewport.View())[0]
-	if !strings.HasSuffix(strings.TrimRight(line, " "), "2.0s") == false {
-		// lipgloss may pad the terminal edge; assert the duration
-		// appears and the row is exactly the width budget wide.
-	}
 	if !strings.Contains(line, "2.0s") {
 		t.Fatalf("duration missing from group header: %q", line)
 	}
-	// Right-aligned: at most 2 columns of slack after the duration.
+	// Right-aligned: the duration is the last visible token on the row
+	// — at most the 2 reserved caret/pad columns of trailing space
+	// after it. (Terminal-edge padding is stripped before measuring.)
 	trimmed := strings.TrimRight(line, " ")
 	if lipgloss.Width(line)-lipgloss.Width(trimmed) > 2 {
 		t.Fatalf("duration not right-aligned (more than 2 trailing columns): %q", line)
 	}
+	if !strings.HasSuffix(ansiStrip(trimmed), "2.0s") {
+		t.Fatalf("duration is not the last visible token on the row: %q", trimmed)
+	}
 }
+
+// ansiStrip removes SGR sequences so suffix checks read the visible
+// text, not the styling bytes.
+func ansiStrip(s string) string { return ansi.Strip(s) }

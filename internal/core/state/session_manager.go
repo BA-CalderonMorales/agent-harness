@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
@@ -202,21 +203,46 @@ func (sm *SessionManager) GetSessionsDir() string {
 }
 
 // ListSessionsWithSize lists sessions like ListSessions, plus each
-// session's on-disk size, for the /cleanup listing (goal 0.3.28 Task 8).
-// Size comes from the same metadata cache ListSessions populates —
-// no extra stat pass beyond the one list does. Oldest first, so the
-// cleanup target order reads naturally.
+// session's on-disk size, for the /cleanup listing. One directory
+// listing pass builds the ID→path map (the same files ListSessions
+// reads), then one os.Stat per session — O(n) overall, never a
+// findSessionFile-per-row loop (that re-lists the directory per call,
+// O(n²) disk I/O). Oldest first, so the cleanup target order reads
+// naturally.
 func (sm *SessionManager) ListSessionsWithSize() ([]SessionWithSize, error) {
 	sessions, err := sm.ListSessions()
 	if err != nil {
 		return nil, err
 	}
+	paths, err := sm.listProjectSessionFiles()
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]string, len(paths))
+	for _, path := range paths {
+		base := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+		if suffix := strings.SplitN(base, "_", 2); len(suffix) == 2 {
+			base = suffix[1]
+		}
+		byID[base] = path
+	}
 	out := make([]SessionWithSize, 0, len(sessions))
 	for _, s := range sessions {
 		entry := SessionWithSize{SessionMetadata: s}
-		if path, err := sm.findSessionFile(s.ID); err == nil {
+		// Exact ID, then prefix match — the same resolution rules
+		// findSessionFile applies, without the per-row directory walk.
+		if path, ok := byID[s.ID]; ok {
 			if info, err := os.Stat(path); err == nil {
 				entry.SizeBytes = info.Size()
+			}
+		} else {
+			for base, path := range byID {
+				if strings.HasPrefix(base, s.ID) {
+					if info, err := os.Stat(path); err == nil {
+						entry.SizeBytes = info.Size()
+					}
+					break
+				}
 			}
 		}
 		out = append(out, entry)

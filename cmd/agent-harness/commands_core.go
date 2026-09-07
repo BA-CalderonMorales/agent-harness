@@ -100,10 +100,12 @@ func (app *App) initCommandsCore() {
 
 	app.cmdRegistry.Register("cleanup", "List saved sessions by size/age; delete with --confirm",
 		commands.CleanupHandler(
-			func() []commands.CleanupSession {
+			func() ([]commands.CleanupSession, error) {
 				rows, err := app.sessionManager.ListSessionsWithSize()
 				if err != nil {
-					return nil
+					// Surface the listing failure: the handler turns it
+					// into a command error instead of "no sessions".
+					return nil, err
 				}
 				out := make([]commands.CleanupSession, 0, len(rows))
 				for _, r := range rows {
@@ -114,7 +116,7 @@ func (app *App) initCommandsCore() {
 						SizeBytes:    r.SizeBytes,
 					})
 				}
-				return out
+				return out, nil
 			},
 			func(id string) error {
 				// SessionManager.DeleteSession: refuses the active

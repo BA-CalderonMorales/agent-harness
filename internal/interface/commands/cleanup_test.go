@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -8,12 +9,12 @@ import (
 
 // seedSessions builds a deterministic listing: three sessions, oldest
 // first, distinct sizes.
-func seedSessions() []CleanupSession {
+func seedSessions() ([]CleanupSession, error) {
 	return []CleanupSession{
 		{ID: "old-big", UpdatedAt: time.Now().Add(-48 * time.Hour), MessageCount: 400, SizeBytes: 3 << 20},
 		{ID: "mid", UpdatedAt: time.Now().Add(-24 * time.Hour), MessageCount: 120, SizeBytes: 512 << 10},
 		{ID: "new-small", UpdatedAt: time.Now().Add(-1 * time.Hour), MessageCount: 3, SizeBytes: 900},
-	}
+	}, nil
 }
 
 // TestCleanupListsSessionsWithoutDeleting: bare /cleanup lists by
@@ -105,7 +106,7 @@ func TestCleanupNoConfirmNoDelete(t *testing.T) {
 
 // TestCleanupEmptyRegistry: no sessions → friendly message, no error.
 func TestCleanupEmptyRegistry(t *testing.T) {
-	out, err := CleanupHandler(func() []CleanupSession { return nil }, func(id string) error { return nil })("")
+	out, err := CleanupHandler(func() ([]CleanupSession, error) { return nil, nil }, func(id string) error { return nil })("")
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
@@ -118,3 +119,18 @@ func TestCleanupEmptyRegistry(t *testing.T) {
 type errActiveSession struct{}
 
 func (errActiveSession) Error() string { return "cannot delete the active session" }
+
+// TestCleanupListingErrorSurfaces: a listing failure must reach the
+// user as a command error — never disguised as "no saved sessions"
+// (review finding on the swallowed-error wrapper).
+func TestCleanupListingErrorSurfaces(t *testing.T) {
+	_, err := CleanupHandler(func() ([]CleanupSession, error) {
+		return nil, fmt.Errorf("permission denied")
+	}, func(id string) error { return nil })("")
+	if err == nil {
+		t.Fatal("listing error swallowed — /cleanup reported success")
+	}
+	if !strings.Contains(err.Error(), "listing sessions failed") || !strings.Contains(err.Error(), "permission denied") {
+		t.Fatalf("error lost the cause: %v", err)
+	}
+}
