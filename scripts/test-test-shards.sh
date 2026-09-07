@@ -92,11 +92,13 @@ fi
 # The Go pattern rule this script exists to encode: a bare `pkg/...`
 # (no ./ prefix) matches no packages in module mode. Expansion of a
 # shard must never silently produce zero packages for a real directory.
-if go list pkg/... >/dev/null 2>&1; then
+# Note: go list exits 0 even when it matches nothing (warning only on
+# stderr) — assert on stdout emptiness, not the exit code.
+if [ -z "$(go list pkg/... 2>/dev/null)" ]; then
+    pass=$((pass + 1))
+else
     fail=$((fail + 1))
     echo "FAIL: bare pkg/... unexpectedly resolved; shard assumptions changed"
-else
-    pass=$((pass + 1))
 fi
 
 echo
