@@ -59,6 +59,10 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// -------------------------------------------------------------------------
 	case tea.MouseMsg:
 		if tea.MouseEvent(msg).IsWheel() {
+			// Flush any pending rebuild first: scrolling stale content
+			// silently loses the wheel event's effect when the rebuild
+			// lands on the next frame.
+			m.flushDeferredRefresh()
 			if isMobilePane(m.width) {
 				// Phone rows are taller, so a fixed 3-line tick
 				// crawls: scroll by a viewport fraction for a
