@@ -81,6 +81,52 @@ type ChatMessage struct {
 	// Empty on legacy data — Content renders whole. Tool parts resolve
 	// to the tool ChatMessage with the matching ID.
 	Parts []TurnPart
+
+	// Memoized content fingerprints for the group render cache
+	// (chat_turns.go groupSignature). A content replacement (any of
+	// the five wholesale-assignment sites) bumps rev; a fingerprint
+	// recomputes when rev or length differs from the memoized values.
+	// Length alone cannot catch a same-length replacement (the
+	// fingerprint would go stale); rev makes the guarantee structural
+	// rather than argued-from-the-call-graph. Steady-state frames pay
+	// two integer compares per message instead of hashing whole
+	// transcripts.
+	sigFP     uint64 // fingerprint of Content
+	sigRev    uint64 // bumped by bumpRev on content replacement
+	sigFPLen  int    // len(Content) when fingerprinted
+	sigFPRev  uint64 // rev when fingerprinted
+	sigRFP    uint64 // fingerprint of ReasoningText
+	sigRRev   uint64 // bumped by bumpRev on reasoning replacement
+	sigRFPLen int    // len(ReasoningText) when fingerprinted
+	sigRFPRev uint64 // rev when fingerprinted
+}
+
+// bumpRev invalidates memoized fingerprints after a content or
+// reasoning replacement. Call it at every wholesale assignment site.
+func (msg *ChatMessage) bumpRev() {
+	msg.sigRev++
+	msg.sigRRev++
+}
+
+// contentFP returns a stable fingerprint of Content, recomputing when
+// the revision or length changed since the last call.
+func (msg *ChatMessage) contentFP() uint64 {
+	if msg.sigRev != msg.sigFPRev || len(msg.Content) != msg.sigFPLen {
+		msg.sigFP = contentHash(msg.Content)
+		msg.sigFPLen = len(msg.Content)
+		msg.sigFPRev = msg.sigRev
+	}
+	return msg.sigFP
+}
+
+// reasoningFP is contentFP for the reasoning record.
+func (msg *ChatMessage) reasoningFP() uint64 {
+	if msg.sigRRev != msg.sigRFPRev || len(msg.ReasoningText) != msg.sigRFPLen {
+		msg.sigRFP = contentHash(msg.ReasoningText)
+		msg.sigRFPLen = len(msg.ReasoningText)
+		msg.sigRFPRev = msg.sigRRev
+	}
+	return msg.sigRFP
 }
 
 // ToolStatus represents the execution state of a tool
@@ -228,6 +274,15 @@ type ChatModel struct {
 	// transcript is unchanged.
 	lastPainted         string
 	lastPaintedAtBottom bool
+
+	// refreshPending marks that transcript state changed since the
+	// last frame. High-frequency mutators (AddMessage, per-chunk
+	// stream updates, per-append refreshes during session load) only
+	// set this flag; View flushes once per frame. Without the flag,
+	// every append paid a full O(transcript) assembly — quadratic on
+	// marathon sessions and the dominant cost of the 10k-event
+	// benchmark (24s of pure assembly for 3,000 messages).
+	refreshPending bool
 
 	// expandedMessageID is the message whose full record is expanded
 	// inline (click the line, or Enter on the latest; Esc closes). It

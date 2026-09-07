@@ -73,6 +73,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 			}
 			m.messages[i].ToolStatus = status
 			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+			m.messages[i].bumpRev()
 			m.refreshViewport()
 			return
 		}

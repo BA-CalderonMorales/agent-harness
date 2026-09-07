@@ -15,6 +15,9 @@ func (m *ChatModel) AddMessage(role, content string) {
 		Timestamp: time.Now(),
 	}
 	m.messages = append(m.messages, msg)
+	// Immediate: user-visible follow semantics (submit yanks to
+	// bottom). The per-frame hot paths (chunks, ticks, session load)
+	// defer; appends arrive at human scale.
 	m.refreshViewportFollow()
 }
 
@@ -28,8 +31,7 @@ func (m *ChatModel) PrependSystemNote(content string) {
 		Timestamp: time.Now(),
 	}
 	m.messages = append([]ChatMessage{note}, m.messages...)
-	m.refreshViewport()
-	m.refreshViewportFollow()
+	m.refreshDeferred()
 }
 
 // SetMessages replaces the visible chat transcript from persisted session
