@@ -85,14 +85,12 @@ func (m ChatModel) workingStatusLine(tick int) string {
 		if class == "" {
 			class = m.currentToolMsg.ToolName
 		}
-		return fmt.Sprintf("%s %s · %s ×%d · %s",
-			SuccessStyle.Render("✻"),
+		return fmt.Sprintf("%s · %s ×%d · %s",
 			workingAnim(workingWord(), tick),
 			class, n, elapsed)
 	}
 	// Thinking: no tool running. The animated word + elapsed clock.
-	return fmt.Sprintf("%s %s · %s",
-		SuccessStyle.Render("✻"),
+	return fmt.Sprintf("%s · %s",
 		workingAnim(workingWord(), tick),
 		elapsed)
 }
