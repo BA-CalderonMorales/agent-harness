@@ -13,6 +13,43 @@ func (m ChatModel) Init() tea.Cmd {
 	return textarea.Blink
 }
 
+// settleCurrentTool records a terminal outcome when the provider stops
+// without sending the normal ToolDone event (for example, a transport
+// error). It deliberately keeps currentToolMsg intact for the caller's
+// cleanup path.
+func (m *ChatModel) settleCurrentTool(status ToolStatus) {
+	toolID := ""
+	if m.currentToolMsg != nil {
+		toolID = m.currentToolMsg.ID
+	}
+	if toolID == "" && m.currentTool != nil {
+		toolID = m.currentTool.ID
+	}
+	if toolID == "" {
+		return
+	}
+	for i := range m.messages {
+		msg := &m.messages[i]
+		if !msg.IsTool || msg.ID != toolID || msg.ToolStatus == ToolStatusSuccess || msg.ToolStatus == ToolStatusError || msg.ToolStatus == ToolStatusComplete {
+			continue
+		}
+		started := msg.ToolStartedAt
+		if started.IsZero() {
+			started = msg.Timestamp
+		}
+		msg.ToolElapsed = time.Since(started)
+		command := msg.ToolDetail
+		if command == "" && m.toolAnimation != nil {
+			command = m.toolAnimation.Command
+		}
+		msg.ToolDetail = command
+		msg.ToolStatus = status
+		msg.Content = m.formatToolContent(msg.ToolDisplayName, command, shortToolTag(msg.ID), status, started, msg.ToolElapsed)
+		msg.bumpRev()
+		return
+	}
+}
+
 // Update handles messages.
 // viewportTopOffset counts the pane rows above the message viewport in
 // the chat view: the tab bar (padding row, label row, border row) plus
@@ -210,9 +247,44 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			return m, nil
 		}
 
+		// Materialize the streaming assistant before the tool lands:
+		// a tool that starts inside the placeholder window (fast
+		// models, instant commands) would otherwise orphan its row
+		// below a bubble that doesn't exist yet — the user sees the
+		// working line spin with nothing in the transcript (goal
+		// 0.3.29 live-visibility finding). The acknowledgment lands
+		// with the first tool call, which is exactly when the user
+		// needs to see what is happening.
+		if m.placeholderPending {
+			m.placeholderPending = false
+			m.updateOrCreateStreamingMessage(m.streamBuffer)
+		}
+		// Providers may repeat a start notification while retrying or
+		// forwarding events. The transcript is the authority: keep the
+		// original row and current part, rather than creating a second
+		// visible call for the same tool ID.
+		for i := range m.messages {
+			if m.messages[i].IsTool && m.messages[i].ID == msg.ToolID {
+				m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
+				m.currentToolMsg = &m.messages[i]
+				m.refreshViewport()
+				return m, nil
+			}
+		}
+
 		// The prose before this call is where the call actually
 		// happened: mark the buffer offset — parts derive from it.
 		m.turnTools = append(m.turnTools, turnToolMark{ToolID: msg.ToolID, At: len(m.streamBuffer)})
+
+		// Re-derive the streaming message's parts NOW: the tool row
+		// must render inside the live turn bubble from the first
+		// call, not on the next chunk (an LLM gone quiet while a
+		// command runs would leave the call outside the bubble for
+		// the whole execution).
+		if smsg := m.streamingAssistant(); smsg != nil {
+			smsg.Parts = m.deriveParts(m.streamBuffer)
+			smsg.bumpRev()
+		}
 
 		m.currentTool = &ToolUseBlock{ID: msg.ToolID, Name: msg.ToolName}
 		displayName := msg.DisplayName
@@ -315,6 +387,14 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			m.completedToolMsgs = append(m.completedToolMsgs, *m.currentToolMsg)
 			m.currentToolMsg = nil
 		}
+		// Re-derive the live bubble's parts: the call just settled, so
+		// its row must flip to the settled state inside the bubble (the
+		// group-cache signature reads len(Parts) — without this the
+		// cached block keeps the running row).
+		if smsg := m.streamingAssistant(); smsg != nil {
+			smsg.Parts = m.deriveParts(m.streamBuffer)
+			smsg.bumpRev()
+		}
 		m.currentTool = nil
 		m.toolAnimation = nil
 		m.refreshViewport()
@@ -327,6 +407,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 
 		m.thinking = false
 		m.streaming = false
+		m.timerRunning = false
 		m.placeholderPending = false
 		// Finalize the streaming message
 		// For streamed responses, use streamBuffer. For direct responses, use FullResponse
@@ -413,8 +494,17 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case AgentErrorMsg:
+		// A provider error can arrive without a ToolDone event. Settle
+		// the active row first so the transcript never claims that a
+		// command is still running after the turn has stopped.
+		m.settleCurrentTool(ToolStatusError)
+		// Provider errors terminate this turn. Ignore any already queued
+		// tool/result events so a late completion cannot overwrite the
+		// truthful error state.
+		m.turnInterrupted = true
 		m.thinking = false
 		m.streaming = false
+		m.timerRunning = false
 		m.placeholderPending = false
 		// Finalize the in-progress message so the thinking spinner does not
 		// stay stuck on its header; drop it entirely if nothing arrived.
@@ -436,6 +526,8 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.messages = make([]ChatMessage, 0)
 		m.streamBuffer = ""
 		m.thinking = false
+		m.streaming = false
+		m.timerRunning = false
 		m.placeholderPending = false
 		m.currentToolMsg = nil
 		m.completedToolMsgs = nil

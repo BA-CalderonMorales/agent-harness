@@ -190,8 +190,10 @@ func TestCollapsedRunRowsClickThroughRealDispatch(t *testing.T) {
 		if !strings.Contains(m.viewport.View(), "✓ Shell") {
 			t.Fatalf("w%d: run not collapsed to a group header:\n%s", width, m.viewport.View())
 		}
-		// The run header itself unfolds the run.
-		m = mouseClickAt(m, 0)
+		// The run header itself unfolds the run. Row 0 is the turn's
+		// Agent header (live-visibility materializes the turn block),
+		// so the group header lives at row 1.
+		m = mouseClickAt(m, 1)
 		if m.expandedMessageID == "" {
 			t.Fatalf("w%d: click on run line did not unfold", width)
 		}

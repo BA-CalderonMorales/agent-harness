@@ -30,7 +30,11 @@ func (m ChatModel) View() string {
 	separatorHeight := 1
 
 	// Ensure minimum height for viewport
-	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
+	// The live working row is part of the fixed chrome while a turn is in
+	// flight. Reserve it before sizing the viewport; otherwise the row is
+	// appended later and pushes the composer/mode line below the pane.
+	statusHeight := m.workingStatusHeight()
+	vpHeight := m.height - inputHeight - headerHeight - separatorHeight - statusHeight
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
@@ -184,15 +188,23 @@ func (m ChatModel) renderModeLine() string {
 	keep := make([]bool, len(segments))
 	for i := range segments {
 		keep[i] = true
-		budget -= 3 // separator
-		if i > 0 {
-			budget -= segments[i].width
-		}
+		budget -= 3 + segments[i].width // separator + segment
 	}
-	// Drop from the least important (effort) up while over budget.
-	for i := len(segments) - 1; i >= 0 && budget < 0; i-- {
-		keep[i] = false
-		budget += segments[i].width + 3
+	// Keep the mode and effort signal useful on a narrow pane. Drop
+	// optional context first: provider, persona, then model. Effort is
+	// the last metadata field to disappear because it describes the
+	// active behavior rather than the selected implementation.
+	for _, i := range []int{2, 0, 1, 3} {
+		if budget >= 0 {
+			break
+		}
+		if i >= len(segments) {
+			continue
+		}
+		if keep[i] {
+			keep[i] = false
+			budget += segments[i].width + 3
+		}
 	}
 	parts := []string{modeBit}
 	for i := range segments {
@@ -302,8 +314,23 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 // the answer bubble — and reports the clickable ranges inside it,
 // relative to the block's first row. The bubble is left-border only, so
 // inner rows map onto bubble rows one-to-one; only the header offsets.
+//
+// A live toolRow resolver is wired here (goal 0.3.29 live-visibility):
+// the streaming assistant carries tool parts as calls come in, and
+// they must render inside the live bubble. The resolver looks the call
+// up by ID across the transcript so the row reflects the message's
+// current state (running → settled) without the turn-block machinery.
 func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, []clickRef) {
-	inner, refs := m.assistantInnerContent(msg, msg.Parts, nil)
+	toolRow := func(id string) (string, bool) {
+		for k := range m.messages {
+			tm := &m.messages[k]
+			if tm.ID == id && tm.IsTool {
+				return m.renderToolMessageAt(*tm, width-8), true
+			}
+		}
+		return "", false
+	}
+	inner, refs := m.assistantInnerContent(msg, msg.Parts, toolRow)
 	bubbles := MessageBubbleAssistant.Width(width - 4).Render(inner)
 	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
@@ -346,11 +373,22 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
-	// hidden so only the animated header shows. When reasoning deltas are
-	// streaming (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning
-	// text previews under the badge — unless the record is expanded, which
-	// shows the full reasoning like an expanded tool call.
-	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
+	// hidden so only the animated header shows — UNLESS the turn already
+	// carries tool calls: those must render as they come in (goal 0.3.29
+	// live-visibility finding — a tool inside the placeholder window used
+	// to hide behind this early return, leaving the user blind while the
+	// command ran). When reasoning deltas are streaming (GLM/DeepSeek/
+	// Nemotron thinking), the tail of the reasoning text previews under
+	// the badge — unless the record is expanded, which shows the full
+	// reasoning like an expanded tool call.
+	hasToolParts := false
+	for _, p := range parts {
+		if p.ToolID != "" {
+			hasToolParts = true
+			break
+		}
+	}
+	if strings.TrimSpace(msg.Content) == "" && msg.Thinking && !hasToolParts {
 		if m.expandedMessageID == msg.ID {
 			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
 				wrapped := fitBlock(m.width-4, full)

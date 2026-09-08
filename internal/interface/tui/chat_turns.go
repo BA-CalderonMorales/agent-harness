@@ -319,17 +319,61 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	}
 
 	// Tool rows render in natural arrival order: each call appears at
-	// its chronological position through the collapse machinery, so
-	// back-to-back same-category calls merge into one group header
-	// while interleaved narration splits them — the user watches calls
-	// come in naturally, grouped only when a category repeats
-	// consecutively (goal 0.3.29 live feedback on Task 3a's spanning).
+	// its chronological position. Back-to-back same-category parts
+	// merge into one group header, while interleaved narration splits
+	// them — the user watches calls come in naturally, grouped only
+	// when a category repeats consecutively (goal 0.3.29 live feedback
+	// on Task 3a's spanning).
+	//
+	// The grouping is computed ONCE over the turn's parts (not per
+	// toolRow call): renderCollapsedMessageAt re-scans the contiguous
+	// run from each call's own position, so calling it per part
+	// re-rendered the whole remaining run for every part — three
+	// duplicate group headers on a 3-call burst (the live-visibility
+	// fix exposed this: materializing the bubble mid-burst made every
+	// tool start re-derive parts).
+	//
+	// Local consecutive grouping (rendersOnce map guards re-entry):
+	// for each unrendered part, walk forward over consecutive parts
+	// of the same display class and render them as one run.
+	rendersOnce := make(map[string]bool)
 	toolRow := func(id string) (string, bool) {
+		if rendersOnce[id] {
+			return "", true // consumed by an earlier group render
+		}
 		for k := i; k < j; k++ {
 			if msgs[k].ID != id {
 				continue
 			}
-			row, _ := m.renderCollapsedMessageAt(msgs, k, collapsed, innerWidth)
+			// Walk the consecutive same-class run starting at k — but
+			// only over parts the assistant actually carries, so
+			// mid-burst materialization renders exactly what has
+			// arrived so far.
+			class := getToolDisplayName(msgs[k].ToolName)
+			end := k + 1
+			for end < j && msgs[end].Role == "tool" &&
+				getToolDisplayName(msgs[end].ToolName) == class &&
+				toolPartCarried(assistant, msgs[end].ID) {
+				end++
+			}
+			for q := k; q < end; q++ {
+				rendersOnce[msgs[q].ID] = true
+			}
+			if end-k == 1 {
+				row := m.renderMessageAt(msgs[k], innerWidth)
+				return indentBlock(row), true
+			}
+			// Expanding any member of the run unfolds it message-by-
+			// message (the run-head contract from renderCollapsedMessageAt):
+			// a group rendered with an expanded member would hide the
+			// record inside the collapsed rows.
+			for q := k; q < end; q++ {
+				if m.expandedMessageID == msgs[q].ID {
+					row := m.renderMessageAt(msgs[k], innerWidth)
+					return indentBlock(row), true
+				}
+			}
+			row := m.renderToolRunAt(msgs[k:end], innerWidth)
 			return indentBlock(row), true
 		}
 		return "", false
@@ -426,3 +470,17 @@ func (c *groupCache) put(sig, block string, refs []clickRef) {
 }
 
 var groupCacheStore = newGroupCache()
+
+// toolPartCarried reports whether the assistant message's Parts carry
+// the tool call with the given ID. Turn-block rendering nests rows by
+// part; a tool whose part hasn't been derived yet (mid-burst
+// materialization) renders as a standalone group until the next
+// derive.
+func toolPartCarried(assistant ChatMessage, toolID string) bool {
+	for _, p := range assistant.Parts {
+		if p.ToolID == toolID {
+			return true
+		}
+	}
+	return false
+}

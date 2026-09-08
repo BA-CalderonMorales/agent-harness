@@ -103,22 +103,21 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	m.clickIndex = m.clickIndex[:0]
 	line := 0
 	blocks := m.blockScratch[:0]
-	var clicksAll []clickRef
 	for i := 0; i < len(m.messages); {
+		blockStart := line
 		rendered, next, clicks := m.appendTurnGroupCached(m.messages, i)
 		blocks = append(blocks, rendered)
-		clicksAll = append(clicksAll, clicks...)
-		line += strings.Count(rendered, "\n") + 3 // block + "\n\n" separator
+		for _, cr := range clicks {
+			m.clickIndex = append(m.clickIndex, clickRange{
+				start: blockStart + cr.start,
+				end:   blockStart + cr.start + cr.lines - 1,
+				msgID: cr.msgID,
+			})
+		}
+		line += strings.Count(rendered, "\n") + 2 // block + "\n\n" separator
 		i = next
 	}
 	m.blockScratch = blocks
-	m.clickIndex = m.clickIndex[:0]
-	for _, cr := range clicksAll {
-		m.clickIndex = append(m.clickIndex, clickRange{
-			start: cr.start, end: cr.start + cr.lines - 1,
-			msgID: cr.msgID,
-		})
-	}
 
 	// Longest common prefix with the previous frame's blocks.
 	common := 0
