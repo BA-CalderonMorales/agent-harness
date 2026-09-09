@@ -55,13 +55,6 @@ func TestBenchBuildSanity(t *testing.T) {
 	}
 }
 
-// paintOnce runs one full assembly and reports its cost in ns.
-func paintOnce(m *ChatModel) int64 {
-	start := time.Now()
-	m.refreshViewportWithFollow(false)
-	return time.Since(start).Nanoseconds()
-}
-
 // BenchmarkRefreshSteady measures a full refreshViewportWithFollow on
 // an unchanged transcript — the per-frame cost the tick timer pays.
 func BenchmarkRefreshSteady(b *testing.B) {

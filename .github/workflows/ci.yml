@@ -89,6 +89,18 @@ jobs:
           GOMEMLIMIT: 6GiB
         continue-on-error: true
 
+  # Keep the required "test" check stable while testing in parallel.
+  test-summary:
+    name: test
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every test shard to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
+
   # Code quality checks
   quality:
     runs-on: ubuntu-latest
@@ -139,7 +151,9 @@ jobs:
         run: sh scripts/test-check-version-matches.sh
 
       - name: Run test-shard coverage unit tests
-        run: bash scripts/test-test-shards.sh
+        run: |
+          bash scripts/test-test-shards.sh
+          sh scripts/test-shards-exact.sh
 
       - name: Run shard coverage drift guard
         run: sh scripts/test-shards.sh coverage

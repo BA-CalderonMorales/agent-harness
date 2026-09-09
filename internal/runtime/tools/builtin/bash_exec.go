@@ -45,8 +45,10 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	// drained before the command is considered complete.
 	var output strings.Builder
 	var outputMu sync.Mutex
-	cmd.Stdout = &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
-	cmd.Stderr = &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+	stdout := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+	stderr := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	if err := cmd.Start(); err != nil {
 		return tools.ToolResult{Data: "[error starting command: " + err.Error() + "]"}, nil
@@ -60,6 +62,8 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	// Wait also joins the stdout/stderr copy goroutines. On Unix, cancellation
 	// kills the command's process group, including descendants holding pipes.
 	err := cmd.Wait()
+	stdout.flush()
+	stderr.flush()
 
 	result := output.String()
 	if result == "" {
@@ -107,4 +111,16 @@ func (w *bashOutputWriter) Write(p []byte) (int, error) {
 		}
 	}
 	return len(p), nil
+}
+
+// flush emits an unterminated final line after Wait has joined the writers.
+func (w *bashOutputWriter) flush() {
+	w.outputMu.Lock()
+	tail := string(w.pending)
+	w.pending = nil
+	w.output.WriteString(tail)
+	w.outputMu.Unlock()
+	if tail != "" && w.onProgress != nil {
+		w.onProgress(tail)
+	}
 }

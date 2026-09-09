@@ -50,8 +50,6 @@ type fastViewport struct {
 
 type keyMapShim struct{}
 
-func (fastViewport) setInitialValues() {}
-
 // AtTop reports whether the viewport is at the very top.
 func (m *fastViewport) AtTop() bool { return m.YOffset <= 0 }
 
@@ -86,7 +84,7 @@ func (m *fastViewport) SetContent(s string) {
 	}
 }
 
-// cachedLongestLineWidth is findLongestLineWidth with the per-line
+// cachedLongestLineWidth measures lines with a per-line
 // memo: the width scan dominates a changed frame's cost (302µs of
 // ~900µs measured on a 2000-line transcript), and frame-over-frame
 // almost every line is unchanged. On a cold cache this is exactly the
@@ -129,16 +127,6 @@ func (m *fastViewport) SetLinesCached(lines []string) {
 	if m.YOffset > len(m.lines)-1 {
 		m.GotoBottom()
 	}
-}
-
-func findLongestLineWidth(lines []string) int {
-	w := 0
-	for _, l := range lines {
-		if ww := ansi.StringWidth(l); ww > w {
-			w = ww
-		}
-	}
-	return w
 }
 
 // visibleLines returns the lines that should currently be visible.

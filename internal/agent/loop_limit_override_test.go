@@ -188,8 +188,8 @@ func TestQueryLimitSuggestionMath(t *testing.T) {
 	if suggestion == "" {
 		t.Fatal("no limit-reached suggestion emitted")
 	}
-	// 5 * 5 = 25, under the ceiling: the suggestion must be the ×5 bump.
+	// 4 * 5 = 20, under the ceiling: the suggestion must be the ×5 bump.
 	if !strings.Contains(suggestion, "/limit 20") {
-		t.Fatalf("suggestion = %q, want /limit 25 (5×5, clamped to ceiling)", suggestion)
+		t.Fatalf("suggestion = %q, want /limit 20 (4×5, clamped to ceiling)", suggestion)
 	}
 }

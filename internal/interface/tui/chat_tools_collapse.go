@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Tool run collapsing: a long-horizon agent turn fires dozens of
@@ -158,23 +159,12 @@ func (m ChatModel) toolGroupRowsAt(msg ChatMessage, width int) []string {
 	}
 	// Reserve for the indent, status glyph and spaces the group
 	// renderer prepends.
-	budget := width - 6
-	if budget < 20 {
-		budget = 20
-	}
-	if len(detail) > budget {
-		detail = detail[:budget-1] + "…"
-	}
+	prefix := ""
 	if msg.ToolName == "bash" || msg.ToolName == "BashTool" {
-		return []string{"$ " + detail}
+		prefix = "$ "
 	}
-	return []string{detail}
-}
-
-// toolGroupRows renders at the model's pane width (single standalone
-// records created before the width-aware path existed).
-func (m ChatModel) toolGroupRows(msg ChatMessage) []string {
-	return m.toolGroupRowsAt(msg, m.width)
+	budget := max(0, width-6)
+	return []string{ansi.Truncate(prefix+detail, budget, "…")}
 }
 
 // todoChecklistRows renders a todo-list tool call as a visible

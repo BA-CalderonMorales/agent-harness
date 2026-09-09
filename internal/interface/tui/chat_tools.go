@@ -291,19 +291,12 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 }
 
 // truncateCommand truncates a command for display with ellipsis.
-// Deprecated: use truncateCommandForWidth for responsive width-aware truncation.
+// Deprecated: use truncateCommandForWidthAt for responsive width-aware truncation.
 func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 	if len(cmd) <= maxLen {
 		return cmd
 	}
 	return cmd[:maxLen-3] + "..."
-}
-
-// truncateCommandForWidth truncates a command so the entire tool line fits
-// within the current terminal width, preserving space for the status indicator
-// and tool display name.
-func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string {
-	return m.truncateCommandForWidthAt(m.width, toolDisplayName, cmd)
 }
 
 // truncateCommandForWidthAt is the width-parameterized form: the budget

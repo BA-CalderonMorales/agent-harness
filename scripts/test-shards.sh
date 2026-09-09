@@ -60,10 +60,9 @@ list)
         cd "$ROOT"
         skip=$(sh "$0" list tui; sh "$0" list core)
         go list ./... | while read -r p; do
-            case "$skip" in
-            *"$p"*) ;;
-            *) echo "$p" ;;
-            esac
+            if ! printf '%s\n' "$skip" | grep -Fxq -- "$p"; then
+                printf '%s\n' "$p"
+            fi
         done
         ;;
     *)
@@ -88,7 +87,7 @@ coverage)
     missing=0
     dup=0
     for p in $all; do
-        count=$(printf '%s\n' $covered | grep -cx "$p")
+        count=$(printf '%s\n' $covered | grep -Fcx -- "$p")
         if [ "$count" -eq 0 ]; then
             echo "MISSING: $p" >&2
             missing=1
