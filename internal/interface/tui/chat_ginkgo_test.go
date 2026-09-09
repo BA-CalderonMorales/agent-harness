@@ -237,10 +237,10 @@ var _ = Describe("ChatModel", func() {
 			})
 		})
 
-		Context("Given more than four rows of text", func() {
-			It("should cap the composer at four rows", func() {
-				By("setting five lines of input")
-				chat.SetInput("one\ntwo\nthree\nfour\nfive")
+		Context("Given more than eight rows of text", func() {
+			It("should cap the composer at eight rows", func() {
+				By("setting nine lines of input")
+				chat.SetInput("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine")
 
 				By("verifying the textarea height is capped")
 				Expect(chat.inputRows()).To(Equal(MaxInputRows))
@@ -253,13 +253,14 @@ var _ = Describe("ChatModel", func() {
 				chat.SetInput("one")
 				oneLineHeight := chat.inputAreaHeight()
 
-				chat.SetInput("one\ntwo\nthree\nfour")
+				chat.SetInput("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine")
 				manyLineHeight := chat.inputAreaHeight()
 
 				// Solid block hugs the text: border + top padding + editor
-				// rows + the mode line row below the block.
+				// rows + the mode line row below the block. Nine lines
+				// exceed the cap, so the tail marker reserves one row.
 				Expect(oneLineHeight).To(Equal(1 + ComposerTopPadding + MinInputRows + ComposerBottomPadding + 1))
-				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + ComposerBottomPadding + 1))
+				Expect(manyLineHeight).To(Equal(1 + ComposerTopPadding + MaxInputRows + ComposerBottomPadding + 1 + 1))
 			})
 		})
 

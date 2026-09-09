@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestComposerStaysVisibleAtBottom(t *testing.T) {
@@ -43,7 +45,8 @@ func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
 		{name: "empty", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
 		{name: "single line", input: "hello", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
 		{name: "two lines", input: "hello\nworld", rows: 2, area: 1 + ComposerTopPadding + 2 + ComposerBottomPadding + 1},
-		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 1 + ComposerTopPadding + 4 + ComposerBottomPadding + 1},
+		{name: "eight lines", input: "1\n2\n3\n4\n5\n6\n7\n8", rows: 8, area: 1 + ComposerTopPadding + 8 + ComposerBottomPadding + 1},
+		{name: "capped", input: "1\n2\n3\n4\n5\n6\n7\n8\n9", rows: MaxInputRows, area: 1 + ComposerTopPadding + MaxInputRows + ComposerBottomPadding + 1 + 1}, // +1 overflow marker row
 	}
 
 	for _, tc := range cases {
@@ -112,6 +115,87 @@ func TestMultilineComposerHasStablePadding(t *testing.T) {
 	}
 }
 
+func TestWrappedLineGrowsComposerRows(t *testing.T) {
+	chat := NewChatModel()
+	chat.width = 80
+	chat.height = 24
+	chat.SetInput("one")
+	// A long single sentence that soft-wraps across the editor width must
+	// count as multiple visual rows, not one: the composer grows so the
+	// wrapped tail is visible instead of hiding below the fold.
+	longText := "The quick brown fox jumps over the lazy dog while the sun sets slowly behind the distant mountains."
+	chat.SetInput(longText)
+
+	if got := chat.inputRows(); got <= 1 {
+		t.Fatalf("wrapped long line inputRows() = %d, want > 1", got)
+	}
+	if got := chat.textarea.Height(); got != chat.inputRows() {
+		t.Fatalf("textarea.Height() = %d, want %d", got, chat.inputRows())
+	}
+}
+
+func TestComposerFitsShortPane(t *testing.T) {
+	// On a short terminal the composer must give way to fixed chrome and
+	// the viewport floor instead of overflowing off the bottom. The editor
+	// shrinks and bubbles scrolls internally; the mode line stays visible.
+	chat := NewChatModel()
+	chat.width = 80
+	chat.height = 16
+	chat.SetModel("test-model")
+
+	// A draft long enough to want the full 8-row cap.
+	draft := "1\n2\n3\n4\n5\n6\n7\n8\n9\n10"
+	chat.SetInput(draft)
+
+	maxRows := chat.maxComposerRows()
+	if got := chat.inputRows(); got > maxRows {
+		t.Fatalf("inputRows() = %d exceeds pane budget %d", got, maxRows)
+	}
+
+	view := chat.View()
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	if len(lines) > chat.height {
+		t.Fatalf("rendered lines = %d, want <= %d\n%s", len(lines), chat.height, view)
+	}
+	if !strings.Contains(view, "effort") {
+		t.Fatalf("mode line not visible on short pane\n%s", view)
+	}
+
+	// Meanwhile the one-line composer is unaffected by the short pane:
+	// it keeps its natural single-row height plus chrome.
+	chat.SetInput("hi")
+	if got, want := chat.inputRows(), 1; got != want {
+		t.Fatalf("short-pane one-line composer inputRows() = %d, want %d", got, want)
+	}
+}
+
+func TestWrappedLineFitsShortPane(t *testing.T) {
+	// A long single line on a narrow short pane: the wrap count is capped
+	// by the pane budget, never exceeding it even though the raw text
+	// would need more rows than the pane can show.
+	chat := NewChatModel()
+	chat.width = 40
+	chat.height = 16
+	chat.SetModel("test-model")
+
+	longText := "The quick brown fox jumps over the lazy dog while the sun sets slowly behind the distant mountains forever and ever amen."
+	chat.SetInput(longText)
+
+	maxRows := chat.maxComposerRows()
+	if got := chat.inputRows(); got > maxRows {
+		t.Fatalf("inputRows() = %d exceeds pane budget %d", got, maxRows)
+	}
+
+	view := chat.View()
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	if len(lines) > chat.height {
+		t.Fatalf("rendered lines = %d, want <= %d\n%s", len(lines), chat.height, view)
+	}
+	if !strings.Contains(view, "effort") {
+		t.Fatalf("mode line not visible on narrow short pane\n%s", view)
+	}
+}
+
 func TestStatusLineStaysQuietAtNarrowWidth(t *testing.T) {
 	chat := NewChatModel()
 	chat.width = 42
@@ -124,5 +208,32 @@ func TestStatusLineStaysQuietAtNarrowWidth(t *testing.T) {
 	}
 	if !strings.Contains(view, "effort") {
 		t.Fatalf("mode line should stay visible at narrow width\n%s", view)
+	}
+}
+
+func TestFirstLineStaysVisibleWhenComposerGrows(t *testing.T) {
+	// Regression: entering a second line used to scroll the first line out
+	// of view even though the whole draft fits. bubbles' repositionView()
+	// ran with the previous (smaller) textarea height and over-scrolled;
+	// the height must grow before the key is fed so the caret's move onto a
+	// new line keeps every line on screen.
+	chat := NewChatModel()
+	chat.width = 80
+	chat.height = 24
+	chat.SetModel("test-model")
+	chat.SetInput("first line")
+
+	// Type a second line via Alt+Enter (multi-line input), then more text.
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	chat = model.(ChatModel)
+	model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("second")})
+	chat = model.(ChatModel)
+
+	view := chat.View()
+	if !strings.Contains(view, "first line") {
+		t.Fatalf("first line vanished from composer after adding a second line\n%s", view)
+	}
+	if !strings.Contains(view, "second") {
+		t.Fatalf("second line not rendered in composer\n%s", view)
 	}
 }

@@ -14,7 +14,7 @@ import (
 func (m *ChatModel) resize(width, height int) {
 	m.width = width
 	m.height = height
-	m.syncTextareaHeight()
+	m.syncTextareaGeometry()
 
 	headerHeight := 2
 	separatorHeight := 1
@@ -26,12 +26,6 @@ func (m *ChatModel) resize(width, height int) {
 
 	m.viewport.Width = width
 	m.viewport.Height = vpHeight
-	columnWidth := width
-	textareaWidth := columnWidth - 8
-	if textareaWidth < 20 {
-		textareaWidth = 20
-	}
-	m.textarea.SetWidth(textareaWidth)
 
 	m.refreshViewport()
 }
@@ -257,6 +251,19 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 				diag.Panic("tui.textarea", r)
 			}
 		}()
+		// Grow the textarea to fit the whole draft before feeding the key.
+		// bubbles' repositionView() runs at the end of Update() against the
+		// height we hand it: with the old (smaller) height it scrolls the
+		// caret's line into view and pushes the first line out from under
+		// the overflow marker. The +1 headroom covers the row the keystroke
+		// itself may create — on narrow panes a single character can wrap
+		// the line, and Alt+Enter adds one — so the window already holds
+		// the post-keystroke draft and nothing ever scrolls: a fitting
+		// draft shows every line; an overflowing one pins the top and
+		// collects the hidden rows at the tail (declared by the marker).
+		if rows := m.draftRows() + 1; rows > m.textarea.Height() {
+			m.textarea.SetHeight(rows)
+		}
 		newTA, cmd = m.textarea.Update(msg)
 	}()
 	m.textarea = newTA

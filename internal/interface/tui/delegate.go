@@ -49,7 +49,7 @@ func (m AsyncChatModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Clear input immediately for responsiveness
 			m.textarea.SetValue("")
-			m.textarea.SetHeight(3)
+			m.textarea.SetHeight(MinInputRows)
 
 			// Add user message to chat
 			m.AddMessage("user", input)

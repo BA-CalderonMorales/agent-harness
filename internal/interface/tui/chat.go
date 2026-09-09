@@ -6,6 +6,7 @@ import (
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"time"
 )
@@ -152,7 +153,11 @@ const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
 	MinInputRows            = 1
-	MaxInputRows            = 4
+	// MaxInputRows caps the composer at eight visible lines before the
+	// textarea scrolls internally (the caret line always stays in view).
+	// Eight keeps a mid-length draft readable on desktop and tablet so a
+	// driver can scan back over recent sentences without scrolling.
+	MaxInputRows = 8
 )
 
 // Composer layout: the input block spans the full terminal width with a
@@ -456,25 +461,93 @@ func (m ChatModel) GetModel() string {
 	return m.model
 }
 
-func (m *ChatModel) syncTextareaHeight() {
-	rows := m.inputRows()
+// maxComposerRows is the largest number of editor rows the composer may
+// occupy without pushing itself (and its mode line) off the bottom of the
+// pane. The transcript viewport keeps a 5-row floor, so the composer can
+// never crowd it out entirely; on a short terminal the editor shrinks and
+// bubbles scrolls internally instead of overflowing. When the pane height
+// is not yet known (0), the hard MaxInputRows cap applies alone.
+func (m ChatModel) maxComposerRows() int {
+	if m.height <= 0 {
+		return MaxInputRows
+	}
+	// Fixed chrome on the pane: header (2) + separator (1) + viewport
+	// floor (5). The composer block itself is border (1) + top padding +
+	// editor rows + bottom padding + mode line (1). One more row is
+	// reserved so the overflow marker (shown when the draft scrolls
+	// internally) never pushes the mode line off the pane.
+	fixed := 2 + 1 + 5
+	rows := m.height - fixed - ComposerTopPadding - ComposerBottomPadding - 2 - 1
 	if rows < MinInputRows {
 		rows = MinInputRows
 	}
 	if rows > MaxInputRows {
 		rows = MaxInputRows
 	}
+	return rows
+}
+
+func (m *ChatModel) syncTextareaHeight() {
+	rows := m.inputRows()
+	if rows < MinInputRows {
+		rows = MinInputRows
+	}
+	if cap := m.maxComposerRows(); rows > cap {
+		rows = cap
+	}
 	m.textarea.SetHeight(rows)
 }
 
+// syncTextareaGeometry keeps the textarea's wrap width and height
+// consistent with the pane's current width and height. bubbles wraps to
+// the width we hand SetWidth, so the editor panel and the textarea must
+// agree on that width or a wrapped line's row count in inputRows() drifts
+// from what View() actually renders.
+func (m *ChatModel) syncTextareaGeometry() {
+	columnWidth := m.width
+	textareaWidth := columnWidth - 8
+	if textareaWidth < 20 {
+		textareaWidth = 20
+	}
+	m.textarea.SetWidth(textareaWidth)
+	m.syncTextareaHeight()
+}
+
+// inputRows reports how many visual rows the composer needs to show the
+// current draft without scrolling. A logical line that soft-wraps across
+// the editor width counts as multiple rows, so a long sentence on a narrow
+// pane grows the composer instead of hiding its wrapped tail. The count is
+// capped at MaxInputRows (and, once the pane height is known, fit to the
+// pane so the block never overflows).
 func (m ChatModel) inputRows() int {
+	rows := m.draftRows()
+	if rows < MinInputRows {
+		rows = MinInputRows
+	}
+	if rows > MaxInputRows {
+		rows = MaxInputRows
+	}
+	if cap := m.maxComposerRows(); rows > cap {
+		rows = cap
+	}
+	return rows
+}
+
+// draftRows counts the draft's visual rows without any cap — the raw
+// soft-wrap-aware height the text needs to be fully visible.
+func (m ChatModel) draftRows() int {
 	value := m.textarea.Value()
 	if value == "" {
 		return MinInputRows
 	}
-	rows := strings.Count(value, "\n") + 1
-	if rows > MaxInputRows {
-		return MaxInputRows
+	width := m.textarea.Width()
+	rows := 0
+	for _, line := range strings.Split(value, "\n") {
+		if width > 0 && ansi.StringWidth(line) > width {
+			rows += strings.Count(ansi.Wordwrap(line, width, ""), "\n") + 1
+		} else {
+			rows++
+		}
 	}
 	return rows
 }
@@ -486,6 +559,11 @@ func (m ChatModel) inputAreaHeight() int {
 	// live, so its appearance shrinks the viewport instead of pushing the
 	// composer + mode line off the pane on short terminals.
 	height := 1 + ComposerTopPadding + m.inputRows() + ComposerBottomPadding + 1
+	if m.hiddenRowsBelow() > 0 {
+		// The tail marker rides inside the block below the text; its
+		// row is part of the composer's reserved area.
+		height++
+	}
 	if m.workingStatusHeight() > 0 {
 		height++
 	}
@@ -504,6 +582,20 @@ func (m *ChatModel) Focus() {
 	m.focused = true
 	m.textarea.Focus()
 	m.togglePlaceholder()
+}
+
+// hiddenRowsBelow reports how many visual rows of the draft sit below the
+// textarea's scroll window — tail rows the driver typed but cannot see
+// right now. The composer pins the first line (top-anchored), so overflow
+// always collects at the bottom; the marker declares the tail so nothing
+// the driver wrote is silently gone.
+func (m ChatModel) hiddenRowsBelow() int {
+	total := m.draftRows()
+	visible := m.textarea.Height()
+	if total <= visible {
+		return 0
+	}
+	return total - visible
 }
 
 // Blur blurs the chat input and turns the composer into a vim-style
