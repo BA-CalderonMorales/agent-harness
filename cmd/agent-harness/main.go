@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	Version   = "0.3.32"
+	Version   = "0.3.33"
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"

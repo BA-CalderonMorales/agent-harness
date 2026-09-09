@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.3.33] - 2026-09-09
+
+### Fixed
+- TUI frame borders stay put when switching tabs on mobile panes
+  (Termux): a sub-view row wider than the frame's inner width wrapped
+  at the terminal and shifted the bottom chrome. The frame now clips
+  any overflowing row (ANSI-aware), and Home session lines truncate
+  with an ellipsis instead of overflowing. Regression test pins the
+  frame invariant across all tabs at phone-pane sizes.
+
 ## [0.3.32] - 2026-09-09
 
 ### Added
