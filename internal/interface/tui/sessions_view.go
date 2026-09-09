@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
-	"github.com/charmbracelet/lipgloss"
 	"strings"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // View renders the sessions list.
@@ -49,9 +51,6 @@ func (m SessionsModel) View() string {
 		contentHeight = 5
 	}
 
-	// Two-pane layout
-	listW, detailW := TwoPaneWidths(m.width)
-
 	// Render list
 	var listB strings.Builder
 	listB.WriteString(ListTitleStyle.Render("  All Sessions") + "\n")
@@ -67,11 +66,6 @@ func (m SessionsModel) View() string {
 		listB.WriteString(WarningStyle.Render("  "+unreadableSessionWarning(m.unreadableCount)) + "\n")
 	}
 	listB.WriteString("\n")
-
-	for i, session := range m.sessions {
-		item := m.renderSessionItem(session, i == m.cursor, listW)
-		listB.WriteString(item + "\n")
-	}
 
 	// List footer
 	footerHints := []ActionHint{
@@ -96,6 +90,27 @@ func (m SessionsModel) View() string {
 			{Key: "n/Esc", Desc: "Cancel"},
 		}
 	}
+
+	// Single-pane full width layout on mobile
+	if isMobilePane(m.width) {
+		for i, session := range m.sessions {
+			item := m.renderSessionItem(session, i == m.cursor, m.width)
+			listB.WriteString(item + "\n")
+		}
+		listB.WriteString(RenderCompactFooterWrapped(footerHints, m.width))
+		listContent := lipgloss.NewStyle().Width(m.width).Height(contentHeight - 2).Render(listB.String())
+		b.WriteString(listContent)
+		return b.String()
+	}
+
+	// Two-pane layout on desktop
+	listW, detailW := TwoPaneWidths(m.width)
+
+	for i, session := range m.sessions {
+		item := m.renderSessionItem(session, i == m.cursor, listW)
+		listB.WriteString(item + "\n")
+	}
+
 	listB.WriteString(RenderCompactFooterWrapped(footerHints, listW))
 
 	listContent := lipgloss.NewStyle().Width(listW).Height(contentHeight - 2).Render(listB.String())
@@ -132,12 +147,6 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		}
 	}
 	age := RelativeTime(session.UpdatedAt)
-	if len(label) > width-12-len(age) {
-		label = label[:width-15-len(age)] + "..."
-	}
-	label += " " + HelpDimStyle.Render(age)
-
-	line := style.Render(prefix + label)
 
 	// Status indicator. The active session gets the active marker, not
 	// "[running]" — an idle open session is not executing anything.
@@ -146,6 +155,24 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		status = StatusActive
 	}
 	statusStr := RenderStatusBadge(status)
+	statusW := 0
+	if statusStr != "" {
+		statusW = lipgloss.Width(statusStr) + 1
+	}
+
+	// Budget available space for the label inside the styled row:
+	// ListItemStyle and ListSelectedStyle pad 2 on each side (4 total),
+	// prefix takes 2, age takes len(age)+1, and status takes statusW.
+	overhead := 4 + 2 + len(age) + 1 + statusW
+	avail := width - overhead
+	if avail < 4 {
+		avail = 4
+	}
+	if lipgloss.Width(label) > avail {
+		label = ansi.Truncate(label, avail, "…")
+	}
+
+	line := style.Render(prefix + label + " " + HelpDimStyle.Render(age))
 	if statusStr != "" {
 		line += " " + statusStr
 	}
