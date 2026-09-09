@@ -14,7 +14,7 @@ import (
 func (m *ChatModel) resize(width, height int) {
 	m.width = width
 	m.height = height
-	m.syncTextareaHeight()
+	m.syncTextareaGeometry()
 
 	headerHeight := 2
 	separatorHeight := 1
@@ -26,12 +26,6 @@ func (m *ChatModel) resize(width, height int) {
 
 	m.viewport.Width = width
 	m.viewport.Height = vpHeight
-	columnWidth := width
-	textareaWidth := columnWidth - 8
-	if textareaWidth < 20 {
-		textareaWidth = 20
-	}
-	m.textarea.SetWidth(textareaWidth)
 
 	m.refreshViewport()
 }

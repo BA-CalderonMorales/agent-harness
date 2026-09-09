@@ -23,7 +23,7 @@ func (m ChatModel) View() string {
 	// lands as a message) — would paint one frame stale and correct
 	// on the next Update.
 
-	m.syncTextareaHeight()
+	m.syncTextareaGeometry()
 	inputHeight := m.inputAreaHeight()
 
 	headerHeight := 2 // Header takes 2 lines
@@ -125,16 +125,34 @@ func (m ChatModel) View() string {
 	// The composer's top border is the mode affordance: bright while
 	// you can type (insert), dim while you read (navigate) — the
 	// boundary is visible where the eyes already are, on the terminal's
-	// own background.
+	// own background. When the draft has rows scrolled out above the
+	// window, the border says so: an overflow marker keeps the hidden
+	// first line discoverable instead of silently gone.
 	composerBorder := ColorBorder
 	if m.modeLabel == "typing" || m.focused {
 		composerBorder = ColorPrimary
 	}
-	blockPanel := InputContainerStyle.
+	if m.hiddenRowsAbove() > 0 {
+		composerBorder = ColorPrimary
+	}
+	borderStyle := InputContainerStyle.
 		Width(columnWidth).
 		BorderForeground(composerBorder).
 		PaddingTop(ComposerTopPadding).
-		PaddingBottom(ComposerBottomPadding).
+		PaddingBottom(ComposerBottomPadding)
+	if hidden := m.hiddenRowsAbove(); hidden > 0 {
+		// The overflow marker rides the top rule: `… N lines above` tells
+		// the driver exactly how much draft is out of view and that it is
+		// reachable, not lost.
+		marker := InputHintStyle.Render(
+			"… " + fmt.Sprintf("%d line%s above — ↑ to scroll", hidden, plural(hidden)))
+		block := lipgloss.JoinVertical(lipgloss.Left, marker, lipgloss.JoinVertical(lipgloss.Left, blockParts...))
+		blockPanel := borderStyle.Render(block)
+		composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
+		sections = append(sections, composerPanel)
+		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+	}
+	blockPanel := borderStyle.
 		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
 
 	// The mode line renders below the block, on the terminal background.
@@ -143,6 +161,14 @@ func (m ChatModel) View() string {
 	sections = append(sections, composerPanel)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
+}
+
+// plural returns "s" for counts other than one.
+func plural(n int) string {
+	if n == 1 {
+		return ""
+	}
+	return "s"
 }
 
 // renderModeLine renders the mode · model · provider · reasoning-effort line
