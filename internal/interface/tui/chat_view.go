@@ -30,7 +30,11 @@ func (m ChatModel) View() string {
 	separatorHeight := 1
 
 	// Ensure minimum height for viewport
-	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
+	// The live working row is part of the fixed chrome while a turn is in
+	// flight. Reserve it before sizing the viewport; otherwise the row is
+	// appended later and pushes the composer/mode line below the pane.
+	statusHeight := m.workingStatusHeight()
+	vpHeight := m.height - inputHeight - headerHeight - separatorHeight - statusHeight
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
@@ -81,6 +85,14 @@ func (m ChatModel) View() string {
 		MaxHeight(vpHeight).
 		Render(vpContent)
 	sections = append(sections, vpRendered)
+
+	// Agent working indicator: the live "what is the agent doing" line
+	// above the composer (Codex parity). Renders in the chrome, not the
+	// transcript; hidden entirely when idle so geometry is unchanged.
+	tick := int(time.Since(m.startTime).Milliseconds() / 250)
+	if status := m.renderWorkingStatus(tick, m.width); status != "" {
+		sections = append(sections, status)
+	}
 
 	// Composer: centered column with padding above and below the input text,
 	// a mode line (mode · model · provider · reasoning effort) under it, and
@@ -176,15 +188,23 @@ func (m ChatModel) renderModeLine() string {
 	keep := make([]bool, len(segments))
 	for i := range segments {
 		keep[i] = true
-		budget -= 3 // separator
-		if i > 0 {
-			budget -= segments[i].width
-		}
+		budget -= 3 + segments[i].width // separator + segment
 	}
-	// Drop from the least important (effort) up while over budget.
-	for i := len(segments) - 1; i >= 0 && budget < 0; i-- {
-		keep[i] = false
-		budget += segments[i].width + 3
+	// Keep the mode and effort signal useful on a narrow pane. Drop
+	// optional context first: provider, persona, then model. Effort is
+	// the last metadata field to disappear because it describes the
+	// active behavior rather than the selected implementation.
+	for _, i := range []int{2, 0, 1, 3} {
+		if budget >= 0 {
+			break
+		}
+		if i >= len(segments) {
+			continue
+		}
+		if keep[i] {
+			keep[i] = false
+			budget += segments[i].width + 3
+		}
 	}
 	parts := []string{modeBit}
 	for i := range segments {
@@ -294,35 +314,45 @@ func (m ChatModel) renderAssistantMessage(msg ChatMessage) string {
 // the answer bubble — and reports the clickable ranges inside it,
 // relative to the block's first row. The bubble is left-border only, so
 // inner rows map onto bubble rows one-to-one; only the header offsets.
+//
+// A live toolRow resolver is wired here (goal 0.3.29 live-visibility):
+// the streaming assistant carries tool parts as calls come in, and
+// they must render inside the live bubble. The resolver looks the call
+// up by ID across the transcript so the row reflects the message's
+// current state (running → settled) without the turn-block machinery.
 func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, []clickRef) {
-	inner, refs := m.assistantInnerContent(msg, msg.Parts, nil)
+	toolRow := func(id string) (string, bool) {
+		for k := range m.messages {
+			tm := &m.messages[k]
+			if tm.ID == id && tm.IsTool {
+				return m.renderToolMessageAt(*tm, width-8), true
+			}
+		}
+		return "", false
+	}
+	inner, refs := m.assistantInnerContent(msg, msg.Parts, toolRow)
 	bubbles := MessageBubbleAssistant.Width(width - 4).Render(inner)
 	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
 
-// renderAssistantHeader is the "Agent 22:24 (22.3s)" line — split from
-// the content so a turn block can nest its tool calls between the two.
+// renderAssistantHeader is the "Agent 22:24" line — split from the
+// content so a turn block can nest its tool calls between the two.
+// Live turn state (elapsed clock, thinking badge) moved to the working
+// indicator above the composer: the header is the record ("this reply
+// landed at 22:24"), the status line is the live signal. On finalize,
+// the settled ResponseTime renders again.
 func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	var b strings.Builder
 
-	// Header
 	header := AssistantStyle.Render("Agent")
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
-	// While the response is in progress the header carries a live status:
-	// Agent 14:39 (6.2s) [8 chunks] (thinking ⠹) - the elapsed time ticks
-	// from the model's clock, the chunk counter updates per chunk, and the
-	// spinner animates on the same clock.
-	elapsed := msg.ResponseTime
-	if msg.Thinking {
-		elapsed = m.elapsed
-	}
-	if elapsed > 0 {
-		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(elapsed)))
-	}
-	if msg.Thinking {
-		header += HelpDimStyle.Render(" ") + m.thinkingBadge(int(m.elapsed.Seconds())*4)
+	// Live turns render a bare header; the elapsed clock and activity
+	// live in the working indicator above the composer (chat_working.go).
+	// Settled turns show how long the response took.
+	if !msg.Thinking && msg.ResponseTime > 0 {
+		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
 	}
 	b.WriteString(header)
 	return b.String()
@@ -343,18 +373,22 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 
 	// Content - render markdown for rich formatting (code blocks, bold,
 	// italic, etc.). While thinking (before the first chunk) the bubble is
-	// hidden so only the animated header shows. Once the first token has
-	// been pending long enough to suggest a slow local model, an explanatory
-	// progress line fills the gap. When reasoning deltas are streaming
-	// (GLM/DeepSeek/Nemotron thinking), the tail of the reasoning text
-	// previews under the badge — unless the record is expanded, which
-	// shows the full reasoning like an expanded tool call.
-	if strings.TrimSpace(msg.Content) == "" && msg.Thinking {
-		if hint := thinkingHint(m.elapsed); hint != "" {
-			b.WriteString(HelpDimStyle.Render(hint))
-			b.WriteString("\n")
-			rows++
+	// hidden so only the animated header shows — UNLESS the turn already
+	// carries tool calls: those must render as they come in (goal 0.3.29
+	// live-visibility finding — a tool inside the placeholder window used
+	// to hide behind this early return, leaving the user blind while the
+	// command ran). When reasoning deltas are streaming (GLM/DeepSeek/
+	// Nemotron thinking), the tail of the reasoning text previews under
+	// the badge — unless the record is expanded, which shows the full
+	// reasoning like an expanded tool call.
+	hasToolParts := false
+	for _, p := range parts {
+		if p.ToolID != "" {
+			hasToolParts = true
+			break
 		}
+	}
+	if strings.TrimSpace(msg.Content) == "" && msg.Thinking && !hasToolParts {
 		if m.expandedMessageID == msg.ID {
 			if full := strings.TrimSpace(m.thinkingText); full != "" && !m.thinkingIsStatus {
 				wrapped := fitBlock(m.width-4, full)
@@ -448,7 +482,7 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	// summary row stays (time, glyph, name, duration), and each todo
 	// becomes an indented checkbox row beneath it.
 	if rows := m.todoChecklistRows(msg); rows != nil {
-		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
+		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
 		for _, r := range rows {
 			body += "\n " + r
 		}
@@ -458,7 +492,7 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 		return body
 	}
 
-	row := m.formatToolContentAt(width+2, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
+	row := m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
 	body := style.Render(expandCaret(expanded) + " " + row)
 
 	// Expanded tool record: the full call beneath the summary line —

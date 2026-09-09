@@ -55,7 +55,7 @@ func TestLoop_TextOnlyResponse(t *testing.T) {
 }
 
 func TestLoop_ToolUseResponse(t *testing.T) {
-	mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", "ls")}
+	mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", `{"command":"ls"}`)}
 	loop := NewLoop(mock)
 
 	bashTool := tools.NewTool(tools.Tool{
@@ -111,7 +111,7 @@ func TestLoop_ToolUseResponse(t *testing.T) {
 
 func TestLoop_MaxTurnsRespected(t *testing.T) {
 	// Every response asks for the same tool, which would loop forever
-	mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", "ls")}
+	mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", `{"command":"ls"}`)}
 	loop := NewLoop(mock)
 	loop.Config.DefaultMaxTurns = 2
 

@@ -402,6 +402,16 @@ func newProductionPermissionContractApp(t *testing.T, mode config.PermissionMode
 		t.Fatalf("newApp execution mode = %s, want interactive", app.executionMode)
 	}
 
+	// The permission-policy matrix is an auto-mode contract: it pins how
+	// the policy layers (granular toggles, permission presets, always_*
+	// rules, destructiveness) classify each tool. The agent-mode gate
+	// ("manual asks for everything") is layered on top of that matrix
+	// and is covered separately by TestProductionPermissionContractManualAsksAll.
+	// agentMode is set directly rather than through applyAgentMode: the
+	// test depends on executionMode staying interactive so an Ask is
+	// observable as approval-pending.
+	app.agentMode = AgentModeAuto
+
 	return app, tuiApp
 }
 
@@ -818,4 +828,56 @@ func permissionContractFileState(path string) string {
 
 func permissionContractShellQuote(value string) string {
 	return "'" + strings.ReplaceAll(value, "'", "'\"'\"'") + "'"
+}
+
+// TestProductionPermissionContractManualAsksAll pins the steering
+// contract (goal 0.3.29): manual mode means a human chooses for EVERY
+// tool call — the old fall-through let non-destructive, granularly
+// enabled tools (bash under workspace-write) run without asking.
+// Auto mode is the opposite contract: no ask beyond what the policy
+// matrix requires (covered by the mode matrix above).
+func TestProductionPermissionContractManualAsksAll(t *testing.T) {
+	for _, streaming := range []bool{true, false} {
+		streaming := streaming
+		t.Run(map[bool]string{true: "streaming", false: "batch"}[streaming], func(t *testing.T) {
+			for _, mode := range []config.PermissionMode{
+				config.PermissionReadOnly,
+				config.PermissionWorkspaceWrite,
+				config.PermissionDangerFullAccess,
+			} {
+				mode := mode
+				t.Run(mode.String(), func(t *testing.T) {
+					app, tuiApp := newProductionPermissionContractApp(t, mode)
+					// The harness sets auto (the policy-matrix contract);
+					// this test flips to manual — the user-facing default.
+					app.agentMode = AgentModeManual
+
+					for _, toolName := range []string{"read", "write", "edit", "bash", "mcp_contract_touch"} {
+						toolName := toolName
+						t.Run(toolName, func(t *testing.T) {
+							operation := newPermissionContractOperation(t, app, toolName)
+							initialState := operation.state()
+							run := startProductionPermissionContractRun(t, app, tuiApp, operation, streaming)
+
+							req, completed := waitForPermissionContractApproval(t, tuiApp, run.done)
+							if req == nil {
+								if completed != nil {
+									t.Fatalf("manual mode ran %s without asking; events: %#v", toolName, completed.events)
+								}
+								t.Fatalf("manual mode produced neither an approval dialog nor an outcome for %s", toolName)
+							}
+
+							// A dialog appeared: this IS the contract.
+							// Reject so the run settles without side effects.
+							req.Respond(approval.DecisionReject)
+							_ = waitForPermissionContractOutcome(t, run.done)
+							if got := operation.state(); got != initialState {
+								t.Errorf("rejected %s still produced a side effect: got %q, want %q", toolName, got, initialState)
+							}
+						})
+					}
+				})
+			}
+		})
+	}
 }

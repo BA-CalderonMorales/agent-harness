@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.3.29] - 2026-09-08
+
+### Changed
+- Give development turns room for 50 model responses and 100 tool calls by
+  default. Rechecking a command after intervening work no longer triggers
+  duplicate-loop protection; explicit session limits remain enforced.
+- Render live tools inside the agent response with incremental transcript
+  assembly, clearer working indicators, and shell-style input history.
+
+### Fixed
+- Harden cancellation, tool completion records, delegated-agent bounds,
+  malformed provider responses, and shell process cleanup.
+- Preserve session settings and tool results across reloads, and surface
+  unreadable saved sessions without silently losing recovery information.
+- Make manual permissions request approval for every tool call and improve
+  approval cancellation handling.
+- Add development-workflow, session-recovery, and memory-guard regression
+  coverage.
+
 ## [0.3.28] - 2026-09-07
 
 ### Added

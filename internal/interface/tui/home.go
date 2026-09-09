@@ -43,6 +43,7 @@ type HomeModel struct {
 	persona         string
 	estimatedTokens int
 	setupRequired   bool
+	unreadableCount int
 
 	// deleting indexes the pending session deletion; -1 when idle. The
 	// y/n confirm mirrors the Sessions tab — same verb, same safety.
@@ -109,7 +110,17 @@ func (m *HomeModel) SetProjectInfo(info ProjectInfo) {
 
 // SetSessions updates the recent sessions list.
 func (m *HomeModel) SetSessions(sessions []SessionInfo) {
-	m.sessions = sessions
+	m.unreadableCount = 0
+	readable := make([]SessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		if session.UnreadableCount > m.unreadableCount {
+			m.unreadableCount = session.UnreadableCount
+		}
+		if session.ID != "" {
+			readable = append(readable, session)
+		}
+	}
+	m.sessions = readable
 	m.clampCursor()
 }
 

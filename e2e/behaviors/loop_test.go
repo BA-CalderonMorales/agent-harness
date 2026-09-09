@@ -28,7 +28,7 @@ func TestBehavior_LoopHappyPaths(t *testing.T) {
 			name: "B9: tool use response yields ToolUseBlock",
 			given: func(f *testharness.Fixture) {
 				f.SetPermissionMode(permissions.ModeDontAsk)
-				f.MockLLM.Events = llm.MockToolUseResponse("bash", "echo hi")
+				f.MockLLM.Events = llm.MockToolUseResponse("bash", `{"command":"echo hi"}`)
 			},
 			wantTypes: []string{"StreamRequestStart", "StreamMessage", "ToolUseBlock"},
 		},

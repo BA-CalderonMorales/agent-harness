@@ -52,3 +52,24 @@ func TestSessionsNoticeLifecycle(t *testing.T) {
 		t.Fatalf("notice survived navigation: %q", updated.notice)
 	}
 }
+
+func TestSessionsWarningKeepsReadableRowsSelectable(t *testing.T) {
+	m := NewSessionsModel()
+	m.width = 80
+	m.height = 20
+	m.Focus()
+	m.SetSessions([]SessionInfo{
+		{ID: "good", Title: "Readable", UnreadableCount: 2},
+		{UnreadableCount: 2},
+	})
+	if len(m.sessions) != 1 || m.sessions[0].ID != "good" {
+		t.Fatalf("readable sessions = %#v, want only the readable row", m.sessions)
+	}
+	if !strings.Contains(m.View(), "2 saved sessions could not be") {
+		t.Fatalf("warning missing from sessions view:\n%s", m.View())
+	}
+	mm, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if mm.(SessionsModel).cursor != 0 {
+		t.Fatal("warning state changed the readable selection")
+	}
+}

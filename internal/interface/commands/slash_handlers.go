@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 )
 
 // Built-in command handlers
@@ -72,8 +74,8 @@ func CurrentModelHandler(getModel func() string) SlashHandler {
 // knob). No args reports the current ceiling; a number sets it for this
 // session only; anything else is rejected honestly.
 func LimitHandler(getLimit func() int, setLimit func(int) error) SlashHandler {
-	const defaultLimit = 15
-	const maxLimit = 100
+	defaultLimit := agent.DefaultLoopConfig().MaxToolCalls
+	const maxLimit = 500
 	return func(args string) (string, error) {
 		if args == "" {
 			current := getLimit()

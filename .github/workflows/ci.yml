@@ -38,9 +38,27 @@ jobs:
         run: go build -tags kairos -v ./cmd/agent-harness
         continue-on-error: true
 
-  # Run all tests
+  # Run all tests, sharded by package group: parallel shards cut the
+  # wall-clock (the TUI suite alone is ~27s; serially it queues behind
+  # everything else) and a failure surfaces on its own shard instead of
+  # hiding at the tail of one serial log. Each matrix entry resolves its
+  # package list via scripts/test-shards.sh (no shell substitution in
+  # the YAML literal — the stash-era matrix embedded a $(go list ...)
+  # inside the matrix, which is fragile). The script's coverage command
+  # is the drift guard: a package in no shard fails the gates job.
+  #
+  # Shard rules (see scripts/test-shards.sh header for the contract):
+  #   tui  — internal/interface/tui alone (the long pole)
+  #   core — internal/core + internal/agent
+  #   rest — everything else, computed by filtering `go list ./...`
+  # Race runs on the same shards, non-blocking (as before).
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [tui, core, rest]
+    name: test (${{ matrix.shard }})
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -51,16 +69,37 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      - name: Resolve shard packages
+        run: |
+          pkgs=$(sh scripts/test-shards.sh list "${{ matrix.shard }}" | tr '\n' ' ')
+          if [ -z "$pkgs" ]; then
+            echo "shard ${{ matrix.shard }} resolved to zero packages" >&2
+            exit 1
+          fi
+          echo "pkgs=$pkgs" >> "$GITHUB_ENV"
+
       - name: Run tests
-        run: go test -v -timeout 15m ./...
+        run: go test -timeout 15m $pkgs
         env:
           GOMEMLIMIT: 6GiB
 
       - name: Run tests with race detector
-        run: go test -race -timeout 15m ./...
+        run: go test -race -timeout 15m $pkgs
         env:
           GOMEMLIMIT: 6GiB
         continue-on-error: true
+
+  # Keep the required "test" check stable while testing in parallel.
+  test-summary:
+    name: test
+    needs: test
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require every test shard to pass
+        env:
+          TEST_RESULT: ${{ needs.test.result }}
+        run: test "$TEST_RESULT" = success
 
   # Code quality checks
   quality:
@@ -110,6 +149,14 @@ jobs:
 
       - name: Run version-gate unit tests
         run: sh scripts/test-check-version-matches.sh
+
+      - name: Run test-shard coverage unit tests
+        run: |
+          bash scripts/test-test-shards.sh
+          sh scripts/test-shards-exact.sh
+
+      - name: Run shard coverage drift guard
+        run: sh scripts/test-shards.sh coverage
 
       # Note: version-bump verification intentionally does NOT run here.
       # A release/* PR legitimately carries no bump commit yet — the bump

@@ -154,11 +154,15 @@ func (app *App) initCommandsCore() {
 	app.cmdRegistry.Register("session", "Manage sessions",
 		commands.SessionHandler(
 			func() string {
-				sessions, err := app.sessionManager.ListSessions()
+				sessions, unreadable, err := app.sessionManager.ListSessionsWithIssues()
 				if err != nil {
 					return sprintf("Failed to list sessions: %v", err)
 				}
-				return formatSessionList(sessions, app.session.ID)
+				result := formatSessionList(sessions, app.session.ID)
+				if unreadable > 0 {
+					result += sprintf("\nWarning: %d saved session(s) could not be read; readable sessions are still shown.", unreadable)
+				}
+				return result
 			},
 			func(id string) error {
 				loaded, err := app.sessionManager.LoadSession(id)

@@ -145,6 +145,56 @@ func TestStreamingToolExecutorCancellationWakesEveryResultWaiter(t *testing.T) {
 	executor.Close()
 }
 
+func TestStreamingToolExecutorCloseAfterParentCancellationIsBounded(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	executor := NewStreamingToolExecutor(
+		[]tools.Tool{lifecycleGateTool("blocked-close", true, started, release, nil)},
+		nil,
+		tools.Context{AbortController: ctx},
+	)
+	executor.AddTool(types.ToolUseBlock{ID: "blocked-close", Name: "blocked-close"}, types.Message{UUID: "assistant"})
+	<-started
+	cancel()
+
+	done := make(chan struct{})
+	go func() {
+		executor.Close()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(250 * time.Millisecond):
+		t.Fatal("executor Close remained blocked after parent cancellation")
+	}
+	close(release)
+}
+
+func TestStreamingToolExecutorCanceledCloseStillDeliversAcceptedResult(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	ctx, cancel := context.WithCancel(context.Background())
+	executor := NewStreamingToolExecutor(
+		[]tools.Tool{lifecycleGateTool("accepted-after-cancel", true, started, release, nil)},
+		nil,
+		tools.Context{AbortController: ctx},
+	)
+	executor.AddTool(types.ToolUseBlock{ID: "accepted-after-cancel", Name: "accepted-after-cancel"}, types.Message{UUID: "assistant"})
+	<-started
+	cancel()
+	executor.Close()
+	close(release)
+
+	final := waitLifecycleFinalEvent(t, executor.Events())
+	if got := lifecycleToolResult(t, final.Message).ToolUseID; got != "accepted-after-cancel" {
+		t.Fatalf("final result tool ID = %q, want accepted-after-cancel", got)
+	}
+	if _, ok := <-executor.Events(); ok {
+		t.Fatal("event stream delivered an unexpected extra event")
+	}
+}
+
 func TestStreamingToolExecutorReturnsResultsInSubmissionOrder(t *testing.T) {
 	firstStarted := make(chan struct{})
 	secondStarted := make(chan struct{})

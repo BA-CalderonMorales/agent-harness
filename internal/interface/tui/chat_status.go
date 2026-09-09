@@ -4,8 +4,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/charmbracelet/lipgloss"
 )
 
 // streamingAssistant returns the in-progress assistant message by its
@@ -52,38 +50,6 @@ func formatElapsed(d time.Duration) string {
 	mins := int(d.Minutes())
 	secs := int(d.Seconds()) % 60
 	return fmt.Sprintf("%dm%ds", mins, secs)
-}
-
-// thinkingHintThreshold is how long the first token may stay pending before
-// the UI assumes a slow local model and shows the explanatory progress line.
-const thinkingHintThreshold = 5 * time.Second
-
-// thinkingQuips is the rotating verb behind the thinking badge. One
-// slice, one clock — the whole personality of the wait state, and
-// deliberately nothing more.
-var thinkingQuips = []string{"thinking", "pondering", "brewing", "scheming", "conjuring"}
-
-// thinkingBadge renders the live wait state: a twinkling star that
-// hue-shifts green↔blue, a rotating quip in bright info color, and a
-// cycling dot trail. tick steps at 250ms from the header clock.
-func (m ChatModel) thinkingBadge(tick int) string {
-	glyphs := []string{"✦", "✧"}
-	styles := []lipgloss.Style{SuccessStyle, InfoStyle}
-	glyph := styles[tick%len(styles)].Render(glyphs[tick%len(glyphs)])
-	quip := thinkingQuips[tick/8%len(thinkingQuips)] // full cycle ≈ 2s per word
-	dots := strings.Repeat("·", 1+tick%3)
-	return glyph + InfoStyle.Render(fmt.Sprintf(" %s", quip)) + HelpDimStyle.Render(dots)
-}
-
-// thinkingHint returns the prompt-eval progress line once the first token
-// has been pending long enough that a slow local model (CPU prompt eval)
-// is the likely explanation. Before the threshold, and once streaming has
-// started, the header's live elapsed clock is enough.
-func thinkingHint(elapsed time.Duration) string {
-	if elapsed < thinkingHintThreshold {
-		return ""
-	}
-	return "still thinking — first token can take minutes on CPU models"
 }
 
 // reasoningPreviewTruncate is the visible tail length of the live

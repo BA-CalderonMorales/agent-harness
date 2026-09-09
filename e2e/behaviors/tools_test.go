@@ -44,14 +44,14 @@ func TestBehavior_ToolExecution(t *testing.T) {
 			wantContains: "hello",
 		},
 		{
-			name: "B5: bash tool allowed in dontAsk mode",
+			name: "B5: destructive bash remains pending in dontAsk mode",
 			given: func(f *testharness.Fixture) {
 				f.SetPermissionMode(permissions.ModeDontAsk)
 			},
 			tool:         "bash",
 			input:        map[string]any{"command": "echo hello"},
-			wantDecision: tools.Allow,
-			wantErr:      false,
+			wantDecision: tools.Ask,
+			wantErr:      true,
 			wantContains: "hello",
 		},
 		{
@@ -69,6 +69,7 @@ func TestBehavior_ToolExecution(t *testing.T) {
 			name: "B7: write tool creates file",
 			given: func(f *testharness.Fixture) {
 				f.SetPermissionMode(permissions.ModeDontAsk)
+				f.SetAlwaysAllow("write")
 			},
 			tool:         "write",
 			input:        map[string]any{"file_path": "out.txt", "content": "test data"},

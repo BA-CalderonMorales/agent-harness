@@ -31,14 +31,18 @@ type storeEvent struct {
 	Model     string    `json:"model,omitempty"`
 	Persona   string    `json:"persona,omitempty"`
 	Version   int       `json:"version,omitempty"`
+	Turns     int       `json:"turns,omitempty"`
+	PlanMode  bool      `json:"plan_mode,omitempty"`
+	ToolLimit int       `json:"tool_limit,omitempty"`
 }
 
 // storeMeta carries rolling session fields that change mid-session.
 type storeMeta struct {
-	Model    string `json:"model,omitempty"`
-	Persona  string `json:"persona,omitempty"`
-	Turns    int    `json:"turns,omitempty"`
-	PlanMode bool   `json:"plan_mode,omitempty"`
+	Model     string `json:"model,omitempty"`
+	Persona   string `json:"persona,omitempty"`
+	Turns     int    `json:"turns,omitempty"`
+	PlanMode  bool   `json:"plan_mode,omitempty"`
+	ToolLimit int    `json:"tool_limit,omitempty"`
 }
 
 // projectSlug turns a project directory into a filesystem-safe session
@@ -81,6 +85,9 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		Model:     s.Model,
 		Persona:   s.Persona,
 		Version:   s.Version,
+		Turns:     s.Turns,
+		PlanMode:  s.PlanMode,
+		ToolLimit: s.ToolLimit,
 	}}
 	for i := range s.Messages {
 		raw, err := json.Marshal(s.Messages[i])
@@ -99,6 +106,9 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		if err := writeEvent(f, event); err != nil {
 			return err
 		}
+	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("failed to sync session file: %w", err)
 	}
 	return nil
 }
@@ -142,9 +152,12 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 
 	// Rolling meta rides along on every save: one short line, and the
 	// loader folds the latest over.
-	meta := storeMeta{Model: s.Model, Persona: s.Persona, Turns: s.Turns, PlanMode: s.PlanMode}
+	meta := storeMeta{Model: s.Model, Persona: s.Persona, Turns: s.Turns, PlanMode: s.PlanMode, ToolLimit: s.ToolLimit}
 	if err := writeEvent(f, storeEvent{Kind: "meta", Meta: &meta}); err != nil {
 		return err
+	}
+	if err := f.Sync(); err != nil {
+		return fmt.Errorf("failed to sync session file: %w", err)
 	}
 	return nil
 }
@@ -172,22 +185,23 @@ func loadSessionFile(path string) (*Session, error) {
 	}
 
 	s := &Session{}
-	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	for _, line := range lines {
+	lines := strings.Split(string(data), "\n")
+	for lineNumber, line := range lines {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
 		var event storeEvent
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			continue // tolerate a torn final line: everything before survives
+			return nil, fmt.Errorf("session file %s is corrupt at line %d: %w", filepath.Base(path), lineNumber+1, err)
 		}
 		switch event.Kind {
 		case "header":
 			s.ID, s.CreatedAt = event.ID, event.CreatedAt
 			s.Model, s.Persona, s.Version = event.Model, event.Persona, event.Version
+			s.Turns, s.PlanMode, s.ToolLimit = event.Turns, event.PlanMode, event.ToolLimit
 		case "meta":
 			if event.Meta == nil {
-				continue
+				return nil, fmt.Errorf("session file %s has an empty meta event at line %d", filepath.Base(path), lineNumber+1)
 			}
 			if event.Meta.Model != "" {
 				s.Model = event.Meta.Model
@@ -197,14 +211,16 @@ func loadSessionFile(path string) (*Session, error) {
 			}
 			s.Turns = event.Meta.Turns
 			s.PlanMode = event.Meta.PlanMode
+			s.ToolLimit = event.Meta.ToolLimit
 		case "message":
 			if event.Message == nil {
-				continue
+				return nil, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)
 			}
 			var msg types.Message
-			if err := json.Unmarshal(*event.Message, &msg); err == nil {
-				s.Messages = append(s.Messages, msg)
+			if err := json.Unmarshal(*event.Message, &msg); err != nil {
+				return nil, fmt.Errorf("session file %s has a corrupt message at line %d: %w", filepath.Base(path), lineNumber+1, err)
 			}
+			s.Messages = append(s.Messages, msg)
 		}
 	}
 	if s.ID == "" {

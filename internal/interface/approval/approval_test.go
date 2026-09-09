@@ -398,6 +398,44 @@ func TestApprovalRequest_ContextCancellation(t *testing.T) {
 	}
 }
 
+func TestNewApprovalRequestUsesParentContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := NewApprovalRequest(CommandInfo{ID: "parent"}, ctx)
+	cancel()
+	select {
+	case <-req.Context.Done():
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("parent cancellation did not reach approval request")
+	}
+}
+
+func TestApprovalRequestResponseStopsCancellationWatcher(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	req := NewApprovalRequest(CommandInfo{ID: "finished"}, ctx)
+	req.Respond(DecisionApprove)
+	cancel()
+	select {
+	case decision := <-req.Response:
+		if decision != DecisionApprove {
+			t.Fatalf("response = %v, want approve", decision)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("approval response was not delivered")
+	}
+}
+
+func TestApprovalRequestCancellationWinsConcurrentResponse(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	req := NewApprovalRequest(CommandInfo{ID: "cancel-race"}, ctx)
+	cancel()
+	req.Respond(DecisionApprove)
+	if got := <-req.Response; got != DecisionReject {
+		t.Fatalf("response after cancellation = %v, want reject", got)
+	}
+}
+
 // ---------------------------------------------------------------------------
 // FormatCommandForDisplay Tests
 // ---------------------------------------------------------------------------

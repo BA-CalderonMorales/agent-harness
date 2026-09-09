@@ -74,6 +74,21 @@ func TestHomeSetupBannerHasHandle(t *testing.T) {
 	}
 }
 
+func TestHomeUnreadableSessionWarningDoesNotHideReadableRows(t *testing.T) {
+	home := NewHomeModel()
+	home.width = 80
+	home.height = 30
+	home.Init()
+	home.SetSessions([]SessionInfo{{ID: "good", Title: "Readable", UnreadableCount: 1}})
+	view := home.View()
+	if !strings.Contains(view, "1 saved session could not be read") {
+		t.Fatalf("warning missing from home view:\n%s", view)
+	}
+	if !strings.Contains(view, "Readable") {
+		t.Fatalf("readable session missing from home view:\n%s", view)
+	}
+}
+
 // TestLKeyOpensLogin: 'l' in normal mode routes the /login command
 // through the message path (the dead-end handle opens the wizard on the
 // live app, never on a handleKeys copy), and in insert mode it types
