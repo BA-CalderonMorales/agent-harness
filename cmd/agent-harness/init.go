@@ -63,7 +63,7 @@ func (app *App) initSession() error {
 
 	model := app.config.Model
 	if model == "" {
-		model = "nvidia/nemotron-3-super-120b-a12b:free"
+		model = config.DefaultModelForProvider(app.config.Provider)
 	}
 
 	// Try to resume the most recent session for continuity. A damaged store
@@ -72,15 +72,10 @@ func (app *App) initSession() error {
 	resumed, resumeErr := sessionManager.ResumeLatestSessionWithError()
 	if resumeErr == nil && resumed != nil {
 		app.session = resumed
-		// The session keeps the model last used in it; adopt it as the
-		// running configuration instead of overwriting it, so a model
-		// picked in a previous session is not forgotten on restart.
-		// An env-pinned model (AH_MODEL) outranks the session, though:
-		// automation and demo boots must get the model they asked for.
-		if app.config.ModelPinned {
-			resumed.Model = app.config.Model
-		} else {
-			app.syncModelFields()
+		// Historical chats retain their model without replacing the user's
+		// default for new chats. An explicit environment pin wins in both.
+		if app.config.ModelPinned || resumed.Model == "" {
+			resumed.Model = model
 		}
 		// Apply configured persona if valid and session has no persona set
 		if app.config.Persona != "" && resumed.Persona == "" {

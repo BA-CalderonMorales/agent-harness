@@ -65,6 +65,10 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 			config.Effort = v
 		}
 	}
+	config.Tagline = DefaultTagline
+	if v, ok := stringValue(config.merged, "tagline"); ok {
+		config.Tagline = v
+	}
 	if v, ok := stringValue(config.merged, "theme"); ok {
 		config.Theme = v
 	}

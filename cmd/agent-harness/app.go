@@ -159,6 +159,7 @@ func (app *App) run() error {
 	tuiApp.AddMessage("system", welcome)
 	tuiApp.RefreshSessions(app.getSessionInfos())
 	tuiApp.SetSettings(app.getSettings())
+	tuiApp.SetHomeTagline(app.config.Tagline)
 	tuiApp.SetModels(app.getModelItems())
 	tuiApp.SetChatModel(app.session.Model)
 	tuiApp.SetChatPersona(app.session.Persona)

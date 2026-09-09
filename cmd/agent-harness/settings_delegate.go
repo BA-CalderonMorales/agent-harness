@@ -72,6 +72,10 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 		}
 	case "permissions":
 		d.handlePermissionModeChange(value)
+	case "tagline":
+		d.app.config.Tagline = value
+		d.tuiApp.SetHomeTagline(value)
+		d.app.commitConfigChange()
 	case "theme":
 		if d.tuiApp.ApplyTheme(value) {
 			theme, _ := tui.LookupTheme(value)
@@ -142,6 +146,7 @@ func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 // handleModelChange updates the model and saves it as the default.
 func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	d.app.session.Model = value
+	d.app.config.Model = value
 	d.app.costTracker.SetModel(value)
 	d.tuiApp.Send(tui.ModelChangedMsg{Model: value})
 	d.app.commitConfigChange()

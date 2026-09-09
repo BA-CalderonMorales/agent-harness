@@ -86,6 +86,7 @@ func (ll *LayeredLoader) Save(source ConfigSource, config *LayeredConfig) error 
 		"perm_delete":     config.PermDelete,
 		"perm_execute":    config.PermExecute,
 		"persona":         config.Persona,
+		"tagline":         config.Tagline,
 	}
 	if config.ServerCommand != "" {
 		data["local_server_command"] = config.ServerCommand

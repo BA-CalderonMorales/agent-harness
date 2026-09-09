@@ -3,6 +3,7 @@ package config
 import "time"
 
 const (
+	DefaultTagline            = "Your workspace. Your models. Your way."
 	DefaultProvider           = "local"
 	DefaultRuntime            = "llama.cpp"
 	DefaultModel              = "deepreinforce-ai/Ornith-1.0-9B-GGUF"

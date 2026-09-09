@@ -47,19 +47,6 @@ func (app *App) refreshTelemetry(tuiApp *tui.App) {
 	tuiApp.SetTelemetry(est, app.config.ContextLength, cost)
 }
 
-// syncModelFields converges app.config.Model and session.Model on the
-// session's model (the live, per-request value) when one exists.
-func (app *App) syncModelFields() {
-	if app.session == nil {
-		return
-	}
-	if app.session.Model != "" {
-		app.config.Model = app.session.Model
-	} else if app.config.Model != "" {
-		app.session.Model = app.config.Model
-	}
-}
-
 // persistUserSettings writes the user's runtime preferences to the user
 // config layer (~/.agent-harness/settings.json). API keys stay out: they
 // belong to the encrypted credential store.
@@ -69,6 +56,7 @@ func (app *App) persistUserSettings() {
 		"endpoint_url":     app.config.EndpointURL,
 		"runtime":          app.config.Runtime,
 		"model":            app.config.Model,
+		"theme":            app.config.Theme,
 		"context_length":   app.config.ContextLength,
 		"temperature":      app.config.Temperature,
 		"max_tokens":       app.config.MaxTokens,
@@ -91,7 +79,6 @@ func (app *App) persistUserSettings() {
 // commitConfigChange persists the current runtime configuration after any
 // in-session mutation so provider/model choices survive restarts.
 func (app *App) commitConfigChange() {
-	app.syncModelFields()
 	app.persistUserSettings()
 }
 
