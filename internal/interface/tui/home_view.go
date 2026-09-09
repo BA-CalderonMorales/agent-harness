@@ -2,7 +2,9 @@ package tui
 
 import (
 	"fmt"
+
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 )
 
@@ -179,6 +181,14 @@ func (m *HomeModel) renderRecentSessions() string {
 			turns = "1 turn"
 		}
 		line := fmt.Sprintf("%s%s · %d msgs · %s", marker, label, s.MessageCount, turns)
+		// A session line wider than the pane wraps at the terminal: the
+		// continuation lands outside the frame border and the chrome
+		// shifts — the mobile border-flicker bug. Truncate to the
+		// model's width budget instead; the title loses its tail, the
+		// frame keeps its shape.
+		if max := m.width - 1; max > 0 && lipgloss.Width(line) > max {
+			line = ansi.Truncate(line, max, "…")
+		}
 		b.WriteString(style.Render(line))
 		b.WriteString("\n")
 	}
