@@ -255,13 +255,13 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		// bubbles' repositionView() runs at the end of Update() against the
 		// height we hand it: with the old (smaller) height it scrolls the
 		// caret's line into view and pushes the first line out from under
-		// the overflow marker. Pre-growing to the draft's uncapped row count
-		// means the window already holds the whole draft, so nothing ever
-		// scrolls: when the draft fits, every line stays visible; when it
-		// exceeds the cap, syncTextareaHeight trims the window afterwards
-		// and the top of the draft stays pinned (the overflow marker
-		// declares how many tail rows are out of view).
-		if rows := m.draftRows(); rows > m.textarea.Height() {
+		// the overflow marker. The +1 headroom covers the row the keystroke
+		// itself may create — on narrow panes a single character can wrap
+		// the line, and Alt+Enter adds one — so the window already holds
+		// the post-keystroke draft and nothing ever scrolls: a fitting
+		// draft shows every line; an overflowing one pins the top and
+		// collects the hidden rows at the tail (declared by the marker).
+		if rows := m.draftRows() + 1; rows > m.textarea.Height() {
 			m.textarea.SetHeight(rows)
 		}
 		newTA, cmd = m.textarea.Update(msg)
