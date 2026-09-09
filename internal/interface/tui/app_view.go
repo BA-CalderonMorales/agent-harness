@@ -57,8 +57,39 @@ func (a App) view() string {
 	// Terminal-native: no painted surface anywhere. Structure comes
 	// from rules, spacing, and color — the terminal's own background is
 	// the app's background, which is the leanest, easiest-on-the-eyes
-	// surface there is.
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
+	// surface there is. The frame borrows the composer rule's border
+	// color so the whole interface reads as one bounded surface, with
+	// the transcript bubbles clearly inset from the terminal edge.
+	inner := lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
+	return FrameStyle.
+		Width(frameWidth(a.width)).
+		Height(frameHeight(a.height)).
+		BorderForeground(ColorBorder).
+		Render(inner)
+}
+
+// Frame geometry: the app frame draws a one-cell border on every side,
+// so the inner chrome renders two rows and two columns smaller than the
+// terminal. Every view and the resize reserve must agree with these.
+const (
+	FrameRows = 2 // top + bottom border rows
+	FrameCols = 2 // left + right border columns
+)
+
+func frameWidth(termWidth int) int {
+	w := termWidth - FrameCols
+	if w < 1 {
+		return 1
+	}
+	return w
+}
+
+func frameHeight(termHeight int) int {
+	h := termHeight - FrameRows
+	if h < 1 {
+		return 1
+	}
+	return h
 }
 
 // ---------------------------------------------------------------------------
@@ -123,16 +154,16 @@ func (a App) renderTabBar() string {
 	line := ""
 	for _, tier := range tabBarTiers {
 		line = a.renderTabLine(tier)
-		if lipgloss.Width(line) <= a.width {
+		if lipgloss.Width(line) <= frameWidth(a.width) {
 			break
 		}
 	}
 
 	// Center the tabs in the available width
-	centeredTabs := lipgloss.PlaceHorizontal(a.width, lipgloss.Center, line)
+	centeredTabs := lipgloss.PlaceHorizontal(frameWidth(a.width), lipgloss.Center, line)
 
 	// Apply tab bar styling with top padding for breathing room
-	return TabBarStyle.Width(a.width).PaddingTop(1).Render(centeredTabs)
+	return TabBarStyle.Width(frameWidth(a.width)).PaddingTop(1).Render(centeredTabs)
 }
 
 // ---------------------------------------------------------------------------
@@ -154,10 +185,11 @@ func gutterFor(width int) int {
 
 func (a App) renderActiveView() string {
 	// Reserve space for the fixed chrome: tab bar (3 with padding and
-	// border) + status bar (3 with its top and bottom padding). The
-	// reserve must match the chrome's real height — one row short and
-	// the pane scrolls a row of the tab bar off the top.
-	contentHeight := a.height - 6
+	// border) + status bar (3 with its top and bottom padding), plus
+	// the app frame's top and bottom border rows. The reserve must
+	// match the chrome's real height — one row short and the pane
+	// scrolls a row of the tab bar off the top.
+	contentHeight := a.height - 6 - FrameRows
 	if contentHeight < 1 {
 		contentHeight = 1
 	}

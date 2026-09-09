@@ -87,8 +87,12 @@ func (m SettingsModel) View() string {
 		m.viewport.SetYOffset(offset)
 	}
 
-	// Render viewport (scrollable settings list)
+	// Render viewport (scrollable settings list). bubbles' viewport
+	// does not end its output with a newline; without the terminator
+	// the pinned description below concatenates onto the last padded
+	// row and produces a too-wide line that wraps the pane.
 	b.WriteString(m.viewport.View())
+	b.WriteString("\n")
 
 	// The selected setting's description pins above the footer: walk
 	// the list, read what each key does — no row-walking with the eye

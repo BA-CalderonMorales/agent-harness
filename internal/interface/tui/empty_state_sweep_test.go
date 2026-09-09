@@ -63,13 +63,16 @@ func assertEmptyStateShape(t *testing.T, tab, sizeName string, view string, w, h
 	}
 
 	// Centered panels: the title carries leading whitespace (not
-	// flush-left) and the block sits inside the pane.
+	// flush-left) and the block sits inside the pane. The app frame's
+	// border column leads every row, so it is stripped before the
+	// padding check.
 	if centeredTitle != "" {
 		found := false
 		for _, line := range lines {
 			if strings.Contains(line, centeredTitle) {
-				trimmed := strings.TrimLeft(ansi.Strip(line), " ")
-				if len(trimmed) == len(line) || len(line)-len(trimmed) == 0 {
+				stripped := strings.TrimPrefix(ansi.Strip(line), "│")
+				trimmed := strings.TrimLeft(stripped, " ")
+				if len(trimmed) == len(stripped) || len(stripped)-len(trimmed) == 0 {
 					t.Fatalf("%s %s: %q not centered (flush left)", tab, sizeName, centeredTitle)
 				}
 				found = true

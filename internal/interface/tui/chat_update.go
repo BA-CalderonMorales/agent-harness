@@ -51,10 +51,11 @@ func (m *ChatModel) settleCurrentTool(status ToolStatus) {
 }
 
 // Update handles messages.
-// viewportTopOffset counts the pane rows above the message viewport in
-// the chat view: the tab bar (padding row, label row, border row) plus
-// the chat view header (title row, blank row).
-const viewportTopOffset = 5
+// viewportTopOffset counts the screen rows above the message viewport in
+// the chat view: the app frame's top border (1), the tab bar (padding
+// row, label row, border row), and the chat view header (title row,
+// blank row).
+const viewportTopOffset = 1 + 5
 
 func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// Deferred rebuilds flush on every exit path: the returned model

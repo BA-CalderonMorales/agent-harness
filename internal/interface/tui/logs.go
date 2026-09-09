@@ -25,11 +25,11 @@ import (
 // full history, the pane just shows a window of it.
 const logsMaxHeight = 20
 
-// logsHeaderRows are the pane rows above the table body: the tab bar
-// (padding row, label row, border row), the page header (title + blank)
-// and the column header row. Click math uses it to map a screen row to
-// a table row.
-const logsHeaderRows = 6
+// logsHeaderRows are the screen rows above the table body: the app
+// frame's top border (1), the tab bar (padding row, label row, border
+// row), the page header (title + blank) and the column header row.
+// Click math uses it to map a screen row to a table row.
+const logsHeaderRows = 1 + 6
 
 // LogEntryMsg delivers a diagnostics entry from the stream (the diag
 // sink forwards through the App's drop-safe channel).

@@ -17,14 +17,14 @@ import (
 func TestPhonePanesGetGutters(t *testing.T) {
 	app := NewApp()
 	app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
-	if app.chatModel.width != 56 { // 60 - 2*2
-		t.Fatalf("phone pane chat width = %d, want 56 (gutter 2)", app.chatModel.width)
+	if app.chatModel.width != 54 { // 60 - 2 (frame) - 2*2 (gutter)
+		t.Fatalf("phone pane chat width = %d, want 54 (frame 2 + gutter 2)", app.chatModel.width)
 	}
 
 	app2 := NewApp()
 	app2.Update(tea.WindowSizeMsg{Width: 40, Height: 20})
-	if app2.chatModel.width != 38 { // 40 - 2*1
-		t.Fatalf("small phone chat width = %d, want 38 (gutter 1)", app2.chatModel.width)
+	if app2.chatModel.width != 36 { // 40 - 2 (frame) - 2*1 (gutter)
+		t.Fatalf("small phone chat width = %d, want 36 (frame 2 + gutter 1)", app2.chatModel.width)
 	}
 
 	// The rendered content carries the gutter: the chat header row is
@@ -35,8 +35,10 @@ func TestPhonePanesGetGutters(t *testing.T) {
 	found := false
 	for _, line := range strings.Split(view, "\n") {
 		if strings.Contains(line, "gutter check") {
-			if !strings.HasPrefix(ansi.Strip(line), "  ") {
-				t.Fatalf("content not inset: %q", ansi.Strip(line))
+			// The frame's left border column leads, then the gutter.
+			stripped := ansi.Strip(line)
+			if !strings.HasPrefix(stripped, "│  ") {
+				t.Fatalf("content not inset inside the frame: %q", stripped)
 			}
 			found = true
 			break
@@ -60,8 +62,8 @@ func TestDesktopHasNoGutter(t *testing.T) {
 
 	app := NewApp()
 	app.Update(tea.WindowSizeMsg{Width: 120, Height: 32})
-	if app.chatModel.width != 120 {
-		t.Fatalf("desktop chat width = %d, want the full pane", app.chatModel.width)
+	if app.chatModel.width != 118 { // 120 - 2 (frame cols)
+		t.Fatalf("desktop chat width = %d, want 118 (full pane minus frame)", app.chatModel.width)
 	}
 
 	app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})

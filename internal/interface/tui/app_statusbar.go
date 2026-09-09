@@ -22,14 +22,14 @@ func (a App) renderStatusBar() string {
 			style = InfoStyle
 		}
 		content := " " + style.Render(a.statusMessage)
-		content = lipgloss.NewStyle().MaxWidth(a.width).Render(content)
-		return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
+		content = lipgloss.NewStyle().MaxWidth(frameWidth(a.width)).Render(content)
+		return StatusBarStyle.Width(frameWidth(a.width)).PaddingTop(1).PaddingBottom(1).Render(content)
 	}
 
 	// The footer spans the full terminal width, keeping flush edges with
 	// the composer block above it; a spacer row separates the bar from the
 	// mode line.
-	columnWidth := a.width
+	columnWidth := frameWidth(a.width)
 
 	// Left: health + workspace-relative path. The badge reflects the
 	// provider probe (checking/ready/warning/unavailable/misconfigured),
@@ -60,7 +60,7 @@ func (a App) renderStatusBar() string {
 	// Right segments in priority order (drop from the end as width shrinks:
 	// hint first, then cost; context usage survives the longest).
 	var telemetry []string
-	mobileTmux := isMobilePane(a.width) && inTmux()
+	mobileTmux := isMobilePane(frameWidth(a.width)) && inTmux()
 	if mobileTmux {
 		if a.mouseCapture {
 			telemetry = append(telemetry, `"m" copy`)
@@ -120,9 +120,9 @@ func (a App) renderStatusBar() string {
 		gap = gapMin
 	}
 	content := left + strings.Repeat(" ", gap) + right
-	content = lipgloss.NewStyle().MaxWidth(a.width).Render(content)
+	content = lipgloss.NewStyle().MaxWidth(frameWidth(a.width)).Render(content)
 
-	return StatusBarStyle.Width(a.width).PaddingTop(1).PaddingBottom(1).Render(content)
+	return StatusBarStyle.Width(frameWidth(a.width)).PaddingTop(1).PaddingBottom(1).Render(content)
 }
 
 // fitPath renders a path within a width budget, keeping the first segment

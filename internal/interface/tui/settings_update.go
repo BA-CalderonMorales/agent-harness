@@ -55,10 +55,11 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		// The pane's height is the app's content area (tab bar and
-		// status bar already subtracted upstream): only the pane's own
-		// header (3 lines) and footer (2 lines) come out of it. The old
-		// math double-reserved and the System Messages region pushed
-		// the pane past the content area, scrolling the tab bar away.
+		// status bar already subtracted upstream): the pane's own
+		// header (2 lines), the selected-setting description line
+		// (1), and the footer (blank spacer + hints = 2) come out of
+		// it — 5 fixed rows. The footer's spacer newline rides in the
+		// RenderFooter output, so the viewport budget is height − 5.
 		vpHeight := msg.Height - 5
 		if vpHeight < 5 {
 			vpHeight = 5
