@@ -237,10 +237,10 @@ var _ = Describe("ChatModel", func() {
 			})
 		})
 
-		Context("Given more than four rows of text", func() {
-			It("should cap the composer at four rows", func() {
-				By("setting five lines of input")
-				chat.SetInput("one\ntwo\nthree\nfour\nfive")
+		Context("Given more than eight rows of text", func() {
+			It("should cap the composer at eight rows", func() {
+				By("setting nine lines of input")
+				chat.SetInput("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine")
 
 				By("verifying the textarea height is capped")
 				Expect(chat.inputRows()).To(Equal(MaxInputRows))
@@ -253,7 +253,7 @@ var _ = Describe("ChatModel", func() {
 				chat.SetInput("one")
 				oneLineHeight := chat.inputAreaHeight()
 
-				chat.SetInput("one\ntwo\nthree\nfour")
+				chat.SetInput("one\ntwo\nthree\nfour\nfive\nsix\nseven\neight\nnine")
 				manyLineHeight := chat.inputAreaHeight()
 
 				// Solid block hugs the text: border + top padding + editor

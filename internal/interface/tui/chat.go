@@ -152,7 +152,11 @@ const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
 	MinInputRows            = 1
-	MaxInputRows            = 4
+	// MaxInputRows caps the composer at eight visible lines before the
+	// textarea scrolls internally (the caret line always stays in view).
+	// Eight keeps a mid-length draft readable on desktop and tablet so a
+	// driver can scan back over recent sentences without scrolling.
+	MaxInputRows = 8
 )
 
 // Composer layout: the input block spans the full terminal width with a

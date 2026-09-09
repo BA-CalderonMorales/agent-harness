@@ -43,7 +43,8 @@ func TestInputAreaHeightTracksVisibleRows(t *testing.T) {
 		{name: "empty", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
 		{name: "single line", input: "hello", rows: 1, area: 1 + ComposerTopPadding + 1 + ComposerBottomPadding + 1},
 		{name: "two lines", input: "hello\nworld", rows: 2, area: 1 + ComposerTopPadding + 2 + ComposerBottomPadding + 1},
-		{name: "capped", input: "1\n2\n3\n4\n5", rows: 4, area: 1 + ComposerTopPadding + 4 + ComposerBottomPadding + 1},
+		{name: "eight lines", input: "1\n2\n3\n4\n5\n6\n7\n8", rows: 8, area: 1 + ComposerTopPadding + 8 + ComposerBottomPadding + 1},
+		{name: "capped", input: "1\n2\n3\n4\n5\n6\n7\n8\n9", rows: MaxInputRows, area: 1 + ComposerTopPadding + MaxInputRows + ComposerBottomPadding + 1},
 	}
 
 	for _, tc := range cases {
