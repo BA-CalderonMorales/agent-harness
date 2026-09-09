@@ -90,3 +90,25 @@ func TestFrameStableAcrossTabSwitches(t *testing.T) {
 		}
 	}
 }
+
+// TestStyledSessionRowsFitModelWidth pins Copilot's review finding: the
+// list styles pad 2 cells per side (4 total), so the unstyled session
+// text must be budgeted for those cells — truncating to m.width-1 left
+// the styled row at m.width+3 and the ellipsis was lost to the frame
+// clip. Every Home row, styled, must fit the model's width budget.
+func TestStyledSessionRowsFitModelWidth(t *testing.T) {
+	for _, w := range []int{50, 60} {
+		app := NewApp()
+		app.Update(tea.WindowSizeMsg{Width: w, Height: 30})
+		app.homeModel.SetSessions([]SessionInfo{
+			{ID: "s1", Title: "Fix the border flicker on mobile panes for good"},
+			{ID: "s2", Title: "Investigate provider probe timeouts", IsActive: true},
+		})
+		home := app.homeModel.View()
+		for i, l := range strings.Split(home, "\n") {
+			if lw := ansi.StringWidth(l); lw > app.homeModel.width {
+				t.Errorf("w%d row %d width %d > %d: %q", w, i, lw, app.homeModel.width, ansi.Strip(l))
+			}
+		}
+	}
+}
