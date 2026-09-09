@@ -104,6 +104,14 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 		case ev, ok := <-events:
 			_ = idle.Reset(l.idleWindow())
 			if !ok {
+				// Cancellation outranks disconnect: when the context was
+				// cancelled the provider client may close its event
+				// channel as part of shutdown, and selecting that close
+				// over ctx.Done() here would misreport an honest
+				// interrupt as a provider failure.
+				if err := ctx.Err(); err != nil {
+					return nil, nil, err
+				}
 				if pendingToolUse != nil {
 					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
 						return nil, nil, err
