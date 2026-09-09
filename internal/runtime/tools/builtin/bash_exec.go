@@ -1,9 +1,8 @@
 package builtin
 
 import (
-	"bufio"
+	"bytes"
 	"context"
-	"io"
 	"os/exec"
 	"strings"
 	"sync"
@@ -36,10 +35,20 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	}
 
 	cmd := exec.CommandContext(execCtx, shell, "-c", cmdStr)
+	configureCommandProcess(cmd)
+	cmd.Cancel = func() error {
+		return cancelCommandProcess(cmd)
+	}
 
-	// Set up pipes for real-time progress
-	stdoutPipe, _ := cmd.StdoutPipe()
-	stderrPipe, _ := cmd.StderrPipe()
+	// Give os/exec writers rather than exposing its pipes. Wait joins the
+	// internal copy goroutines for non-*os.File writers, so all output is
+	// drained before the command is considered complete.
+	var output strings.Builder
+	var outputMu sync.Mutex
+	stdout := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+	stderr := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+
+	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	if err := cmd.Start(); err != nil {
 		return tools.ToolResult{Data: "[error starting command: " + err.Error() + "]"}, nil
@@ -50,36 +59,11 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 		onProgress("running: " + cmdStr)
 	}
 
-	// Accumulate output
-	var output strings.Builder
-	var wg sync.WaitGroup
-	wg.Add(2)
-
-	processPipe := func(r io.Reader) {
-		defer wg.Done()
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
-			line := scanner.Text()
-			output.WriteString(line + "\n")
-			if onProgress != nil {
-				onProgress(line)
-			}
-		}
-	}
-
-	go processPipe(stdoutPipe)
-	go processPipe(stderrPipe)
-
-	// Wait for pipe readers to finish BEFORE calling cmd.Wait().
-	// Per Go docs: "It is thus incorrect to call Wait before all reads
-	// from the pipe have completed."
-	wg.Wait()
-
-	// Close pipes explicitly so cmd.Wait() can reap the process cleanly.
-	_ = stdoutPipe.Close()
-	_ = stderrPipe.Close()
-
+	// Wait also joins the stdout/stderr copy goroutines. On Unix, cancellation
+	// kills the command's process group, including descendants holding pipes.
 	err := cmd.Wait()
+	stdout.flush()
+	stderr.flush()
 
 	result := output.String()
 	if result == "" {
@@ -97,4 +81,46 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	result = truncateBashOutput(result)
 
 	return tools.ToolResult{Data: result}, nil
+}
+
+type bashOutputWriter struct {
+	output     *strings.Builder
+	outputMu   *sync.Mutex
+	onProgress tools.OnProgress
+	pending    []byte
+}
+
+func (w *bashOutputWriter) Write(p []byte) (int, error) {
+	w.outputMu.Lock()
+	w.pending = append(w.pending, p...)
+	var lines []string
+	for {
+		newline := bytes.IndexByte(w.pending, '\n')
+		if newline < 0 {
+			break
+		}
+		line := strings.TrimSuffix(string(w.pending[:newline]), "\r")
+		w.output.WriteString(line + "\n")
+		w.pending = w.pending[newline+1:]
+		lines = append(lines, line)
+	}
+	w.outputMu.Unlock()
+	if w.onProgress != nil {
+		for _, line := range lines {
+			w.onProgress(line)
+		}
+	}
+	return len(p), nil
+}
+
+// flush emits an unterminated final line after Wait has joined the writers.
+func (w *bashOutputWriter) flush() {
+	w.outputMu.Lock()
+	tail := string(w.pending)
+	w.pending = nil
+	w.output.WriteString(tail)
+	w.outputMu.Unlock()
+	if tail != "" && w.onProgress != nil {
+		w.onProgress(tail)
+	}
 }

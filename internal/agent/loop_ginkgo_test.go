@@ -31,7 +31,7 @@ var _ = Describe("Agent Loop Limits", func() {
 		Context("Given an LLM that requests tools repeatedly", func() {
 			It("should stop after MaxToolCalls and return BlockingLimit", func() {
 				By("creating a mock that always requests a tool")
-				mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", "ls")}
+				mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", `{"command":"ls"}`)}
 				loop = NewLoop(mock)
 				loop.Config.MaxToolCalls = 3
 				loop.Config.MaxIdenticalToolUses = 10 // budget spec: identical calls allowed
@@ -80,7 +80,7 @@ var _ = Describe("Agent Loop Limits", func() {
 		Context("Given an LLM that requests tools on every turn", func() {
 			It("should stop after DefaultMaxTurns", func() {
 				By("creating a mock that always requests a tool")
-				mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", "ls")}
+				mock := &llm.MockClient{Events: llm.MockToolUseResponse("bash", `{"command":"ls"}`)}
 				loop = NewLoop(mock)
 				loop.Config.DefaultMaxTurns = 2
 				loop.Config.MaxToolCalls = 100 // high, so turns are the limiting factor

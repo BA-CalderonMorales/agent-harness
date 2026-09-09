@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
@@ -28,10 +29,14 @@ type Fixture struct {
 	ToolRegistry   *tools.ToolRegistry
 	MockLLM        *llm.MockClient
 	Loop           *agent.Loop
+	MockRequests   []llm.Request
 
-	permCtx      permissions.Context
-	lastDecision tools.PermissionDecision
-	lastEvents   []types.StreamEvent
+	permCtx       permissions.Context
+	lastDecision  tools.PermissionDecision
+	lastEvents    []types.StreamEvent
+	mockResponses [][]types.LLMEvent
+	mockCalls     int
+	mu            sync.Mutex
 }
 
 // NewFixture creates a fresh test fixture with all core components initialized.
@@ -51,7 +56,7 @@ func NewFixture(t *testing.T) *Fixture {
 	// Session manager with temp session dir
 	sessionDir := filepath.Join(workDir, "sessions")
 	os.MkdirAll(sessionDir, 0755)
-	os.Setenv("HOME", workDir) // redirect session storage to temp dir
+	t.Setenv("HOME", workDir) // redirect session storage to temp dir; restore after the test
 
 	sm, err := state.NewSessionManager()
 	if err != nil {
@@ -83,9 +88,6 @@ func NewFixture(t *testing.T) *Fixture {
 	reg.RegisterBuiltIn(builtin.SettingsTool)
 
 	mockLLM := &llm.MockClient{}
-	loop := agent.NewLoop(mockLLM)
-	loop.Config.DefaultMaxTurns = 5
-
 	f := &Fixture{
 		T:              t,
 		WorkDir:        workDir,
@@ -93,9 +95,11 @@ func NewFixture(t *testing.T) *Fixture {
 		SessionManager: sm,
 		ToolRegistry:   reg,
 		MockLLM:        mockLLM,
-		Loop:           loop,
+		Loop:           agent.NewLoop(nil),
 		permCtx:        permissions.EmptyContext(),
 	}
+	f.Loop.Client = fixtureMockClient{fixture: f}
+	f.Loop.Config.DefaultMaxTurns = 5
 
 	f.SyncPermissions()
 	return f
@@ -129,6 +133,15 @@ func (f *Fixture) rulesFromList(names []string, behavior tools.DecisionBehavior)
 // SetPermissionMode updates the fixture's permission mode.
 func (f *Fixture) SetPermissionMode(mode permissions.Mode) {
 	f.SyncPermissions()
+	f.permCtx.Mode = mode
+}
+
+// SetMockResponses scripts successive provider responses for one query. Each
+// response is still streamed by the production MockClient implementation.
+func (f *Fixture) SetMockResponses(responses ...[]types.LLMEvent) {
+	f.mockResponses = responses
+	f.mockCalls = 0
+	f.MockRequests = nil
 }
 
 // SetAlwaysAsk adds a tool to the always-ask rules.
@@ -172,7 +185,9 @@ func (f *Fixture) ExecuteTool(name string, input map[string]any) error {
 
 	// Check permissions via real engine
 	decision := permissions.Evaluate(tool, input, f.permCtx)
+	f.mu.Lock()
 	f.lastDecision = decision
+	f.mu.Unlock()
 	if decision.Behavior == tools.Deny {
 		return fmt.Errorf("permission denied")
 	}
@@ -191,6 +206,11 @@ func (f *Fixture) ExecuteTool(name string, input map[string]any) error {
 
 // QueryLoop runs the agent loop with the configured mock LLM.
 func (f *Fixture) QueryLoop(messages []types.Message, systemPrompt string) []types.StreamEvent {
+	return f.QueryLoopContext(context.Background(), messages, systemPrompt)
+}
+
+// QueryLoopContext runs the real loop with caller-controlled cancellation.
+func (f *Fixture) QueryLoopContext(ctx context.Context, messages []types.Message, systemPrompt string) []types.StreamEvent {
 	params := agent.QueryParams{
 		Messages:     messages,
 		SystemPrompt: systemPrompt,
@@ -200,12 +220,12 @@ func (f *Fixture) QueryLoop(messages []types.Message, systemPrompt string) []typ
 				MainLoopModel: "test-model",
 				Tools:         f.ToolRegistry.AllTools(),
 			},
-			AbortController: context.Background(),
+			AbortController: ctx,
 			GlobLimits:      tools.GlobLimits{MaxResults: 100},
 		},
 	}
 
-	stream, err := f.Loop.Query(context.Background(), params)
+	stream, err := f.Loop.Query(ctx, params)
 	if err != nil {
 		f.T.Fatalf("loop query failed: %v", err)
 	}
@@ -218,8 +238,27 @@ func (f *Fixture) QueryLoop(messages []types.Message, systemPrompt string) []typ
 	return events
 }
 
+type fixtureMockClient struct {
+	fixture *Fixture
+}
+
+func (c fixtureMockClient) Stream(ctx context.Context, req llm.Request) (<-chan types.LLMEvent, error) {
+	f := c.fixture
+	f.mu.Lock()
+	f.MockRequests = append(f.MockRequests, req)
+	client := *f.MockLLM
+	if f.mockCalls < len(f.mockResponses) {
+		client.Events = f.mockResponses[f.mockCalls]
+	}
+	f.mockCalls++
+	f.mu.Unlock()
+	return client.Stream(ctx, req)
+}
+
 // LastDecision returns the most recent permission decision.
 func (f *Fixture) LastDecision() tools.PermissionDecision {
+	f.mu.Lock()
+	defer f.mu.Unlock()
 	return f.lastDecision
 }
 
@@ -263,7 +302,9 @@ func (f *Fixture) canUseToolFn() tools.CanUseToolFn {
 			return tools.PermissionDecision{Behavior: tools.Deny}, nil
 		}
 		decision := permissions.Evaluate(tool, input, f.permCtx)
+		f.mu.Lock()
 		f.lastDecision = decision
+		f.mu.Unlock()
 		return decision, nil
 	}
 }

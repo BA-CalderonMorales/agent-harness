@@ -1,6 +1,7 @@
 package main
 
 import (
+	"os"
 	"reflect"
 	"strings"
 	"testing"
@@ -15,6 +16,66 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
+
+func TestSessionListCommandReportsUnreadableStateWithoutContent(t *testing.T) {
+	manager, err := state.NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("model")
+	session.ID = "readable-session"
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+	if err := os.WriteFile(path+"-damaged.jsonl", []byte("private transcript content\n"), 0600); err != nil {
+		t.Fatalf("write damaged session: %v", err)
+	}
+
+	app := &App{session: session, sessionManager: manager}
+	app.initCommandsCore()
+	out, handled, err := app.cmdRegistry.Handle("/session list")
+	if err != nil || !handled {
+		t.Fatalf("/session list = %q, %v, %v", out, handled, err)
+	}
+	if !strings.Contains(out, "could not be read") || !strings.Contains(out, "readable") {
+		t.Fatalf("list output = %q, want readable session and warning", out)
+	}
+	if strings.Contains(out, "private transcript content") {
+		t.Fatalf("list output exposed persisted content: %q", out)
+	}
+}
+
+func TestInitSessionStartsFreshAndRecordsUnreadableResume(t *testing.T) {
+	sessionsDir := t.TempDir()
+	manager, err := state.NewSessionManagerWithDir(sessionsDir)
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("old-model")
+	session.ID = "damaged-session"
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+	if err := os.WriteFile(path, []byte("{truncated\n"), 0600); err != nil {
+		t.Fatalf("damage session: %v", err)
+	}
+
+	app := &App{
+		cwd:    t.TempDir(),
+		config: &config.LayeredConfig{SessionDir: sessionsDir, Model: "fresh-model"},
+	}
+	if err := app.initSession(); err != nil {
+		t.Fatalf("initSession() error = %v", err)
+	}
+	if app.session == nil || app.session.Model != "fresh-model" {
+		t.Fatalf("session = %#v, want fresh session", app.session)
+	}
+	if !strings.Contains(app.bootNotice, "could not be resumed") || strings.Contains(app.bootNotice, "truncated") {
+		t.Fatalf("boot notice = %q, want safe recovery guidance", app.bootNotice)
+	}
+}
 
 func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *App {
 	t.Helper()

@@ -53,7 +53,7 @@ func TestTurnPanicRecoversAsErrorMessage(t *testing.T) {
 		case tui.AgentDoneMsg:
 			sawDone = true
 		}
-		if sawError && sawDone {
+		if sawError {
 			return
 		}
 	}

@@ -215,7 +215,9 @@ func TestLoopAllowsToolAtBudgetThenBlocksNextToolRequest(t *testing.T) {
 	if toolCalls != 1 {
 		t.Fatalf("expected only first in-budget tool call to execute, got %d", toolCalls)
 	}
-	if !streamMessagesContain(events, "Tool call limit reached (1 tools). Runaway-loop protection stopped this turn. Type /limit 2 to continue") {
+	// Suggestion is ×5 the current limit, clamped to maxToolLimit
+	// (goal 0.3.29 Task 5): 1 tool → suggests /limit 5.
+	if !streamMessagesContain(events, "Tool call limit reached (1 tools). Runaway-loop protection stopped this turn. Type /limit 5 to continue") {
 		t.Fatalf("expected tool budget warning in stream events, got %#v", events)
 	}
 }

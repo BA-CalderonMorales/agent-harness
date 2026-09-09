@@ -6,11 +6,17 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"strings"
 	"time"
+)
+
+const (
+	delegatedAgentTimeout  = 60 * time.Second
+	delegatedAgentMaxTurns = 4
+	delegatedAgentMaxTools = 8
 )
 
 // handleAgentLoopAsync runs the full agent loop asynchronously.
@@ -27,11 +33,6 @@ func (app *App) handleAgentLoopAsync(input string, tuiApp *tui.App) {
 			tuiApp.Send(tui.AgentErrorMsg{
 				Error:     fmt.Errorf("internal error recovered (site: agent.turn.panic). Trace: ~/.agent-harness/logs"),
 				Timestamp: time.Now(),
-			})
-			tuiApp.Send(tui.AgentDoneMsg{
-				FullResponse: "",
-				ToolCalls:    0,
-				Timestamp:    time.Now(),
 			})
 		}
 	}()
@@ -53,9 +54,12 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	sysPrompt := app.buildSystemPrompt()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	beginApprovalTurn(app, ctx)
+	defer endApprovalTurn(app)
 
 	tuiApp.SetAgentCancelFunc(cancel)
 	defer tuiApp.SetAgentCancelFunc(nil)
+	canUseTool := app.createToolPermissionFunc(tuiApp)
 
 	toolCtx := tools.Context{
 		Options: tools.Options{
@@ -65,39 +69,10 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		},
 		AbortController:   ctx,
 		RequireCanUseTool: true,
-		SubAgentQuery: func(prompt string) (string, error) {
-			// Sub-agent runs a single-turn query with fresh context
-			subCtx, subCancel := context.WithTimeout(ctx, 60*time.Second)
-			defer subCancel()
-			req := llm.Request{
-				Messages: []types.Message{
-					{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()},
-				},
-				SystemPrompt: app.buildSystemPrompt(),
-				Model:        app.session.Model,
-				MaxTokens:    app.config.MaxTokens,
-				Temperature:  app.config.Temperature,
-			}
-			stream, err := app.client.Stream(subCtx, req)
-			if err != nil {
-				return "", err
-			}
-			var result strings.Builder
-			for event := range stream {
-				switch e := event.(type) {
-				case types.LLMTextDelta:
-					result.WriteString(e.Delta)
-				case types.LLMMessageStop:
-					// done
-				case types.LLMError:
-					return result.String(), e.Error
-				}
-			}
-			return result.String(), nil
-		},
 	}
-
-	canUseTool := app.createToolPermissionFunc(tuiApp)
+	toolCtx.SubAgentQuery = func(prompt string) (string, error) {
+		return app.runDelegatedAgent(ctx, prompt, toolCtx, canUseTool)
+	}
 
 	params := agent.QueryParams{
 		Messages:        app.session.Messages,
@@ -120,6 +95,8 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	var responseText strings.Builder
 	toolCallCount := 0
 	var persistenceErr error
+	var terminal *types.StreamTerminal
+	settlementSent := false
 
 	for event := range stream {
 		// Keep draining after a persistence failure so the producer can close
@@ -190,11 +167,29 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 				diag.Error("session.save.turn", err)
 			}
 		case types.StreamError:
-			tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
+			if !settlementSent {
+				tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
+				settlementSent = true
+			}
+		case types.StreamTerminal:
+			terminal = &e
 		}
 	}
 
 	if persistenceErr != nil {
+		return
+	}
+	if terminal == nil {
+		terminal = &types.StreamTerminal{Reason: string(agent.TerminalReasonError), Error: fmt.Errorf("agent stream ended without a terminal event")}
+	}
+	if terminal.Reason != string(agent.TerminalReasonComplete) {
+		if !settlementSent {
+			err := terminal.Error
+			if err == nil {
+				err = fmt.Errorf("agent turn ended: %s", terminal.Reason)
+			}
+			tuiApp.Send(tui.AgentErrorMsg{Error: err, Timestamp: time.Now()})
+		}
 		return
 	}
 
@@ -233,6 +228,76 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 			})
 		}
 	}
+}
+
+// runDelegatedAgent executes a child with fresh messages and bounded runtime.
+// The parent's context and permission callback are deliberately retained: a
+// child cannot outlive its request or bypass the user's tool decisions.
+func (app *App) runDelegatedAgent(parent context.Context, prompt string, parentToolCtx tools.Context, canUseTool tools.CanUseToolFn) (string, error) {
+	subCtx, subCancel := context.WithTimeout(parent, delegatedAgentTimeout)
+	defer subCancel()
+	childTools := make([]tools.Tool, 0, len(parentToolCtx.Options.Tools))
+	for _, tool := range parentToolCtx.Options.Tools {
+		if tool.Name != builtin.AgentTool.Name {
+			childTools = append(childTools, tool)
+		}
+	}
+	childCtx := tools.Context{
+		Options: tools.Options{
+			MainLoopModel: app.session.Model,
+			Tools:         childTools,
+			Debug:         false,
+		},
+		AbortController:   subCtx,
+		QueryTracking:     tools.QueryChainTracking{ChainID: parentToolCtx.QueryTracking.ChainID, Depth: parentToolCtx.QueryTracking.Depth + 1},
+		RequireCanUseTool: true,
+	}
+	childLoop := agent.NewLoop(app.client)
+	childLoop.Config.DefaultMaxTurns = delegatedAgentMaxTurns
+	childLoop.Config.MaxToolCalls = delegatedAgentMaxTools
+	childLoop.Config.StreamingToolExecution = false
+	stream, err := childLoop.Query(subCtx, agent.QueryParams{
+		Messages:        []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
+		SystemPrompt:    app.buildSystemPrompt() + "\n\nYou are a bounded delegated worker. Report exactly what you inspected or changed, and state failures plainly.",
+		CanUseTool:      canUseTool,
+		ToolUseContext:  childCtx,
+		MaxOutputTokens: app.config.MaxTokens,
+		Temperature:     app.config.Temperature,
+		MaxTurns:        delegatedAgentMaxTurns,
+		MaxToolCalls:    delegatedAgentMaxTools,
+	})
+	if err != nil {
+		return "", fmt.Errorf("delegated worker failed: %w", err)
+	}
+	var result strings.Builder
+	var terminal types.StreamTerminal
+	terminalSeen := false
+	for event := range stream {
+		switch e := event.(type) {
+		case types.StreamMessage:
+			for _, block := range e.Message.Content {
+				if text, ok := block.(types.TextBlock); ok {
+					result.WriteString(text.Text)
+				}
+			}
+		case types.StreamError:
+			if e.Error != nil {
+				return result.String(), fmt.Errorf("delegated worker failed: %w", e.Error)
+			}
+		case types.StreamTerminal:
+			terminal, terminalSeen = e, true
+		}
+	}
+	if !terminalSeen {
+		return result.String(), fmt.Errorf("delegated worker ended without a terminal result")
+	}
+	if terminal.Reason != string(agent.TerminalReasonComplete) {
+		if terminal.Error != nil {
+			return result.String(), fmt.Errorf("delegated worker failed (%s): %w", terminal.Reason, terminal.Error)
+		}
+		return result.String(), fmt.Errorf("delegated worker stopped before completion: %s", terminal.Reason)
+	}
+	return result.String(), nil
 }
 
 // createToolPermissionFunc creates the permission checking function for tools.

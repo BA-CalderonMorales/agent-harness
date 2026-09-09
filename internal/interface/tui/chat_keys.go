@@ -114,6 +114,40 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 		return m, nil, true
 	}
 
+	// Shell-style input history (goal 0.3.29 Task 6): ↑ recalls the
+	// previous submission, ↓ walks back toward the draft. Active only
+	// while typing with history to recall; navigate mode keeps ↑/↓ for
+	// scrolling (they never reach this handler there).
+	switch msg.String() {
+	case "up":
+		if m.focused && len(m.inputHistory) > 0 {
+			if !m.historyNavigating {
+				// Entering history: preserve whatever is in the composer.
+				m.historyNavigating = true
+				m.historyDraft = m.textarea.Value()
+				m.historyCursor = len(m.inputHistory) - 1
+			} else if m.historyCursor > 0 {
+				m.historyCursor--
+			}
+			m.textarea.SetValue(m.inputHistory[m.historyCursor])
+			m.syncTextareaHeight()
+			return m, nil, true
+		}
+	case "down":
+		if m.focused && m.historyNavigating {
+			if m.historyCursor < len(m.inputHistory)-1 {
+				m.historyCursor++
+				m.textarea.SetValue(m.inputHistory[m.historyCursor])
+			} else {
+				// Past the newest entry: restore the draft, leave history.
+				m.historyNavigating = false
+				m.textarea.SetValue(m.historyDraft)
+			}
+			m.syncTextareaHeight()
+			return m, nil, true
+		}
+	}
+
 	switch msg.Type {
 	case tea.KeyEnter:
 		if msg.Alt {

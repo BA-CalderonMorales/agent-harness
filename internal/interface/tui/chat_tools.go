@@ -2,10 +2,12 @@ package tui
 
 import (
 	"fmt"
+	"hash/fnv"
 	"strings"
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
@@ -72,7 +74,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
 			}
 			m.messages[i].ToolStatus = status
-			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, shortToolTag(id), status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 			m.messages[i].bumpRev()
 			m.refreshViewport()
 			return
@@ -84,7 +86,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	msg := ChatMessage{
 		ID:              id,
 		Role:            "tool",
-		Content:         m.formatToolContent(toolDisplayName, command, status, started, 0),
+		Content:         m.formatToolContent(toolDisplayName, command, shortToolTag(id), status, started, 0),
 		Timestamp:       started,
 		IsTool:          true,
 		ToolName:        toolName,
@@ -101,23 +103,46 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 // structured tool line, so the detail column aligns down a turn.
 const toolNameColumn = 8
 
+// shortToolTag derives the stable short identifier rendered on tool
+// rows (goal 0.3.29 Task 3c, Slice 1): the first four hex characters
+// of the FNV-1a 64 hash of the tool-use ID — the same ID the audit log
+// records as ToolCallID, so a tag typed into the Logs filter (Slice 2)
+// joins the chat row to the full command, permission decision, and
+// audit trail. Always derived, never stored: a scheme change never
+// migrates data. An empty ID yields an empty tag (rows that have no
+// tool-use ID — legacy records — render without one).
+func shortToolTag(toolID string) string {
+	if toolID == "" {
+		return ""
+	}
+	h := fnv.New64a()
+	h.Write([]byte(toolID))
+	return fmt.Sprintf("#%04x", h.Sum64()&0xffff)
+}
+
 // formatToolContent renders one tool event as a structured log record,
 // Splunk-shaped but readable at a glance:
 //
-//	01:20:03 ✓ bash     git log --oneline -8                          0.4s
-//	01:20:05 ✓ read     pkg/format/format.go                          0.1s
-//	01:20:07 → grep     "ToolStatus" in internal/                        …
+//	01:20:03 ✓ bash     git log --oneline -8                  0.4s  #a1b2
+//	01:20:05 ✓ read     pkg/format/format.go                  0.1s  #c93f
+//	01:20:07 → grep     "ToolStatus" in internal/               …
 //
 // Time · status glyph · tool name (padded) · target detail · right-
-// aligned duration (live calls show a running ellipsis instead).
-func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
-	return m.formatToolContentAt(m.width, toolDisplayName, command, status, started, elapsed)
+// aligned duration (live calls show a running ellipsis instead) · the
+// stable short tag (Task 3c) that joins the row to its Logs records.
+func (m *ChatModel) formatToolContent(toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	return m.formatToolContentAt(m.width, toolDisplayName, command, tag, status, started, elapsed)
 }
 
 // formatToolContentAt renders the record for a width budget — nested
 // rows live inside the response bubble, which is narrower than the
 // pane, and a full-width row wraps its duration onto its own line.
-func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+// The command truncates to THIS width (the caller's actual budget),
+// not the pane width baked in at creation time: a record created at
+// pane width and re-rendered inside the bubble used to exceed the
+// bubble's inner budget and wrap its duration onto a second line
+// (goal 0.3.29 Task 3b).
+func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
 	var glyph string
 	switch status {
 	case ToolStatusRunning:
@@ -130,12 +155,12 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 
 	detail := command
 	if detail != "" {
-		detail = m.truncateCommandForWidth(toolDisplayName, detail)
+		detail = m.truncateCommandForWidthAt(width, toolDisplayName, detail)
 	}
 
 	timeStr := started.Format("15:04:05")
 	name := toolDisplayName
-	if pad := toolNameColumn - len(name); pad > 0 {
+	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
 		name += strings.Repeat(" ", pad)
 	}
 
@@ -150,13 +175,37 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 		return line + ToolTimeStyle.Render("  …")
 	}
 	dur := formatElapsed(elapsed)
+	// The short tag rides at the row's right end, after the duration:
+	// it is the pointer to the full record (Logs filter, Task 3c) and
+	// must survive truncation of the command text.
+	if tag != "" {
+		dur = dur + "  " + tag
+	}
 	// Display-width padding: glyph and dot runes are multi-byte, so
-	// len() would over-count and shove the duration off the edge. Two
-	// columns are reserved for the expand caret the render path
-	// prepends (▸ folded / ▾ open) so the line stays exact-width.
-	pad := width - lipgloss.Width(timeStr) - lipgloss.Width(glyphAndName) - lipgloss.Width(detail) - lipgloss.Width(dur) - 6
-	if pad < 2 {
-		pad = 2
+	// len() would over-count and shove the duration off the edge. The
+	// fixed reservation: two caret columns the render path prepends
+	// (▸ folded / ▾ open), two leading spaces before the timestamp, and
+	// the tag width when present (2-space separator + tag) — the tag
+	// rides at the row's right end after the duration (Task 3c).
+	tagWidth := 0
+	if tag != "" {
+		tagWidth = 2 + lipgloss.Width(tag)
+	}
+	// The detail budget is the authority: whatever is left after the
+	// fixed columns and a 2-column pad. Overruns re-truncate here —
+	// the pad is never allowed to go negative and push the duration
+	// onto a second line (goal 0.3.29 Task 3b).
+	fixed := lipgloss.Width(timeStr) + lipgloss.Width(glyphAndName) + lipgloss.Width(dur) + tagWidth + 8
+	budget := width - fixed
+	if budget < 1 {
+		budget = 1
+	}
+	if lipgloss.Width(detail) > budget {
+		detail = truncateDisplayWidth(detail, budget)
+	}
+	pad := width - fixed - lipgloss.Width(detail)
+	if pad < 1 {
+		pad = 1
 	}
 	return line + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
 }
@@ -242,7 +291,7 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 }
 
 // truncateCommand truncates a command for display with ellipsis.
-// Deprecated: use truncateCommandForWidth for responsive width-aware truncation.
+// Deprecated: use truncateCommandForWidthAt for responsive width-aware truncation.
 func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 	if len(cmd) <= maxLen {
 		return cmd
@@ -250,33 +299,48 @@ func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 	return cmd[:maxLen-3] + "..."
 }
 
-// truncateCommandForWidth truncates a command so the entire tool line fits
-// within the current terminal width, preserving space for the status indicator
-// and tool display name.
-func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string {
-	// Reserve space for indicator (2), spaces (2), tool name, and padding (4)
-	maxCmdLen := m.width - len(toolDisplayName) - 8
+// truncateCommandForWidthAt is the width-parameterized form: the budget
+// comes from the caller's render width (pane or bubble inner width), so
+// a nested re-render truncates to the space it actually has.
+//
+// The reservation accounts for the row's real fixed costs: timestamp
+// (8) + space (1) + glyph+name column + spaces (2) + the two caret
+// columns the render path prepends + minimum padding (2) + duration
+// (up to 5). The old `width − name − 8` ignored the timestamp and
+// duration entirely, so the pad floor of 2 shipped an over-wide row
+// and the duration wrapped (goal 0.3.29 Task 3b).
+func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd string) string {
+	name := toolDisplayName
+	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
+		name += strings.Repeat(" ", pad)
+	}
+	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur
+	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur + 7 tag
+	maxCmdLen := width - 8 - 1 - lipgloss.Width(name) - 1 - 2 - 2 - 5 - 7
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}
-	if len(cmd) > 40 && strings.Contains(cmd, "/") {
+	if lipgloss.Width(cmd) > 40 && strings.Contains(cmd, "/") {
 		compact := compactCommandForWidth(cmd, maxCmdLen)
-		if len(compact) < len(cmd) {
+		if lipgloss.Width(compact) < lipgloss.Width(cmd) {
 			return compact
 		}
 	}
-	if len(cmd) <= maxCmdLen {
+	if lipgloss.Width(cmd) <= maxCmdLen {
 		return cmd
 	}
 	return compactCommandForWidth(cmd, maxCmdLen)
 }
 
 func compactCommandForWidth(cmd string, maxLen int) string {
-	if maxLen <= 0 || len(cmd) <= maxLen {
+	if maxLen <= 0 {
+		return ""
+	}
+	if lipgloss.Width(cmd) <= maxLen {
 		return cmd
 	}
 	if maxLen <= 3 {
-		return cmd[:maxLen]
+		return truncateDisplayWidth(cmd, maxLen)
 	}
 	fields := strings.Fields(cmd)
 	if len(fields) > 0 {
@@ -288,16 +352,31 @@ func compactCommandForWidth(cmd string, maxLen int) string {
 			if prefix != "" {
 				candidate = prefix + " " + candidate
 			}
-			if len(candidate) <= maxLen {
+			if lipgloss.Width(candidate) <= maxLen {
 				return candidate
 			}
-			if len(name)+4 <= maxLen {
+			if lipgloss.Width(name)+4 <= maxLen {
 				return ".../" + name
 			}
-			return "..." + name[len(name)-(maxLen-3):]
+			return "..." + truncateDisplayWidth(name, maxLen-3)
 		}
 	}
-	return cmd[:maxLen-3] + "..."
+	return truncateDisplayWidth(cmd, maxLen)
+}
+
+// truncateDisplayWidth keeps terminal rows valid for Unicode text and
+// measures what the terminal displays rather than UTF-8 bytes.
+func truncateDisplayWidth(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(text) <= maxWidth {
+		return text
+	}
+	if maxWidth <= 3 {
+		return ansi.Truncate(text, maxWidth, "")
+	}
+	return ansi.Truncate(text, maxWidth, "...")
 }
 
 func pathBase(path string) string {

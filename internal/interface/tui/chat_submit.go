@@ -51,6 +51,30 @@ type timerTickMsg struct {
 	time time.Time
 }
 
+// recordHistory appends a submission to the input history and resets
+// navigation state (the next ↑ starts from the newest entry). Duplicate
+// consecutive entries collapse — pressing ↑ twice through identical
+// re-prompts reads as noise otherwise.
+func (m *ChatModel) recordHistory(entry string) {
+	if entry == "" {
+		return
+	}
+	m.historyNavigating = false
+	m.historyCursor = 0
+	m.historyDraft = ""
+	if n := len(m.inputHistory); n > 0 && m.inputHistory[n-1] == entry {
+		return
+	}
+	m.inputHistory = append(m.inputHistory, entry)
+	// Bound the history: a marathon session must not grow without
+	// limit (the harness has an OOM history). 500 entries of bounded
+	// composer text is ample recall depth.
+	const inputHistoryLimit = 500
+	if len(m.inputHistory) > inputHistoryLimit {
+		m.inputHistory = m.inputHistory[len(m.inputHistory)-inputHistoryLimit:]
+	}
+}
+
 // doSubmit performs the actual message submission after the debounce window.
 func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 	// Defensive: recover from any panic during submission to prevent the
@@ -79,6 +103,7 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 
 	// Handle slash commands
 	trimmed := strings.TrimSpace(input)
+	m.recordHistory(trimmed)
 	if strings.HasPrefix(trimmed, "/") {
 		m.AddMessage("user", trimmed)
 		if m.delegate != nil {

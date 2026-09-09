@@ -1,11 +1,26 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"sync"
 	"time"
 )
+
+var activeTurnContexts sync.Map // map[*App]context.Context
+
+func beginApprovalTurn(app *App, ctx context.Context) { activeTurnContexts.Store(app, ctx) }
+func endApprovalTurn(app *App)                        { activeTurnContexts.Delete(app) }
+func approvalTurnContext(app *App) context.Context {
+	if value, ok := activeTurnContexts.Load(app); ok {
+		if ctx, ok := value.(context.Context); ok && ctx != nil {
+			return ctx
+		}
+	}
+	return context.Background()
+}
 
 // requestCommandApproval requests user approval for a command.
 // Returns the decision and, for rejections, the optional free-text note
@@ -40,7 +55,7 @@ func (app *App) requestCommandApproval(toolName, command string, toolInput map[s
 		Preview:       preview,
 		IsDestructive: isDestructive,
 		Timestamp:     time.Now(),
-	})
+	}, approvalTurnContext(app))
 
 	app.tuiApp.Send(tui.ApprovalRequestMsg{Request: req})
 

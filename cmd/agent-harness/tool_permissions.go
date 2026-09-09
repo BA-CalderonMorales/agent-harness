@@ -98,6 +98,17 @@ func (app *App) createToolPermissionFunc(tuiApp *tui.App) tools.CanUseToolFn {
 			}
 		}
 
+		// Manual means manual: every tool call asks for approval, with
+		// only two exceptions — the explicit always_allow rules above
+		// and the always_deny rules (which short-circuit earlier). The
+		// old fall-through allowed any non-destructive, non-listed tool
+		// (e.g. bash) to run without asking when the permission preset
+		// returned Allow, which made "manual" a lie (goal 0.3.29
+		// steering finding: manual mode never showed the dialog).
+		if app.agentMode == AgentModeManual {
+			return makeDecision(tools.Ask, "manual mode — every tool call asks"), nil
+		}
+
 		permDecision := app.checkPermissionMode(toolName)
 		if permDecision.Behavior == tools.Deny {
 			return makeDecision(tools.Deny, permDecision.Message), nil

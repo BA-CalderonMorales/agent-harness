@@ -28,6 +28,9 @@ func (m *HomeModel) View() string {
 	if m.setupRequired {
 		sections = append(sections, m.renderSetupBanner())
 	}
+	if m.unreadableCount > 0 {
+		sections = append(sections, WarningStyle.Render("  "+unreadableSessionWarning(m.unreadableCount))+"\n")
+	}
 
 	// Project card
 	sections = append(sections, m.renderProjectCard())

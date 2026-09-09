@@ -33,6 +33,10 @@ type SessionInfo struct {
 	UpdatedAt    time.Time
 	Model        string
 	IsActive     bool
+	// UnreadableCount is an aggregate, privacy-safe warning from the
+	// persistence listing. It is carried on the first row (or a warning-only
+	// row when no readable sessions remain) and never affects selection.
+	UnreadableCount int
 }
 
 // ---------------------------------------------------------------------------
@@ -52,8 +56,9 @@ type SessionsModel struct {
 
 	// notice is a transient operation result (deleted/exported/copied/
 	// loaded) shown under the header until the user navigates.
-	notice     string
-	noticeType string
+	notice          string
+	noticeType      string
+	unreadableCount int
 
 	delegate SessionsDelegate
 }
@@ -75,9 +80,22 @@ func (m *SessionsModel) SetDelegate(delegate SessionsDelegate) {
 
 // SetSessions updates the sessions list.
 func (m *SessionsModel) SetSessions(sessions []SessionInfo) {
-	m.sessions = sessions
-	if m.cursor >= len(sessions) && len(sessions) > 0 {
-		m.cursor = len(sessions) - 1
+	m.unreadableCount = 0
+	readable := make([]SessionInfo, 0, len(sessions))
+	for _, session := range sessions {
+		if session.UnreadableCount > m.unreadableCount {
+			m.unreadableCount = session.UnreadableCount
+		}
+		if session.ID != "" {
+			readable = append(readable, session)
+		}
+	}
+	m.sessions = readable
+	if m.cursor >= len(readable) && len(readable) > 0 {
+		m.cursor = len(readable) - 1
+	}
+	if len(readable) == 0 {
+		m.cursor = 0
 	}
 }
 

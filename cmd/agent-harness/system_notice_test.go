@@ -55,8 +55,9 @@ func TestLimitNoticeRendersAsSystemMessage(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	tuiApp := tui.NewApp()
 	app.tuiApp = tuiApp
-	app.client = &burstClient{first: true, burstSize: 20} // trips the default ceiling of 15
+	app.client = &burstClient{first: true, burstSize: 20}
 	app.loop = agent.NewLoop(app.client)
+	app.loop.Config.MaxToolCalls = 15 // exercise a deliberately small ceiling
 	app.toolRegistry = tools.NewRegistry()
 	app.toolRegistry.RegisterBuiltIn(echoTool())
 
@@ -69,7 +70,7 @@ func TestLimitNoticeRendersAsSystemMessage(t *testing.T) {
 	for time.Now().Before(deadline) {
 		msg := receiveTUIMessage(t, tuiApp)
 		model, _ = model.Update(msg)
-		if _, ok := msg.(tui.AgentDoneMsg); ok {
+		if _, ok := msg.(tui.AgentErrorMsg); ok {
 			break
 		}
 	}

@@ -17,6 +17,13 @@ func (m SessionsModel) View() string {
 	}
 
 	if len(m.sessions) == 0 {
+		if m.unreadableCount > 0 {
+			return RenderEmptyState(ViewPort{Width: m.width, Height: m.height}, EmptyState{
+				Title:       "Sessions unavailable",
+				Description: unreadableSessionWarning(m.unreadableCount),
+				Actions:     []ActionHint{{Key: "r", Desc: "Refresh"}},
+			})
+		}
 		return RenderEmptyState(ViewPort{Width: m.width, Height: m.height}, EmptyState{
 			Title:       "No Sessions",
 			Description: "Start chatting to create your first session.",
@@ -55,6 +62,9 @@ func (m SessionsModel) View() string {
 			noticeStyle = ErrorStyle
 		}
 		listB.WriteString(noticeStyle.Render("  "+m.notice) + "\n")
+	}
+	if m.unreadableCount > 0 {
+		listB.WriteString(WarningStyle.Render("  "+unreadableSessionWarning(m.unreadableCount)) + "\n")
 	}
 	listB.WriteString("\n")
 

@@ -4,7 +4,6 @@ package tui
 
 import (
 	"github.com/charmbracelet/bubbles/textarea"
-	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"strings"
@@ -191,7 +190,7 @@ type ChatModel struct {
 	width    int
 	height   int
 	messages []ChatMessage
-	viewport viewport.Model
+	viewport fastViewport
 	textarea textarea.Model
 	focused  bool
 
@@ -319,6 +318,25 @@ type ChatModel struct {
 	// Steer queue holds user messages to be auto-submitted after the current
 	// agent turn completes (like Claude Code's /btw).
 	steerQueue []string
+
+	// Input history: shell-style ↑/↓ recall of submitted messages. Every
+	// submission (slash command or prompt) appends here; ↑ walks
+	// backwards from the newest entry, ↓ walks forward again. The
+	// in-progress draft is preserved while navigating and restored when
+	// history is exited. Mobile keyboards get a real affordance for
+	// re-prompting (goal 0.3.29 Task 6, up-arrow history finding).
+	inputHistory      []string
+	historyCursor     int    // position in inputHistory; len() = at the draft
+	historyNavigating bool   // ↑ was pressed; ↓ returns to the draft
+	historyDraft      string // composer content when history navigation began
+
+	// Structural prefix reuse (Task 5): the previous frame's rendered
+	// blocks and their painted form. A new frame compares its block
+	// list with lastBlocks (identity through the group cache) and
+	// reuses lastPainted's unchanged head bytes instead of re-joining
+	// the whole transcript.
+	blockScratch []string
+	lastBlocks   []string
 }
 
 // ToolAnimationState tracks the current animated tool display (yolo mode)
@@ -370,7 +388,7 @@ func NewChatModel() ChatModel {
 	ta.FocusedStyle.Base = lipgloss.NewStyle().Foreground(ColorText)
 	ta.BlurredStyle.Base = lipgloss.NewStyle().Foreground(ColorTextDim)
 
-	vp := newViewport(80, 20)
+	vp := fastViewport{Width: 80, Height: 20}
 
 	return ChatModel{
 		textarea: ta,
@@ -464,7 +482,13 @@ func (m ChatModel) inputRows() int {
 func (m ChatModel) inputAreaHeight() int {
 	// The solid block: border + top padding + editor rows + bottom padding.
 	// The mode line below the block adds one more row to the reserved area.
+	// The working indicator (goal 0.3.29 Task 4) reserves its row here when
+	// live, so its appearance shrinks the viewport instead of pushing the
+	// composer + mode line off the pane on short terminals.
 	height := 1 + ComposerTopPadding + m.inputRows() + ComposerBottomPadding + 1
+	if m.workingStatusHeight() > 0 {
+		height++
+	}
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {

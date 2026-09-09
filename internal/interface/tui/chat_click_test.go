@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 	"time"
@@ -132,15 +133,18 @@ func TestToolRunClickUnfoldsRun(t *testing.T) {
 	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
 	m = model.(ChatModel)
 	for i := 0; i < 3; i++ {
+		// Distinct IDs per call, assigned up front: the streaming
+		// assistant's parts carry the tool IDs (live-visibility), so
+		// re-IDing messages after the fact orphans the parts (the old
+		// rename-the-last-message trick is gone with materialization).
+		id := fmt.Sprintf("t%d", i)
 		model, _ = m.Update(AgentToolStartMsg{
-			ToolID: "t1", ToolName: "bash", DisplayName: "bash",
+			ToolID: id, ToolName: "bash", DisplayName: "bash",
 			Input: map[string]any{"command": "echo hi"},
 		})
 		m = model.(ChatModel)
-		model, _ = m.Update(AgentToolDoneMsg{ToolID: "t1", Success: true})
+		model, _ = m.Update(AgentToolDoneMsg{ToolID: id, Success: true})
 		m = model.(ChatModel)
-		// Distinct IDs per call: reuse the model's own ID scheme.
-		m.messages[len(m.messages)-1].ID = string(rune('a' + i))
 	}
 	m.refreshViewportWithFollow(true)
 
@@ -148,7 +152,9 @@ func TestToolRunClickUnfoldsRun(t *testing.T) {
 		t.Fatalf("run not collapsed to a header + sub-rows:\n%s", m.viewport.View())
 	}
 
-	m = mouseClickAt(m, 0)
+	// Row 1: row 0 is the turn's Agent header (live-visibility
+	// materializes the turn block), so the run header lives at row 1.
+	m = mouseClickAt(m, 1)
 	if m.expandedMessageID == "" {
 		t.Fatal("click on run line did not expand")
 	}

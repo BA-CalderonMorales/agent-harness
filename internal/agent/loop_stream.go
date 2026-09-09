@@ -4,10 +4,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
-	"github.com/google/uuid"
 	"strings"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+	"github.com/google/uuid"
 )
 
 // consumeStream reads LLM events and builds an assistant message + tool uses.
@@ -27,6 +28,55 @@ func (l *Loop) idleWindow() time.Duration {
 		return l.Config.StreamIdleTimeout
 	}
 	return maxStreamIdle
+}
+
+// malformedToolInputError identifies the provider tool call whose streamed
+// JSON could not be finalized. Keeping the call identity here makes the
+// resulting stream error actionable instead of turning the bad input into an
+// executable empty map.
+type malformedToolInputError struct {
+	ToolID   string
+	ToolName string
+	Input    string
+	Err      error
+}
+
+func (e *malformedToolInputError) Error() string {
+	return fmt.Sprintf("malformed input for tool %q (id %q): %v", e.ToolName, e.ToolID, e.Err)
+}
+
+func (e *malformedToolInputError) Unwrap() error {
+	return e.Err
+}
+
+func finalizeToolInput(tool *types.ToolUseBlock, raw string) error {
+	var input map[string]any
+	if raw == "" {
+		return &malformedToolInputError{
+			ToolID:   tool.ID,
+			ToolName: tool.Name,
+			Input:    raw,
+			Err:      fmt.Errorf("empty JSON input"),
+		}
+	}
+	if err := json.Unmarshal([]byte(raw), &input); err != nil {
+		return &malformedToolInputError{
+			ToolID:   tool.ID,
+			ToolName: tool.Name,
+			Input:    raw,
+			Err:      err,
+		}
+	}
+	if input == nil {
+		return &malformedToolInputError{
+			ToolID:   tool.ID,
+			ToolName: tool.Name,
+			Input:    raw,
+			Err:      fmt.Errorf("JSON input must be an object"),
+		}
+	}
+	tool.Input = input
+	return nil
 }
 
 func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, out chan<- types.StreamEvent) (*types.Message, []types.ToolUseBlock, error) {
@@ -54,6 +104,11 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 		case ev, ok := <-events:
 			_ = idle.Reset(l.idleWindow())
 			if !ok {
+				if pendingToolUse != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+						return nil, nil, err
+					}
+				}
 				// The provider closed the stream without a stop event:
 				// the response is incomplete, and a truncated answer
 				// that looks complete is worse than an error naming it.
@@ -79,12 +134,6 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					)
 				}
 				if pendingToolUse != nil {
-					if toolInputBuffer != "" {
-						var input map[string]any
-						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
-							pendingToolUse.Input = input
-						}
-					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 				}
@@ -117,11 +166,8 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
 					toolInputBuffer = ""
 				} else if pendingToolUse.ID != e.ID {
-					if toolInputBuffer != "" {
-						var input map[string]any
-						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
-							pendingToolUse.Input = input
-						}
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+						return nil, nil, err
 					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
@@ -136,11 +182,8 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				msg.Model = e.Model
 				l.LastUsage = e.Usage
 				if pendingToolUse != nil {
-					if toolInputBuffer != "" {
-						var input map[string]any
-						if err := json.Unmarshal([]byte(toolInputBuffer), &input); err == nil {
-							pendingToolUse.Input = input
-						}
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+						return nil, nil, err
 					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)

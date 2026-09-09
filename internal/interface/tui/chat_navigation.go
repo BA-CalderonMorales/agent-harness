@@ -85,35 +85,71 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	m.refreshPending = false
 	wasAtBottom := m.viewport.AtBottom()
 	previousOffset := m.viewport.YOffset
-	var content strings.Builder
 
 	// The transcript (m.messages) is the single render source: tool
 	// messages live there in order (running in place, finalized in
 	// place), so the completedToolMsgs/currentToolMsg duplicates are
 	// not rendered - they used to double every tool line. Collapsed
 	// runs merge contiguous finalized same-tool messages per turn.
+	//
+	// Structural prefix reuse (goal 0.3.29 Task 5): the group cache
+	// hands back immutable strings, so a frame's block list shares
+	// almost all of its entries with the previous frame's. Instead of
+	// re-joining ~40KB of unchanged bytes every frame (292µs measured),
+	// find the longest common block prefix with lastBlocks and
+	// concatenate prevPainted[:prevPrefixLen] + the new tail. Only a
+	// mid-transcript change (a fold, an expansion) forces the full
+	// re-join, and those are rare, user-paced events.
 	m.clickIndex = m.clickIndex[:0]
 	line := 0
+	blocks := m.blockScratch[:0]
 	for i := 0; i < len(m.messages); {
+		blockStart := line
 		rendered, next, clicks := m.appendTurnGroupCached(m.messages, i)
-		content.WriteString(rendered)
-		content.WriteString("\n\n")
+		blocks = append(blocks, rendered)
 		for _, cr := range clicks {
 			m.clickIndex = append(m.clickIndex, clickRange{
-				start: line + cr.start, end: line + cr.start + cr.lines - 1,
+				start: blockStart + cr.start,
+				end:   blockStart + cr.start + cr.lines - 1,
 				msgID: cr.msgID,
 			})
 		}
-		lines := strings.Count(rendered, "\n") + 1
-		line += lines + 2 // the "\n\n" separator between groups
+		line += strings.Count(rendered, "\n") + 2 // block + "\n\n" separator
 		i = next
 	}
+	m.blockScratch = blocks
 
-	// Only paint when the built transcript actually differs from the
-	// last painted frame: the tick-driven streaming repaints would
-	// otherwise SetContent the identical string four times a second
-	// even when the stream went quiet.
-	painted := content.String()
+	// Longest common prefix with the previous frame's blocks.
+	common := 0
+	for common < len(blocks) && common < len(m.lastBlocks) && blocks[common] == m.lastBlocks[common] {
+		common++
+	}
+	// Byte length of the common prefix as previously painted (each
+	// block was followed by "\n\n").
+	prevPrefixLen := 0
+	for k := 0; k < common; k++ {
+		prevPrefixLen += len(m.lastBlocks[k]) + 2
+	}
+
+	var painted string
+	if common > 0 && prevPrefixLen <= len(m.lastPainted) {
+		// Reuse: the unchanged head bytes are literally the same string
+		// content; join only the changed tail.
+		var tail strings.Builder
+		for k := common; k < len(blocks); k++ {
+			tail.WriteString(blocks[k])
+			tail.WriteString("\n\n")
+		}
+		painted = m.lastPainted[:prevPrefixLen] + tail.String()
+	} else {
+		var content strings.Builder
+		for _, blk := range blocks {
+			content.WriteString(blk)
+			content.WriteString("\n\n")
+		}
+		painted = content.String()
+	}
+	m.lastBlocks = append(m.lastBlocks[:0], blocks...)
 	if !forceBottom && painted == m.lastPainted && wasAtBottom == m.lastPaintedAtBottom {
 		return
 	}
@@ -128,7 +164,7 @@ func (m *ChatModel) refreshViewportWithFollow(forceBottom bool) {
 	// The transcript can shrink (a fold, an expansion closing): a stale
 	// offset past the new end makes the viewport's visibleLines slice
 	// invert and panic. Clamp before restoring.
-	lines := strings.Count(content.String(), "\n") + 1
+	lines := strings.Count(painted, "\n") + 1
 	maxOffset := lines - m.viewport.Height
 	if maxOffset < 0 {
 		maxOffset = 0

@@ -3,7 +3,6 @@ package builtin
 import (
 	"fmt"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
@@ -62,10 +61,7 @@ var AgentTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{Data: fmt.Sprintf("[Sub-agent %s]\n%s", agentType, result)}, nil
 		}
 
-		// Fallback: demonstrate the pattern without real execution
-		_ = agent.NewLoop(nil)
-		result := fmt.Sprintf("[Sub-agent %s completed]\nTask: %s\nResult: (sub-agent execution would run here)", agentType, prompt)
-		return tools.ToolResult{Data: result}, nil
+		return tools.ToolResult{}, fmt.Errorf("sub-agent unavailable: delegated execution is not configured")
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
