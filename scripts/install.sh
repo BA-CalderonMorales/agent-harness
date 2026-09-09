@@ -4,7 +4,7 @@
 # Usage: curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install.sh | bash
 #
 
-set -e
+set -eo pipefail
 
 # Configuration
 REPO="BA-CalderonMorales/agent-harness"
@@ -83,7 +83,7 @@ get_latest_version() {
     log_info "Fetching latest release..."
     
     local latest_url="https://api.github.com/repos/$REPO/releases/latest"
-    VERSION=$(curl -fsSL "$latest_url" | grep -oP '"tag_name": "\K[^"]+' || true)
+    VERSION=$(curl -fsSL "$latest_url" | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')
     
     if [ -z "$VERSION" ]; then
         log_error "Failed to fetch latest version"
@@ -99,7 +99,7 @@ download_binary() {
     local archive_name="${BINARY_NAME}-${suffix}"
     
     if [ "$OS" = "windows" ]; then
-        archive_name="${archive_name}.zip"
+        archive_name="${archive_name}.exe.zip"
     else
         archive_name="${archive_name}.tar.gz"
     fi
@@ -135,6 +135,10 @@ download_binary() {
     
     log_info "Installing to $INSTALL_DIR..."
     
+    # Create user-owned destinations without requiring sudo on a fresh install.
+    if [ ! -d "$INSTALL_DIR" ]; then
+        mkdir -p "$INSTALL_DIR" 2>/dev/null || sudo mkdir -p "$INSTALL_DIR"
+    fi
     # Check if we need sudo
     if [ -w "$INSTALL_DIR" ]; then
         mv "$binary_name" "$INSTALL_DIR/$BINARY_NAME"
@@ -154,10 +158,10 @@ download_binary() {
 
 # Verify installation
 verify_installation() {
-    if command -v "$BINARY_NAME" &> /dev/null; then
+    if [ -x "$INSTALL_DIR/$BINARY_NAME" ]; then
         log_success "Installation verified!"
         echo ""
-        "$BINARY_NAME" --version 2>/dev/null || true
+        "$INSTALL_DIR/$BINARY_NAME" --version
         echo ""
         log_info "Run '$BINARY_NAME' to get started"
     else
@@ -195,7 +199,6 @@ main() {
                 echo ""
                 echo "Environment variables:"
                 echo "  INSTALL_DIR      Installation directory"
-                echo "  GITHUB_TOKEN     GitHub token for API requests (optional)"
                 exit 0
                 ;;
             *)

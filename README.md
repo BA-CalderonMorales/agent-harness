@@ -21,9 +21,11 @@
 
 ## Install
 
-The one-liner installs the binary and the runtime convenience scripts into
-`~/.local/bin`. Platforms, prerequisites, and manual paths:
-[Installation](docs/install.md).
+The one-liner installs the binary into `/usr/local/bin` (override with
+`--dir` for a user-owned install). Platforms, prerequisites, and manual paths:
+[Installation](docs/install.md). To update, rerun the installer with the same
+installation directory; your settings and sessions stay in place. See
+[Updating](docs/install.md#updating).
 
 ```bash
 # Any Linux or macOS shell
