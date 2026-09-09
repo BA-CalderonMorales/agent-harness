@@ -73,3 +73,23 @@ func TestSessionsWarningKeepsReadableRowsSelectable(t *testing.T) {
 		t.Fatal("warning state changed the readable selection")
 	}
 }
+
+func TestSessionsMobilePaneRendersWithoutPanic(t *testing.T) {
+	for _, width := range []int{30, 35, 40, 50, 60, 80} {
+		m := NewSessionsModel()
+		m.width = width
+		m.height = 24
+		m.Focus()
+		m.SetSessions([]SessionInfo{
+			{ID: "session-1", Title: "Very long session title that will definitely need truncation on mobile", Turns: 2, MessageCount: 4},
+			{ID: "session-2", Title: "Short", IsActive: true},
+		})
+		view := m.View()
+		if view == "" {
+			t.Fatalf("width %d rendered empty view", width)
+		}
+		if !strings.Contains(view, "All Sessions") {
+			t.Fatalf("width %d missing title: %s", width, view)
+		}
+	}
+}
