@@ -194,12 +194,10 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			maxToolCalls = params.MaxToolCalls
 		}
 		if maxToolCalls <= 0 {
-			maxToolCalls = 15
+			maxToolCalls = DefaultLoopConfig().MaxToolCalls
 		}
 		if state.toolCallCount+len(toolUses) > maxToolCalls {
-			// Suggest a meaningful next step: the default 15 doubling to
-			// 30 still grinds ("keep saying continue"). Five times the
-			// current limit is a real rescope; the ceiling clamps it.
+			// Suggest room for a larger task, bounded by the session ceiling.
 			suggested := maxToolCalls * 5
 			if suggested > maxToolLimit {
 				suggested = maxToolLimit
@@ -218,20 +216,21 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 		state.toolCallCount += len(toolUses)
 
-		// Convergence guard: re-running the same tool with the same
-		// canonical input inside one turn is the signature of a looping
-		// model, not a workflow - the second call aborts the turn instead
-		// of cloning another row into the transcript.
+		// Count repeats across consecutive tool rounds only. A command
+		// repeated after intervening work (test, edit, test) is normal.
+		// Alternating cycles remain bounded by the tool and turn budgets.
+		currentTools := make(map[string]int, len(toolUses))
 		maxIdentical := l.Config.MaxIdenticalToolUses
 		if maxIdentical <= 0 {
 			maxIdentical = 1
 		}
 		for _, tu := range toolUses {
 			key := toolCallSignature(tu)
-			state.executedTools[key]++
-			if state.executedTools[key] > maxIdentical {
+			currentTools[key]++
+			count := state.executedTools[key] + currentTools[key]
+			if count > maxIdentical {
 				msg := fmt.Sprintf("[Tool loop detected: %s was called %d times with identical input. Stopping to prevent runaway exploration.]",
-					tu.Name, state.executedTools[key])
+					tu.Name, count)
 				select {
 				case out <- types.StreamMessage{Message: types.Message{
 					Role:    types.RoleSystem,
@@ -244,6 +243,10 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 				return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg}
 			}
 		}
+		for key := range currentTools {
+			currentTools[key] += state.executedTools[key]
+		}
+		state.executedTools = currentTools
 
 		// Execute tools
 		if l.Config.StreamingToolExecution {

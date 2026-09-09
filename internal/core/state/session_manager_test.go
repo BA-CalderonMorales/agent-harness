@@ -163,3 +163,30 @@ func TestListSessionsWithSizeOrderAndSizes(t *testing.T) {
 		t.Fatalf("DeleteSession(active) error = %v, want refusal", err)
 	}
 }
+
+func TestListSessionsWithIssuesRetainsReadableSessions(t *testing.T) {
+	manager, err := NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("model")
+	session.ID = "readable-session"
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+	if err := os.WriteFile(path+"-damaged.jsonl", []byte("not json\n"), 0600); err != nil {
+		t.Fatalf("write damaged session: %v", err)
+	}
+
+	sessions, unreadable, err := manager.ListSessionsWithIssues()
+	if err != nil {
+		t.Fatalf("ListSessionsWithIssues() error = %v", err)
+	}
+	if len(sessions) != 1 || sessions[0].ID != session.ID {
+		t.Fatalf("sessions = %#v, want readable session only", sessions)
+	}
+	if unreadable != 1 {
+		t.Fatalf("unreadable = %d, want 1", unreadable)
+	}
+}

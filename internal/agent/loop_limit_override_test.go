@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -17,11 +18,13 @@ type toolBatchClient struct {
 	llm.Client
 	first     bool
 	batchSize int
+	calls     int
 }
 
 func (c *toolBatchClient) Stream(ctx context.Context, req llm.Request) (<-chan types.LLMEvent, error) {
 	first := c.first
 	c.first = false // synchronous: no goroutine race on the flag
+	c.calls++
 	out := make(chan types.LLMEvent, 16)
 	go func() {
 		defer close(out)
@@ -38,6 +41,41 @@ func (c *toolBatchClient) Stream(ctx context.Context, req llm.Request) (<-chan t
 		out <- types.LLMMessageStop{StopReason: "stop"}
 	}()
 	return out, nil
+}
+
+func TestQueryCompletesAcceptedWorkBeyondFourToolCalls(t *testing.T) {
+	client := &toolBatchClient{first: true, batchSize: 5}
+	loop := NewLoop(client)
+	loop.Config.MaxToolCalls = 5
+	loop.Config.MaxIdenticalToolUses = 1000
+	var executedTools atomic.Int32
+
+	params := QueryParams{
+		Messages: []types.Message{{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "go"}}}},
+		CanUseTool: func(name string, input map[string]any, ctx tools.Context) (tools.PermissionDecision, error) {
+			return tools.PermissionDecision{Behavior: tools.Allow}, nil
+		},
+		ToolUseContext: tools.Context{
+			Options:         tools.Options{Tools: []tools.Tool{echoToolWithCounter(&executedTools)}},
+			AbortController: context.Background(),
+		},
+	}
+
+	stream, err := loop.Query(context.Background(), params)
+	if err != nil {
+		t.Fatalf("Query: %v", err)
+	}
+	for ev := range stream {
+		if terminal, ok := ev.(types.StreamTerminal); ok && terminal.Reason != string(TerminalReasonComplete) {
+			t.Fatalf("terminal reason = %q, want complete", terminal.Reason)
+		}
+	}
+	if client.calls != 2 {
+		t.Fatalf("provider calls = %d, want initial tool request plus completion", client.calls)
+	}
+	if got := executedTools.Load(); got != 5 {
+		t.Fatalf("executed tool calls = %d, want 5", got)
+	}
 }
 
 func TestQueryParamsMaxToolCallsOverridesLoopDefault(t *testing.T) {
@@ -75,6 +113,10 @@ func TestQueryParamsMaxToolCallsOverridesLoopDefault(t *testing.T) {
 }
 
 func echoTool() tools.Tool {
+	return echoToolWithCounter(nil)
+}
+
+func echoToolWithCounter(executed *atomic.Int32) tools.Tool {
 	return tools.Tool{
 		Name:        "echo",
 		Description: "echo",
@@ -85,6 +127,9 @@ func echoTool() tools.Tool {
 			return tools.ValidationResult{Valid: true}
 		},
 		Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
+			if executed != nil {
+				executed.Add(1)
+			}
 			return tools.ToolResult{Data: "ok"}, nil
 		},
 		MapResult: func(data any, toolUseID string) types.ToolResultBlock {

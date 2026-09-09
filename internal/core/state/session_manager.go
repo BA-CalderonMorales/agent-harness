@@ -72,12 +72,15 @@ func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
 	if err := os.MkdirAll(sm.sessionsDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create sessions directory: %w", err)
 	}
+	sm.migrateLegacySessionFiles()
 	return sm, nil
 }
 
 // CreateSession creates a new session
 func (sm *SessionManager) CreateSession(model string) *Session {
 	sm.current = NewSession(model)
+	sm.appendOffset = 0
+	sm.journalID = ""
 	return sm.current
 }
 
@@ -89,6 +92,8 @@ func (sm *SessionManager) GetCurrent() *Session {
 // SetCurrent sets the current session
 func (sm *SessionManager) SetCurrent(session *Session) {
 	sm.current = session
+	sm.appendOffset = 0
+	sm.journalID = ""
 }
 
 // SaveCurrent persists the current session by appending whatever is new
@@ -167,18 +172,28 @@ func (sm *SessionManager) ReadSession(id string) (*Session, error) {
 // per file stat: unchanged files never get re-parsed, so the Sessions
 // tab can refresh as often as it likes.
 func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
+	sessions, _, err := sm.ListSessionsWithIssues()
+	return sessions, err
+}
+
+// ListSessionsWithIssues lists readable sessions and counts files that could
+// not be read. Readable sessions remain available so one damaged file does
+// not hide the rest of the history.
+func (sm *SessionManager) ListSessionsWithIssues() ([]SessionMetadata, int, error) {
 	paths, err := sm.listProjectSessionFiles()
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	if sm.sessionMetas == nil {
 		sm.sessionMetas = make(map[string]metaStamp)
 	}
 
 	sessions := make([]SessionMetadata, 0)
+	unreadable := 0
 	for _, path := range paths {
 		info, err := os.Stat(path)
 		if err != nil {
+			unreadable++
 			continue
 		}
 		if cached, ok := sm.sessionMetas[path]; ok && cached.modTime.Equal(info.ModTime()) && cached.size == info.Size() {
@@ -187,14 +202,15 @@ func (sm *SessionManager) ListSessions() ([]SessionMetadata, error) {
 		}
 		session, err := loadSessionFile(path)
 		if err != nil {
-			continue // torn or foreign file: skip, never fail the list
+			unreadable++
+			continue // retain readable sessions, but report the issue to callers
 		}
 		meta := session.GetMetadata()
 		sm.sessionMetas[path] = metaStamp{modTime: info.ModTime(), size: info.Size(), meta: meta}
 		sessions = append(sessions, meta)
 	}
 
-	return sessions, nil
+	return sessions, unreadable, nil
 }
 
 // GetSessionsDir returns the sessions directory
@@ -210,9 +226,12 @@ func (sm *SessionManager) GetSessionsDir() string {
 // O(n²) disk I/O). Oldest first, so the cleanup target order reads
 // naturally.
 func (sm *SessionManager) ListSessionsWithSize() ([]SessionWithSize, error) {
-	sessions, err := sm.ListSessions()
+	sessions, unreadable, err := sm.ListSessionsWithIssues()
 	if err != nil {
 		return nil, err
+	}
+	if unreadable > 0 {
+		return nil, fmt.Errorf("%d saved session(s) could not be read", unreadable)
 	}
 	paths, err := sm.listProjectSessionFiles()
 	if err != nil {
@@ -284,21 +303,43 @@ func (sm *SessionManager) GetDefaultSessionPath() string {
 }
 
 // ResumeLatestSession loads the most recently updated session if one exists.
-// Returns the session and true if resumed, nil and false if no sessions found.
+// It preserves the legacy bool-only contract for callers that do not need to
+// distinguish an empty store from an unreadable saved session.
 func (sm *SessionManager) ResumeLatestSession() (*Session, bool) {
+	session, err := sm.ResumeLatestSessionWithError()
+	return session, err == nil && session != nil
+}
+
+// ResumeLatestSessionWithError loads the most recently updated session.
+// A nil session and nil error means that no persisted sessions exist. A
+// non-nil error means a session was present but could not be inspected or
+// decoded, so callers can create a fresh session without losing the reason.
+func (sm *SessionManager) ResumeLatestSessionWithError() (*Session, error) {
 	paths, err := sm.listProjectSessionFiles()
-	if err != nil || len(paths) == 0 {
-		return nil, false
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect saved sessions: %w", err)
+	}
+	if len(paths) == 0 {
+		return nil, nil
 	}
 
-	// Filenames sort by start time; the newest is last.
-	session, err := loadSessionFile(paths[len(paths)-1])
+	// Filenames record start time, while appends and metadata updates change
+	// modification time. Resume the session most recently written.
+	latest := paths[0]
+	latestModTime := fileModTime(latest)
+	for _, path := range paths[1:] {
+		modTime := fileModTime(path)
+		if modTime.After(latestModTime) || (modTime.Equal(latestModTime) && path > latest) {
+			latest, latestModTime = path, modTime
+		}
+	}
+	session, err := loadSessionFile(latest)
 	if err != nil {
-		return nil, false
+		return nil, fmt.Errorf("latest saved session could not be resumed: %w", err)
 	}
 
 	sm.current = session
-	return session, true
+	return session, nil
 }
 
 // FormatSessionReport returns a formatted session report

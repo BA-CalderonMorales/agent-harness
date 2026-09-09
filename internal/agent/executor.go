@@ -83,14 +83,30 @@ func (e *StreamingToolExecutor) Close() {
 		e.closed = true
 		e.mu.Unlock()
 
-		e.pendingTools.Wait()
 		e.siblingCancel()
+		parentCanceled := e.toolUseContext.AbortController != nil && e.toolUseContext.AbortController.Err() != nil
+		if !parentCanceled {
+			e.pendingTools.Wait()
+			e.closeEventQueue()
+			return
+		}
 
-		e.eventMu.Lock()
-		e.eventQueueClosed = true
-		e.eventCond.Broadcast()
-		e.eventMu.Unlock()
+		// A canceled parent must not wait for a tool that ignores cancellation,
+		// but accepted tools still own their final result event. Keep dispatching
+		// until those workers finish so Close cannot discard an already-admitted
+		// result.
+		go func() {
+			e.pendingTools.Wait()
+			e.closeEventQueue()
+		}()
 	})
+}
+
+func (e *StreamingToolExecutor) closeEventQueue() {
+	e.eventMu.Lock()
+	e.eventQueueClosed = true
+	e.eventCond.Broadcast()
+	e.eventMu.Unlock()
 }
 
 func (e *StreamingToolExecutor) dispatchEvents() {

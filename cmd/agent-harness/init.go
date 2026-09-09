@@ -66,8 +66,11 @@ func (app *App) initSession() error {
 		model = "nvidia/nemotron-3-super-120b-a12b:free"
 	}
 
-	// Try to resume the most recent session for continuity
-	if resumed, ok := sessionManager.ResumeLatestSession(); ok {
+	// Try to resume the most recent session for continuity. A damaged store
+	// must not prevent a fresh session, but it must not look like an empty
+	// store either.
+	resumed, resumeErr := sessionManager.ResumeLatestSessionWithError()
+	if resumeErr == nil && resumed != nil {
 		app.session = resumed
 		// The session keeps the model last used in it; adopt it as the
 		// running configuration instead of overwriting it, so a model
@@ -86,6 +89,10 @@ func (app *App) initSession() error {
 			}
 		}
 	} else {
+		if resumeErr != nil {
+			app.bootNotice = appendBootNotice(app.bootNotice,
+				"Saved session could not be resumed; started a fresh session. Check session storage permissions or remove the damaged session file.")
+		}
 		app.session = sessionManager.CreateSession(model)
 		// Apply configured persona to new session
 		if app.config.Persona != "" {
@@ -101,6 +108,13 @@ func (app *App) initSession() error {
 	app.syncAgentMode()
 
 	return nil
+}
+
+func appendBootNotice(existing, notice string) string {
+	if existing == "" {
+		return notice
+	}
+	return existing + "\n" + notice
 }
 
 // initExecutionMode sets up the execution mode from config.

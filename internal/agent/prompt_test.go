@@ -20,3 +20,24 @@ func TestSystemPromptOpensWithAcknowledgment(t *testing.T) {
 		t.Fatal("system prompt missing the before-first-tool-call clause")
 	}
 }
+
+func TestSystemPromptContinuesAcceptedWorkWithDurableHandoff(t *testing.T) {
+	prompt := strings.Join(strings.Fields(BuildSystemPrompt(SystemPromptConfig{})), " ")
+	for _, want := range []string{
+		"For accepted multi-step work, pursue the objective until it is complete",
+		"batch independent reads",
+		"adapt after failed edits or",
+		"distinguish partial progress from verified completion",
+		"checkpoint it after meaningful milestones and before expensive work",
+		"On continuation or resume, read that ledger and verify the current state",
+		"and do not promise that a prompt or context exhaustion will trigger a final write",
+		"Runtime limits, cancellation, permissions, and convergence guards",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("system prompt missing continuation contract %q", want)
+		}
+	}
+	if strings.Contains(prompt, "After 3-4 tool attempts") || strings.Contains(prompt, "After 3–4 tool attempts") {
+		t.Fatal("system prompt retains the arbitrary 3–4-tool stopping rule")
+	}
+}

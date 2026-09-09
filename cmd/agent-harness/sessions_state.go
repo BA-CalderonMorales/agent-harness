@@ -12,9 +12,10 @@ import (
 // dropped: a just-created session has nothing to resume, and "0 msgs ·
 // 0 turns" in Recent Sessions is noise on the first boot.
 func (app *App) getSessionInfos() []tui.SessionInfo {
-	sessions, err := app.sessionManager.ListSessions()
+	sessions, unreadable, err := app.sessionManager.ListSessionsWithIssues()
 	if err != nil {
 		sessions = []state.SessionMetadata{}
+		unreadable = 0
 	}
 
 	// Ensure current session is included (a fresh, not-yet-saved session
@@ -28,6 +29,13 @@ func (app *App) getSessionInfos() []tui.SessionInfo {
 	for _, info := range infos {
 		if info.MessageCount > 0 {
 			filtered = append(filtered, info)
+		}
+	}
+	if unreadable > 0 {
+		if len(filtered) == 0 {
+			filtered = append(filtered, tui.SessionInfo{UnreadableCount: unreadable})
+		} else {
+			filtered[0].UnreadableCount = unreadable
 		}
 	}
 	return filtered

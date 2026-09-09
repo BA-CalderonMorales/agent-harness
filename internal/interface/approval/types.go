@@ -6,6 +6,7 @@ package approval
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 )
 
@@ -106,23 +107,48 @@ type ApprovalRequest struct {
 	// Note carries the free-text annotation sent with the last response
 	// (e.g. the suggestion from "Reject + Suggest"). The requester reads
 	// it after the decision arrives off the channel.
-	Note string
+	Note       string
+	finished   chan struct{}
+	finishOnce sync.Once
 }
 
 // NewApprovalRequest creates a new approval request
-func NewApprovalRequest(cmd CommandInfo) *ApprovalRequest {
-	return &ApprovalRequest{
+func NewApprovalRequest(cmd CommandInfo, parent ...context.Context) *ApprovalRequest {
+	ctx := context.Background()
+	bound := false
+	if len(parent) > 0 && parent[0] != nil {
+		ctx = parent[0]
+		bound = true
+	}
+	req := &ApprovalRequest{
 		Command:  cmd,
 		Response: make(chan Decision, 1),
-		Context:  context.Background(),
+		Context:  ctx,
+		finished: make(chan struct{}),
 	}
+	if bound {
+		go func() {
+			select {
+			case <-ctx.Done():
+				req.Respond(DecisionReject)
+			case <-req.finished:
+			}
+		}()
+	}
+	return req
 }
 
 // Respond sends a decision response
 func (r *ApprovalRequest) Respond(d Decision) {
+	if r.Context != nil && r.Context.Err() != nil {
+		d = DecisionReject
+	}
 	select {
 	case r.Response <- d:
 	default:
+	}
+	if r.finished != nil {
+		r.finishOnce.Do(func() { close(r.finished) })
 	}
 }
 
@@ -214,6 +240,9 @@ func (m *Manager) CheckApproval(cmd CommandInfo) (Decision, error) {
 	select {
 	case decision := <-req.Response:
 		delete(m.pending, cmd.ID)
+		if err := req.Context.Err(); err != nil {
+			return DecisionReject, err
+		}
 
 		// Handle special decisions
 		switch decision {

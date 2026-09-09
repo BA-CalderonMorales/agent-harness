@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 )
 
 func (m *ChatModel) AddToolMessage(toolName, toolDisplayName, content string) {
@@ -159,7 +160,7 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag
 
 	timeStr := started.Format("15:04:05")
 	name := toolDisplayName
-	if pad := toolNameColumn - len(name); pad > 0 {
+	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
 		name += strings.Repeat(" ", pad)
 	}
 
@@ -200,7 +201,7 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag
 		budget = 1
 	}
 	if lipgloss.Width(detail) > budget {
-		detail = detail[:len(detail)-(lipgloss.Width(detail)-budget)]
+		detail = truncateDisplayWidth(detail, budget)
 	}
 	pad := width - fixed - lipgloss.Width(detail)
 	if pad < 1 {
@@ -317,7 +318,7 @@ func (m *ChatModel) truncateCommandForWidth(toolDisplayName, cmd string) string 
 // and the duration wrapped (goal 0.3.29 Task 3b).
 func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd string) string {
 	name := toolDisplayName
-	if pad := toolNameColumn - len(name); pad > 0 {
+	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
 		name += strings.Repeat(" ", pad)
 	}
 	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur
@@ -326,24 +327,27 @@ func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd st
 	if maxCmdLen < 12 {
 		maxCmdLen = 12 // absolute minimum so something is visible
 	}
-	if len(cmd) > 40 && strings.Contains(cmd, "/") {
+	if lipgloss.Width(cmd) > 40 && strings.Contains(cmd, "/") {
 		compact := compactCommandForWidth(cmd, maxCmdLen)
-		if len(compact) < len(cmd) {
+		if lipgloss.Width(compact) < lipgloss.Width(cmd) {
 			return compact
 		}
 	}
-	if len(cmd) <= maxCmdLen {
+	if lipgloss.Width(cmd) <= maxCmdLen {
 		return cmd
 	}
 	return compactCommandForWidth(cmd, maxCmdLen)
 }
 
 func compactCommandForWidth(cmd string, maxLen int) string {
-	if maxLen <= 0 || len(cmd) <= maxLen {
+	if maxLen <= 0 {
+		return ""
+	}
+	if lipgloss.Width(cmd) <= maxLen {
 		return cmd
 	}
 	if maxLen <= 3 {
-		return cmd[:maxLen]
+		return truncateDisplayWidth(cmd, maxLen)
 	}
 	fields := strings.Fields(cmd)
 	if len(fields) > 0 {
@@ -355,16 +359,31 @@ func compactCommandForWidth(cmd string, maxLen int) string {
 			if prefix != "" {
 				candidate = prefix + " " + candidate
 			}
-			if len(candidate) <= maxLen {
+			if lipgloss.Width(candidate) <= maxLen {
 				return candidate
 			}
-			if len(name)+4 <= maxLen {
+			if lipgloss.Width(name)+4 <= maxLen {
 				return ".../" + name
 			}
-			return "..." + name[len(name)-(maxLen-3):]
+			return "..." + truncateDisplayWidth(name, maxLen-3)
 		}
 	}
-	return cmd[:maxLen-3] + "..."
+	return truncateDisplayWidth(cmd, maxLen)
+}
+
+// truncateDisplayWidth keeps terminal rows valid for Unicode text and
+// measures what the terminal displays rather than UTF-8 bytes.
+func truncateDisplayWidth(text string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return ""
+	}
+	if lipgloss.Width(text) <= maxWidth {
+		return text
+	}
+	if maxWidth <= 3 {
+		return ansi.Truncate(text, maxWidth, "")
+	}
+	return ansi.Truncate(text, maxWidth, "...")
 }
 
 func pathBase(path string) string {

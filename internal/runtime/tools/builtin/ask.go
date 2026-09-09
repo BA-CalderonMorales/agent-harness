@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -60,8 +61,33 @@ var AskUserQuestionTool = tools.NewTool(tools.Tool{
 		}
 
 		fmt.Print("Your answer: ")
-		reader := bufio.NewReader(os.Stdin)
-		answer, err := reader.ReadString('\n')
+		abort := ctx.AbortController
+		if abort == nil {
+			abort = context.Background()
+		}
+		if err := abort.Err(); err != nil {
+			return tools.ToolResult{}, err
+		}
+		answerCh := make(chan struct {
+			answer string
+			err    error
+		}, 1)
+		go func() {
+			reader := bufio.NewReader(os.Stdin)
+			answer, err := reader.ReadString('\n')
+			answerCh <- struct {
+				answer string
+				err    error
+			}{answer: answer, err: err}
+		}()
+		var answer string
+		var err error
+		select {
+		case result := <-answerCh:
+			answer, err = result.answer, result.err
+		case <-abort.Done():
+			return tools.ToolResult{}, abort.Err()
+		}
 		if err != nil {
 			return tools.ToolResult{}, err
 		}

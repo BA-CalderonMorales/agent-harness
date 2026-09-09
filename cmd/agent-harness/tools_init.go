@@ -27,6 +27,7 @@ func (app *App) initTools() {
 	app.toolRegistry.RegisterBuiltIn(builtin.TodoWriteTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebFetchTool)
 	app.toolRegistry.RegisterBuiltIn(builtin.WebSearchTool)
+	app.toolRegistry.RegisterBuiltIn(builtin.AgentTool)
 
 	app.mcpManager = mcp.NewManager()
 	if len(app.config.McpServers) > 0 {

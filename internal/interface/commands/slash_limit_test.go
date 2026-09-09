@@ -11,8 +11,8 @@ func TestLimitHandlerReportsCurrent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("error = %v", err)
 	}
-	if !strings.Contains(result, "15") {
-		t.Fatalf("report = %q, want the default 15", result)
+	if !strings.Contains(result, "Tool call limit: 100 (default 100)") {
+		t.Fatalf("report = %q, want the default 100", result)
 	}
 }
 
