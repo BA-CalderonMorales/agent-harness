@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"strings"
+
 	"github.com/charmbracelet/lipgloss"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 )
@@ -61,11 +64,39 @@ func (a App) view() string {
 	// color so the whole interface reads as one bounded surface, with
 	// the transcript bubbles clearly inset from the terminal edge.
 	inner := lipgloss.JoinVertical(lipgloss.Left, tabBar, content, statusBar)
+
+	// Frame invariant: no inner row may exceed the frame's inner width.
+	// A wider row wraps at the terminal — the continuation lands outside
+	// the border and the frame grows a row, shifting the bottom chrome.
+	// That is the mobile border-flicker bug: any sub-view that renders
+	// one row too wide (a long session line, a wide log hint) pushed the
+	// borders around when switching tabs. Clipping here guarantees the
+	// chrome is byte-stable across tabs; sub-views still own graceful
+	// wrapping, the clip is the last-resort net.
+	inner = clipToWidth(inner, frameWidth(a.width))
+
 	return FrameStyle.
 		Width(frameWidth(a.width)).
 		Height(frameHeight(a.height)).
 		BorderForeground(ColorBorder).
 		Render(inner)
+}
+
+// clipToWidth hard-truncates every line of a rendered block to max
+// width, ANSI-sequence aware. It is the frame's last-resort net: sub-
+// views should wrap their own content, but a single overflowing row
+// must never be able to shift the chrome again.
+func clipToWidth(block string, max int) string {
+	if max <= 0 {
+		return block
+	}
+	lines := strings.Split(block, "\n")
+	for i, line := range lines {
+		if ansi.StringWidth(line) > max {
+			lines[i] = ansi.Truncate(line, max, "")
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // Frame geometry: the app frame draws a one-cell border on every side,
