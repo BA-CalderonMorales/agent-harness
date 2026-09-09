@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.32] - 2026-09-09
+
+### Added
+- User-settable Home tagline (Settings → Appearance → Home Tagline), saved
+  to the user config layer; the Home header now titles the app with the
+  tagline as its subtitle.
+- Settings navigation wraps at both ends, and the footer hint names the
+  action for the selected row type (Toggle / Next choice / Edit text).
+
+### Changed
+- The layered config is the source of truth for the preferred model: new
+  chats from Home or Sessions adopt it, /model updates it, and historical
+  sessions no longer overwrite the user's default on restart. Environment
+  pins still win.
+- Home recent sessions sort newest-first and keep the selection visible
+  while navigating.
+
+### Fixed
+- The agent stream preserves narration text between tool calls in the
+  persisted message content instead of dropping it.
+
 ## [0.3.31] - 2026-09-08
 
 ### Changed
