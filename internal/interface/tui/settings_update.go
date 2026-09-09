@@ -78,14 +78,10 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		switch msg.String() {
 		case "up", "k":
-			if m.cursor > 0 {
-				m.cursor--
-			}
+			m.Scroll(-1)
 
 		case "down", "j":
-			if m.cursor < len(m.settings)-1 {
-				m.cursor++
-			}
+			m.Scroll(1)
 
 		case "enter", " ":
 			if m.cursor < len(m.settings) {

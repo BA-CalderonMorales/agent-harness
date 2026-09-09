@@ -104,6 +104,14 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 		case ev, ok := <-events:
 			_ = idle.Reset(l.idleWindow())
 			if !ok {
+				// Cancellation outranks disconnect: when the context was
+				// cancelled the provider client may close its event
+				// channel as part of shutdown, and selecting that close
+				// over ctx.Done() here would misreport an honest
+				// interrupt as a provider failure.
+				if err := ctx.Err(); err != nil {
+					return nil, nil, err
+				}
 				if pendingToolUse != nil {
 					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
 						return nil, nil, err
@@ -160,8 +168,22 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					return nil, nil, ctx.Err()
 				}
 			case types.LLMTextDelta:
+				if pendingToolUse != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+						return nil, nil, err
+					}
+					msg.Content = append(msg.Content, *pendingToolUse)
+					toolUses = append(toolUses, *pendingToolUse)
+					pendingToolUse = nil
+				}
 				currentText += e.Delta
 			case types.LLMToolUseDelta:
+				// Keep narration ahead of the call it introduces in both
+				// the live transcript and the persisted provider history.
+				if currentText != "" {
+					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
+					currentText = ""
+				}
 				if pendingToolUse == nil {
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
 					toolInputBuffer = ""

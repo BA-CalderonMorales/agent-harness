@@ -112,7 +112,9 @@ func (app *App) applySecureConfig(secureCfg *config.SecureConfig) {
 	if secureCfg.APIKey != "" && os.Getenv("AH_API_KEY") == "" && os.Getenv("AGENT_HARNESS_API_KEY") == "" {
 		app.config.APIKey = secureCfg.APIKey
 	}
-	if secureCfg.Model != "" && os.Getenv("AH_MODEL") == "" && os.Getenv("AGENT_HARNESS_MODEL") == "" {
+	// Layered settings own the preferred model; the credential store may
+	// still contain the model chosen during an earlier login.
+	if app.config.Model == "" && secureCfg.Model != "" && os.Getenv("AH_MODEL") == "" && os.Getenv("AGENT_HARNESS_MODEL") == "" {
 		app.config.Model = secureCfg.Model
 	}
 }

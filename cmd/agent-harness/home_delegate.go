@@ -24,9 +24,15 @@ func (d *tuiHomeDelegate) OnNewChat() {
 			return
 		}
 	}
-	model := d.app.session.Model
+	model := d.app.config.Model
+	if model == "" {
+		model = d.app.session.Model
+	}
 	personaName := d.app.session.Persona
 	d.app.session = d.app.sessionManager.CreateSession(model)
+	if d.app.costTracker != nil {
+		d.app.costTracker.SetModel(model)
+	}
 	d.app.session.Persona = personaName
 	d.app.sessionManager.SetCurrent(d.app.session)
 	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {

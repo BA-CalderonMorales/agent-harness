@@ -4,6 +4,7 @@ package tui
 
 import (
 	tea "github.com/charmbracelet/bubbletea"
+	"sort"
 )
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,7 @@ type HomeModel struct {
 	height          int
 	focused         bool
 	project         ProjectInfo
+	tagline         string
 	sessions        []SessionInfo
 	model           string
 	permissionMode  string
@@ -120,6 +122,7 @@ func (m *HomeModel) SetSessions(sessions []SessionInfo) {
 			readable = append(readable, session)
 		}
 	}
+	sort.SliceStable(readable, func(i, j int) bool { return readable[i].UpdatedAt.After(readable[j].UpdatedAt) })
 	m.sessions = readable
 	m.clampCursor()
 }

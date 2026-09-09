@@ -140,3 +140,43 @@ func assertMalformedToolInput(t *testing.T, err error, wantID, wantName string) 
 		t.Fatalf("error is not actionable for tool %q: %v", wantID, err)
 	}
 }
+
+func TestConsumeStreamPreservesProseAroundToolCalls(t *testing.T) {
+	input := []types.LLMEvent{
+		types.LLMTextDelta{Delta: "I will inspect the workspace."},
+		types.LLMToolUseDelta{ID: "first", Name: "bash", Delta: `{"command":"pwd"}`},
+		types.LLMTextDelta{Delta: "Next, read the configuration."},
+		types.LLMToolUseDelta{ID: "second", Name: "read", Delta: `{"path":"config.yml"}`},
+		types.LLMTextDelta{Delta: "Then I will summarize."},
+		types.LLMMessageStop{StopReason: "tool_use"},
+	}
+	events := make(chan types.LLMEvent, len(input))
+	for _, event := range input {
+		events <- event
+	}
+	close(events)
+	out := make(chan types.StreamEvent, 1)
+	msg, calls, err := (&Loop{}).consumeStream(context.Background(), events, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(msg.Content) != 5 || len(calls) != 2 {
+		t.Fatalf("content = %#v; calls = %#v", msg.Content, calls)
+	}
+	for i, want := range []string{"I will inspect the workspace.", "Next, read the configuration.", "Then I will summarize."} {
+		block, ok := msg.Content[i*2].(types.TextBlock)
+		if !ok || block.Text != want {
+			t.Fatalf("block %d = %#v, want prose %q", i*2, msg.Content[i*2], want)
+		}
+	}
+	for i, want := range []string{"first", "second"} {
+		block, ok := msg.Content[i*2+1].(types.ToolUseBlock)
+		if !ok || block.ID != want {
+			t.Fatalf("block %d = %#v, want tool %q", i*2+1, msg.Content[i*2+1], want)
+		}
+	}
+	emitted := (<-out).(types.StreamMessage)
+	if len(emitted.Message.Content) != len(msg.Content) {
+		t.Fatal("streamed content differs from durable message")
+	}
+}

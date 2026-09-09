@@ -67,6 +67,7 @@ func (app *App) initCommandsCore() {
 			func() string { return app.session.Model },
 			func(m string) error {
 				app.session.Model = m
+				app.config.Model = m
 				app.applyModelContext(m)
 				if app.costTracker != nil {
 					app.costTracker.SetModel(m)

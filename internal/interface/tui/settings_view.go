@@ -28,7 +28,7 @@ func (m SettingsModel) View() string {
 	// Header (always visible, not in viewport)
 	b.WriteString(RenderHeader(HeaderConfig{
 		Title:    "Settings",
-		Subtitle: "Configuration options",
+		Subtitle: "Choose a row, then change its value",
 		Count:    -1, // no count: 17 settings is noise, not signal
 	}))
 
@@ -41,18 +41,23 @@ func (m SettingsModel) View() string {
 	// rows uneven — the old estimate let the cursor scroll out of
 	// sight past the last category).
 	cursorLine := make([]int, len(m.settings))
+	line := 0
 	for i, setting := range m.settings {
 		if setting.Category != "" && setting.Category != currentCat {
 			if currentCat != "" {
 				settingsContent.WriteString("\n")
+				line++
 			}
 			currentCat = setting.Category
 			categoryHeader := SectionHeaderStyle.Render("── " + currentCat + " ──")
+			line++
 			settingsContent.WriteString(categoryHeader)
 			settingsContent.WriteString("\n")
 		}
-		cursorLine[i] = strings.Count(settingsContent.String(), "\n")
-		settingsContent.WriteString(m.renderSetting(setting, i == m.cursor))
+		cursorLine[i] = line
+		row := m.renderSetting(setting, i == m.cursor)
+		line += strings.Count(row, "\n") + 1
+		settingsContent.WriteString(row)
 		settingsContent.WriteString("\n")
 	}
 
@@ -102,10 +107,19 @@ func (m SettingsModel) View() string {
 		b.WriteString("\n")
 	}
 
-	// Footer (always visible, not in viewport)
+	// Footer explains the action for the selected type.
+	action := "Edit text"
+	if m.cursor >= 0 && m.cursor < len(m.settings) {
+		switch m.settings[m.cursor].Type {
+		case "bool":
+			action = "Toggle"
+		case "choice":
+			action = "Next choice"
+		}
+	}
 	footerActions := []ActionHint{
-		{Key: "↑/↓", Desc: "Navigate"},
-		{Key: "Enter/Space", Desc: "Edit / toggle"},
+		{Key: "↑/↓", Desc: "Move (wraps)"},
+		{Key: "Enter/Space", Desc: action},
 		{Key: "←/→", Desc: "Cycle choice"},
 		{Key: "r", Desc: "Reload"},
 	}
