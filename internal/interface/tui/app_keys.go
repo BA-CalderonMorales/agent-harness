@@ -385,17 +385,19 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 
 	// Reserve space for the fixed chrome: tab bar (3: padding top +
 	// content + border bottom) + status bar (3: content + top and
-	// bottom padding) = 6 total. The reserve must match the chrome's
-	// real height — one row short and the pane scrolls the tab bar's
-	// padding row off the top.
-	reserved := 6
+	// bottom padding) = 6 total, plus the app frame's top and bottom
+	// border rows. The reserve must match the chrome's real height —
+	// one row short and the pane scrolls the tab bar's padding row off
+	// the top.
+	reserved := 6 + FrameRows
 
-	// Phone panes inset their content by the gutter; sub-models render
-	// to the inset width so the padding and the text agree. Desktop
-	// panes keep the full width.
+	// The frame insets the content: sub-models render inside the
+	// border on every side, so their width shrinks by one column per
+	// side and their height by the reserved chrome. Phone panes inset
+	// further by the gutter; desktop panes keep the full inner width.
 	gutter := gutterFor(width)
 	contentMsg := tea.WindowSizeMsg{
-		Width:  width - 2*gutter,
+		Width:  width - FrameCols - 2*gutter,
 		Height: height - reserved,
 	}
 

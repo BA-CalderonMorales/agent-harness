@@ -528,18 +528,20 @@ var _ = Describe("App", func() {
 			It("should propagate to sub-models", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 100, Height: 50})
 				updated := model.(*App)
-				Expect(updated.homeModel.width).To(Equal(100))
-				Expect(updated.chatModel.width).To(Equal(100))
-				Expect(updated.sessionsModel.width).To(Equal(100))
-				Expect(updated.settingsModel.width).To(Equal(100))
+				// The app frame insets every side: sub-models get the
+				// terminal width minus the left and right border cells.
+				Expect(updated.homeModel.width).To(Equal(100 - FrameCols))
+				Expect(updated.chatModel.width).To(Equal(100 - FrameCols))
+				Expect(updated.sessionsModel.width).To(Equal(100 - FrameCols))
+				Expect(updated.settingsModel.width).To(Equal(100 - FrameCols))
 			})
 
 			It("should reserve space for tab and status bars", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 				updated := model.(*App)
-				// Sub-models should get height minus reserved space (6:
-				// tab bar 3 + status bar 3)
-				Expect(updated.homeModel.height).To(Equal(18))
+				// Sub-models get height minus the chrome (6: tab bar 3
+				// + status bar 3) and the frame's border rows.
+				Expect(updated.homeModel.height).To(Equal(24 - 6 - FrameRows))
 			})
 		})
 	})
@@ -684,10 +686,13 @@ var _ = Describe("App", func() {
 			It("should render compact runtime context in the mode line and bottom bar", func() {
 				app.width = 180
 				app.activeView = viewChat
-				app.chatModel.width = 180
-				// The real resize path hands sub-models height-6 (tab bar
-				// + status bar reserve); MaxHeight clips stale fixtures.
-				app.chatModel.height = 18
+				// The frame insets the pane by one border cell per side;
+				// the chat model renders inside that inner width. The
+				// real resize path hands sub-models the content height
+				// (terminal minus the 6-row chrome and the frame's two
+				// border rows); MaxHeight clips stale fixtures.
+				app.chatModel.width = 180 - FrameCols
+				app.chatModel.height = 24 - 6 - FrameRows
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				GinkgoT().Setenv("HOME", testHome)

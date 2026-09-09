@@ -14,9 +14,17 @@ var (
 	HeaderPrimary   lipgloss.Style
 	HeaderSecondary lipgloss.Style
 	HeaderTertiary  lipgloss.Style
+	// FrameStyle bounds the whole interface: a one-cell rule on every
+	// side in the composer rule's color, so the transcript bubbles read
+	// as inset from the terminal edge. No padding of its own — the
+	// views carry the inset via resize's frame reserve.
+	FrameStyle lipgloss.Style
 )
 
 func applyPanelStyles() {
+	FrameStyle = lipgloss.NewStyle().
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(ColorBorder)
 	PanelPrimary = lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(ColorBorder).
