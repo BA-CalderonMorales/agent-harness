@@ -166,8 +166,8 @@ const (
 // provider · reasoning effort) renders below the block on the terminal
 // background.
 const (
-	ComposerTopPadding    = 0 // blank rows above the input text
-	ComposerBottomPadding = 0 // blank rows below the input text, inside the block
+	ComposerTopPadding    = 1 // blank rows above the input text
+	ComposerBottomPadding = 1 // blank rows below the input text, inside the block
 )
 
 // PlaceholderDelay is how long the agent section waits before appearing
@@ -520,6 +520,22 @@ func (m *ChatModel) syncTextareaGeometry() {
 // capped at MaxInputRows (and, once the pane height is known, fit to the
 // pane so the block never overflows).
 func (m ChatModel) inputRows() int {
+	rows := m.draftRows()
+	if rows < MinInputRows {
+		rows = MinInputRows
+	}
+	if rows > MaxInputRows {
+		rows = MaxInputRows
+	}
+	if cap := m.maxComposerRows(); rows > cap {
+		rows = cap
+	}
+	return rows
+}
+
+// draftRows counts the draft's visual rows without any cap — the raw
+// soft-wrap-aware height the text needs to be fully visible.
+func (m ChatModel) draftRows() int {
 	value := m.textarea.Value()
 	if value == "" {
 		return MinInputRows
@@ -533,15 +549,6 @@ func (m ChatModel) inputRows() int {
 			rows++
 		}
 	}
-	if rows < MinInputRows {
-		rows = MinInputRows
-	}
-	if rows > MaxInputRows {
-		rows = MaxInputRows
-	}
-	if cap := m.maxComposerRows(); rows > cap {
-		rows = cap
-	}
 	return rows
 }
 
@@ -552,8 +559,8 @@ func (m ChatModel) inputAreaHeight() int {
 	// live, so its appearance shrinks the viewport instead of pushing the
 	// composer + mode line off the pane on short terminals.
 	height := 1 + ComposerTopPadding + m.inputRows() + ComposerBottomPadding + 1
-	if m.hiddenRowsAbove() > 0 {
-		// The overflow marker rides inside the block above the text; its
+	if m.hiddenRowsBelow() > 0 {
+		// The tail marker rides inside the block below the text; its
 		// row is part of the composer's reserved area.
 		height++
 	}
@@ -577,31 +584,13 @@ func (m *ChatModel) Focus() {
 	m.togglePlaceholder()
 }
 
-// hiddenRowsAbove reports how many visual rows of the draft sit above the
-// textarea's scroll window — rows the driver typed but cannot see right
-// now. The composer border turns this into the overflow affordance: a
-// `…` on the top rule means "scroll (↑/PgUp) to reach your first line".
-func (m ChatModel) hiddenRowsAbove() int {
-	value := m.textarea.Value()
-	if value == "" {
-		return 0
-	}
-	width := m.textarea.Width()
-	if width <= 0 {
-		return 0
-	}
-	// Total visual rows of the whole draft.
-	total := 0
-	for _, line := range strings.Split(value, "\n") {
-		if ansi.StringWidth(line) > width {
-			total += strings.Count(ansi.Wordwrap(line, width, ""), "\n") + 1
-		} else {
-			total++
-		}
-	}
-	// Rows above the caret's position in the scroll window: the textarea
-	// viewport's YOffset is in visual rows; the caret line is visible at
-	// the bottom. The hidden count is the total minus what fits.
+// hiddenRowsBelow reports how many visual rows of the draft sit below the
+// textarea's scroll window — tail rows the driver typed but cannot see
+// right now. The composer pins the first line (top-anchored), so overflow
+// always collects at the bottom; the marker declares the tail so nothing
+// the driver wrote is silently gone.
+func (m ChatModel) hiddenRowsBelow() int {
+	total := m.draftRows()
 	visible := m.textarea.Height()
 	if total <= visible {
 		return 0

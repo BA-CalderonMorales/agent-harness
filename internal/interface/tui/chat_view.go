@@ -125,14 +125,14 @@ func (m ChatModel) View() string {
 	// The composer's top border is the mode affordance: bright while
 	// you can type (insert), dim while you read (navigate) — the
 	// boundary is visible where the eyes already are, on the terminal's
-	// own background. When the draft has rows scrolled out above the
-	// window, the border says so: an overflow marker keeps the hidden
-	// first line discoverable instead of silently gone.
+	// own background. When the draft overflows the window, the tail
+	// marker keeps the hidden lines discoverable instead of silently
+	// gone; the first line stays pinned at the top.
 	composerBorder := ColorBorder
 	if m.modeLabel == "typing" || m.focused {
 		composerBorder = ColorPrimary
 	}
-	if m.hiddenRowsAbove() > 0 {
+	if m.hiddenRowsBelow() > 0 {
 		composerBorder = ColorPrimary
 	}
 	borderStyle := InputContainerStyle.
@@ -140,20 +140,19 @@ func (m ChatModel) View() string {
 		BorderForeground(composerBorder).
 		PaddingTop(ComposerTopPadding).
 		PaddingBottom(ComposerBottomPadding)
-	if hidden := m.hiddenRowsAbove(); hidden > 0 {
-		// The overflow marker rides the top rule: `… N lines above` tells
-		// the driver exactly how much draft is out of view and that it is
-		// reachable, not lost.
+
+	// The solid block hugs the text; when the draft overflows, a tail
+	// marker rides under it: `… N lines below` tells the driver exactly
+	// how much draft is out of view while the first line stays visible.
+	var block []string
+	block = append(block, blockParts...)
+	if hidden := m.hiddenRowsBelow(); hidden > 0 {
 		marker := InputHintStyle.Render(
-			"… " + fmt.Sprintf("%d line%s above — ↑ to scroll", hidden, plural(hidden)))
-		block := lipgloss.JoinVertical(lipgloss.Left, marker, lipgloss.JoinVertical(lipgloss.Left, blockParts...))
-		blockPanel := borderStyle.Render(block)
-		composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
-		sections = append(sections, composerPanel)
-		return lipgloss.JoinVertical(lipgloss.Left, sections...)
+			"… " + fmt.Sprintf("%d line%s below — ↓ to scroll", hidden, plural(hidden)))
+		block = append(block, marker)
 	}
 	blockPanel := borderStyle.
-		Render(lipgloss.JoinVertical(lipgloss.Left, blockParts...))
+		Render(lipgloss.JoinVertical(lipgloss.Left, block...))
 
 	// The mode line renders below the block, on the terminal background.
 	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())

@@ -3,6 +3,8 @@ package tui
 import (
 	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 func TestComposerStaysVisibleAtBottom(t *testing.T) {
@@ -206,5 +208,32 @@ func TestStatusLineStaysQuietAtNarrowWidth(t *testing.T) {
 	}
 	if !strings.Contains(view, "effort") {
 		t.Fatalf("mode line should stay visible at narrow width\n%s", view)
+	}
+}
+
+func TestFirstLineStaysVisibleWhenComposerGrows(t *testing.T) {
+	// Regression: entering a second line used to scroll the first line out
+	// of view even though the whole draft fits. bubbles' repositionView()
+	// ran with the previous (smaller) textarea height and over-scrolled;
+	// the height must grow before the key is fed so the caret's move onto a
+	// new line keeps every line on screen.
+	chat := NewChatModel()
+	chat.width = 80
+	chat.height = 24
+	chat.SetModel("test-model")
+	chat.SetInput("first line")
+
+	// Type a second line via Alt+Enter (multi-line input), then more text.
+	model, _ := chat.Update(tea.KeyMsg{Type: tea.KeyEnter, Alt: true})
+	chat = model.(ChatModel)
+	model, _ = chat.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("second")})
+	chat = model.(ChatModel)
+
+	view := chat.View()
+	if !strings.Contains(view, "first line") {
+		t.Fatalf("first line vanished from composer after adding a second line\n%s", view)
+	}
+	if !strings.Contains(view, "second") {
+		t.Fatalf("second line not rendered in composer\n%s", view)
 	}
 }

@@ -251,6 +251,19 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 				diag.Panic("tui.textarea", r)
 			}
 		}()
+		// Grow the textarea to fit the whole draft before feeding the key.
+		// bubbles' repositionView() runs at the end of Update() against the
+		// height we hand it: with the old (smaller) height it scrolls the
+		// caret's line into view and pushes the first line out from under
+		// the overflow marker. Pre-growing to the draft's uncapped row count
+		// means the window already holds the whole draft, so nothing ever
+		// scrolls: when the draft fits, every line stays visible; when it
+		// exceeds the cap, syncTextareaHeight trims the window afterwards
+		// and the top of the draft stays pinned (the overflow marker
+		// declares how many tail rows are out of view).
+		if rows := m.draftRows(); rows > m.textarea.Height() {
+			m.textarea.SetHeight(rows)
+		}
 		newTA, cmd = m.textarea.Update(msg)
 	}()
 	m.textarea = newTA
