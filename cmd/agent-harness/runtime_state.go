@@ -66,6 +66,7 @@ func (app *App) persistUserSettings() {
 		"perm_write":       app.config.PermWrite,
 		"perm_delete":      app.config.PermDelete,
 		"perm_execute":     app.config.PermExecute,
+		"tagline":          app.config.Tagline,
 	}
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {

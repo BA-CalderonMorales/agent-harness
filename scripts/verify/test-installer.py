@@ -38,7 +38,9 @@ class InstallerTest(unittest.TestCase):
                     out.addfile(info, io.BytesIO(payload))
             commands = {
                 'uname': '#!/bin/sh\nif [ "$1" = -s ]; then echo "$TEST_PLATFORM"; else echo x86_64; fi\n',
-                # BSD grep does not support -P. Make the portability failure visible on Linux too.
+                # The installer no longer uses grep; this mock always fails
+                # so any future reintroduction of a grep dependency is
+                # caught by the portability test on every platform.
                 'grep': '#!/bin/sh\nexit 2\n',
                 'curl': '''#!/bin/sh
 case "$*" in

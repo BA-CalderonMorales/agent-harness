@@ -163,7 +163,7 @@ verify_installation() {
         echo ""
         "$INSTALL_DIR/$BINARY_NAME" --version
         echo ""
-        log_info "Run '$BINARY_NAME' to get started"
+        log_info "Run '$INSTALL_DIR/$BINARY_NAME' to get started (add '$INSTALL_DIR' to PATH if it isn't already)"
     else
         log_warn "$BINARY_NAME not found in PATH"
         log_info "You may need to restart your shell or run: export PATH=\"$INSTALL_DIR:\$PATH\""

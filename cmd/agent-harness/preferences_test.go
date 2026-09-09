@@ -22,6 +22,20 @@ func TestThemeSurvivesSettingsReload(t *testing.T) {
 	}
 }
 
+func TestTaglineSurvivesSettingsReload(t *testing.T) {
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", Model: "chosen", Tagline: "Built for the long haul"}, "chosen")
+	app.cwd = t.TempDir()
+	app.commitConfigChange()
+	loaded, err := config.NewLayeredLoader(app.cwd).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Tagline != "Built for the long haul" {
+		t.Fatalf("tagline = %q, want %q", loaded.Tagline, "Built for the long haul")
+	}
+}
+
 func TestNewChatsKeepPreferredModelAfterVisitingHistory(t *testing.T) {
 	for _, entry := range []string{"home", "sessions"} {
 		t.Run(entry, func(t *testing.T) {
