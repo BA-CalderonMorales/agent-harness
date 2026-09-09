@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.3.34] - 2026-09-09
+
+### Fixed
+- The Sessions tab no longer vanishes on narrow mobile panes (Termux):
+  the session row renderer sliced its label with a width budget that
+  went negative on phone panes, panicked, and the frame's panic
+  recovery rendered an empty screen. Rows now budget style padding,
+  prefix, age, and status badge before truncating (ANSI-aware), and
+  mobile panes render a single-pane full-width list — the two-pane
+  list+detail split stays desktop-only.
+
 ## [0.3.33] - 2026-09-09
 
 ### Fixed
