@@ -17,8 +17,8 @@ func (m *HomeModel) View() string {
 	// Header. Count stays -1: the zero value would render a meaningless
 	// "(0)" on a view with no countable collection.
 	sections = append(sections, RenderHeader(HeaderConfig{
-		Title:    "Home",
-		Subtitle: "Project dashboard",
+		Title:    "Agent-Harness",
+		Subtitle: m.tagline,
 		Count:    -1,
 	}))
 
@@ -157,11 +157,12 @@ func (m *HomeModel) renderRecentSessions() string {
 		count = len(m.sessions)
 	}
 
-	for i := 0; i < count; i++ {
+	start := max(0, m.cursorSessionIndex()-count+1)
+	for i := start; i < start+count; i++ {
 		s := m.sessions[i]
 		label := s.Title
 		if label == "" {
-			label = fmt.Sprintf("Session %s", s.ID[:8])
+			label = fmt.Sprintf("Session %s", s.ID[:min(8, len(s.ID))])
 		}
 		marker := IndicatorUnselected
 		style := ListItemStyle

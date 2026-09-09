@@ -237,3 +237,8 @@ func (a *App) handlePaletteSelection(selected *commandInfo) (App, tea.Cmd) {
 func (a *App) ProviderState() (int, string) {
 	return a.providerReadiness, a.statusMessage
 }
+
+// SetHomeTagline updates the workspace introduction shown on Home.
+func (a *App) SetHomeTagline(tagline string) {
+	a.homeModel.tagline = tagline
+}

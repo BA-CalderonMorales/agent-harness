@@ -107,20 +107,21 @@ func (m SettingsModel) CapturesAllKeys() bool {
 	return m.editing
 }
 
-// Scroll scrolls the list and updates viewport.
-// CRITICAL FIX: Also scrolls the viewport to ensure all settings are visible
+// Scroll moves the selection. Single steps wrap; page jumps stop at the ends.
 func (m *SettingsModel) Scroll(lines int) {
-	if lines > 0 {
-		for i := 0; i < lines && m.cursor < len(m.settings)-1; i++ {
-			m.cursor++
-		}
-	} else {
-		for i := 0; i < -lines && m.cursor > 0; i++ {
-			m.cursor--
-		}
+	n := len(m.settings)
+	if n == 0 {
+		return
 	}
-	// Viewport sync happens in View, which knows each row's rendered
-	// position exactly.
+	if lines == -1 && m.cursor == 0 {
+		m.cursor = n - 1
+		return
+	}
+	if lines == 1 && m.cursor == n-1 {
+		m.cursor = 0
+		return
+	}
+	m.cursor = max(0, min(n-1, m.cursor+lines))
 }
 
 // GotoTop scrolls to top.

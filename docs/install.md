@@ -7,6 +7,7 @@ Complete installation instructions for agent-harness on all supported platforms.
 ## Table of Contents
 
 - [Quick Install](#quick-install)
+- [Updating](#updating)
 - [Linux](#linux)
 - [macOS](#macos)
 - [Windows](#windows)
@@ -33,6 +34,30 @@ curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/ma
 ```
 
 ---
+
+## Updating
+
+Run the installer again to replace the binary with the latest published release.
+Use the same installation directory as before (`command -v agent-harness` shows
+which binary your shell runs). For a user-owned install:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install.sh | bash -s -- --dir "$HOME/.local/bin"
+agent-harness --version
+```
+
+Keep `~/.local/bin` on your `PATH`. For the default `/usr/local/bin` install,
+rerun the Quick Install command. Termux users can rerun the Termux installer.
+Close Agent-Harness before updating and reopen it afterward.
+
+The binary installer leaves settings, credentials, and sessions in place. You
+do not need to delete configuration or repeat onboarding. To install a specific
+published version, append `--version vX.Y.Z` to the installer arguments.
+
+For a source checkout, keep personal configuration in your user settings or
+ignored `.agent-harness/settings.local.json`. Fetch and check out the desired
+release tag, then run `make install`; keep your own code changes on a separate
+branch so updating does not require overwriting them.
 
 ## Linux
 
@@ -327,10 +352,15 @@ See [Local Model Setup](local-models.md) for model download and YAML details.
 agent-harness uses the following directories:
 
 - **Root config**: `./agent-harness.yml`
-- **Config**: `~/.agent-harness/settings.json`
-- **Sessions**: `~/.agent-harness/sessions/`
+- **Config**: `~/.config/agent-harness/settings.json`
+- **Sessions**: `~/.local/share/agent-harness/sessions/`
 - **Skills**: `./.agent-harness/skills/`
 - **Local Config**: `./.agent-harness/settings.local.json`
+
+`XDG_CONFIG_HOME` and `XDG_DATA_HOME` change the corresponding roots.
+`AGENT_HARNESS_CONFIG_HOME` and `AGENT_HARNESS_DATA_HOME` override the complete
+application paths. Existing settings and sessions in `~/.agent-harness` migrate
+at startup; unknown files remain in place.
 
 ---
 

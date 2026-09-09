@@ -67,14 +67,26 @@ var _ = Describe("SettingsModel", func() {
 			})
 
 			It("should navigate within bounds", func() {
-				for i := 0; i < 10; i++ {
-					m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				// Single steps wrap at both ends: one down from the last
+				// row returns to the first, one up from the first lands on
+				// the last.
+				var m tea.Model
+				for i := 0; i < 3; i++ {
+					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyDown})
 					settings = m.(SettingsModel)
 				}
 				Expect(settings.cursor).To(Equal(3))
 
-				for i := 0; i < 10; i++ {
-					m, _ := settings.Update(tea.KeyMsg{Type: tea.KeyUp})
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyDown})
+				settings = m.(SettingsModel)
+				Expect(settings.cursor).To(Equal(0))
+
+				m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyUp})
+				settings = m.(SettingsModel)
+				Expect(settings.cursor).To(Equal(3))
+
+				for i := 0; i < 3; i++ {
+					m, _ = settings.Update(tea.KeyMsg{Type: tea.KeyUp})
 					settings = m.(SettingsModel)
 				}
 				Expect(settings.cursor).To(Equal(0))

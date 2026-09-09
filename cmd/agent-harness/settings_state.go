@@ -38,6 +38,7 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "session_dir", Label: "Session Directory", Value: app.config.SessionDir, Category: "System & Storage", Description: "Directory for session log storage (default: the shared data home's sessions directory).", Type: "string"},
 
 		// Appearance
+		{Key: "tagline", Label: "Home Tagline", Value: app.config.Tagline, Category: "Appearance", Description: "Make Home your own. Enter to edit; Enter saves, Esc cancels. Blank hides the tagline.", Type: "string"},
 		{Key: "theme", Label: "Theme", Value: theme, Category: "Appearance", Description: "TUI color palette. See /theme for the catalog.", Type: "choice", Options: tui.ThemeNames()},
 	}
 }
