@@ -310,7 +310,9 @@ var _ = Describe("SessionsModel", func() {
 					{ID: "1", Title: longTitle},
 				})
 				view := sessions.View()
-				Expect(view).To(ContainSubstring("..."))
+				// Truncation is ANSI-aware with an ellipsis marker; the
+				// old byte-slice with "..." panicked on narrow panes.
+				Expect(view).To(ContainSubstring("…"))
 			})
 		})
 	})
