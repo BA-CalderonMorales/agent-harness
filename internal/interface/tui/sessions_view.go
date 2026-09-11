@@ -47,8 +47,8 @@ func (m SessionsModel) View() string {
 
 	// Content area height (subtract header height)
 	contentHeight := m.height - 3
-	if contentHeight < 5 {
-		contentHeight = 5
+	if contentHeight < 8 {
+		contentHeight = 8
 	}
 
 	// Render list
@@ -165,8 +165,9 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 	// prefix takes 2, age takes len(age)+1, and status takes statusW.
 	overhead := 4 + 2 + len(age) + 1 + statusW
 	avail := width - overhead
-	if avail < 4 {
-		avail = 4
+	minLabel := 8
+	if avail < minLabel {
+		avail = minLabel
 	}
 	if lipgloss.Width(label) > avail {
 		label = ansi.Truncate(label, avail, "…")
