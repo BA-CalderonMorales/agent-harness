@@ -545,7 +545,13 @@ func (m ChatModel) draftRows() int {
 	rows := 0
 	for _, line := range strings.Split(value, "\n") {
 		if width > 0 && ansi.StringWidth(line) > width {
-			rows += strings.Count(ansi.Wordwrap(line, width, ""), "\n") + 1
+			// Mirror the textarea's own wrap pipeline (wordwrap at
+			// word boundaries, then a hard pass for unbroken runs —
+			// bubbles textarea.go): a CJK draft or a long URL must
+			// count the rows the editor actually renders, or the
+			// wrapped tail hides under an undersized composer.
+			wrapped := ansi.Hardwrap(ansi.Wordwrap(line, width, ""), width, true)
+			rows += strings.Count(wrapped, "\n") + 1
 		} else {
 			rows++
 		}
