@@ -52,7 +52,7 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			}
 			listModels := func() []string { return []string{"gpt-4o", "claude-3-5-sonnet", "gemma4:2b"} }
 
-			handler := ModelHandler(getModel, setModel, listModels)
+			handler := ModelHandler(getModel, setModel, listModels, "")
 
 			// Case 1: bare /model cycles to the next model in the list
 			cycleRes, err := handler("")
@@ -336,7 +336,7 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			registry.Register("compact", "Compact history", CompactHandler(func() (string, error) { return "compacted", nil }))
 			registry.Register("cost", "Show cost", CostHandler(func() string { return "cost: $0.00" }))
 			registry.Register("current-model", "Current model", CurrentModelHandler(func() string { return "gpt-4o" }))
-			registry.Register("model", "Change model", ModelHandler(func() string { return "gpt-4o" }, func(_ string) error { return nil }, func() []string { return []string{"gpt-4o"} }))
+			registry.Register("model", "Change model", ModelHandler(func() string { return "gpt-4o" }, func(_ string) error { return nil }, func() []string { return []string{"gpt-4o"} }, ""))
 			registry.Register("export", "Export session", ExportHandler(func(p string) (string, error) { return p, nil }))
 			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "sessions" }, func(_ string) error { return nil }))
 			registry.Register("plan", "Toggle plan mode", PlanHandler(func() bool { return false }, func(_ bool) string { return "plan" }))

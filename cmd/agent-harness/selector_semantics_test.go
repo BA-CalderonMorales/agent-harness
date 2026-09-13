@@ -128,6 +128,7 @@ func TestSingleOptionSelectorIsNotice(t *testing.T) {
 		func() string { return "solo" },
 		func(m string) error { set = m; return nil },
 		func() []string { return []string{"solo"} },
+		"tip",
 	)("")
 
 	if err != nil {
@@ -138,6 +139,34 @@ func TestSingleOptionSelectorIsNotice(t *testing.T) {
 	}
 	if !strings.Contains(out, "Only one model available") {
 		t.Fatalf("single-model cycle notice missing: %q", out)
+	}
+}
+
+// TestModelCycleNamesTheAlternatives pins the discoverability half of
+// the cycle contract: a bare /model states what happened and names how
+// to view without cycling (/current-model) and how to pick a specific
+// model (/model <name>), so the cycle never surprises a user who wanted
+// either.
+func TestModelCycleNamesTheAlternatives(t *testing.T) {
+	current := "gpt-4o"
+	out, err := commands.ModelHandler(
+		func() string { return current },
+		func(m string) error { current = m; return nil },
+		func() []string { return []string{"gpt-4o", "claude-3-5-sonnet"} },
+		"/current-model views without cycling; /model <name> picks a specific model",
+	)("")
+
+	if err != nil {
+		t.Fatalf("bare cycle errored: %v", err)
+	}
+	if !strings.Contains(out, "Model cycled") {
+		t.Fatalf("cycle output missing state change: %q", out)
+	}
+	if !strings.Contains(out, "/current-model views without cycling") {
+		t.Fatalf("cycle output must point at /current-model: %q", out)
+	}
+	if !strings.Contains(out, "/model <name> picks a specific model") {
+		t.Fatalf("cycle output must point at /model <name>: %q", out)
 	}
 }
 

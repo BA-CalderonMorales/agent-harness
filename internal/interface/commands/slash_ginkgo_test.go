@@ -307,6 +307,7 @@ var _ = Describe("Slash Commands", func() {
 				func() string { return current },
 				func(m string) error { current = m; return nil },
 				func() []string { return []string{"gpt-4o", "claude-3-5-sonnet"} },
+				"tip",
 			)
 		})
 
@@ -342,6 +343,7 @@ var _ = Describe("Slash Commands", func() {
 					func() string { return "gpt-4o" },
 					func(m string) error { return errors.New("invalid model") },
 					func() []string { return nil },
+					"tip",
 				)
 
 				By("when invoking /model bad-model")
@@ -358,6 +360,7 @@ var _ = Describe("Slash Commands", func() {
 					func() string { return "gpt-4o" },
 					func(m string) error { return nil },
 					func() []string { return []string{} },
+					"tip",
 				)
 
 				By("when invoking /model with an empty list")
@@ -375,6 +378,7 @@ var _ = Describe("Slash Commands", func() {
 					func() string { return current },
 					func(m string) error { current = m; return nil },
 					func() []string { return []string{"gpt-4o", "claude-3-5-sonnet", "gemma4:2b"} },
+					"tip",
 				)
 
 				By("cycling visits each model in order, then wraps")

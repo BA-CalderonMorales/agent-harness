@@ -62,7 +62,7 @@ func (app *App) initCommandsCore() {
 			return app.costTracker.Summary()
 		}))
 
-	app.cmdRegistry.Register("model", "Show or change the current model",
+	app.cmdRegistry.Register("model", "Cycle to the next model; /model <name> picks one, /current-model shows it",
 		commands.ModelHandler(
 			func() string { return app.session.Model },
 			func(m string) error {
@@ -94,6 +94,7 @@ func (app *App) initCommandsCore() {
 				}
 				return names
 			},
+			"/current-model views without cycling; /model <name> picks a specific model",
 		))
 
 	app.cmdRegistry.Register("current-model", "Show the current model",
@@ -145,6 +146,7 @@ func (app *App) initCommandsCore() {
 				return nil
 			},
 			func() []string { return config.EffortLevels },
+			"/effort <level> sets it directly (low, medium, high)",
 		))
 
 	app.cmdRegistry.Register("export", "Export conversation to file",

@@ -144,7 +144,7 @@ Cost: 450 input + 890 output tokens (~$0.0032) across 3 turns
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `/model` | Show or change the current model | `/model`, `/model gpt-4o` |
+| `/model` | Cycle to the next model; `/model <name>` picks one, `/current-model` shows it | `/model`, `/model gpt-4o` |
 | `/permissions` | Show or change permission mode | `/permissions`, `/permissions read-only` |
 | `/config` | Show configuration | `/config` |
 | `/memory` | Show memory context | `/memory` |
@@ -535,7 +535,7 @@ Session:
   /compact       Compact session to reduce token usage
 
 Settings:
-  /model         Show or change the current model
+  /model         Cycle to the next model; /model <name> picks one
   /permissions   Show or change permission mode
   /config        Show configuration
   /memory        Show memory context
