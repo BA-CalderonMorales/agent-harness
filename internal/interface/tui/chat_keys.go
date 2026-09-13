@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
@@ -242,7 +243,7 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 	}
 
 	// Update textarea
-	lastLen := len(m.textarea.Value())
+	lastRunes := utf8.RuneCountInString(m.textarea.Value())
 	var newTA textarea.Model
 	var cmd tea.Cmd
 	func() {
@@ -269,8 +270,10 @@ func (m ChatModel) handleKeys(msg tea.KeyMsg) (ChatModel, tea.Cmd, bool) {
 	m.textarea = newTA
 	m.syncTextareaHeight()
 
-	// Heuristic paste detection for terminals without bracketed paste
-	if !msg.Paste && len(m.textarea.Value())-lastLen > PasteHeuristicThreshold {
+	// Heuristic paste detection for terminals without bracketed paste.
+	// The jump is measured in runes so multibyte text is judged by the
+	// characters its author sees, like every other paste threshold.
+	if !msg.Paste && utf8.RuneCountInString(m.textarea.Value())-lastRunes > PasteHeuristicThreshold {
 		m.pasteDetected = true
 	}
 	// Reset paste flag if input was cleared

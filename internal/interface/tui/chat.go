@@ -148,7 +148,8 @@ type clickRange struct {
 	msgID      string
 }
 
-// Paste detection thresholds.
+// Paste detection thresholds, all in runes: multibyte text is judged by
+// the characters its author sees, never by its byte length.
 const (
 	PasteDisplayThreshold   = 200 // min chars to collapse a pasted message
 	PasteHeuristicThreshold = 20  // min length jump in one keystroke to detect paste
