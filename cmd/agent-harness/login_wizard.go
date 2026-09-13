@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
@@ -100,14 +101,15 @@ func (app *App) storeProviderModel(provider, model string) {
 // completeLogin persists the modal login wizard's result: the provider,
 // the (masked-input) API key, and the model. The key goes to the
 // encrypted store; the provider/model go through the normal config
-// commit path. Runs on the event loop via SetLoginHandler.
+// commit path. The authenticated happy path greets with a fresh session
+// and a pointer at /help. Runs on the event loop via SetLoginHandler.
 func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	if provider == "" {
 		return
 	}
 	app.config.Provider = provider
 	app.config.EndpointURL = app.wizardEndpoint(provider)
-	app.applyLoginCredentials(provider, apiKey, model, tuiApp)
+	authMsg := app.applyLoginCredentials(provider, apiKey, model)
 
 	if model == "" {
 		model = getDefaultModel(provider)
@@ -123,6 +125,19 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	app.commitConfigChange()
 	app.storeProviderModel(provider, model)
 
+	// The greeting: auth narration, the login state, the fresh-session
+	// notice, and the /help pointer — one system message the new
+	// session opens with.
+	notice := sprintf("%s\nLogged in. Provider: %s | Model: %s", authMsg, provider, model)
+	if err := app.startFreshSession(model); err != nil {
+		// A failed rotation keeps the current session; the notice says
+		// so instead of lying about a fresh start.
+		notice += sprintf("\n[!] Could not start a fresh session: %v", err)
+	} else {
+		notice += sprintf("\nStarted fresh session %s — the previous one is saved and resumable from the Sessions tab.", app.session.ID[:8])
+	}
+	notice += "\nType /help for a guided tour of commands, keys, and navigation."
+
 	// Recreate the LLM client and refresh the TUI state.
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.loop = agent.NewLoop(app.client)
@@ -130,31 +145,80 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
 	tuiApp.SetModels(app.getModelItems())
-	tuiApp.AddMessage("system", sprintf("Logged in. Provider: %s | Model: %s", provider, model))
 
 	// Re-probe the new provider.
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
 
+	// Activate the fresh session the way OnNewChat does: the transcript
+	// resets (the old conversation stays persisted app-side, never on
+	// the pane), the notice opens the new session, and every tab hears
+	// the new session ID.
+	tuiApp.Send(tui.SessionActivatedMsg{
+		SessionID:      app.session.ID,
+		Transcript:     nil,
+		Model:          app.session.Model,
+		Persona:        app.session.Persona,
+		Sessions:       app.getSessionInfos(),
+		Notice:         notice,
+		NoticeType:     "success",
+		SwitchToChat:   true,
+		PermissionMode: app.config.PermissionMode.String(),
+		EstTokens:      app.session.EstimateTokens(),
+	})
+
 	// Land the user in chat, ready to type: the first-run happy path
-	// never strands them on the home screen after authenticating.
+	// never strands them on the home screen after authenticating. Runs
+	// after SessionActivatedMsg so insert mode survives the view reset.
 	tuiApp.Send(tui.LoginCompletedMsg{})
+}
+
+// startFreshSession rotates to a new empty session for the model — the
+// app-side half of OnNewChat's new-chat path: the current session is
+// saved first (its history stays resumable from the Sessions tab), the
+// persona carries over as a durable setting, and the manager re-anchors
+// on the fresh session.
+func (app *App) startFreshSession(model string) error {
+	if app.session != nil && len(app.session.Messages) > 0 {
+		if _, err := app.sessionManager.SaveCurrent(); err != nil {
+			return err
+		}
+	}
+	m := model
+	personaName := ""
+	if app.session != nil {
+		if m == "" {
+			m = app.session.Model
+		}
+		personaName = app.session.Persona
+	}
+	session := app.sessionManager.CreateSession(m)
+	if session == nil {
+		return fmt.Errorf("session manager returned no session")
+	}
+	session.Persona = personaName
+	app.session = session
+	app.sessionManager.SetCurrent(session)
+	if _, err := app.sessionManager.SaveCurrent(); err != nil {
+		return err
+	}
+	return nil
 }
 
 // applyLoginCredentials resolves the API key for the login result —
 // typed key, local dummy, stored key, or an honest "none" — and
-// persists it. One policy per early return, in priority order.
-func (app *App) applyLoginCredentials(provider, apiKey, model string, tuiApp *tui.App) {
+// persists it. One policy per early return, in priority order. The
+// narration is returned, not sent: completeLogin composes it into the
+// fresh session's greeting so the transcript reset never swallows it.
+func (app *App) applyLoginCredentials(provider, apiKey, model string) string {
 	if config.IsLocalProvider(provider) {
 		app.config.APIKey = provider
-		tuiApp.AddMessage("system", sprintf("Local provider configured. Model: %s", model))
-		return
+		return sprintf("Local provider configured. Model: %s", model)
 	}
 
 	if apiKey != "" {
 		app.config.APIKey = apiKey
-		app.saveTypedCredentials(provider, apiKey, model, tuiApp)
-		return
+		return app.saveTypedCredentials(provider, apiKey, model)
 	}
 
 	storedKey, ok := app.storedKeyForProvider(provider, config.NewCredentialManager())
@@ -165,23 +229,23 @@ func (app *App) applyLoginCredentials(provider, apiKey, model string, tuiApp *tu
 		// key material (not even the masked hint): chat messages
 		// persist to session files and exports.
 		app.config.APIKey = storedKey
-		tuiApp.AddMessage("system", sprintf("Using stored API key. Provider: %s", provider))
 		app.refreshStoredModel(provider, model)
-		return
+		return sprintf("Using stored API key. Provider: %s", provider)
 	}
 
 	// No usable key for this provider: say so instead of sending a
 	// stale or dummy credential as auth (a local dummy or another
 	// provider's key 401s with "missing authentication header").
 	app.config.APIKey = ""
-	tuiApp.AddMessage("system", sprintf("[!] No stored API key for %s. Run /login and paste the key, or set AH_API_KEY.", provider))
+	return sprintf("[!] No stored API key for %s. Run /login and paste the key, or set AH_API_KEY.", provider)
 }
 
 // saveTypedCredentials stores a freshly typed key in the encrypted
 // credential store, MERGING into the per-provider key set: saving the
 // nvidia key must not clobber the openrouter key (the single-slot
-// store used to lose them on every provider switch).
-func (app *App) saveTypedCredentials(provider, apiKey, model string, tuiApp *tui.App) {
+// store used to lose them on every provider switch). The narration is
+// returned, not sent.
+func (app *App) saveTypedCredentials(provider, apiKey, model string) string {
 	credManager := config.NewCredentialManager()
 	keys := map[string]string{}
 	models := map[string]string{}
@@ -206,10 +270,9 @@ func (app *App) saveTypedCredentials(provider, apiKey, model string, tuiApp *tui
 		ProviderModels: models,
 	}
 	if err := credManager.SaveSecure(secureCfg); err != nil {
-		tuiApp.AddMessage("system", sprintf("[!] Failed to save credentials: %v", err))
-		return
+		return sprintf("[!] Failed to save credentials: %v", err)
 	}
-	tuiApp.AddMessage("system", sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath()))
+	return sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath())
 }
 
 // refreshStoredModel updates the stored model for an unchanged stored
