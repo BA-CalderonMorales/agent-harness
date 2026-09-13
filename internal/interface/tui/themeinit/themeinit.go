@@ -13,12 +13,18 @@
 // The same reasoning pins the color profile. Every theme is authored as
 // truecolor hex (see themes.go), so the palette only stays faithful if
 // the renderer emits truecolor. termenv's per-host sniff under-detects
-// color support on hosts like Windows PowerShell conhost or CI shells
-// that report no TTY, dropping the profile to ANSI/Ascii and collapsing
-// all 20 themes into one 16-color bucket — theme switching then looks
-// dead. Pinning the profile keeps the themes distinguishable on any
-// color terminal. NO_COLOR still wins: an explicit no-color opt-out is
-// never overridden.
+// color support on hosts like Windows PowerShell conhost, dropping the
+// profile to ANSI/Ascii and collapsing all 20 themes into one 16-color
+// bucket — theme switching then looks dead. Pinning the profile keeps
+// the themes distinguishable on any interactive color terminal.
+//
+// The pin stops where color output stops being useful: piped output, a
+// dumb terminal, and the standard opt-outs (NO_COLOR present, CLICOLOR=0)
+// stay colorless instead of carrying 24-bit escapes the other end cannot
+// render. An interactive TUI session always has a TTY on stdout (tea
+// requires it, and bubbletea enables VT processing on Windows), so the
+// TTY gate preserves the fix everywhere a human actually watches themes
+// while keeping logs and pipes clean.
 //
 // Import order matters: Go initializes a package's imports in lexical
 // file order, so cmd/agent-harness imports this package from a file
@@ -31,6 +37,7 @@ import (
 
 	"github.com/charmbracelet/lipgloss"
 	"github.com/muesli/termenv"
+	"golang.org/x/term"
 )
 
 func init() {
@@ -39,12 +46,25 @@ func init() {
 }
 
 // colorProfile returns the profile the hardcoded truecolor palette needs
-// to stay faithful: truecolor, unless the user explicitly opted out of
-// color via NO_COLOR (https://no-color.org), in which case termenv's own
-// detection is left to produce the colorless output it already emits.
+// to stay faithful: truecolor on an interactive terminal that has not
+// opted out, colorless output otherwise. NO_COLOR counts when present
+// under any value (https://no-color.org); CLICOLOR=0 and TERM=dumb are
+// honored the same way.
 func colorProfile() termenv.Profile {
-	if os.Getenv("NO_COLOR") != "" {
+	_, noColor := os.LookupEnv("NO_COLOR")
+	return resolveColorProfile(noColor, os.Getenv("CLICOLOR"), os.Getenv("TERM"), term.IsTerminal(int(os.Stdout.Fd())))
+}
+
+// resolveColorProfile is the pure policy behind colorProfile, kept
+// separate so the matrix is testable without a real terminal.
+func resolveColorProfile(noColor bool, clicolor, termName string, isTTY bool) termenv.Profile {
+	switch {
+	case noColor,
+		clicolor == "0",
+		termName == "dumb",
+		!isTTY:
 		return termenv.Ascii
+	default:
+		return termenv.TrueColor
 	}
-	return termenv.TrueColor
 }
