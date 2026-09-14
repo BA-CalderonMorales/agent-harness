@@ -148,14 +148,6 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		}
 		return m, nil
 	}
-
-	m.pasteDetected = false
-	m.textarea.SetValue("")
-	m.clearPendingPastes()
-	m.syncTextareaHeight()
-	m.refreshViewportFollow()
-	model = m
-	return
 }
 
 // startSubmitTimer returns a command that fires after SubmitDebounceDuration.
