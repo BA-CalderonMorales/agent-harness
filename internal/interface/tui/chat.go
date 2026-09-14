@@ -321,9 +321,12 @@ type ChatModel struct {
 	// header) until PlaceholderDelay has elapsed since the question.
 	placeholderPending bool
 
-	// Steer queue holds user messages to be auto-submitted after the current
-	// agent turn completes (like Claude Code's /btw).
-	steerQueue []string
+	// steerQueue holds user messages to be auto-submitted after the
+	// current agent turn completes (like Claude Code's /btw). A message
+	// the user typed while the agent was already working is already on
+	// screen, so its entry is marked Shown and the auto-submit runs it
+	// without repeating the user bubble.
+	steerQueue []queuedSubmit
 
 	// Input history: shell-style ↑/↓ recall of submitted messages. Every
 	// submission (slash command or prompt) appends here; ↑ walks
@@ -651,13 +654,39 @@ func (m *ChatModel) RemoveLastUserMessage() {
 	}
 }
 
+// queuedSubmit is a message waiting for the current agent turn to
+// finish. Shown marks entries the transcript already rendered (a submit
+// that arrived mid-turn) so the auto-submit does not duplicate them.
+type queuedSubmit struct {
+	Text  string
+	Shown bool
+}
+
 // QueueSteer adds a message to the steer queue. It will be auto-submitted as a
 // user message after the current agent turn completes.
 func (m *ChatModel) QueueSteer(text string) {
-	m.steerQueue = append(m.steerQueue, text)
+	m.steerQueue = append(m.steerQueue, queuedSubmit{Text: text})
 }
 
-// GetSteerQueue returns the current steer queue (for testing).
+// QueueUserSubmit queues a message the user submitted while a turn was
+// already running. The composer rendered the bubble when it was typed,
+// so the auto-submit runs it without repeating the user message.
+func (m *ChatModel) QueueUserSubmit(text string) {
+	m.steerQueue = append(m.steerQueue, queuedSubmit{Text: text, Shown: true})
+}
+
+// turnInFlight reports whether an agent turn is streaming or about to.
+// A submit that lands while this is true must queue, never start a
+// second concurrent turn.
+func (m ChatModel) turnInFlight() bool {
+	return m.thinking || m.streaming
+}
+
+// GetSteerQueue returns the queued message texts (for testing).
 func (m ChatModel) GetSteerQueue() []string {
-	return m.steerQueue
+	out := make([]string, 0, len(m.steerQueue))
+	for _, q := range m.steerQueue {
+		out = append(out, q.Text)
+	}
+	return out
 }
