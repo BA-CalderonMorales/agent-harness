@@ -210,6 +210,45 @@ func TestSaveSettings_MergesExisting(t *testing.T) {
 	}
 }
 
+// TestZeroNumericSettingsDoNotClobberProject: a 0 in the user layer is a
+// leftover snapshot value, not a configurable window. It must not blank
+// the project's context/output budget, while a deliberate temperature of
+// 0.0 (a legal choice) still comes through.
+func TestZeroNumericSettingsDoNotClobberProject(t *testing.T) {
+	configHome := t.TempDir()
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", configHome)
+	clearConfigEnv(t)
+
+	root := t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "agent-harness.yml"),
+		[]byte("provider: local\ncontext_length: 4096\nmax_tokens: 4096\ntemperature: 0.2\n"), 0644); err != nil {
+		t.Fatalf("write yaml: %v", err)
+	}
+
+	ll := NewLayeredLoader(root)
+	if err := ll.SaveSettings(SourceUser, map[string]interface{}{
+		"context_length": 0,
+		"max_tokens":     0,
+		"temperature":    0.0,
+	}); err != nil {
+		t.Fatalf("SaveSettings() error = %v", err)
+	}
+
+	cfg, err := NewLayeredLoader(root).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.ContextLength != 4096 {
+		t.Errorf("context_length = %d, want the project's 4096", cfg.ContextLength)
+	}
+	if cfg.MaxTokens != 4096 {
+		t.Errorf("max_tokens = %d, want the project's 4096", cfg.MaxTokens)
+	}
+	if cfg.Temperature != 0.0 {
+		t.Errorf("temperature = %v, want 0.0 (a legal choice)", cfg.Temperature)
+	}
+}
+
 func TestSaveSettings_FileModeIs0600(t *testing.T) {
 	configHome := t.TempDir()
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", configHome)
