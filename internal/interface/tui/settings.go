@@ -56,6 +56,22 @@ func NewSettingsModel() SettingsModel {
 	}
 }
 
+// distinctOptions collapses duplicate option entries to their first
+// occurrence, preserving order. A repeated entry can never trap a
+// choice rotation between its indices, and the view can report one
+// stable position for the current value.
+func distinctOptions(options []string) []string {
+	seen := make(map[string]bool, len(options))
+	out := make([]string, 0, len(options))
+	for _, o := range options {
+		if !seen[o] {
+			seen[o] = true
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
 // SetDelegate sets the settings delegate.
 func (m *SettingsModel) SetDelegate(delegate SettingsDelegate) {
 	m.delegate = delegate

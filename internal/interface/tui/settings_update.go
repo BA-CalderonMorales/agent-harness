@@ -15,19 +15,11 @@ import (
 // three-way split (Enter defaulted to -1, arrows to 0) made Enter and
 // the arrows disagree about where an unknown value lands.
 func cycleChoice(s *Setting, dir int) {
-	n := len(s.Options)
+	options := distinctOptions(s.Options)
+	n := len(options)
 	if n == 0 {
 		return
 	}
-	seen := make(map[string]bool, n)
-	options := make([]string, 0, n)
-	for _, o := range s.Options {
-		if !seen[o] {
-			seen[o] = true
-			options = append(options, o)
-		}
-	}
-	n = len(options)
 
 	idx := -1
 	for i, o := range options {
