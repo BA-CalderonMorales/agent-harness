@@ -574,9 +574,10 @@ func (m ChatModel) inputAreaHeight() int {
 		// row is part of the composer's reserved area.
 		height++
 	}
-	if m.workingStatusHeight() > 0 {
-		height++
-	}
+	// The live working block (blank · status · blank) reserves its full
+	// height here, so its appearance shrinks the viewport instead of
+	// pushing the composer + mode line off the pane.
+	height += m.workingStatusHeight()
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
 		if visible > 6 {
