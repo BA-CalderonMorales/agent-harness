@@ -128,3 +128,29 @@ func TestSessionRowFitsItsWidthBudget(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionsNarrowHeightKeepsTheList pins the content-height floor: on
+// a short pane the content area used to shrink below the list, so the
+// sessions tab rendered chrome with no rows in it. The floor keeps a
+// legible minimum, and the list title must survive every phone height.
+func TestSessionsNarrowHeightKeepsTheList(t *testing.T) {
+	for _, height := range []int{4, 6, 8, 10, 12, 16, 24} {
+		for _, width := range []int{30, 40, 60} {
+			m := NewSessionsModel()
+			m.width = width
+			m.height = height
+			m.Focus()
+			m.SetSessions([]SessionInfo{
+				{ID: "session-1", Title: "Very long session title that will need truncation"},
+				{ID: "session-2", Title: "Short", IsActive: true},
+			})
+			view := m.View()
+			if view == "" {
+				t.Fatalf("w%d h%d rendered empty view", width, height)
+			}
+			if !strings.Contains(view, "All Sessions") {
+				t.Fatalf("w%d h%d dropped the list: %q", width, height, view)
+			}
+		}
+	}
+}
