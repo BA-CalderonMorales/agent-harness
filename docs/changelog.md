@@ -10,11 +10,14 @@
   labels keep an eight-column minimum before truncating.
 
 ### Changed
-- CI and the release pipeline both build on go1.26.8, clearing five
-  reachable standard-library advisories (encoding/xml, encoding/asn1,
-  net/http) and ending the toolchain skew between them (1.25 vs 1.26.1).
-  The source-build prerequisite in the install guide names the same line,
-  so a build from source cannot quietly reintroduce the advisories.
+- The toolchain moves to go1.26.8 everywhere it is declared (CI, the
+  release pipeline, and the module's minimum toolchain), ending a skew
+  where CI ran 1.25 while releases built on 1.26.1. That clears the five
+  reachable standard-library advisories govulncheck reported against
+  go1.26.5, including encoding/xml (GO-2026-6088), encoding/asn1
+  (GO-2026-5972) and net/http (GO-2026-5026), all fixed from go1.26.6.
+  The install guide and the Termux skill name the same line, so a source
+  build cannot silently reintroduce them.
 
 ## [0.3.34] - 2026-09-09
 
