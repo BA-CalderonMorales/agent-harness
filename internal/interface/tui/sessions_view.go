@@ -155,23 +155,33 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		status = StatusActive
 	}
 	statusStr := RenderStatusBadge(status)
-	statusW := 0
+
+	// Row budget. The list styles pad two cells per side and the prefix
+	// leads the row; neither is optional, so they come out of the pane
+	// first. The age and the status badge are: a pane too narrow to afford
+	// them drops them from the tail inwards rather than rendering past the
+	// edge, where the frame clip would cut a field in half. The label takes
+	// whatever is left, and nothing at all when nothing is left.
+	chrome := 4 + lipgloss.Width(prefix)
+	ageCell := 1 + lipgloss.Width(age)
+	statusCell := 0
 	if statusStr != "" {
-		statusW = lipgloss.Width(statusStr) + 1
+		statusCell = 1 + lipgloss.Width(statusStr)
 	}
 
-	// Budget available space for the label inside the styled row:
-	// ListItemStyle and ListSelectedStyle pad 2 on each side (4 total),
-	// prefix takes 2, age takes len(age)+1, and status takes statusW.
-	overhead := 4 + 2 + len(age) + 1 + statusW
-	// The label takes the whole remainder and no more. A legible floor
-	// reads better, but any floor past the true remainder makes the
-	// styled row wider than the pane on phone widths, and the frame clip
-	// then eats the trailing age and status badge — the fields that tell
-	// two sessions apart. On a pane this narrow the chrome can fill the
-	// row on its own, so a label with no room is dropped rather than left
-	// as a bare ellipsis that costs a cell the row does not have.
-	avail := width - overhead
+	// Drop optional metadata from the tail inwards until the fixed parts
+	// fit. A hard-coded label floor cannot do this: any floor above the
+	// real remainder renders the row wider than its pane.
+	avail := width - chrome - ageCell - statusCell
+	if avail < 0 {
+		statusStr, statusCell = "", 0
+		avail = width - chrome - ageCell
+	}
+	if avail < 0 {
+		ageCell = 0
+		avail = width - chrome
+	}
+
 	switch {
 	case avail <= 0:
 		label = ""
@@ -179,12 +189,15 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		label = ansi.Truncate(label, avail, "…")
 	}
 
-	line := style.Render(prefix + label + " " + HelpDimStyle.Render(age))
+	row := prefix + label
+	if ageCell > 0 {
+		row += " " + HelpDimStyle.Render(age)
+	}
 	if statusStr != "" {
-		line += " " + statusStr
+		row += " " + statusStr
 	}
 
-	return line
+	return style.Render(row)
 }
 
 func (m SessionsModel) renderSessionDetail(session SessionInfo) string {

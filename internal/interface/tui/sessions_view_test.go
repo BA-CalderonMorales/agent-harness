@@ -94,35 +94,31 @@ func TestSessionsMobilePaneRendersWithoutPanic(t *testing.T) {
 	}
 }
 
-// TestSessionRowFitsItsWidthBudget pins the row budget invariant: the
-// list styles pad 2 cells per side and the age and status badge are
-// appended after the label, so a label budgeted past the real remainder
-// renders the row wider than the pane, and the frame clip then eats the
-// trailing fields — the age and the status badge are exactly what tells
-// two sessions apart. A label may never widen a row past the wider of
-// the pane and the fixed chrome.
+// TestSessionRowFitsItsWidthBudget pins the row budget invariant: a
+// session row is never rendered wider than the pane it was rendered for.
+// The list styles pad two cells per side, the prefix leads the row, and
+// the age and status badge trail it, so anything budgeted past the real
+// remainder overruns the pane and the frame clip then cuts the trailing
+// fields — the age and the status badge are exactly what tells two
+// sessions apart. Widths start at 8 because the unstyled chrome needs six
+// cells before a row can fit at all.
 func TestSessionRowFitsItsWidthBudget(t *testing.T) {
 	long := "Very long session title that will definitely need truncation on narrow panes"
 	probes := []SessionInfo{
 		{ID: "neutral", Title: long},
 		{ID: "active", Title: long, IsActive: true},
+		{ID: "short", Title: "Short"},
+		{ID: "untitled", Title: ""},
 	}
 	m := NewSessionsModel()
 
 	for _, probe := range probes {
 		for _, selected := range []bool{false, true} {
-			// Derive the fixed chrome (style padding, prefix, age, status)
-			// from the renderer itself: a one-cell title on a wide pane is
-			// never truncated, so that row is the chrome plus one cell.
-			oneCell := probe
-			oneCell.Title = "x"
-			chrome := lipgloss.Width(m.renderSessionItem(oneCell, selected, 1000)) - 1
-
-			for width := 10; width <= 64; width++ {
-				got := lipgloss.Width(m.renderSessionItem(probe, selected, width))
-				if want := max(chrome, width); got > want {
-					t.Errorf("%s selected=%v: width %d row is %d cells, want at most %d (chrome %d)",
-						probe.ID, selected, width, got, want, chrome)
+			for width := 8; width <= 64; width++ {
+				row := m.renderSessionItem(probe, selected, width)
+				if got := lipgloss.Width(row); got > width {
+					t.Errorf("%s selected=%v: width %d row is %d cells wide: %q",
+						probe.ID, selected, width, got, strings.TrimSpace(row))
 				}
 			}
 		}
