@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.3.35] - 2026-09-14
+
+### Fixed
+- Sessions stay visible on narrow and mobile panes: the sessions list
+  reserved a five-row content floor and a four-column label budget, so
+  a phone-sized pane could allocate more rows and width than it had and
+  push the list out of the frame. A row now budgets strictly to the pane
+  it is rendered for: the label takes only the width left over, and a
+  pane too narrow for the age or the status badge drops those fields
+  rather than rendering past the edge for the frame clip to cut in half.
+
+### Changed
+- The toolchain moves to go1.26.8 everywhere it is declared (CI, the
+  release pipeline, and the module's minimum toolchain), ending a skew
+  where CI ran 1.25 while releases built on 1.26.1. That clears the five
+  reachable standard-library advisories govulncheck reported against
+  go1.26.5, including encoding/xml (GO-2026-6088), encoding/asn1
+  (GO-2026-5972) and net/http (GO-2026-5026), all fixed from go1.26.6.
+  The install guide and the Termux skill name the same line, so a source
+  build cannot silently reintroduce them.
+
 ## [0.3.34] - 2026-09-09
 
 ### Fixed

@@ -281,7 +281,8 @@ docker-compose run --rm agent-harness
 
 ### Prerequisites
 
-- Go 1.26.1 or later
+- Go 1.26.8 or later (the current patch on the 1.26 line; the
+  standard-library advisories this build avoids are fixed from 1.26.6)
 - Git
 
 ### Build

@@ -7,7 +7,8 @@
 ## Environment Characteristics
 
 - **Platform**: Android (Samsung S26 Ultra) via Termux
-- **Go Version**: 1.26.1 (android/arm64)
+- **Go Version**: 1.26.8+ (android/arm64); 1.26.1 predates the
+  standard-library fixes this build depends on
 - **Shell**: `/data/data/com.termux/files/usr/bin/bash`
 - **Home**: `/data/data/com.termux/files/home`
 - **Prefix**: `/data/data/com.termux/files/usr`
@@ -73,7 +74,7 @@ Android power management:
 
 ### 7. Build Environment
 
-- Native compilation works (Go 1.26.1 available)
+- Native compilation works (build on Go 1.26.8+, the advisory-free line)
 - CGO enabled by default for Android
 - Cross-compilation FROM Termux TO desktop may be limited
 
