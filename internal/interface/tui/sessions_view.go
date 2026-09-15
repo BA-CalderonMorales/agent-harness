@@ -47,8 +47,8 @@ func (m SessionsModel) View() string {
 
 	// Content area height (subtract header height)
 	contentHeight := m.height - 3
-	if contentHeight < 5 {
-		contentHeight = 5
+	if contentHeight < 8 {
+		contentHeight = 8
 	}
 
 	// Render list
@@ -155,29 +155,49 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 		status = StatusActive
 	}
 	statusStr := RenderStatusBadge(status)
-	statusW := 0
+
+	// Row budget. The list styles pad two cells per side and the prefix
+	// leads the row; neither is optional, so they come out of the pane
+	// first. The age and the status badge are: a pane too narrow to afford
+	// them drops them from the tail inwards rather than rendering past the
+	// edge, where the frame clip would cut a field in half. The label takes
+	// whatever is left, and nothing at all when nothing is left.
+	chrome := 4 + lipgloss.Width(prefix)
+	ageCell := 1 + lipgloss.Width(age)
+	statusCell := 0
 	if statusStr != "" {
-		statusW = lipgloss.Width(statusStr) + 1
+		statusCell = 1 + lipgloss.Width(statusStr)
 	}
 
-	// Budget available space for the label inside the styled row:
-	// ListItemStyle and ListSelectedStyle pad 2 on each side (4 total),
-	// prefix takes 2, age takes len(age)+1, and status takes statusW.
-	overhead := 4 + 2 + len(age) + 1 + statusW
-	avail := width - overhead
-	if avail < 4 {
-		avail = 4
+	// Drop optional metadata from the tail inwards until the fixed parts
+	// fit. A hard-coded label floor cannot do this: any floor above the
+	// real remainder renders the row wider than its pane.
+	avail := width - chrome - ageCell - statusCell
+	if avail < 0 {
+		statusStr, statusCell = "", 0
+		avail = width - chrome - ageCell
 	}
-	if lipgloss.Width(label) > avail {
+	if avail < 0 {
+		ageCell = 0
+		avail = width - chrome
+	}
+
+	switch {
+	case avail <= 0:
+		label = ""
+	case lipgloss.Width(label) > avail:
 		label = ansi.Truncate(label, avail, "…")
 	}
 
-	line := style.Render(prefix + label + " " + HelpDimStyle.Render(age))
+	row := prefix + label
+	if ageCell > 0 {
+		row += " " + HelpDimStyle.Render(age)
+	}
 	if statusStr != "" {
-		line += " " + statusStr
+		row += " " + statusStr
 	}
 
-	return line
+	return style.Render(row)
 }
 
 func (m SessionsModel) renderSessionDetail(session SessionInfo) string {
