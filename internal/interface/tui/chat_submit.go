@@ -127,24 +127,27 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 			displayText = pastePreview(input)
 		}
 		m.AddMessage("user", displayText)
-		if m.delegate != nil {
-			cmd = m.delegate.OnSubmit(input)
-			m.textarea.SetValue("")
-			m.syncTextareaHeight()
-			m.pasteDetected = false
-			m.refreshViewportFollow()
-			model = m
-			return
-		}
-	}
+		m.pasteDetected = false
+		m.textarea.SetValue("")
+		m.syncTextareaHeight()
+		m.refreshViewportFollow()
+		model = m
 
-	m.pasteDetected = false
-	m.textarea.SetValue("")
-	m.clearPendingPastes()
-	m.syncTextareaHeight()
-	m.refreshViewportFollow()
-	model = m
-	return
+		// A turn is already running. Starting a second one interleaved
+		// two streams and corrupted the session; queue this message
+		// instead. AgentDoneMsg submits it next, and the bubble above is
+		// already on screen, so it is queued as shown.
+		if m.turnInFlight() {
+			m.QueueUserSubmit(input)
+			return m, func() tea.Msg {
+				return StatusMsg{Text: "Agent is working — your message is queued and sends when this turn finishes (Esc stops the turn).", Type: "info"}
+			}
+		}
+		if m.delegate != nil {
+			return m, m.delegate.OnSubmit(input)
+		}
+		return m, nil
+	}
 }
 
 // startSubmitTimer returns a command that fires after SubmitDebounceDuration.

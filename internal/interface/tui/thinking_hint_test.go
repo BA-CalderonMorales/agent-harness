@@ -70,6 +70,44 @@ func TestWorkingIndicatorStates(t *testing.T) {
 	}
 }
 
+// TestWorkingStatusBreathes pins the live status layout: the line gets a
+// blank row above and below so it reads as its own band between the
+// transcript and the composer, and the working frame never grows the
+// chrome — it occupies the same rows as an idle one.
+func TestWorkingStatusBreathes(t *testing.T) {
+	idle := NewChatModel()
+	idle.width, idle.height = 80, 20
+	idle.SetInput("ready")
+	idleRows := len(strings.Split(strings.TrimRight(idle.View(), "\n"), "\n"))
+
+	m := NewChatModel()
+	m.width, m.height = 80, 20
+	m.SetInput("ready")
+	m.SetThinking(true, "Thinking...")
+	view := m.View()
+	lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
+	if len(lines) != idleRows {
+		t.Fatalf("working view = %d rows, idle = %d (chrome must not grow)", len(lines), idleRows)
+	}
+
+	idx := -1
+	for i, ln := range lines {
+		if strings.Contains(ln, "Working") {
+			idx = i
+			break
+		}
+	}
+	if idx < 0 {
+		t.Fatalf("no Working row in:\n%s", view)
+	}
+	if idx == 0 || idx == len(lines)-1 {
+		t.Fatalf("Working row at the pane edge, no room to breathe:\n%s", view)
+	}
+	if strings.TrimSpace(lines[idx-1]) != "" || strings.TrimSpace(lines[idx+1]) != "" {
+		t.Fatalf("Working row is not flanked by blank rows:\n%s", view)
+	}
+}
+
 // TestWorkingAnimShimmers pins the in-place animation contract: the
 // word never changes, and the bright letter sweeps through it on the
 // tick clock. Assertion is on the sweep index, not rendered bytes —

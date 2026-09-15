@@ -228,6 +228,7 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 			return nil, fmt.Errorf("failed to load %s: %w", entry.Path, err)
 		}
 
+		dropNoOpValues(data)
 		ll.deepMerge(config.merged, data)
 		config.loadedEntries = append(config.loadedEntries, entry)
 	}

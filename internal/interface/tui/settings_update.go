@@ -15,19 +15,11 @@ import (
 // three-way split (Enter defaulted to -1, arrows to 0) made Enter and
 // the arrows disagree about where an unknown value lands.
 func cycleChoice(s *Setting, dir int) {
-	n := len(s.Options)
+	options := distinctOptions(s.Options)
+	n := len(options)
 	if n == 0 {
 		return
 	}
-	seen := make(map[string]bool, n)
-	options := make([]string, 0, n)
-	for _, o := range s.Options {
-		if !seen[o] {
-			seen[o] = true
-			options = append(options, o)
-		}
-	}
-	n = len(options)
 
 	idx := -1
 	for i, o := range options {
@@ -56,11 +48,10 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		// The pane's height is the app's content area (tab bar and
 		// status bar already subtracted upstream): the pane's own
-		// header (2 lines), the selected-setting description line
-		// (1), and the footer (blank spacer + hints = 2) come out of
-		// it — 5 fixed rows. The footer's spacer newline rides in the
-		// RenderFooter output, so the viewport budget is height − 5.
-		vpHeight := msg.Height - 5
+		// header (2 lines), the focused-row detail panel
+		// (settingsDetailLines), and the footer (blank spacer + hints
+		// = 2) come out of it. The budget is height − (4 + detail).
+		vpHeight := msg.Height - (4 + settingsDetailLines)
 		if vpHeight < 5 {
 			vpHeight = 5
 		}

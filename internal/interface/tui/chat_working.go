@@ -79,19 +79,22 @@ func (m ChatModel) workingStatusLine(tick int) string {
 		formatElapsed(m.elapsed))
 }
 
-// workingStatusHeight reports how many rows the status line occupies in
+// workingStatusHeight reports how many rows the status block occupies in
 // the current state (0 when idle) so View can budget vertical space
-// without a hidden-but-reserved row.
+// without a hidden-but-reserved row. Live, it is three rows: the status
+// line with a blank spacer above and below it.
 func (m ChatModel) workingStatusHeight() int {
 	if m.workingStatusLine(0) == "" {
 		return 0
 	}
-	return 1
+	return 3
 }
 
 // renderWorkingStatus renders the status line pinned to the pane width
-// (left-aligned, dim) for placement above the composer rule. Empty when
-// idle.
+// (left-aligned, dim) for placement above the composer rule. The caller
+// wraps it in blank rows so the line reads as its own band between the
+// transcript and the composer instead of being pressed against both.
+// Empty when idle.
 func (m ChatModel) renderWorkingStatus(tick int, width int) string {
 	line := m.workingStatusLine(tick)
 	if line == "" {

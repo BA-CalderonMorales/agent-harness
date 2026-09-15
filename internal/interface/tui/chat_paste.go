@@ -3,16 +3,19 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/format"
 )
 
-// PasteCollapseThreshold is how large a bracketed paste must be before
-// the composer collapses it to a placeholder token: pasting is a
+// PasteCollapseThreshold is how many runes a bracketed paste must carry
+// before the composer collapses it to a placeholder token: pasting is a
 // transfer of material, not an editing session — nobody wants 8k
-// characters of log file scrolling past in their input box.
+// characters of log file scrolling past in their input box. Runes, not
+// bytes: a multibyte draft must collapse on the characters its author
+// sees, the same unit the wrap math and the transcript counts below use.
 const PasteCollapseThreshold = 300
 
 // PastePreviewLines is how many leading lines of a collapsed paste the
@@ -31,10 +34,11 @@ func pastePreview(input string) string {
 		head = lines[:PastePreviewLines]
 	}
 	text := strings.Join(head, "\n")
+	runes := utf8.RuneCountInString(input)
 	if hidden := len(lines) - len(head); hidden > 0 {
-		text += fmt.Sprintf("\n[… +%d more lines · %d characters total]", hidden, len(input))
-	} else if len(input) > PasteDisplayThreshold {
-		text += fmt.Sprintf(" [… %d characters total]", len(input))
+		text += fmt.Sprintf("\n[… +%d more lines · %d characters total]", hidden, runes)
+	} else if runes > PasteDisplayThreshold {
+		text += fmt.Sprintf(" [… %d characters total]", runes)
 	}
 	return text
 }

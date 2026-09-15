@@ -61,7 +61,11 @@ func DefaultModelForProvider(provider string) string {
 	case "fireworks":
 		return "accounts/fireworks/models/llama-v3p3-70b-instruct"
 	case "nvidia":
-		return "nvidia/nemotron-3.5-lightning"
+		// Must match the NVIDIA catalog entry: the unversioned
+		// "nemotron-3.5-lightning" id is not a served NIM model, so the
+		// old default 404'd and never matched the catalog's context
+		// budget (context stayed at the local 8k default).
+		return "nvidia/nemotron-3.5-lightning-30b-a3b"
 	case "omniroute":
 		return "gemini-3.7-flash"
 	default:

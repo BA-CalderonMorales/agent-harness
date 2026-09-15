@@ -5,8 +5,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	"os"
-	"path/filepath"
 )
 
 // requireGitRepo returns an error if the app is not inside a git repository.
@@ -140,21 +138,40 @@ func (app *App) modelsForProvider(provider string) []tui.ModelItem {
 	return getModelsForProvider(provider, app.session.Model)
 }
 
-// reset clears all credentials and sessions.
+// reset clears all credentials and sessions. Session files are deleted
+// through the SessionManager — the single authority on where sessions
+// live (AGENT_HARNESS_SESSION_DIR or the XDG data home) and how they are
+// named (timestamped JSONL per project). Hand-rolling the path (notably
+// via $HOME, which is unset on Windows) silently deleted nothing.
 func (app *App) reset() error {
 	credManager := config.NewCredentialManager()
 	if err := credManager.ClearSecureConfig(); err != nil {
 		return errf("failed to clear credentials: %w", err)
 	}
-	sessions, err := app.sessionManager.ListSessions()
-	if err != nil {
-		return errf("failed to list sessions: %w", err)
+	var firstErr error
+	if app.sessionManager != nil {
+		sessions, err := app.sessionManager.ListSessions()
+		if err != nil {
+			return errf("failed to list sessions: %w", err)
+		}
+		// DeleteSession refuses the active session, so detach it
+		// while every listed file is removed.
+		app.sessionManager.SetCurrent(nil)
+		for _, s := range sessions {
+			if err := app.sessionManager.DeleteSession(s.ID); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
-	for _, s := range sessions {
-		path := filepath.Join(app.getSessionsDir(), s.ID+".json")
-		_ = os.Remove(path)
+	if app.session != nil {
+		app.session = app.session.Clear()
+		if app.sessionManager != nil {
+			app.sessionManager.SetCurrent(app.session)
+		}
 	}
-	app.session = app.session.Clear()
+	if firstErr != nil {
+		return errf("failed to delete sessions: %w", firstErr)
+	}
 	return nil
 }
 

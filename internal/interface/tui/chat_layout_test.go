@@ -7,6 +7,25 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// TestCJKDraftRowsOnNarrowPane pins the cell-aware wrap math for wide
+// glyphs: a CJK draft on a narrow pane counts visual rows by terminal
+// cells (a wide glyph is two), so the composer grows to show the whole
+// wrapped draft instead of hiding its tail.
+func TestCJKDraftRowsOnNarrowPane(t *testing.T) {
+	chat := NewChatModel()
+	chat.width = 40
+	chat.height = 24
+	chat.syncTextareaGeometry() // editor width 32 at a 40-column pane
+
+	// 40 CJK runes are 80 terminal cells: rune math would see one wrap
+	// (ceil(40/32) = 2 rows); cell math sees ceil(80/32) = 3.
+	chat.SetInput(strings.Repeat("あ", 40))
+
+	if got := chat.draftRows(); got < 3 {
+		t.Fatalf("draftRows() = %d for an 80-cell CJK draft at width 32, want >= 3 (wide glyphs measure as two cells)", got)
+	}
+}
+
 func TestComposerStaysVisibleAtBottom(t *testing.T) {
 	chat := NewChatModel()
 	chat.width = 80

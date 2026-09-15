@@ -3,7 +3,6 @@ package main
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
@@ -198,11 +197,6 @@ func (app *App) run() error {
 	}()
 
 	return tui.Run(tuiApp)
-}
-
-// getSessionsDir returns the directory where sessions are stored.
-func (app *App) getSessionsDir() string {
-	return filepath.Join(os.Getenv("HOME"), ".config", "agent-harness", "sessions")
 }
 
 // sprintf is a helper for fmt.Sprintf

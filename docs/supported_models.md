@@ -45,8 +45,9 @@ generous free tier for learning and demo work. Set the provider to
 
 Reasoning effort profiles (`/effort`) map to NVIDIA's top-level
 `reasoning_budget` plus `chat_template_kwargs.enable_thinking` (the
-hosted API rejects unknown body keys, so `extra_body` is never sent);
-the harness ignores `reasoning_content` deltas in the stream.
+hosted API rejects unknown body keys, so `extra_body` is never sent).
+`reasoning_content` deltas stream into the live thinking badge; they are
+wait-state feedback and are not written to the durable transcript.
 
 ### Demo
 
@@ -173,14 +174,15 @@ a free tier (rate-limited).
 
 | Model | Status | Notes |
 |-------|--------|-------|
-| `nvidia/nemotron-3.5-lightning` | ✅ Default | Fast, good tool use |
-| `nvidia/nemotron-3.5-lightning:free` | ⚠️ Free tier | Rate-limited |
+| `nvidia/nemotron-3.5-lightning-30b-a3b` | ✅ Default | Fast, thinking-capable, good tool use |
+| `nvidia/nemotron-3-super-120b-a12b` | ✅ Supported | Stronger reasoning, slower |
+| `nvidia/llama-3.1-nemotron-ultra-253b-v1` | ✅ Supported | Largest hosted Nemotron |
 
 ### Configuration
 
 ```bash
 export AGENT_HARNESS_PROVIDER="nvidia"
-export AGENT_HARNESS_MODEL="nvidia/nemotron-3.5-lightning"
+export AGENT_HARNESS_MODEL="nvidia/nemotron-3.5-lightning-30b-a3b"
 ```
 
 Or run `/login` and pick NVIDIA (the key is stored encrypted).
