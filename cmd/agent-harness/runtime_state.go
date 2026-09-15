@@ -53,20 +53,35 @@ func (app *App) refreshTelemetry(tuiApp *tui.App) {
 func (app *App) persistUserSettings() {
 	values := map[string]interface{}{
 		"provider":         app.config.Provider,
-		"endpoint_url":     app.config.EndpointURL,
 		"runtime":          app.config.Runtime,
-		"model":            app.config.Model,
-		"theme":            app.config.Theme,
-		"context_length":   app.config.ContextLength,
-		"temperature":      app.config.Temperature,
-		"max_tokens":       app.config.MaxTokens,
+		"temperature":      app.config.Temperature, // 0.0 is a valid choice
 		"reasoning_effort": app.config.Effort,
 		"permission_mode":  app.config.PermissionMode.String(),
 		"perm_read":        app.config.PermRead,
 		"perm_write":       app.config.PermWrite,
 		"perm_delete":      app.config.PermDelete,
 		"perm_execute":     app.config.PermExecute,
-		"tagline":          app.config.Tagline,
+		"tagline":          app.config.Tagline, // blank is meaningful: hide the tagline
+	}
+	// The user layer is a delta over the tracked project config, so a
+	// value that carries no information must not be written. Persisting a
+	// zero or empty froze it as an override: context_length 0 clobbered
+	// the project's context window, and an empty endpoint/model clobbered
+	// the project's provider wiring.
+	if app.config.EndpointURL != "" {
+		values["endpoint_url"] = app.config.EndpointURL
+	}
+	if app.config.Model != "" {
+		values["model"] = app.config.Model
+	}
+	if app.config.Theme != "" {
+		values["theme"] = app.config.Theme
+	}
+	if app.config.ContextLength > 0 {
+		values["context_length"] = app.config.ContextLength
+	}
+	if app.config.MaxTokens > 0 {
+		values["max_tokens"] = app.config.MaxTokens
 	}
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {

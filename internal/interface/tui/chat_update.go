@@ -435,13 +435,17 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.completedToolMsgs = nil
 		m.refreshViewport()
 
-		// If there are queued steer messages, submit the next one automatically.
+		// If there are queued messages, submit the next one automatically.
+		// Entries already shown in the transcript (a submit that arrived
+		// mid-turn) are not re-rendered.
 		if len(m.steerQueue) > 0 {
-			steer := m.steerQueue[0]
+			next := m.steerQueue[0]
 			m.steerQueue = m.steerQueue[1:]
-			m.AddMessage("user", steer)
+			if !next.Shown {
+				m.AddMessage("user", next.Text)
+			}
 			if m.delegate != nil {
-				return m, m.delegate.OnSubmit(steer)
+				return m, m.delegate.OnSubmit(next.Text)
 			}
 		}
 		return m, nil
@@ -520,6 +524,11 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		isLocal := m.provider == "local" || m.provider == "ollama"
 		feedback := ProviderErrorFeedback(ClassifyProviderError(errStr), errStr, isLocal)
 		m.AddMessage("system", feedback)
+		// A queued follow-up survives the failed turn: say so instead of
+		// leaving it silently pending until some later turn succeeds.
+		if n := len(m.steerQueue); n > 0 {
+			m.AddMessage("system", fmt.Sprintf("%d queued message(s) still waiting — they send after the next completed turn.", n))
+		}
 		m.streamBuffer = ""
 		return m, nil
 

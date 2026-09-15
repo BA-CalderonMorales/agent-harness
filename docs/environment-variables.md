@@ -4,7 +4,7 @@ All variables accept an `AGENT_HARNESS_*` prefix aliasing (e.g.
 `AGENT_HARNESS_PROVIDER`), with `AH_*` taking precedence. Environment values
 override every config file layer.
 
-- `AH_PROVIDER`: local, ollama, openrouter, openai, anthropic
+- `AH_PROVIDER`: local, ollama, flm, openrouter, openai, anthropic, fireworks, nvidia, omniroute
 - `AH_RUNTIME`: llama.cpp, ollama, or another local runtime label
 - `AH_MODEL`: model identifier
 - `AH_MODEL_PATH`: local GGUF path when using a local runtime

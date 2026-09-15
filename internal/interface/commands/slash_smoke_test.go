@@ -50,6 +50,7 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 				func() string { return "gpt-4o" },
 				func(string) error { return nil },
 				func() []string { return []string{"gpt-4o"} },
+				"tip",
 			))
 			registry.Register("current-model", "Show model", CurrentModelHandler(func() string { return "gpt-4o" }))
 
@@ -187,6 +188,7 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 				func() string { return "gpt-4o" },
 				func(string) error { return nil },
 				func() []string { return nil },
+				"tip",
 			))
 			registry.Register("clear", "Clear", ClearHandler(func() error { return nil }, nil))
 
@@ -224,6 +226,7 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 				func() string { return "gpt-4o" },
 				func(string) error { return nil },
 				func() []string { return nil },
+				"tip",
 			))
 
 			By("getting completions")
@@ -287,6 +290,7 @@ var _ = Describe("End-to-End Command Chains", func() {
 			func() string { return current },
 			func(m string) error { current = m; return nil },
 			func() []string { return []string{"gpt-4o", "claude-3-5-sonnet"} },
+			"tip",
 		))
 
 		By("cycling models with a bare /model")

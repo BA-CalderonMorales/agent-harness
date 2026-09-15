@@ -1,5 +1,40 @@
 # Changelog
 
+## [0.3.36] - 2026-09-14
+
+### Added
+- The model cycle names the alternatives it moves between and states what
+  cycling does, instead of switching model with no announcement.
+- Settings rationale moves into a dedicated detail panel, so the value
+  being chosen and the reason for it are readable at the same time.
+- Logging in greets with a fresh session and a pointer to `/help`.
+- The working indicator is separated from the content around it by a
+  blank row above and below.
+
+### Fixed
+- A message submitted while a turn is running is queued instead of racing
+  the turn, along with dropping the unreachable submit fallthrough the
+  queue early-return left behind.
+- Provider errors surface the provider's own sentence rather than the
+  JSON envelope it arrived in.
+- User settings persist as a delta, so a stale key cannot blank the
+  project, and settings tests no longer write to the real home directory.
+- Config layer merging drops no-op values, so a stale settings file can no
+  longer blank out the project's configuration.
+- Draft row height mirrors the textarea wrap pipeline, so an unbroken
+  draft counts as the rows it actually occupies.
+- Paste thresholds and preview counts measure runes, not bytes.
+- Truecolor is enabled only on interactive terminals and honours colour
+  opt-outs, and the colour profile is pinned so themes stay
+  distinguishable.
+- `/reset` deletes sessions through the session manager rather than a
+  home-directory path.
+- The NVIDIA default points at a model the endpoint actually serves.
+
+### Changed
+- Local llama.cpp defaults halve the context window and lower the
+  sampling temperature.
+
 ## [0.3.35] - 2026-09-14
 
 ### Fixed

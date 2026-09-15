@@ -80,6 +80,17 @@ func TestInitSessionStartsFreshAndRecordsUnreadableResume(t *testing.T) {
 func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *App {
 	t.Helper()
 
+	// Isolate the user config home. App code paths reached from tests
+	// (settings delegates, config commands, login) call
+	// persistUserSettings, which writes to the user layer — without this
+	// guard a sparse test config (zero context_length, empty model)
+	// overwrote the developer's real ~/.config/agent-harness/settings.json.
+	// Tests that assert on a specific home set the variable themselves
+	// before calling this helper; theirs wins.
+	if os.Getenv("AGENT_HARNESS_CONFIG_HOME") == "" {
+		t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	}
+
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", t.TempDir())
 	sm, err := state.NewSessionManager()
 	if err != nil {

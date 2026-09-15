@@ -716,6 +716,13 @@ var _ = Describe("App", func() {
 
 			Context("Given a constrained footer width", func() {
 				BeforeEach(func() {
+					// These specs exercise the desktop footer's degradation:
+					// drop hint, then cost, keeping context usage. A desktop
+					// host is not tmux, so isolate the two envs the mobile
+					// branch keys on; otherwise a tmux runner activates the
+					// mobile hints and crowds out ctx/cost.
+					GinkgoT().Setenv("TMUX", "")
+					GinkgoT().Setenv("TERM", "xterm-256color")
 					testHome := GinkgoT().TempDir()
 					GinkgoT().Setenv("HOME", testHome)
 					workspace := filepath.Join(testHome, "sample-project", "nested", "deep", "path")

@@ -27,7 +27,7 @@ var _ = Describe("CommandPaletteModel", func() {
 			"help": "Show available commands", "status": "Show session status",
 			"clear": "Clear the session history", "compact": "Compact session to reduce token usage",
 			"cost": "Show token usage and cost", "export": "Export conversation to file",
-			"model": "Show or change the current model", "current-model": "Show the current model",
+			"model": "Cycle to the next model; /model <name> picks one, /current-model shows it", "current-model": "Show the current model",
 			"diff": "Show git diff", "version": "Show version",
 			"config": "Show configuration", "permissions": "Show or change permission mode",
 			"workspace": "Show workspace information", "agents": "Show available agents",

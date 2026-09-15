@@ -1,9 +1,11 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
 	"strings"
 	"testing"
+	"time"
+
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // upKey/downKey build the arrow-key messages for the history tests.
@@ -22,6 +24,51 @@ func submit(t *testing.T, m ChatModel, text string) ChatModel {
 func sendUpdate(m ChatModel, key tea.KeyMsg) ChatModel {
 	mm, _ := m.Update(key)
 	return mm.(ChatModel)
+}
+
+// TestHistoryRecallPreservesStashedPastes pins the composition
+// invariant: a collapsed paste token survives ↑/↓ history navigation,
+// and submitting the recalled draft expands the stash — the model
+// receives the material, never the token.
+func TestHistoryRecallPreservesStashedPastes(t *testing.T) {
+	SubmitDebounceDuration = 0
+	defer func() { SubmitDebounceDuration = 80 * time.Millisecond }()
+
+	h := newSubmitDebounceHarness()
+	blob := "LOG LINE\n" + strings.Repeat("x", 5000)
+
+	h.typeRunes("first prompt")
+	h.enter()
+	h.fireDebounce()
+	if len(h.subs) != 1 {
+		t.Fatalf("warm-up submits = %d, want 1", len(h.subs))
+	}
+
+	// Paste: token in the composer, content stashed.
+	h.sendMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(blob), Paste: true})
+	if !strings.Contains(h.model.textarea.Value(), "[paste #1") {
+		t.Fatalf("composer = %q, want the collapsed token", h.model.textarea.Value())
+	}
+
+	// History navigation away and back: the draft (token form) returns.
+	h.send(upKey())
+	if got := h.model.textarea.Value(); got != "first prompt" {
+		t.Fatalf("↑ recalled %q, want the warm-up submission", got)
+	}
+	h.send(downKey())
+	if !strings.Contains(h.model.textarea.Value(), "[paste #1") {
+		t.Fatalf("recalled draft = %q, want the token preserved by history", h.model.textarea.Value())
+	}
+
+	// Submit: the stash expands — the delegate receives the material.
+	h.enter()
+	h.fireDebounce()
+	if len(h.subs) != 2 {
+		t.Fatalf("submits = %d, want 2", len(h.subs))
+	}
+	if h.subs[1] != blob {
+		t.Fatalf("submitted text lost the stash: %d chars, want %d", len(h.subs[1]), len(blob))
+	}
 }
 
 // TestInputHistoryRecall pins goal 0.3.29 Task 6: ↑/↓ recall submitted

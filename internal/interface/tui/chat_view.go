@@ -30,11 +30,13 @@ func (m ChatModel) View() string {
 	separatorHeight := 1
 
 	// Ensure minimum height for viewport
-	// The live working row is part of the fixed chrome while a turn is in
-	// flight. Reserve it before sizing the viewport; otherwise the row is
-	// appended later and pushes the composer/mode line below the pane.
+	// The live working block is part of the fixed chrome while a turn is
+	// in flight. It is already counted in inputHeight (inputAreaHeight
+	// reserves it, matching resize's budget); subtracting it here again
+	// would reserve the rows twice and leave dead space below the
+	// composer. Size the viewport from the chrome that is not the input.
 	statusHeight := m.workingStatusHeight()
-	vpHeight := m.height - inputHeight - headerHeight - separatorHeight - statusHeight
+	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
 	if vpHeight < 5 {
 		vpHeight = 5
 	}
@@ -43,8 +45,9 @@ func (m ChatModel) View() string {
 	m.viewport.Width = m.width
 	m.viewport.Height = vpHeight
 	// Composer top row in pane coordinates: the click mapper turns a
-	// tap on the composer into a focus request (tap-to-type).
-	m.lastComposerTop = viewportTopOffset + vpHeight
+	// tap on the composer into a focus request (tap-to-type). The live
+	// working block sits between the viewport and the composer.
+	m.lastComposerTop = viewportTopOffset + vpHeight + statusHeight
 
 	// Build the view
 	var sections []string
@@ -91,7 +94,10 @@ func (m ChatModel) View() string {
 	// transcript; hidden entirely when idle so geometry is unchanged.
 	tick := int(time.Since(m.startTime).Milliseconds() / 250)
 	if status := m.renderWorkingStatus(tick, m.width); status != "" {
-		sections = append(sections, status)
+		// Blank · status · blank: the line breathes between the transcript
+		// and the composer rule. workingStatusHeight reserves all three
+		// rows, so the composer stays on the pane.
+		sections = append(sections, "", status, "")
 	}
 
 	// Composer: centered column with padding above and below the input text,

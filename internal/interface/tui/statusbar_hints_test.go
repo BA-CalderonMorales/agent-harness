@@ -43,6 +43,12 @@ func TestMobileTmuxHintsSwap(t *testing.T) {
 // TestDesktopHintsFrozen: outside tmux the hints are the ones desktop
 // has always shown, at any width.
 func TestDesktopHintsFrozen(t *testing.T) {
+	// Isolate a desktop host: a real desktop has neither a tmux session
+	// nor a tmux/screen TERM. Without this, a runner started inside tmux
+	// leaks mobile hints into a test that asserts the frozen desktop set.
+	t.Setenv("TMUX", "")
+	t.Setenv("TERM", "xterm-256color")
+
 	app := NewApp()
 	app.Update(tea.WindowSizeMsg{Width: 60, Height: 20})
 	bar := app.renderStatusBar()

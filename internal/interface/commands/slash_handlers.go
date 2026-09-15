@@ -114,8 +114,12 @@ func NextInList(list []string, current string) string {
 }
 
 // ModelHandler handles model switching: bare /model cycles to the next
-// model in the provider's list — browsing stays on /models.
-func ModelHandler(getModel func() string, setModel func(string) error, listModels func() []string) SlashHandler {
+// model in the provider's list — browsing stays on /models. The tip is
+// the discoverability half of the cycle contract: the output names how
+// to view without cycling and how to pick a specific entry, so a bare
+// cycle never surprises a user who wanted either. The handler is shared
+// (also /effort), so the tip is the caller's to word.
+func ModelHandler(getModel func() string, setModel func(string) error, listModels func() []string, tip string) SlashHandler {
 	return func(args string) (string, error) {
 		if args == "" {
 			current := getModel()
@@ -131,10 +135,14 @@ func ModelHandler(getModel func() string, setModel func(string) error, listModel
 			if err := setModel(next); err != nil {
 				return "", err
 			}
-			return fmt.Sprintf(`Model cycled
+			out := fmt.Sprintf(`Model cycled
   Previous         %s
   Current          %s
-  Preserved        Conversation context maintained`, current, next), nil
+  Preserved        Conversation context maintained`, current, next)
+			if tip != "" {
+				out += fmt.Sprintf("\n  Tip              %s", tip)
+			}
+			return out, nil
 		}
 
 		previous := getModel()

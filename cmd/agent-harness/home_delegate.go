@@ -15,29 +15,15 @@ func (d *tuiHomeDelegate) OnDeleteSession(id string) {
 }
 
 func (d *tuiHomeDelegate) OnNewChat() {
-	if d.app.session == nil {
-		d.app.session = d.app.sessionManager.CreateSession("")
-	}
-	if d.app.session != nil && len(d.app.session.Messages) > 0 {
-		if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
-			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to save session: %v", err), Type: "error"})
-			return
-		}
-	}
-	model := d.app.config.Model
-	if model == "" {
-		model = d.app.session.Model
-	}
-	personaName := d.app.session.Persona
-	d.app.session = d.app.sessionManager.CreateSession(model)
-	if d.app.costTracker != nil {
-		d.app.costTracker.SetModel(model)
-	}
-	d.app.session.Persona = personaName
-	d.app.sessionManager.SetCurrent(d.app.session)
-	if _, err := d.app.sessionManager.SaveCurrent(); err != nil {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to persist new session: %v", err), Type: "error"})
+	// The rotation is startFreshSession's app-side path (the same one
+	// login uses): save the current session, carry the persona,
+	// re-anchor on a fresh session for the configured model.
+	if err := d.app.startFreshSession(d.app.config.Model); err != nil {
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Failed to start new chat: %v", err), Type: "error"})
 		return
+	}
+	if d.app.costTracker != nil {
+		d.app.costTracker.SetModel(d.app.session.Model)
 	}
 	d.tuiApp.Send(tui.SessionActivatedMsg{
 		SessionID:      d.app.session.ID,

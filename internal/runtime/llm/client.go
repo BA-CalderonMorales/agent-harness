@@ -104,7 +104,9 @@ func (c *HTTPClient) Stream(ctx context.Context, req Request) (<-chan types.LLME
 		// never ride along.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
 		resp.Body.Close()
-		return nil, fmt.Errorf("LLM API error %d: %s", resp.StatusCode, sanitizeError(fmt.Errorf("%s", string(body)), c.APIKey))
+		// Unwrap the provider's JSON error envelope so the pane shows the
+		// one actionable sentence instead of raw braces and quotations.
+		return nil, fmt.Errorf("LLM API error %d: %s", resp.StatusCode, sanitizeError(fmt.Errorf("%s", apiErrorMessage(body)), c.APIKey))
 	}
 
 	out := make(chan types.LLMEvent, 32)

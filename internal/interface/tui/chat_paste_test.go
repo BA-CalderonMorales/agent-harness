@@ -56,6 +56,53 @@ func TestSmallPasteInsertsVerbatim(t *testing.T) {
 	}
 }
 
+// A multibyte paste below the rune threshold inserts verbatim: 250 CJK
+// runes are 750 bytes, which the old byte counting wrongly collapsed.
+func TestMultibytePasteBelowThresholdStaysVerbatim(t *testing.T) {
+	h := newSubmitDebounceHarness()
+	pasted := strings.Repeat("あ", 250)
+
+	h.sendMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(pasted), Paste: true})
+
+	if got := h.model.textarea.Value(); got != pasted {
+		t.Fatalf("composer = %q, want the verbatim multibyte paste", got)
+	}
+}
+
+// The transcript preview counts characters, not bytes: 250 CJK runes
+// must report 250, not their 750 bytes.
+func TestPastePreviewCountsRunes(t *testing.T) {
+	got := pastePreview(strings.Repeat("あ", 250))
+	if !strings.Contains(got, "250 characters total") {
+		t.Fatalf("preview = %q, want a 250-character count", got)
+	}
+	if strings.Contains(got, "750") {
+		t.Fatalf("preview = %q, must not report byte length as characters", got)
+	}
+}
+
+// Below the display threshold, a byte-heavy multibyte paste shows no
+// collapse marker at all: 150 CJK runes are 450 bytes, previously
+// mislabeled as over-threshold.
+func TestPastePreviewNoMarkerForMultibyteBelowThreshold(t *testing.T) {
+	pasted := strings.Repeat("あ", 150)
+	if got := pastePreview(pasted); got != pasted {
+		t.Fatalf("preview = %q, want the verbatim paste with no marker", got)
+	}
+}
+
+// The no-bracketed-paste heuristic judges the keystroke jump in runes:
+// 10 CJK runes (30 bytes) are typing, not a paste.
+func TestHeuristicPasteDetectionCountsRunes(t *testing.T) {
+	h := newSubmitDebounceHarness()
+
+	h.sendMsg(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(strings.Repeat("あ", 10))})
+
+	if h.model.pasteDetected {
+		t.Fatal("pasteDetected = true for a 10-rune jump, want false")
+	}
+}
+
 // Abandoning the draft drops stashed pastes: a token typed from a stale
 // draft must not resurrect old content.
 func TestClearInputDropsPendingPastes(t *testing.T) {
