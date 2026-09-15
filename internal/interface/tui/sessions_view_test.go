@@ -93,3 +93,38 @@ func TestSessionsMobilePaneRendersWithoutPanic(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionRowFitsItsWidthBudget pins the row budget invariant: the
+// list styles pad 2 cells per side and the age and status badge are
+// appended after the label, so a label budgeted past the real remainder
+// renders the row wider than the pane, and the frame clip then eats the
+// trailing fields — the age and the status badge are exactly what tells
+// two sessions apart. A label may never widen a row past the wider of
+// the pane and the fixed chrome.
+func TestSessionRowFitsItsWidthBudget(t *testing.T) {
+	long := "Very long session title that will definitely need truncation on narrow panes"
+	probes := []SessionInfo{
+		{ID: "neutral", Title: long},
+		{ID: "active", Title: long, IsActive: true},
+	}
+	m := NewSessionsModel()
+
+	for _, probe := range probes {
+		for _, selected := range []bool{false, true} {
+			// Derive the fixed chrome (style padding, prefix, age, status)
+			// from the renderer itself: a one-cell title on a wide pane is
+			// never truncated, so that row is the chrome plus one cell.
+			oneCell := probe
+			oneCell.Title = "x"
+			chrome := lipgloss.Width(m.renderSessionItem(oneCell, selected, 1000)) - 1
+
+			for width := 10; width <= 64; width++ {
+				got := lipgloss.Width(m.renderSessionItem(probe, selected, width))
+				if want := max(chrome, width); got > want {
+					t.Errorf("%s selected=%v: width %d row is %d cells, want at most %d (chrome %d)",
+						probe.ID, selected, width, got, want, chrome)
+				}
+			}
+		}
+	}
+}

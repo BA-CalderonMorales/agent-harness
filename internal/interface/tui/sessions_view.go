@@ -164,12 +164,18 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 	// ListItemStyle and ListSelectedStyle pad 2 on each side (4 total),
 	// prefix takes 2, age takes len(age)+1, and status takes statusW.
 	overhead := 4 + 2 + len(age) + 1 + statusW
+	// The label takes the whole remainder and no more. A legible floor
+	// reads better, but any floor past the true remainder makes the
+	// styled row wider than the pane on phone widths, and the frame clip
+	// then eats the trailing age and status badge — the fields that tell
+	// two sessions apart. On a pane this narrow the chrome can fill the
+	// row on its own, so a label with no room is dropped rather than left
+	// as a bare ellipsis that costs a cell the row does not have.
 	avail := width - overhead
-	minLabel := 8
-	if avail < minLabel {
-		avail = minLabel
-	}
-	if lipgloss.Width(label) > avail {
+	switch {
+	case avail <= 0:
+		label = ""
+	case lipgloss.Width(label) > avail:
 		label = ansi.Truncate(label, avail, "…")
 	}
 
