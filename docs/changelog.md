@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.3.35] - 2026-09-14
+
+### Fixed
+- Sessions stay visible on narrow and mobile panes: the sessions list
+  reserved a five-row content floor and a four-column label budget, so
+  a phone-sized pane could allocate more rows and width than it had and
+  push the list out of the frame. The floor is now eight rows, and
+  labels keep an eight-column minimum before truncating.
+
+### Changed
+- CI and the release pipeline both build on go1.26.8, clearing five
+  reachable standard-library advisories (encoding/xml, encoding/asn1,
+  net/http) and ending the toolchain skew between them (1.25 vs 1.26.1).
+
 ## [0.3.34] - 2026-09-09
 
 ### Fixed
