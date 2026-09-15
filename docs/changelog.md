@@ -6,8 +6,9 @@
 - Sessions stay visible on narrow and mobile panes: the sessions list
   reserved a five-row content floor and a four-column label budget, so
   a phone-sized pane could allocate more rows and width than it had and
-  push the list out of the frame. The floor is now eight rows, and
-  labels keep an eight-column minimum before truncating.
+  push the list out of the frame. The content floor is now eight rows,
+  and the label takes only the width the pane actually leaves it, so a
+  phone-width row is never rendered wider than its pane.
 
 ### Changed
 - The toolchain moves to go1.26.8 everywhere it is declared (CI, the
