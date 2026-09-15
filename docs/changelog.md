@@ -13,6 +13,8 @@
 - CI and the release pipeline both build on go1.26.8, clearing five
   reachable standard-library advisories (encoding/xml, encoding/asn1,
   net/http) and ending the toolchain skew between them (1.25 vs 1.26.1).
+  The source-build prerequisite in the install guide names the same line,
+  so a build from source cannot quietly reintroduce the advisories.
 
 ## [0.3.34] - 2026-09-09
 
