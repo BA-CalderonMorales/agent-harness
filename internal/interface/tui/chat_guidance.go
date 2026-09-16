@@ -20,6 +20,15 @@ func chatEmptyState(personaName string, width, height int) string {
 	if err != nil {
 		p = persona.Default()
 	}
+	// A pane too short for the panel still gets a panel: the caller
+	// passes the rows left after the notices, which can be zero or
+	// negative on a very short pane.
+	if height < 1 {
+		height = 1
+	}
+	if width < 1 {
+		width = 1
+	}
 
 	block := strings.Join([]string{
 		HelpTitleStyle.Render("The agent is ready."),

@@ -24,21 +24,46 @@ func (m ChatModel) View() string {
 	// on the next Update.
 
 	m.syncTextareaGeometry()
+
+	const headerHeight = 2 // header + its blank row
+	separatorHeight := 1
+	statusHeight := m.workingStatusHeight()
+	// inputAreaHeight already reserves the composer and, while a turn is
+	// live, the status band inside it.
 	inputHeight := m.inputAreaHeight()
 
-	headerHeight := 2 // Header takes 2 lines
-	separatorHeight := 1
+	// The composer is non-negotiable: losing it strands the driver with
+	// no way to type. So the chrome is measured, and on a pane too short
+	// to carry all of it the decoration yields first — the header, then
+	// the live status band — before the transcript is squeezed below a
+	// single row. The old code floored the transcript at five rows
+	// regardless of what was left, which pushed the view over its budget;
+	// the app frame's clip then silently ate the working indicator and
+	// the entire composer. A 100x16 pane lost both.
+	showStatus := statusHeight > 0
+	showHeader := true
+	chromeRows := func() int {
+		rows := inputHeight + separatorHeight
+		if showHeader {
+			rows += headerHeight
+		}
+		if !showStatus {
+			// inputAreaHeight counts the band; it is not rendered.
+			rows -= statusHeight
+		}
+		return rows
+	}
+	for m.height-chromeRows() < 1 && (showHeader || showStatus) {
+		if showHeader {
+			showHeader = false
+			continue
+		}
+		showStatus = false
+	}
 
-	// Ensure minimum height for viewport
-	// The live working block is part of the fixed chrome while a turn is
-	// in flight. It is already counted in inputHeight (inputAreaHeight
-	// reserves it, matching resize's budget); subtracting it here again
-	// would reserve the rows twice and leave dead space below the
-	// composer. Size the viewport from the chrome that is not the input.
-	statusHeight := m.workingStatusHeight()
-	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
-	if vpHeight < 5 {
-		vpHeight = 5
+	vpHeight := m.height - chromeRows()
+	if vpHeight < 1 {
+		vpHeight = 1
 	}
 
 	// Ensure viewport has correct dimensions
@@ -47,18 +72,25 @@ func (m ChatModel) View() string {
 	// Composer top row in pane coordinates: the click mapper turns a
 	// tap on the composer into a focus request (tap-to-type). The live
 	// working block sits between the viewport and the composer.
-	m.lastComposerTop = viewportTopOffset + vpHeight + statusHeight
+	statusRows := 0
+	if showStatus {
+		statusRows = statusHeight
+	}
+	m.lastComposerTop = viewportTopOffset + vpHeight + statusRows
 
 	// Build the view
 	var sections []string
 
-	// Header (like Settings has)
-	header := RenderHeader(HeaderConfig{
-		Title:    "Chat",
-		Subtitle: "Agent conversation",
-		Count:    -1, // no count: internal message tallies are not user signal
-	})
-	sections = append(sections, header)
+	// Header (like Settings has) — yielded on a pane too short to carry
+	// both it and a row of transcript.
+	if showHeader {
+		header := RenderHeader(HeaderConfig{
+			Title:    "Chat",
+			Subtitle: "Agent conversation",
+			Count:    -1, // no count: internal message tallies are not user signal
+		})
+		sections = append(sections, header)
+	}
 
 	// Viewport for messages — a conversation with no turns yet gets
 	// the full empty-state panel, centered in the pane. System notices
@@ -93,11 +125,14 @@ func (m ChatModel) View() string {
 	// above the composer (Codex parity). Renders in the chrome, not the
 	// transcript; hidden entirely when idle so geometry is unchanged.
 	tick := int(time.Since(m.startTime).Milliseconds() / 250)
-	if status := m.renderWorkingStatus(tick, m.width); status != "" {
-		// Blank · status · blank: the line breathes between the transcript
-		// and the composer rule. workingStatusHeight reserves all three
-		// rows, so the composer stays on the pane.
-		sections = append(sections, "", status, "")
+	if showStatus {
+		if status := m.renderWorkingStatus(tick, m.width); status != "" {
+			// Blank · status · blank: the line breathes between the
+			// transcript and the composer rule. workingStatusHeight
+			// reserves all three rows, so the composer stays on the pane
+			// and the padded band never collapses into the transcript.
+			sections = append(sections, "", status, "")
+		}
 	}
 
 	// Composer: centered column with padding above and below the input text,
