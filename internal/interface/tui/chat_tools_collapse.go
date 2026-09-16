@@ -200,6 +200,11 @@ func (m ChatModel) todoChecklistRows(msg ChatMessage) []string {
 			rows = append(rows, ToolDoneStyle.Render("✓")+" "+td.Text)
 		case "in_progress", "active":
 			rows = append(rows, ToolRunningStyle.Render("→")+" "+td.Text)
+		case "cancelled":
+			// A step the agent decided not to take stays visible: a plan
+			// that silently drops an item is a plan the reader cannot
+			// trust.
+			rows = append(rows, HelpDimStyle.Render("✗")+" "+HelpDimStyle.Render(td.Text))
 		default:
 			rows = append(rows, HelpDimStyle.Render("○")+" "+td.Text)
 		}
