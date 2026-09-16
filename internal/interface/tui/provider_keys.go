@@ -9,6 +9,8 @@
 
 package tui
 
+import "fmt"
+
 // providerKeyStep is one hosted provider's key-acquisition journey: the
 // page it starts from and the ordered steps to a usable key.
 type providerKeyStep struct {
@@ -90,4 +92,39 @@ func keyStepsFor(provider string) (providerKeyStep, bool) {
 	}
 	step, ok := providerKeySteps[provider]
 	return step, ok
+}
+
+// keyRemedyLine is the one-line fix for a provider that authenticates
+// with a key: where to get one, and which key opens the wizard. Empty for
+// a local runtime, which has nothing to fix.
+func keyRemedyLine(provider string) string {
+	steps, ok := keyStepsFor(provider)
+	if !ok {
+		return ""
+	}
+	return fmt.Sprintf("Get a key: %s  ·  press l to enter it", steps.URL)
+}
+
+// readinessNotice composes the durable transcript notice for a provider
+// verdict. One home for the wording: the same sentence lands in the
+// transcript and in the Logs tab, and a credential failure carries its
+// fix. The boot probe is the precheck — it runs before the first prompt,
+// so a bad key is a direction rather than a dead end discovered by a
+// failed turn.
+func readinessNotice(provider string, readiness int, message string) string {
+	switch readiness {
+	case 1: // ProviderReady
+		return "Provider ready: " + message
+	case 2: // ProviderWarning
+		return "Provider warning: " + message
+	case 3: // ProviderUnavailable
+		return "Provider unavailable: " + message
+	case 4: // ProviderMisconfigured
+		notice := "Provider misconfigured: " + message
+		if remedy := keyRemedyLine(provider); remedy != "" {
+			notice += "\n" + remedy
+		}
+		return notice
+	}
+	return ""
 }
