@@ -273,10 +273,21 @@ var _ = Describe("SettingsModel", func() {
 				Expect(settings.height).To(Equal(50))
 			})
 
-			It("should ensure minimum viewport height", func() {
-				m, _ := settings.Update(tea.WindowSizeMsg{Width: 80, Height: 4})
-				settings = m.(SettingsModel)
-				Expect(settings.viewport.Height).To(BeNumerically(">=", 5))
+			It("should shrink the list rather than overflow a short pane", func() {
+				// The pinned chrome is the header (2), the detail panel
+				// (settingsDetailLines) and the footer (2), so a pane of 8 is
+				// the shortest that can carry the view at all. The old
+				// five-row floor on the list made a 10-row pane render 12 rows,
+				// and the frame's clip then ate the detail panel and the
+				// footer. The floor is now one row, so the list absorbs the
+				// shortfall instead of the chrome.
+				for _, height := range []int{8, 10} {
+					m, _ := settings.Update(tea.WindowSizeMsg{Width: 80, Height: height})
+					settings = m.(SettingsModel)
+					Expect(settings.viewport.Height).To(BeNumerically(">=", 1))
+					rows := strings.Count(SanitizeANSI(settings.View()), "\n") + 1
+					Expect(rows).To(BeNumerically("<=", height))
+				}
 			})
 		})
 	})

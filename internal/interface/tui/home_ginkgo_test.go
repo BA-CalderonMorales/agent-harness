@@ -221,7 +221,7 @@ var _ = Describe("HomeModel", func() {
 		})
 
 		Context("Given recent sessions exist", func() {
-			It("should render up to 3 recent sessions", func() {
+			It("should render every recent session rather than capping the list", func() {
 				home.SetSessions([]SessionInfo{
 					{ID: "1", Title: "First", MessageCount: 2, Turns: 1},
 					{ID: "2", Title: "Second", MessageCount: 4, Turns: 2},
@@ -230,9 +230,26 @@ var _ = Describe("HomeModel", func() {
 				})
 				view := home.View()
 				Expect(view).To(ContainSubstring("First"))
-				Expect(view).To(ContainSubstring("Second"))
-				Expect(view).To(ContainSubstring("Third"))
-				Expect(view).ToNot(ContainSubstring("Fourth"))
+				Expect(view).To(ContainSubstring("Fourth"))
+			})
+
+			It("should keep the tail of the list reachable on a short pane", func() {
+				m, _ := home.Update(tea.WindowSizeMsg{Width: 80, Height: 12})
+				home = *m.(*HomeModel)
+				home.SetSessions([]SessionInfo{
+					{ID: "1", Title: "First", MessageCount: 2, Turns: 1},
+					{ID: "2", Title: "Second", MessageCount: 4, Turns: 2},
+					{ID: "3", Title: "Third", MessageCount: 6, Turns: 3},
+					{ID: "4", Title: "Fourth", MessageCount: 8, Turns: 4},
+				})
+				// The dashboard scrolls, so a session past the fold can still
+				// be seen and selected. Capping the render at three rows and
+				// clipping the rest made a session the user wanted to delete
+				// impossible to reach — the reported problem.
+				home.GotoBottom()
+				Expect(home.View()).To(ContainSubstring("Fourth"))
+				home.GotoTop()
+				Expect(home.View()).To(ContainSubstring("New chat"))
 			})
 
 			It("should render active session with indicator", func() {

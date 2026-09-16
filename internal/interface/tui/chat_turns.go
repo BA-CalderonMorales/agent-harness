@@ -15,7 +15,10 @@ import (
 // renderCollapsedMessage renders one message with run merging applied,
 // pure: no writing, no separators. next is the caller's next index.
 func (m ChatModel) renderCollapsedMessage(msgs []ChatMessage, i int, collapsed bool) (string, int) {
-	return m.renderCollapsedMessageAt(msgs, i, collapsed, m.width)
+	// This path draws a tool run straight into the pane — no bubble, no
+	// block indent — so the row's budget is the pane width less the two
+	// columns its own renderer prepends for the expand caret.
+	return m.renderCollapsedMessageAt(msgs, i, collapsed, m.toolRowWidth(0))
 }
 
 // renderCollapsedMessageAt renders one message with run merging at a
@@ -311,12 +314,10 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 		}
 	}
 
-	// The bubble's inner width: pane minus bubble border, padding, and
-	// the nesting step.
-	innerWidth := m.width - 8
-	if innerWidth < 20 {
-		innerWidth = 20
-	}
+	// Every nested row pads itself out to this budget, so the same value
+	// serves tool rows, collapsed runs and same-turn notes — they share
+	// the block's nesting step.
+	innerWidth := m.toolRowWidth(turnBlockChromeCols)
 
 	// Tool rows render in natural arrival order: each call appears at
 	// its chronological position. Back-to-back same-category parts
@@ -399,12 +400,8 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 		}
 	}
 
-	width := m.width - 4
-	if width < 1 {
-		width = 1
-	}
 	inner, refs := m.assistantInnerContent(assistant, parts, toolRow)
-	bubbles := MessageBubbleAssistant.Width(width).Render(inner)
+	bubbles := MessageBubbleAssistant.Width(m.bubbleWidth()).Render(inner)
 	b.WriteString(bubbles)
 
 	// The inner content is pre-wrapped to the bubble's inner width and
