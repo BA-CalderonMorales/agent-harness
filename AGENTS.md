@@ -48,21 +48,43 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 
 ## CI
 
-- `.github/workflows/ci.yml` runs on PRs: build, vet, full test suite.
-- `release.yml` tags and publishes releases; `bump-version.yml` bumps
-  versions before a release cut.
+- `.github/workflows/ci.yml` runs on PRs: `build`, `quality`, `security`,
+  `secrets`, `sbom`, `branch-naming`, and a sharded `test` matrix (`tui`,
+  `core`, `rest`). The shard coverage check is a drift guard — a package in no
+  shard fails the gates job rather than silently going untested.
+- `release.yml` runs on a tag push and builds and publishes the release
+  artifacts; it refuses to build unless the tag equals `main.go`'s version,
+  which is what `scripts/check-version-matches.sh` exists to catch early.
+- `bump-version.yml` exists but is superseded and must not be dispatched: it
+  commits a version bump to whatever ref it is run from and pushes a
+  lightweight tag, with no PR, review or CI gate on that commit. See the traps
+  in `.agent-harness/skills/release-workflow/SKILL.md`.
 - Docs-only changes skip CI automatically where configured; trigger
   `workflow_dispatch` when needed.
 
 ## Branch Strategy
 
-- `main` and `develop` are protected (restrict deletions; local `git del`
-  honors protection, `./scripts/prune-branches.sh` prunes merged branches).
+The ship ritual — the ordered steps, the gates, and how to babysit CD — lives in
+`.agent-harness/skills/release-workflow/SKILL.md`. Run that rather than
+improvising; this section records the invariants it rests on.
+
+- `main` and `develop` are both protected and both require a PR. `develop`
+  additionally requires **1 approving review** and resolution of every
+  conversation, so an unreplied review thread blocks a merge on its own.
+  `enforce_admins` is off, but an admin merge bypasses protection the
+  maintainer configured — ask before using it.
 - Release branches are named exactly `release/X.Y.Z` (no suffixes) — CI and
   the pre-push hook both reject any other `release/*` name.
-- Feature and fix work lives on `release/<next-patch>` branches cut from
-  `develop`; the branch accumulates the release, then merges into `develop`
-  and is tagged from `main`.
+- The flow is two PRs: `release/X.Y.Z` accumulates the work and merges into
+  `develop`, then `develop` merges into `main`, and the tag is cut from
+  `origin/main` — never from a local `main`, which drifts stale (it read 39
+  commits behind during the 0.3.37 cycle).
+- Remote first: the PRs carry the changes, remote CI is the gate, and remote CD
+  builds and publishes. A local version bump with a locally pushed tag that
+  bypasses CD is a last resort, not a route — say so out loud when taking it.
+- Copilot review is expected but not guaranteed (it covered 0.3.35 and skipped
+  0.3.36). When it lands, each comment gets its own commit, then the reply,
+  then the resolve — in that order.
 - Never merge dev-local working spaces (`scratch/`, `.workspace/`,
   working ledgers) into `develop` or `main`.
 
