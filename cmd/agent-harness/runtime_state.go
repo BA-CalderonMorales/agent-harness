@@ -52,22 +52,34 @@ func (app *App) refreshTelemetry(tuiApp *tui.App) {
 // belong to the encrypted credential store.
 func (app *App) persistUserSettings() {
 	values := map[string]interface{}{
-		"provider":         app.config.Provider,
-		"runtime":          app.config.Runtime,
-		"temperature":      app.config.Temperature, // 0.0 is a valid choice
-		"reasoning_effort": app.config.Effort,
-		"permission_mode":  app.config.PermissionMode.String(),
-		"perm_read":        app.config.PermRead,
-		"perm_write":       app.config.PermWrite,
-		"perm_delete":      app.config.PermDelete,
-		"perm_execute":     app.config.PermExecute,
-		"tagline":          app.config.Tagline, // blank is meaningful: hide the tagline
+		"temperature":     app.config.Temperature, // 0.0 is a valid choice
+		"permission_mode": app.config.PermissionMode.String(),
+		"perm_read":       app.config.PermRead,
+		"perm_write":      app.config.PermWrite,
+		"perm_delete":     app.config.PermDelete,
+		"perm_execute":    app.config.PermExecute,
+		"tagline":         app.config.Tagline, // blank is meaningful: hide the tagline
 	}
 	// The user layer is a delta over the tracked project config, so a
 	// value that carries no information must not be written. Persisting a
 	// zero or empty froze it as an override: context_length 0 clobbered
 	// the project's context window, and an empty endpoint/model clobbered
 	// the project's provider wiring.
+	//
+	// The provider carries the same rule and it is the costly one to miss:
+	// an empty string is dropped on read, so a blank write erased the
+	// user's provider and sent the next boot to the default — `local` and
+	// the login wall the dead local probe raises behind it. It could not
+	// even be repaired from the app, because the blank write repeated.
+	if app.config.Provider != "" {
+		values["provider"] = app.config.Provider
+	}
+	if app.config.Runtime != "" {
+		values["runtime"] = app.config.Runtime
+	}
+	if app.config.Effort != "" {
+		values["reasoning_effort"] = app.config.Effort
+	}
 	if app.config.EndpointURL != "" {
 		values["endpoint_url"] = app.config.EndpointURL
 	}
