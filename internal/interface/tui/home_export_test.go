@@ -75,7 +75,8 @@ func TestExportPickerViewRendersSessions(t *testing.T) {
 	app.OpenExportPicker([]SessionInfo{{ID: "s1", Title: "Crawl the repo", MessageCount: 12}})
 
 	view := app.exportPicker.View(100, 30)
-	if !containsAll(view, "Export session", "Crawl the repo", "Esc cancels") {
+	// The footer is the modal family's shared grammar: "Esc: cancel".
+	if !containsAll(view, "Export session", "Crawl the repo", "Esc: cancel") {
 		t.Fatalf("modal view missing pieces:\n%s", view)
 	}
 	if !containsAll(app.exportPicker.View(100, 30), "12") {

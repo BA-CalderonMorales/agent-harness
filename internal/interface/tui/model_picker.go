@@ -53,6 +53,28 @@ func NewModelPicker() ModelPickerModel {
 	}
 }
 
+// modalSpec is the picker's frame description. View renders it and Open
+// sizes the viewport from it, so the two can never disagree about how
+// much room the body has — the old code sized the viewport from its own
+// guesses and the panel from another, which is how a picker ends up
+// overflowing its own frame.
+func (m ModelPickerModel) modalSpec() modalSpec {
+	title := m.title
+	if title == "" {
+		title = "Select Model"
+	}
+	hint := fmt.Sprintf("Showing %d of %d models", len(m.filtered), len(m.models))
+	if m.searchQuery != "" {
+		hint = fmt.Sprintf("Filter: %s  ·  showing %d of %d", m.searchQuery, len(m.filtered), len(m.models))
+	}
+	return modalSpec{
+		title:          title,
+		hint:           hint,
+		footer:         "Type to filter  j/k: navigate  Enter: select  Esc: cancel",
+		preferredWidth: modalMaxWidth,
+	}
+}
+
 // Open initializes the model picker overlay
 func (m *ModelPickerModel) Open(width, height int) {
 	m.width = width
@@ -61,32 +83,18 @@ func (m *ModelPickerModel) Open(width, height int) {
 	m.searchQuery = ""
 	m.selected = nil
 
-	panelW := 80
-	if width-8 < panelW {
-		panelW = width - 8
-	}
-	if panelW < 30 {
-		panelW = 30
-	}
-
-	minHeight := 3
-	vpH := height - 6
-	if vpH < minHeight {
-		vpH = minHeight
-	}
-	maxVpH := height - 4
-	if maxVpH < minHeight {
-		maxVpH = minHeight
-	}
-	if vpH > maxVpH {
-		vpH = maxVpH
+	spec := m.modalSpec()
+	panelW := panelWidth(spec.preferredWidth, width)
+	vpH := modalBodyRows(width, height, spec)
+	if vpH < 3 {
+		vpH = 3
 	}
 
 	if !m.ready {
-		m.viewport = newViewport(panelW, vpH)
+		m.viewport = newViewport(modalInnerWidth(panelW), vpH)
 		m.ready = true
 	} else {
-		m.viewport.Width = panelW
+		m.viewport.Width = modalInnerWidth(panelW)
 		m.viewport.Height = vpH
 	}
 
@@ -192,9 +200,11 @@ func (m *ModelPickerModel) Update(msg tea.Msg) (closed bool, cmd tea.Cmd) {
 }
 
 func (m *ModelPickerModel) ensureCursorVisible() {
-	headerLines := 3
+	// The frame owns the title and hint now, so the body starts at the
+	// first model row; only the live filter line sits above them.
+	headerLines := 0
 	if m.searchQuery != "" {
-		headerLines = 4
+		headerLines = 2
 	}
 	visualLine := headerLines + m.cursor
 
@@ -230,23 +240,46 @@ func (m *ModelPickerModel) applyFilter() {
 }
 
 func (m *ModelPickerModel) updateContent() {
+	m.fitViewport()
 	m.viewport.SetContent(m.buildContent())
 	m.ensureCursorVisible()
 }
 
+// fitViewport sizes the viewport to the frame's body budget, capped to
+// the rows the current list needs so the panel hugs its content like the
+// other overlays instead of reserving a screen of blank rows.
+func (m *ModelPickerModel) fitViewport() {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	spec := m.modalSpec()
+	// Width first: row truncation depends on it.
+	m.viewport.Width = modalInnerWidth(panelWidth(spec.preferredWidth, m.width))
+
+	want := len(m.filtered)
+	if want == 0 {
+		want = 1
+	}
+	if m.searchQuery != "" {
+		want += 2 // the filter line and its blank
+	}
+	if budget := modalBodyRows(m.width, m.height, spec); want > budget {
+		want = budget
+	}
+	if want < 3 {
+		want = 3
+	}
+	m.viewport.Height = want
+}
+
+// buildContent renders the scrollable body only: the frame owns the
+// title, the count hint, and the key hints, so they cannot scroll away
+// and cannot be duplicated.
 func (m ModelPickerModel) buildContent() string {
 	var b strings.Builder
 
-	title := m.title
-	if title == "" {
-		title = "Select Model"
-	}
-	b.WriteString(HelpTitleStyle.Render(title) + "\n\n")
-
 	if m.searchQuery != "" {
 		b.WriteString("Filter: " + InfoStyle.Render(m.searchQuery) + " " + HelpDimStyle.Render("(type to filter, Backspace to clear)") + "\n\n")
-	} else {
-		b.WriteString(HelpDimStyle.Render("Type to filter models  /  j/k: navigate  Enter: select  Esc: cancel") + "\n\n")
 	}
 
 	if len(m.filtered) == 0 {
@@ -258,22 +291,26 @@ func (m ModelPickerModel) buildContent() string {
 		b.WriteString(m.renderModelLine(model, i == m.cursor) + "\n")
 	}
 
-	b.WriteString("\n" + HelpDimStyle.Render(fmt.Sprintf("Showing %d of %d models", len(m.filtered), len(m.models))))
-
 	return b.String()
 }
 
 func (m ModelPickerModel) renderModelLine(model ModelItem, isSelected bool) string {
-	indicator := "  "
+	// Both markers are the same width, so selecting a row never shifts its
+	// columns; the old selected marker was one cell wider and every
+	// selected row sat a column right of its neighbours.
+	indicator := IndicatorUnselected
 	style := lipgloss.NewStyle()
 
 	if isSelected {
-		indicator = IndicatorSelected + " "
+		indicator = IndicatorSelected
 		style = ListSelectedStyle
 	}
 
+	// A model with no provider recorded shows no tag at all: the old
+	// default rendered an empty "[] " that read like a broken checkbox.
 	providerLabel := ""
 	switch model.Provider {
+	case "":
 	case "openai":
 		providerLabel = "[OpenAI] "
 	case "openrouter":
@@ -317,20 +354,14 @@ func (m ModelPickerModel) renderModelLine(model ModelItem, isSelected bool) stri
 	return line
 }
 
-// View renders the model picker panel centered in the terminal
+// View renders the model picker through the shared modal frame.
 func (m ModelPickerModel) View(width, height int) string {
 	if !m.ready || !m.showing {
 		return ""
 	}
 
-	body := m.viewport.View()
-
-	panel := lipgloss.NewStyle().
-		Width(m.viewport.Width).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(0, 1)
-
-	rendered := panel.Render(body)
-	return placeOverlay(width, height, rendered)
+	spec := m.modalSpec()
+	spec.items = []modalItem{modalTextItem(m.viewport.View())}
+	spec.cursor = -1
+	return renderModal(width, height, spec)
 }

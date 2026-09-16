@@ -53,6 +53,17 @@ func (m *CommandPaletteModel) SetCommands(cmds []CommandInfo) {
 	m.cursor = 0
 }
 
+// modalSpec is the palette's frame description: View renders it and Open
+// sizes the viewport from it, so the body can never overflow the frame.
+func (m CommandPaletteModel) modalSpec() modalSpec {
+	return modalSpec{
+		title:          "Commands",
+		hint:           "Type to filter, Enter to select.",
+		footer:         "j/k: navigate  Enter: select  Tab: auto-complete  Esc: cancel",
+		preferredWidth: modalMaxWidth,
+	}
+}
+
 // Open shows the command palette
 func (m *CommandPaletteModel) Open(width, height int) {
 	m.width = width
@@ -63,32 +74,18 @@ func (m *CommandPaletteModel) Open(width, height int) {
 	m.filtered = m.commands
 	m.cursor = 0
 
-	panelW := 70
-	if width-8 < panelW {
-		panelW = width - 8
-	}
-	if panelW < 30 {
-		panelW = 30
-	}
-
-	minHeight := 3
-	vpH := height - 6
-	if vpH < minHeight {
-		vpH = minHeight
-	}
-	maxVpH := height - 4
-	if maxVpH < minHeight {
-		maxVpH = minHeight
-	}
-	if vpH > maxVpH {
-		vpH = maxVpH
+	spec := m.modalSpec()
+	panelW := panelWidth(spec.preferredWidth, width)
+	vpH := modalBodyRows(width, height, spec)
+	if vpH < 3 {
+		vpH = 3
 	}
 
 	if !m.ready {
-		m.viewport = newViewport(panelW, vpH)
+		m.viewport = newViewport(modalInnerWidth(panelW), vpH)
 		m.ready = true
 	} else {
-		m.viewport.Width = panelW
+		m.viewport.Width = modalInnerWidth(panelW)
 		m.viewport.Height = vpH
 	}
 
@@ -226,8 +223,31 @@ func (m *CommandPaletteModel) applyFilter() {
 }
 
 func (m *CommandPaletteModel) updateContent() {
+	m.fitViewport()
 	m.viewport.SetContent(m.buildContent())
 	m.syncViewportToCursor()
+}
+
+// fitViewport sizes the viewport to the frame's body budget, capped to
+// the rows the current list needs so the panel hugs its content like
+// the other overlays instead of reserving a screen of blank rows.
+func (m *CommandPaletteModel) fitViewport() {
+	if m.width <= 0 || m.height <= 0 {
+		return
+	}
+	spec := m.modalSpec()
+	// Width first: row wrapping depends on it, and the row count decides
+	// the height.
+	m.viewport.Width = modalInnerWidth(panelWidth(spec.preferredWidth, m.width))
+
+	want := len(strings.Split(strings.TrimRight(m.buildContent(), "\n"), "\n"))
+	if budget := modalBodyRows(m.width, m.height, spec); want > budget {
+		want = budget
+	}
+	if want < 3 {
+		want = 3
+	}
+	m.viewport.Height = want
 }
 
 func (m *CommandPaletteModel) syncViewportToCursor() {
@@ -239,9 +259,11 @@ func (m *CommandPaletteModel) syncViewportToCursor() {
 		visualLine++
 	}
 
-	headerLines := 3
+	// The frame owns the title and hint, so only the live search line
+	// can sit above the first command row.
+	headerLines := 0
 	if m.searchQuery != "" {
-		headerLines = 4
+		headerLines = 2
 	}
 	visualLine += headerLines
 
@@ -252,11 +274,10 @@ func (m *CommandPaletteModel) syncViewportToCursor() {
 	}
 }
 
+// buildContent renders the scrollable body only: the frame owns the
+// title and key hints, so they never scroll out of reach.
 func (m CommandPaletteModel) buildContent() string {
 	var b strings.Builder
-
-	b.WriteString(HelpTitleStyle.Render("Commands") + "\n")
-	b.WriteString(HelpDimStyle.Render("Type to filter, Enter to select, Esc to cancel") + "\n\n")
 
 	if m.searchQuery != "" {
 		b.WriteString("Search: " + InfoStyle.Render(m.searchQuery) + "\n\n")
@@ -283,9 +304,11 @@ func (m CommandPaletteModel) buildContent() string {
 }
 
 func (m CommandPaletteModel) renderCommandLine(cmd commandInfo, isSelected bool) string {
-	indicator := "  "
+	// Equal-width markers: a selected row must not shift the columns of
+	// the command names and descriptions below it.
+	indicator := IndicatorUnselected
 	if isSelected {
-		indicator = IndicatorSelected + " "
+		indicator = IndicatorSelected
 	}
 
 	cmdText := cmd.Command
@@ -332,36 +355,32 @@ func paletteFooterHint(panelWidth int, canScroll bool) string {
 	if canScroll {
 		scroll = " scroll"
 	}
+	// Richest first: the loop returns the first variant that fits, so a
+	// shortest-first list always returned the tersest hint no matter how
+	// much room the panel had.
 	candidates := []string{
-		"Esc:cancel Enter:select",
-		"j/k:nav Enter:select",
-		"j/k:nav Enter:select Tab:auto",
 		"j/k: navigate  Enter: select  Tab: auto-complete",
+		"j/k:nav Enter:select Tab:auto",
+		"j/k:nav Enter:select",
+		"Esc:cancel Enter:select",
 	}
 	for _, base := range candidates {
 		if lipgloss.Width(base+scroll) <= inner {
 			return HelpDimStyle.Render(base + scroll)
 		}
 	}
-	return HelpDimStyle.Render(candidates[0])
+	return HelpDimStyle.Render(candidates[len(candidates)-1])
 }
 
-// View renders the command palette centered
+// View renders the command palette through the shared modal frame.
 func (m CommandPaletteModel) View(width, height int) string {
 	if !m.ready || !m.showing {
 		return ""
 	}
 
-	body := m.viewport.View()
-
-	content := body + "\n" + paletteFooterHint(m.viewport.Width, m.viewport.ScrollPercent() < 1.0)
-
-	panel := lipgloss.NewStyle().
-		Width(m.viewport.Width).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(0, 1)
-
-	rendered := panel.Render(content)
-	return placeOverlay(width, height, rendered)
+	spec := m.modalSpec()
+	spec.footer = paletteFooterHint(modalInnerWidth(panelWidth(spec.preferredWidth, width)), m.viewport.ScrollPercent() < 1.0)
+	spec.items = []modalItem{modalTextItem(m.viewport.View())}
+	spec.cursor = -1
+	return renderModal(width, height, spec)
 }
