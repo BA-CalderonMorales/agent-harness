@@ -211,6 +211,26 @@ func plural(n int) string {
 	return "s"
 }
 
+// effortChip renders the reasoning effort as a self-describing chip: the
+// axis the user can act on and the level it is set to, named together.
+//
+// The level also carries its own emphasis — quiet at low, the rail's own
+// weight at medium, accented at high — so the ramp from reserved to
+// generous reads at a glance instead of only through the word. That is
+// what the bare "effort medium" form failed to do: it named the axis but
+// looked like two more values, so the line read as noise.
+func effortChip(effort string) string {
+	label := "[effort: " + effort + "]"
+	switch effort {
+	case "low":
+		return HelpDimStyle.Render(label)
+	case "high":
+		return InfoStyle.Render(label)
+	default:
+		return label
+	}
+}
+
 // renderModeLine renders the mode · model · provider · reasoning-effort line
 // shown under the input, mirroring modern composer status rows.
 func (m ChatModel) renderModeLine() string {
@@ -244,11 +264,21 @@ func (m ChatModel) renderModeLine() string {
 	if m.agentMode != "" {
 		segments = append(segments, segment{lipgloss.Width(m.agentMode), m.agentMode, true})
 	}
+	// Reasoning effort is the one segment that cannot read as a bare
+	// value: "medium" alone names no axis, and gluing the label onto it
+	// left a two-word fragment — "effort medium" — sitting in a rail of
+	// single values. The setting was on screen and unreadable. It renders
+	// as a self-describing chip instead, in the same bracket language the
+	// rest of the app uses for state ([ready], [running], [on]), so the
+	// label reads as part of the chip rather than as a stray word.
 	effort := m.effort
 	if effort == "" {
 		effort = "medium"
 	}
-	segments = append(segments, segment{lipgloss.Width("effort " + effort), "effort " + effort, false})
+	chip := effortChip(effort)
+	// lipgloss.Width measures the visible text, so the styled chip still
+	// reports the width the budget math must reserve for it.
+	segments = append(segments, segment{lipgloss.Width(chip), chip, false})
 
 	budget := m.width - lipgloss.Width(mode)
 	keep := make([]bool, len(segments))
