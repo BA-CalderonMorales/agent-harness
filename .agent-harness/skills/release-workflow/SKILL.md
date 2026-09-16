@@ -165,6 +165,13 @@ should be worked on next.
   and push straight to `develop` and `main`, bypassing the release branch,
   the branch-naming gate, PR review and CI. `check-remote.sh` and
   `bump-version.sh` remain useful.
+- **`bump-version.yml` is superseded — do not dispatch it.** It edits
+  `main.go`, prepends a stub changelog section (duplicating the curated one),
+  commits straight to whatever ref it was dispatched from, pushes that, and
+  then creates a **lightweight** tag and pushes it. No PR, no review, and no
+  CI gate on the bump commit — and `release.yml` would still accept the tag,
+  because the version does match. The bump belongs in a reviewable commit on
+  the release branch.
 - **`make release` cannot validate a pending release.** It runs
   `check-remote.sh`, which requires the code version to equal the latest remote
   tag — true only *before* the bump. Expect it to fail mid-cycle by design.
