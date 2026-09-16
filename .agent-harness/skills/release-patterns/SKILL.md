@@ -1,207 +1,172 @@
 ---
 name: release-patterns
-description: Release workflow patterns for agent-harness and related projects. Ensures consistent versioning, tagging, and GitHub release creation across all harness repositories.
+description: Version alignment checks, multi-repo release sync, and the release anti-patterns that have actually bitten agent-harness. The ship sequence itself lives in the release-workflow skill; read that first.
 ---
 
 # Release Patterns
 
-> **Purpose:** Consistent, error-free releases across all agent harness projects.
+> **Purpose:** the checks that surround a release — version alignment, multi-repo
+> sync, and the anti-patterns this repo has paid for.
+> **Not the sequence.** `../release-workflow/SKILL.md` is the authoritative
+> end-to-end runbook. Where the two disagree, it wins.
 
 ---
 
-## Pattern 1: Version Alignment Check
+## Precedence
 
-Before any release, verify all version sources match:
+Remote first, always. The remote is the only source of truth: PRs carry the
+changes, remote CI is the gate, remote CD builds and publishes. Anchor on
+`origin/*`, never on the working tree. A stale local `main` read 39 commits
+behind `origin/main` during the 0.3.37 cycle — enough to compare branches
+backwards or tag the wrong commit.
+
+Never push directly to `develop` or `main`. Both go through a PR, and the
+`release/X.Y.Z` branch name is a gate, not a preference.
+
+---
+
+## Pattern 1: Version alignment check
+
+Three sources have to agree: the code constant, the newest remote tag, and the
+newest GitHub release.
 
 ```bash
-#!/bin/bash
-# Check version alignment
+CODE=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go | sed 's/.*"\([^"]*\)".*/\1/')
 
-REPO_DIR="${1:-~/projects/agent-harness}"
-cd "$REPO_DIR" || exit 1
+# Remote, not `git describe --tags`: that returns the newest tag reachable
+# from HEAD, and release tags land on main — on develop it reports an older
+# release. This is the same source scripts/release/check-remote.sh reads.
+GIT=$(git ls-remote --tags origin \
+  | grep -oE 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  | sort -V | tail -1 | sed 's|refs/tags/v||')
 
-# Get code version (Go projects)
-CODE_VERSION=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go 2>/dev/null | head -1 | sed 's/.*"\([^"]*\)".*/\1/')
+GH=$(gh release list --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
 
-# Get latest git tag
-GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//')
-
-# Get latest GitHub release
-GH_RELEASE=$(gh release list --limit 1 --json tagName -q '.[0].tagName' 2>/dev/null | sed 's/^v//')
-
-echo "Code:   $CODE_VERSION"
-echo "Git:    $GIT_TAG"
-echo "GitHub: $GH_RELEASE"
-
-if [ "$CODE_VERSION" = "$GIT_TAG" ] && [ "$GIT_TAG" = "$GH_RELEASE" ]; then
-    echo "[OK] All versions aligned"
-    exit 0
-else
-    echo "[!] Version mismatch detected"
-    exit 1
-fi
+echo "Code: $CODE | Remote: $GIT | GitHub: $GH"
+[ "$CODE" = "$GIT" ] && [ "$GIT" = "$GH" ] && echo "[OK]" || echo "[MISMATCH]"
 ```
 
+**These agree only *before* the version bump.** Once the release branch carries
+`chore(release): bump version to vX.Y.Z`, the code is ahead of the newest
+remote tag by design — that is the pending release, not a drift. A mismatch
+mid-cycle is expected; `make release` fails for the same reason, because it
+wraps this check.
+
 ---
 
-## Pattern 2: Isolated Release Commits
+## Pattern 2: Multi-repo sync
 
-Each release step must be an isolated commit:
+Each repository runs the `../release-workflow/SKILL.md` sequence independently —
+its own release branch, its own PRs, its own tag and CD run. There is no
+cross-repo batch command; `scripts/release.sh` is superseded and must not be
+used (see the traps in the runbook).
+
+Release in dependency order — `agent-harness` first, then anything that depends on
+it — and do not start the next repo until the previous one's CD has published,
+so a downstream repo never pins a version that does not exist yet. There is no
+loop worth scripting here: each repo's sequence has merge points that need a
+human decision, so run them one at a time from the runbook.
+
+Confirm alignment across all of them when the stack is done:
+
+- [ ] Every repo's `develop` and `main` merged and synced
+- [ ] Every repo tagged, CD green, release published
+- [ ] Version alignment check clean in each
+- [ ] Next `release/X.Y.Z+1` branch cut in each
+
+---
+
+## Pattern 3: Post-release verification
+
+Do not call a release shipped because the tag pushed. Confirm the artifacts
+exist.
 
 ```bash
-# Step 1: Version bump (isolated commit)
-sed -i 's/Version   = "0.0.51"/Version   = "0.0.52"/' cmd/*/main.go
-git add cmd/*/main.go
-git commit -m "chore(release): bump version to v0.0.52"
+gh run list --workflow=release.yml --limit 3
+gh run watch <run_id>
+gh release view vX.Y.Z
+gh release view vX.Y.Z --json assets -q '.assets[].name'
+```
 
-# Step 2: Push to develop
+Expect six platform binaries plus `checksums.txt`. All of it is built by CD on
+the remote — never reproduce a build locally to fill a gap in it.
+
+---
+
+## Anti-patterns
+
+### Combined version and feature commit
+
+```
+git commit -m "feat: new feature + version bump"   # one change per commit
+```
+
+### Tag before CI passes
+
+```
 git push origin develop
-
-# Step 3: Merge to main (separate commit)
-git checkout main
-git merge develop
-git push origin main
-
-# Step 4: Tag (annotated tag)
-git tag -a "v0.0.52" -m "Release v0.0.52"
-git push origin "v0.0.52"
-
-# Step 5: Return to develop
-git checkout develop
+git tag vX.Y.Z        # CI has not passed, and develop is not main yet
 ```
 
-**Never combine these steps into one commit.**
+### Tagging a local `main`
+
+```
+git checkout main && git tag vX.Y.Z    # local main drifts stale
+git rev-parse origin/main              # tag this commit instead
+```
+
+### Direct push that bypasses the release branch
+
+```
+git checkout main && git merge develop && git push origin main   # skips the PR
+```
+
+This is what the `release/X.Y.Z` naming gate, the PR checks and the tag gate
+exist to prevent. A merged release branch carries review and CI provenance; a
+direct push carries neither.
+
+### Using `git describe` to find the latest release
+
+Covered in Pattern 1 — it reports the newest tag reachable from `HEAD`, which
+on `develop` is an older release.
+
+### Light tags
+
+```
+git tag -a vX.Y.Z -m "Release vX.Y.Z"   # annotated, not a bare tag
+```
+
+### A local bump and locally pushed tag that bypasses remote CD
+
+A last resort, not a route. The published artifacts then carry no pipeline
+provenance, no pipeline checksums and no release record to audit. Reach for it
+only when CD is genuinely unavailable, and say so plainly rather than quietly.
+
+### Editing the user's vendored settings to unblock a release
+
+Changing `~/.config/agent-harness/settings.json` to make a local run work hides
+a bug that a downloader will hit. Fix the code path instead.
 
 ---
 
-## Pattern 3: CI-First Release Flow
-
-```
-1. Push version bump to develop
-   ↓ (wait for CI)
-2. CI passes → Merge to main
-   ↓ (wait for CI)
-3. CI passes → Create tag
-   ↓ (triggers release workflow)
-4. Release workflow builds artifacts
-   ↓
-5. GitHub release created automatically
-```
-
----
-
-## Pattern 4: Post-Release Verification
-
-After tag push, verify within 5 minutes:
-
-```bash
-# Watch release workflow
-gh run watch
-
-# Verify release created
-gh release view v0.0.52
-
-# List artifacts
-gh release view v0.0.52 --json assets -q '.assets[].name'
-```
-
----
-
-## Pattern 5: Hotfix Release (Emergency)
-
-When main is broken and needs immediate fix:
-
-```bash
-# 1. Create hotfix branch from main
-git checkout main
-git checkout -b hotfix/critical-fix
-
-# 2. Apply minimal fix
-git add -A
-git commit -m "fix: critical issue description"
-
-# 3. Version bump (same commit as fix for hotfix)
-git add -A
-git commit -m "chore(release): bump version to v0.0.52-hotfix1"
-
-# 4. Merge to main and tag immediately
-git checkout main
-git merge hotfix/critical-fix
-git tag -a "v0.0.52-hotfix1" -m "Hotfix release v0.0.52-hotfix1"
-git push origin main --follow-tags
-
-# 5. Merge back to develop
-git checkout develop
-git merge main
-git push origin develop
-```
-
----
-
-## Pattern 6: Multi-Repo Sync
-
-When releasing multiple harness projects:
-
-```bash
-# Release order (dependencies first)
-PROJECTS="agent-harness agent-harness-reference"
-
-for project in $PROJECTS; do
-    echo "=== Releasing $project ==="
-    cd ~/projects/$project
-    
-    # Run isolated release for each
-    ./scripts/release.sh patch
-    
-    # Wait for CI before next
-    gh run watch --exit-status
-done
-```
-
----
-
-## Anti-Patterns
-
-### ❌ Combined Version+Feature Commit
-```bash
-# Don't do this:
-git commit -m "feat: new feature + version bump"
-```
-
-### ❌ Tag Before CI Passes
-```bash
-# Don't do this:
-git push origin develop
-git tag v0.0.52  # ← CI hasn't passed yet!
-```
-
-### ❌ Light Tags
-```bash
-# Don't do this:
-git tag v0.0.52  # Light tag (no message)
-
-# Do this:
-git tag -a v0.0.52 -m "Release v0.0.52"
-```
-
----
-
-## Release Checklist Template
+## Release checklist
 
 ```markdown
-## Release vX.X.X
+## Release vX.Y.Z
 
-- [ ] Version bump committed to develop
-- [ ] CI passes on develop
-- [ ] Merged to main
-- [ ] CI passes on main
-- [ ] Annotated tag created and pushed
-- [ ] Release workflow completes successfully
-- [ ] GitHub release created with artifacts
-- [ ] Returned to develop branch
-- [ ] VERSION file updated (if applicable)
+- [ ] Dogfooded; the changes are exercised, not just compiled
+- [ ] Version bump committed on release/X.Y.Z with the changelog section
+- [ ] PR release/X.Y.Z -> develop opened, CI green
+- [ ] Copilot review addressed per comment, threads replied to then resolved
+- [ ] Merged to develop
+- [ ] PR develop -> main opened, CI green, merged
+- [ ] Annotated tag pushed from origin/main
+- [ ] CD green; six binaries plus checksums.txt published
+- [ ] Local develop and main synced from origin
+- [ ] Merged branches pruned (--dry-run first)
+- [ ] Next release/X.Y.Z+1 cut off develop
 ```
 
 ---
 
-> **Remember:** Isolated commits, CI-first, always return to develop.
+> **Remember:** remote first, one change per commit, and never merge on red.

@@ -15,6 +15,10 @@ func newTurnBlockModel(t *testing.T, width int) ChatModel {
 	t.Helper()
 	m := NewChatModel()
 	m.width = width
+	// The viewport must agree with the pane: the live path resizes both
+	// together, and a transcript wrapped to a narrower viewport than the
+	// row budget assumes is a fixture that lies about the layout.
+	m.viewport.Width = width
 	m.height = 40
 	m.AddToolMessage("bash", "bash", "echo hi")
 	m.messages[0].ToolStatus = ToolStatusSuccess

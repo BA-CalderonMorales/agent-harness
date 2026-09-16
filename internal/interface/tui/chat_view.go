@@ -24,21 +24,46 @@ func (m ChatModel) View() string {
 	// on the next Update.
 
 	m.syncTextareaGeometry()
+
+	const headerHeight = 2 // header + its blank row
+	separatorHeight := 1
+	statusHeight := m.workingStatusHeight()
+	// inputAreaHeight already reserves the composer and, while a turn is
+	// live, the status band inside it.
 	inputHeight := m.inputAreaHeight()
 
-	headerHeight := 2 // Header takes 2 lines
-	separatorHeight := 1
+	// The composer is non-negotiable: losing it strands the driver with
+	// no way to type. So the chrome is measured, and on a pane too short
+	// to carry all of it the decoration yields first — the header, then
+	// the live status band — before the transcript is squeezed below a
+	// single row. The old code floored the transcript at five rows
+	// regardless of what was left, which pushed the view over its budget;
+	// the app frame's clip then silently ate the working indicator and
+	// the entire composer. A 100x16 pane lost both.
+	showStatus := statusHeight > 0
+	showHeader := true
+	chromeRows := func() int {
+		rows := inputHeight + separatorHeight
+		if showHeader {
+			rows += headerHeight
+		}
+		if !showStatus {
+			// inputAreaHeight counts the band; it is not rendered.
+			rows -= statusHeight
+		}
+		return rows
+	}
+	for m.height-chromeRows() < 1 && (showHeader || showStatus) {
+		if showHeader {
+			showHeader = false
+			continue
+		}
+		showStatus = false
+	}
 
-	// Ensure minimum height for viewport
-	// The live working block is part of the fixed chrome while a turn is
-	// in flight. It is already counted in inputHeight (inputAreaHeight
-	// reserves it, matching resize's budget); subtracting it here again
-	// would reserve the rows twice and leave dead space below the
-	// composer. Size the viewport from the chrome that is not the input.
-	statusHeight := m.workingStatusHeight()
-	vpHeight := m.height - inputHeight - headerHeight - separatorHeight
-	if vpHeight < 5 {
-		vpHeight = 5
+	vpHeight := m.height - chromeRows()
+	if vpHeight < 1 {
+		vpHeight = 1
 	}
 
 	// Ensure viewport has correct dimensions
@@ -47,18 +72,25 @@ func (m ChatModel) View() string {
 	// Composer top row in pane coordinates: the click mapper turns a
 	// tap on the composer into a focus request (tap-to-type). The live
 	// working block sits between the viewport and the composer.
-	m.lastComposerTop = viewportTopOffset + vpHeight + statusHeight
+	statusRows := 0
+	if showStatus {
+		statusRows = statusHeight
+	}
+	m.lastComposerTop = viewportTopOffset + vpHeight + statusRows
 
 	// Build the view
 	var sections []string
 
-	// Header (like Settings has)
-	header := RenderHeader(HeaderConfig{
-		Title:    "Chat",
-		Subtitle: "Agent conversation",
-		Count:    -1, // no count: internal message tallies are not user signal
-	})
-	sections = append(sections, header)
+	// Header (like Settings has) — yielded on a pane too short to carry
+	// both it and a row of transcript.
+	if showHeader {
+		header := RenderHeader(HeaderConfig{
+			Title:    "Chat",
+			Subtitle: "Agent conversation",
+			Count:    -1, // no count: internal message tallies are not user signal
+		})
+		sections = append(sections, header)
+	}
 
 	// Viewport for messages — a conversation with no turns yet gets
 	// the full empty-state panel, centered in the pane. System notices
@@ -93,11 +125,14 @@ func (m ChatModel) View() string {
 	// above the composer (Codex parity). Renders in the chrome, not the
 	// transcript; hidden entirely when idle so geometry is unchanged.
 	tick := int(time.Since(m.startTime).Milliseconds() / 250)
-	if status := m.renderWorkingStatus(tick, m.width); status != "" {
-		// Blank · status · blank: the line breathes between the transcript
-		// and the composer rule. workingStatusHeight reserves all three
-		// rows, so the composer stays on the pane.
-		sections = append(sections, "", status, "")
+	if showStatus {
+		if status := m.renderWorkingStatus(tick, m.width); status != "" {
+			// Blank · status · blank: the line breathes between the
+			// transcript and the composer rule. workingStatusHeight
+			// reserves all three rows, so the composer stays on the pane
+			// and the padded band never collapses into the transcript.
+			sections = append(sections, "", status, "")
+		}
 	}
 
 	// Composer: centered column with padding above and below the input text,
@@ -176,6 +211,26 @@ func plural(n int) string {
 	return "s"
 }
 
+// effortChip renders the reasoning effort as a self-describing chip: the
+// axis the user can act on and the level it is set to, named together.
+//
+// The level also carries its own emphasis — quiet at low, the rail's own
+// weight at medium, accented at high — so the ramp from reserved to
+// generous reads at a glance instead of only through the word. That is
+// what the bare "effort medium" form failed to do: it named the axis but
+// looked like two more values, so the line read as noise.
+func effortChip(effort string) string {
+	label := "[effort: " + effort + "]"
+	switch effort {
+	case "low":
+		return HelpDimStyle.Render(label)
+	case "high":
+		return InfoStyle.Render(label)
+	default:
+		return label
+	}
+}
+
 // renderModeLine renders the mode · model · provider · reasoning-effort line
 // shown under the input, mirroring modern composer status rows.
 func (m ChatModel) renderModeLine() string {
@@ -209,11 +264,21 @@ func (m ChatModel) renderModeLine() string {
 	if m.agentMode != "" {
 		segments = append(segments, segment{lipgloss.Width(m.agentMode), m.agentMode, true})
 	}
+	// Reasoning effort is the one segment that cannot read as a bare
+	// value: "medium" alone names no axis, and gluing the label onto it
+	// left a two-word fragment — "effort medium" — sitting in a rail of
+	// single values. The setting was on screen and unreadable. It renders
+	// as a self-describing chip instead, in the same bracket language the
+	// rest of the app uses for state ([ready], [running], [on]), so the
+	// label reads as part of the chip rather than as a stray word.
 	effort := m.effort
 	if effort == "" {
 		effort = "medium"
 	}
-	segments = append(segments, segment{lipgloss.Width("effort " + effort), "effort " + effort, false})
+	chip := effortChip(effort)
+	// lipgloss.Width measures the visible text, so the styled chip still
+	// reports the width the budget math must reserve for it.
+	segments = append(segments, segment{lipgloss.Width(chip), chip, false})
 
 	budget := m.width - lipgloss.Width(mode)
 	keep := make([]bool, len(segments))
@@ -312,10 +377,7 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	b.WriteString("\n")
 
 	// Content - render markdown for rich formatting
-	width := m.width - 4
-	if width < 1 {
-		width = 1
-	}
+	width := m.bubbleWidth()
 	renderedContent := renderMarkdown(msg.Content, width)
 	content := MessageBubbleUser.Width(width).Render(renderedContent)
 	b.WriteString(content)
@@ -356,13 +418,13 @@ func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, [
 		for k := range m.messages {
 			tm := &m.messages[k]
 			if tm.ID == id && tm.IsTool {
-				return m.renderToolMessageAt(*tm, width-8), true
+				return m.renderToolMessageAt(*tm, m.toolRowWidth(bubbleChromeCols)), true
 			}
 		}
 		return "", false
 	}
 	inner, refs := m.assistantInnerContent(msg, msg.Parts, toolRow)
-	bubbles := MessageBubbleAssistant.Width(width - 4).Render(inner)
+	bubbles := MessageBubbleAssistant.Width(m.bubbleWidth()).Render(inner)
 	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
 
@@ -440,22 +502,26 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 		}
 		return b.String(), refs
 	}
-	width := m.width - 4
-	if width < 1 {
-		width = 1
-	}
+	width := m.bubbleWidth()
 	// Expanded reasoning record: the full model thinking, above the
 	// answer — same interaction as an expanded tool call. The frame
 	// closes with the └─ footer like a tool record and the live frame.
 	if m.expandedMessageID == msg.ID && strings.TrimSpace(msg.ReasoningText) != "" {
-		b.WriteString(ToolTimeStyle.Render("   ┌─ reasoning · esc to close"))
+		// The same frame shape as an expanded tool record: the box hangs
+		// two columns in, and every body line carries the │ gutter. The
+		// body used to render flush-left against a three-column header
+		// and footer, which read as a floating label above a stray
+		// paragraph rather than one record.
+		b.WriteString(ToolTimeStyle.Render("  ┌─ reasoning · esc to close"))
 		b.WriteString("\n")
-		wrapped := fitBlock(width-2, msg.ReasoningText)
-		b.WriteString(ToolTimeStyle.Render(wrapped))
-		b.WriteString("\n")
+		wrapped := fitBlock(width-5, msg.ReasoningText)
+		for _, line := range strings.Split(wrapped, "\n") {
+			b.WriteString(ToolTimeStyle.Render("  │  " + line))
+			b.WriteString("\n")
+		}
 		refs = append(refs, clickRef{start: rows, lines: strings.Count(wrapped, "\n") + 2, msgID: msg.ID})
 		rows += strings.Count(wrapped, "\n") + 2
-		b.WriteString(ToolTimeStyle.Render("   └─ esc to close"))
+		b.WriteString(ToolTimeStyle.Render("  └─ esc to close"))
 		b.WriteString("\n")
 		rows++
 	}
@@ -505,15 +571,19 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 	}
 
 	// The expand caret advertises the click: ▸ folded (click opens),
-	// ▾ open (click folds). formatToolContent reserves the two caret
-	// columns so the right-aligned duration stays put.
+	// ▾ open (click folds). It renders in the muted time style rather
+	// than the status style — an affordance reads as chrome, and when it
+	// took the status colour it read as another status glyph crammed
+	// against the timestamp. The row's own budget leaves the two caret
+	// columns alone, so the right-aligned duration stays put.
 	expanded := m.expandedMessageID != "" && m.expandedMessageID == msg.ID
+	caret := ToolTimeStyle.Render(expandCaret(expanded)) + " "
 
 	// A todo-list call renders as a visible checklist (Task 4.4): the
 	// summary row stays (time, glyph, name, duration), and each todo
 	// becomes an indented checkbox row beneath it.
 	if rows := m.todoChecklistRows(msg); rows != nil {
-		body := style.Render(expandCaret(expanded) + " " + m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
+		body := caret + style.Render(m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed))
 		for _, r := range rows {
 			body += "\n " + r
 		}
@@ -523,8 +593,8 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 		return body
 	}
 
-	row := m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, shortToolTag(msg.ID), msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
-	body := style.Render(expandCaret(expanded) + " " + row)
+	row := m.formatToolContentAt(width, msg.ToolDisplayName, msg.ToolDetail, msg.ToolStatus, msg.ToolStartedAt, msg.ToolElapsed)
+	body := caret + style.Render(row)
 
 	// Expanded tool record: the full call beneath the summary line —
 	// exactly what was called, no truncation. Esc (or clicking again)
@@ -538,23 +608,33 @@ func (m ChatModel) renderToolMessageAt(msg ChatMessage, width int) string {
 }
 
 // renderToolExpansion renders the full call record for an expanded tool
-// message: name, untruncated detail, and the raw input JSON.
+// message: name, status, the untruncated detail, and the raw input JSON.
+//
+// This is where the short tag belongs (Task 3c): it is the pointer into
+// the Logs tab, so it rides on the record rather than on the summary row
+// the user scans — beside a duration it read as a color code.
 func (m ChatModel) renderToolExpansion(msg ChatMessage) string {
 	var b strings.Builder
 	status := string(msg.ToolStatus)
 	if msg.ToolElapsed > 0 {
 		status += " · " + formatElapsed(msg.ToolElapsed)
+	} // The box hangs two columns in, under the row's own text (the caret
+	// and its space), so the record reads as that row's detail rather
+	// than a block floating a column to the right of it.
+	head := "  ┌─ " + msg.ToolDisplayName + " · " + status
+	if tag := shortToolTag(msg.ID); tag != "" {
+		head += " · " + tag
 	}
-	b.WriteString(ToolTimeStyle.Render("   ┌─ " + msg.ToolDisplayName + " · " + status))
+	b.WriteString(ToolTimeStyle.Render(head))
 	if msg.ToolDetail != "" {
-		b.WriteString("\n" + ToolTimeStyle.Render("   │  detail: ") + msg.ToolDetail)
+		b.WriteString("\n" + ToolTimeStyle.Render("  │  detail: ") + msg.ToolDetail)
 	}
 	if msg.ToolInputJSON != "" {
 		for _, line := range prettyInputJSON(msg.ToolInputJSON) {
-			b.WriteString("\n" + ToolTimeStyle.Render("   │  "+line))
+			b.WriteString("\n" + ToolTimeStyle.Render("  │  "+line))
 		}
 	}
-	b.WriteString("\n" + ToolTimeStyle.Render("   └─ esc to close"))
+	b.WriteString("\n" + ToolTimeStyle.Render("  └─ esc to close"))
 	return b.String()
 }
 

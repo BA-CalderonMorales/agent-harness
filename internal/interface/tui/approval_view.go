@@ -83,11 +83,12 @@ func (m ApprovalDialogModel) View() string {
 	// The frame hugs its content up to a comfortable reading width and
 	// yields to the pane below it — a modal that touches the pane edges
 	// on a phone reads as broken, and a 100-column slab on desktop
-	// reads as lazy.
+	// reads as lazy. The measurements come from the shared modal family
+	// so this dialog lines up with every other overlay.
 	dialogStyle := lipgloss.NewStyle().
 		BorderStyle(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
-		Padding(1, 2).
+		Padding(modalPaddingY, modalPaddingX).
 		Width(m.dialogWidth())
 
 	dialog := dialogStyle.Render(content)
@@ -96,17 +97,11 @@ func (m ApprovalDialogModel) View() string {
 	return placeOverlay(m.width, m.height, dialog)
 }
 
-// dialogWidth is the frame's outer width: a comfortable read on
-// desktop, pane-bound on a phone.
+// dialogWidth is the frame's outer width, resolved by the shared modal
+// width policy so the approval prompt matches every other overlay
+// instead of carrying its own 66-column rule.
 func (m ApprovalDialogModel) dialogWidth() int {
-	w := 66
-	if m.width-2 < w {
-		w = m.width - 2
-	}
-	if w < 10 {
-		w = 10
-	}
-	return w
+	return panelWidth(modalMaxWidth, m.width)
 }
 
 // visibleDetailRows is how many detail lines fit between the pinned

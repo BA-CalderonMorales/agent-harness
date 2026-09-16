@@ -1484,12 +1484,14 @@ var _ = Describe("ChatModel", func() {
 		})
 
 		Context("Given the composer is blurred (navigate mode)", func() {
-			It("should teach the 'i' key in the placeholder", func() {
+			It("should teach the 'i' and 's' keys in the placeholder", func() {
 				By("blurring the composer")
 				chat.Blur()
 
 				By("verifying the navigate affordance")
-				Expect(chat.textarea.Placeholder).To(Equal(`"i" to type a message`))
+				// Navigate mode advertises both keys that move the turn
+				// forward: start typing, or ask what to do next.
+				Expect(chat.textarea.Placeholder).To(Equal(`"i" to type a message · "s" next steps`))
 			})
 
 			It("should restore the typing affordance on focus", func() {

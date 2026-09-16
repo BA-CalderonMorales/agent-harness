@@ -3,8 +3,10 @@
 package tui
 
 import (
-	tea "github.com/charmbracelet/bubbletea"
 	"sort"
+
+	"github.com/charmbracelet/bubbles/viewport"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // ---------------------------------------------------------------------------
@@ -55,6 +57,12 @@ type HomeModel struct {
 	actionCursor int
 	actions      []homeAction
 
+	// viewport is the scroll window for the dashboard body. The header
+	// and footer are pinned outside it; the banners, the Project card,
+	// Quick Actions, and Recent Sessions scroll through it. Without a
+	// window the pane's height simply hid the tail of the dashboard.
+	viewport viewport.Model
+
 	// Delegate
 	delegate HomeDelegate
 }
@@ -97,6 +105,7 @@ func NewHomeModel() HomeModel {
 		actionCursor: 0,
 		actions:      make([]homeAction, 0),
 		deleting:     -1,
+		viewport:     newViewport(80, 20),
 	}
 }
 
@@ -154,6 +163,17 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.rebuildActions()
+		// Budget the scroll window from the pane less the pinned chrome.
+		// The floor is one row, not five: a floor larger than what a short
+		// pane can spare pushes the view past its budget and the frame's
+		// clip then eats the footer — the trap the chat composer had. A
+		// short pane should shrink the list, never the chrome.
+		vpHeight := msg.Height - homeChromeRows
+		if vpHeight < 1 {
+			vpHeight = 1
+		}
+		m.viewport.Width = msg.Width
+		m.viewport.Height = vpHeight
 
 	case tea.KeyMsg:
 		if !m.focused {
@@ -247,10 +267,23 @@ func (m HomeModel) CapturesAllKeys() bool {
 	return false
 }
 
-// Scroll scrolls the actions list.
+// Scroll moves the cursor. Single steps wrap, matching the Settings tab;
+// page jumps stop at the ends so a half-page jump cannot silently lap the
+// list and land the reader back where they started.
 func (m *HomeModel) Scroll(lines int) {
-	m.actionCursor += lines
-	m.clampCursor()
+	n := m.totalItems()
+	if n == 0 {
+		return
+	}
+	if lines == -1 && m.actionCursor == 0 {
+		m.actionCursor = n - 1
+		return
+	}
+	if lines == 1 && m.actionCursor == n-1 {
+		m.actionCursor = 0
+		return
+	}
+	m.actionCursor = max(0, min(n-1, m.actionCursor+lines))
 }
 
 // GotoTop scrolls to top action.

@@ -1,6 +1,9 @@
 package main
 
 import (
+	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -121,4 +124,109 @@ func TestLoginKeyHint_HidesLocalDummy(t *testing.T) {
 	if hint := app.storedCredentialsSnapshot(); !strings.Contains(hint.Primary(), "sk") && !strings.Contains(hint.Primary(), "…") {
 		t.Fatalf("hosted config key hint = %q, want a masked hint", hint.Primary())
 	}
+}
+
+// THE regression: a provider on disk must survive a boot whose store
+// still names the last provider logged into. The store's Provider is a
+// single slot, and letting it win sent a machine that had chosen a
+// hosted provider back to `local` on every launch — and to the login
+// wall the unreachable local probe raises behind it.
+func TestBootKeepsProviderChosenOnDisk(t *testing.T) {
+	cm := newCredentialTestEnv(t)
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	t.Setenv("AH_PROVIDER", "")
+	t.Setenv("AGENT_HARNESS_PROVIDER", "")
+
+	// The store's active slot belongs to a provider the user has since
+	// moved off; the key for the chosen provider is recorded beside it.
+	if err := cm.SaveSecure(&config.SecureConfig{
+		Provider:     "local",
+		APIKey:       "local",
+		ProviderKeys: map[string]string{"local": "local", "nvidia": "nvapi-chosen"},
+	}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	writeUserSettings(t, map[string]string{
+		"provider":     "nvidia",
+		"model":        "deepseek-ai/deepseek-v4-flash-0731",
+		"endpoint_url": "https://integrate.api.nvidia.com/v1",
+	})
+
+	cfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	app := &App{config: cfg}
+	app.applySecureConfig(mustLoadSecure(t, cm))
+
+	if app.config.Provider != "nvidia" {
+		t.Fatalf("provider = %q, want nvidia: the store's slot must not override a provider on disk", app.config.Provider)
+	}
+	// The key must follow the provider that won — a local dummy token
+	// travelling as a Bearer credential was the 401 this replaces.
+	if app.config.APIKey != "nvapi-chosen" {
+		t.Fatalf("api key = %q, want the key recorded for nvidia", app.config.APIKey)
+	}
+	if app.config.Model != "deepseek-ai/deepseek-v4-flash-0731" {
+		t.Fatalf("model = %q, want the model chosen on disk", app.config.Model)
+	}
+}
+
+// The store still fills the gap for a machine that has never picked a
+// provider: no layer names one, so the last login stands.
+func TestBootFallsBackToStoredProviderWhenNoLayerNamesOne(t *testing.T) {
+	cm := newCredentialTestEnv(t)
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	t.Setenv("AH_PROVIDER", "")
+	t.Setenv("AGENT_HARNESS_PROVIDER", "")
+
+	if err := cm.SaveSecure(&config.SecureConfig{Provider: "openrouter", APIKey: "sk-or-real"}); err != nil {
+		t.Fatalf("seed store: %v", err)
+	}
+
+	cfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	app := &App{config: cfg}
+	app.applySecureConfig(mustLoadSecure(t, cm))
+
+	if app.config.Provider != "openrouter" {
+		t.Fatalf("provider = %q, want the stored provider", app.config.Provider)
+	}
+	if app.config.APIKey != "sk-or-real" {
+		t.Fatalf("api key = %q, want the stored key", app.config.APIKey)
+	}
+}
+
+// writeUserSettings drops a user-layer settings.json into the config
+// home the loader resolves from.
+func writeUserSettings(t *testing.T, values map[string]string) {
+	t.Helper()
+	path := filepath.Join(config.ConfigHome(), "settings.json")
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", path, err)
+	}
+	data, err := json.Marshal(values)
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0o600); err != nil {
+		t.Fatalf("WriteFile(%s): %v", path, err)
+	}
+}
+
+// mustLoadSecure reads the seeded store, which applySecureConfig takes
+// as a value rather than a manager.
+func mustLoadSecure(t *testing.T, cm *config.CredentialManager) *config.SecureConfig {
+	t.Helper()
+	cfg, err := cm.LoadSecure()
+	if err != nil {
+		t.Fatalf("LoadSecure() error = %v", err)
+	}
+	if cfg == nil {
+		t.Fatal("LoadSecure() returned a nil config")
+	}
+	return cfg
 }

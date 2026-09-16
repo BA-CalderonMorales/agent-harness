@@ -625,7 +625,10 @@ func (m *ChatModel) togglePlaceholder() {
 	if m.focused {
 		m.textarea.Placeholder = "Type a message..."
 	} else {
-		m.textarea.Placeholder = `"i" to type a message`
+		// Navigate mode advertises the two keys that move you forward:
+		// start typing, or ask what to do next. next-steps is otherwise
+		// undiscoverable, and an affordance nobody finds is not one.
+		m.textarea.Placeholder = `"i" to type a message · "s" next steps`
 	}
 }
 func (m *ChatModel) SetInput(text string) {

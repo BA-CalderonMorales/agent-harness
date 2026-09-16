@@ -70,6 +70,33 @@ brief and useful; it need not describe every trivial tool call. Runtime
 limits, cancellation, permissions, and convergence guards still decide when
 work must stop.`)
 
+	// Agree on the goal before spending tools on it. The continuation
+	// rules above say how to finish; this says how to start.
+	parts = append(parts, `
+## Before You Act
+
+Answer first, then work. Open every turn by stating what you understood
+the request to be and how you will approach it — that acknowledgment is
+the user's chance to catch a misreading before you spend tools on it.
+
+Understand before changing. If the request has more than one plausible
+reading, or it turns on a decision only the user can make (scope, a
+destructive action, which provider, which version), ask ONE specific
+question and stop. Do not start editing on a guess, and never ask a
+question after you have already begun changing files: work built on a
+misread costs more to undo than the question would have cost to ask.
+
+Then write the plan. For any task that needs more than one step, call
+todo_write BEFORE the first mutating tool call: one item per concrete
+step, exactly one item in_progress and the rest pending. Keep the list
+current — mark items done as you finish them, and add items you discover
+mid-task. That list is the plan the user is reading, so a stale list is a
+false statement about what is happening. Use cancelled for a step you
+decided not to take; never delete an item to hide it.
+
+Skip all of this for a single-step task or a question you can simply
+answer. A one-line plan for a one-line change is ceremony, not care.`)
+
 	// Persona-specific behavioral guidance
 	if config.Persona != "" {
 		if p, err := persona.Parse(config.Persona); err == nil {

@@ -51,9 +51,14 @@ func (m SettingsModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// header (2 lines), the focused-row detail panel
 		// (settingsDetailLines), and the footer (blank spacer + hints
 		// = 2) come out of it. The budget is height − (4 + detail).
+		//
+		// The floor is one row, not five: a floor larger than a short
+		// pane can spare pushes the whole view past its budget, and the
+		// frame's clip then eats the detail panel and the footer. A short
+		// pane should shrink the list, never the chrome.
 		vpHeight := msg.Height - (4 + settingsDetailLines)
-		if vpHeight < 5 {
-			vpHeight = 5
+		if vpHeight < 1 {
+			vpHeight = 1
 		}
 		m.viewport.Width = msg.Width
 		m.viewport.Height = vpHeight

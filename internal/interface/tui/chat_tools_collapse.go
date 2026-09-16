@@ -56,7 +56,6 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 	type group struct {
 		name  string
 		start time.Time
-		tag   string // short identifier of the first member (Task 3c)
 		rows  []string
 	}
 	var groups []*group
@@ -68,7 +67,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		// `ls` belongs to "Shell" wherever it came from.
 		name := getToolDisplayName(msg.ToolName)
 		if current == nil || current.name != name {
-			current = &group{name: name, start: msg.ToolStartedAt, tag: shortToolTag(msg.ID)}
+			current = &group{name: name, start: msg.ToolStartedAt}
 			if current.start.IsZero() {
 				current.start = msg.Timestamp
 			}
@@ -113,13 +112,12 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 			ToolDoneStyle.Render("✓"),
 			g.name,
 		)
-		left = ToolDoneStyle.Render(expandCaret(false)) + " " + left
+		// The caret is the affordance, not the record: muted, like the
+		// single-row path. The short tag is not here — it rides on the
+		// expanded record (renderToolExpansion), where the join key into
+		// Logs actually means something.
+		left = ToolTimeStyle.Render(expandCaret(false)) + " " + left
 		if dur != "" {
-			// The group header carries the first member's short tag
-			// (Task 3c): the pointer to the full record in Logs.
-			if g.tag != "" {
-				dur = dur + "  " + g.tag
-			}
 			pad := width - lipgloss.Width(left) - lipgloss.Width(dur) - 2
 			if pad < 2 {
 				pad = 2
@@ -200,6 +198,11 @@ func (m ChatModel) todoChecklistRows(msg ChatMessage) []string {
 			rows = append(rows, ToolDoneStyle.Render("✓")+" "+td.Text)
 		case "in_progress", "active":
 			rows = append(rows, ToolRunningStyle.Render("→")+" "+td.Text)
+		case "cancelled":
+			// A step the agent decided not to take stays visible: a plan
+			// that silently drops an item is a plan the reader cannot
+			// trust.
+			rows = append(rows, HelpDimStyle.Render("✗")+" "+HelpDimStyle.Render(td.Text))
 		default:
 			rows = append(rows, HelpDimStyle.Render("○")+" "+td.Text)
 		}

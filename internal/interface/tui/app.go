@@ -70,6 +70,7 @@ type App struct {
 	modelPicker    ModelPickerModel
 	providerPicker ProviderPickerModel
 	exportPicker   ExportPickerModel
+	nextSteps      NextStepsModel
 	loginDialog    LoginDialogModel
 	tabActivity    [viewCount]bool
 
@@ -169,6 +170,7 @@ func NewApp() *App {
 		modelPicker:    NewModelPicker(),
 		providerPicker: NewProviderPicker(),
 		exportPicker:   NewExportPicker(),
+		nextSteps:      NewNextSteps(),
 		loginDialog:    NewLoginDialog(),
 		msgChan:        make(chan tea.Msg, 64),
 		mouseCapture:   true,
