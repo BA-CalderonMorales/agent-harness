@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -82,6 +83,9 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		chosen, closed := a.nextSteps.Update(msg)
 		if closed && chosen != nil {
 			prompt := chosen.Prompt
+			if strings.HasPrefix(prompt, "/") {
+				return a, func() tea.Msg { return UserCommandMsg{Command: prompt} }, true
+			}
 			return a, func() tea.Msg { return UserSubmitMsg{Text: prompt} }, true
 		}
 		return a, nil, true
