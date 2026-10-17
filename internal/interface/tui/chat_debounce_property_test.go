@@ -95,8 +95,8 @@ func TestSubmitDebounceNeverEatsKeysProperty(t *testing.T) {
 
 		composer := h.model.textarea.Value()
 		count := len(h.subs)
-		switch {
-		case count == 1:
+		switch count {
+		case 1:
 			// Exactly one submit; whatever remained in the composer must
 			// be a suffix of the original text plus the trailing key —
 			// no characters invented, none lost overall.
@@ -104,7 +104,7 @@ func TestSubmitDebounceNeverEatsKeysProperty(t *testing.T) {
 				return "submitted text is not a prefix of the input"
 			}
 			return ""
-		case count == 0:
+		case 0:
 			// A debounce timer that never fired (e.g. cancelled) is only
 			// acceptable when the composer still holds everything.
 			if composer == strings.Replace(text, "\n", "", 1)+"z" || composer != "" {

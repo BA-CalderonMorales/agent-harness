@@ -7,10 +7,7 @@
 package tui
 
 import (
-	"strings"
-
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // ProviderPickHandler receives the chosen provider on the event loop.
@@ -71,28 +68,29 @@ func (m *ProviderPickerModel) Update(msg tea.KeyMsg) (completed, cancelled bool,
 	return false, false, ""
 }
 
-// View renders the picker centered over the app.
+// View renders the picker centered over the app. It goes through the
+// shared modal frame like every other overlay: one width, one frame,
+// and a scroll window so the list stays reachable on a short pane.
 func (m ProviderPickerModel) View() string {
 	if !m.showing {
 		return ""
 	}
 
-	var body strings.Builder
-	body.WriteString(HelpTitleStyle.Render("Switch provider") + "\n\n")
+	items := make([]modalItem, 0, len(loginProviders))
 	for i, p := range loginProviders {
-		marker := "  "
+		marker, style := IndicatorUnselected, HelpDimStyle
 		if i == m.providerIdx {
-			marker = IndicatorSelected + " "
+			marker, style = IndicatorSelected, InfoStyle
 		}
-		body.WriteString(marker + p + "\n")
+		items = append(items, modalItem{lines: []string{style.Render(marker + p)}})
 	}
-	body.WriteString("\n" + HelpDimStyle.Render("j/k: navigate  Enter: pick + models  Esc: cancel"))
 
-	panel := lipgloss.NewStyle().
-		Width(48).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(1, 2)
-
-	return placeOverlay(m.width, m.height, panel.Render(body.String()))
+	return renderModal(m.width, m.height, modalSpec{
+		title:          "Switch provider",
+		hint:           "Keys are remembered per provider, so switching never asks you to paste one again.",
+		items:          items,
+		footer:         "j/k: navigate  Enter: pick + models  Esc: cancel",
+		preferredWidth: modalMaxWidth,
+		cursor:         m.providerIdx,
+	})
 }

@@ -186,21 +186,21 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 		wc.Dir = c.basePath
 		out, _ := wc.Output()
 		var lines int
-		fmt.Sscanf(string(out), "%d", &lines)
+		_, _ = fmt.Sscanf(string(out), "%d", &lines)
 		totalLines += lines
 		fileCounts[ext]++
 	}
 
 	// Build analysis
 	var analysis strings.Builder
-	analysis.WriteString(fmt.Sprintf("Code Analysis for %s:\n\n", path))
-	analysis.WriteString(fmt.Sprintf("Total files: %d\n", len(files)))
-	analysis.WriteString(fmt.Sprintf("Total lines: %d\n\n", totalLines))
+	fmt.Fprintf(&analysis, "Code Analysis for %s:\n\n", path)
+	fmt.Fprintf(&analysis, "Total files: %d\n", len(files))
+	fmt.Fprintf(&analysis, "Total lines: %d\n\n", totalLines)
 
 	if len(fileCounts) > 0 {
 		analysis.WriteString("Files by type:\n")
 		for ext, count := range fileCounts {
-			analysis.WriteString(fmt.Sprintf("  %s: %d\n", ext, count))
+			fmt.Fprintf(&analysis, "  %s: %d\n", ext, count)
 		}
 	}
 
@@ -227,7 +227,7 @@ func (c *CodeBucket) handleAnalyze(ctx loop.ExecutionContext) loop.LoopResult {
 		cmd := exec.Command("test", "-f", ind.file)
 		cmd.Dir = c.basePath
 		if err := cmd.Run(); err == nil {
-			analysis.WriteString(fmt.Sprintf("  ✓ %s\n", ind.desc))
+			fmt.Fprintf(&analysis, "  ✓ %s\n", ind.desc)
 		}
 	}
 
@@ -327,7 +327,7 @@ func (c *CodeBucket) parseLintOutput(output string, lang string) []LintIssue {
 			// Try to parse "file:line:col: message" format
 			if parts := strings.SplitN(line, ":", 4); len(parts) >= 3 {
 				issue.File = parts[0]
-				fmt.Sscanf(parts[1], "%d", &issue.Line)
+				_, _ = fmt.Sscanf(parts[1], "%d", &issue.Line)
 				if len(parts) >= 4 {
 					issue.Message = strings.TrimSpace(parts[3])
 				}

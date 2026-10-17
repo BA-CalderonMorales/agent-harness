@@ -35,7 +35,7 @@ func (s *SessionStore) WriteMessage(msg types.Message) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	line, err := json.Marshal(msg)
 	if err != nil {
@@ -56,7 +56,7 @@ func (s *SessionStore) WriteMessagesBlocking(msgs []types.Message) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	w := bufio.NewWriter(f)
 	for _, msg := range msgs {
@@ -83,7 +83,7 @@ func (s *SessionStore) ReadMessages() ([]types.Message, error) {
 		}
 		return nil, err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var msgs []types.Message
 	scanner := bufio.NewScanner(f)

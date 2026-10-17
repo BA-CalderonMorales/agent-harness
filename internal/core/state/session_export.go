@@ -61,25 +61,25 @@ func (s *Session) ExportToRedactedJSON() ([]byte, error) {
 // ExportToMarkdown exports the session as a human-readable Markdown transcript.
 func (s *Session) ExportToMarkdown() string {
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("# Session %s\n\n", exportIDPrefix(s.ID)))
-	b.WriteString(fmt.Sprintf("- **Model**: %s\n", redactExportString(s.Model)))
-	b.WriteString(fmt.Sprintf("- **Created**: %s\n", s.CreatedAt.Format(time.RFC3339)))
-	b.WriteString(fmt.Sprintf("- **Turns**: %d\n", s.Turns))
-	b.WriteString(fmt.Sprintf("- **Messages**: %d\n\n", len(s.Messages)))
+	fmt.Fprintf(&b, "# Session %s\n\n", exportIDPrefix(s.ID))
+	fmt.Fprintf(&b, "- **Model**: %s\n", redactExportString(s.Model))
+	fmt.Fprintf(&b, "- **Created**: %s\n", s.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "- **Turns**: %d\n", s.Turns)
+	fmt.Fprintf(&b, "- **Messages**: %d\n\n", len(s.Messages))
 
 	for _, msg := range s.Messages {
 		if msg.Role == "system" {
 			continue
 		}
 		roleTitle := strings.ToUpper(string(msg.Role)[:1]) + string(msg.Role)[1:]
-		b.WriteString(fmt.Sprintf("## %s\n\n", roleTitle))
+		fmt.Fprintf(&b, "## %s\n\n", roleTitle)
 		for _, block := range msg.Content {
 			switch v := block.(type) {
 			case types.TextBlock:
 				b.WriteString(redactExportString(v.Text))
 				b.WriteString("\n\n")
 			case types.ToolUseBlock:
-				b.WriteString(fmt.Sprintf("**Tool**: `%s`\n\n", v.Name))
+				fmt.Fprintf(&b, "**Tool**: `%s`\n\n", v.Name)
 				inputJSON, _ := json.MarshalIndent(redactExportValue(v.Input), "", "  ")
 				b.WriteString("```json\n")
 				b.WriteString(string(inputJSON))
@@ -99,18 +99,18 @@ func (s *Session) ExportToMarkdown() string {
 func (s *Session) ExportToText() string {
 	var b strings.Builder
 	b.WriteString("Agent Harness Session Export\n")
-	b.WriteString(fmt.Sprintf("Session: %s\n", exportIDPrefix(s.ID)))
-	b.WriteString(fmt.Sprintf("Model: %s\n", redactExportString(s.Model)))
-	b.WriteString(fmt.Sprintf("Created: %s\n", s.CreatedAt.Format(time.RFC3339)))
-	b.WriteString(fmt.Sprintf("Updated: %s\n", s.UpdatedAt.Format(time.RFC3339)))
-	b.WriteString(fmt.Sprintf("Turns: %d\n", s.Turns))
-	b.WriteString(fmt.Sprintf("Messages: %d\n\n", len(s.Messages)))
+	fmt.Fprintf(&b, "Session: %s\n", exportIDPrefix(s.ID))
+	fmt.Fprintf(&b, "Model: %s\n", redactExportString(s.Model))
+	fmt.Fprintf(&b, "Created: %s\n", s.CreatedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "Updated: %s\n", s.UpdatedAt.Format(time.RFC3339))
+	fmt.Fprintf(&b, "Turns: %d\n", s.Turns)
+	fmt.Fprintf(&b, "Messages: %d\n\n", len(s.Messages))
 
 	for _, msg := range s.Messages {
 		if msg.Role == types.RoleSystem {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("== %s ==\n", strings.ToUpper(string(msg.Role))))
+		fmt.Fprintf(&b, "== %s ==\n", strings.ToUpper(string(msg.Role)))
 		if msg.APIError != "" {
 			b.WriteString("API error: ")
 			b.WriteString(redactExportString(msg.APIError))
@@ -122,7 +122,7 @@ func (s *Session) ExportToText() string {
 				b.WriteString(redactExportString(v.Text))
 				b.WriteString("\n\n")
 			case types.ToolUseBlock:
-				b.WriteString(fmt.Sprintf("[tool use: %s]\n", v.Name))
+				fmt.Fprintf(&b, "[tool use: %s]\n", v.Name)
 				inputJSON, _ := json.MarshalIndent(redactExportValue(v.Input), "", "  ")
 				b.WriteString(redactExportString(string(inputJSON)))
 				b.WriteString("\n\n")

@@ -7,6 +7,33 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// TestSettingsFitsShortPanes pins the same budget rule the Home dashboard
+// follows: a short pane shrinks the list rather than pushing the view past
+// its pane. The viewport's height had a flat floor of five rows, which on a
+// pane that could not spare them made the whole view taller than its
+// budget — the frame's clip then ate the detail panel and the footer.
+func TestSettingsFitsShortPanes(t *testing.T) {
+	m := NewSettingsModel()
+	m.SetSettings([]Setting{
+		{Key: "a", Label: "Alpha", Value: "alpha-value", Type: "string", Category: "One", Description: "first"},
+		{Key: "b", Label: "Beta", Value: "beta-value", Type: "string", Category: "Two", Description: "second"},
+		{Key: "c", Label: "Gamma", Value: "gamma-value", Type: "string", Category: "Two", Description: "third"},
+	})
+	m.Focus()
+
+	for _, height := range []int{30, 20, 16, 12, 10, 8} {
+		model, _ := m.Update(tea.WindowSizeMsg{Width: 100, Height: height})
+		sized := model.(SettingsModel)
+		view := SanitizeANSI(sized.View())
+		if rows := strings.Count(view, "\n") + 1; rows > height {
+			t.Fatalf("height %d: settings rendered %d rows\n%s", height, rows, view)
+		}
+		if !strings.Contains(view, "Move (wraps)") {
+			t.Fatalf("height %d: footer hints were clipped\n%s", height, view)
+		}
+	}
+}
+
 // TestSettingsCursorStaysVisible pins the scroll fix: walking the
 // cursor from the first setting to the last must reveal the focused row
 // in the viewport, at any pane height. The old per-row-average sync

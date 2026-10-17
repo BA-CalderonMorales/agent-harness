@@ -51,13 +51,19 @@ func TestToolRowNestedWidth(t *testing.T) {
 			model, _ = m.Update(AgentDoneMsg{FullResponse: "", Timestamp: time.Now()})
 			m = model.(ChatModel)
 
-			// The turn block nests rows at innerWidth = pane - 8.
-			inner := pane - 8
+			// The turn block hands each nested row its own budget; the
+			// rendered row then carries the two caret columns the budget
+			// already accounts for, and the block indents it once more.
+			// What must hold is that the finished row, so indented, fits
+			// inside the bubble's text area — one column less than the
+			// width the bubble style is given, which is its padding.
+			inner := m.toolRowWidth(turnBlockChromeCols)
+			textArea := m.bubbleWidth() - 1
 			for i := range m.messages {
 				if m.messages[i].IsTool {
 					row, _ := m.renderCollapsedMessageAt(m.messages, i, true, inner)
-					if w := visualWidth(row); w > inner {
-						t.Fatalf("pane=%d: nested tool row width %d exceeds bubble budget %d", pane, w, inner)
+					if w := visualWidth(row) + 1; w > textArea {
+						t.Fatalf("pane=%d: nested tool row width %d exceeds the bubble's text area %d", pane, w, textArea)
 					}
 				}
 			}

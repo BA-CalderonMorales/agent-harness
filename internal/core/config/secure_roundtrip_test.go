@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"testing"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 // TestLoadSecureThenSaveSecureRoundTrip pins the store-bricking bug: a
@@ -11,7 +13,7 @@ import (
 // writing a fresh salt — the next boot could never decrypt it.
 func TestLoadSecureThenSaveSecureRoundTrip(t *testing.T) {
 	dir := t.TempDir()
-	t.Setenv("HOME", dir)
+	testenv.SetHome(t, dir)
 
 	cm := NewCredentialManager()
 	if err := cm.SaveSecure(&SecureConfig{Provider: "openrouter", APIKey: "sk-test-123", Model: "m"}); err != nil {

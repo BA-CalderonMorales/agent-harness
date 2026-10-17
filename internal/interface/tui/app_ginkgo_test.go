@@ -11,6 +11,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 var _ = Describe("App", func() {
@@ -695,7 +697,7 @@ var _ = Describe("App", func() {
 				app.chatModel.height = 24 - 6 - FrameRows
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
-				GinkgoT().Setenv("HOME", testHome)
+				testenv.SetHome(GinkgoT(), testHome)
 				workspace := filepath.Join(testHome, "sample-project")
 				app.SetChatModel("gpt-5.5")
 				app.SetRuntimeContext("openrouter", "medium", workspace)
@@ -708,7 +710,7 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
 				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
 				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
-				Expect(view).To(ContainSubstring("effort medium"))
+				Expect(view).To(ContainSubstring("[effort: medium]"))
 				Expect(view).To(ContainSubstring(`"?" help`))
 				Expect(view).To(ContainSubstring("$0.12"))
 				Expect(view).ToNot(ContainSubstring(testHome))
@@ -724,7 +726,7 @@ var _ = Describe("App", func() {
 					GinkgoT().Setenv("TMUX", "")
 					GinkgoT().Setenv("TERM", "xterm-256color")
 					testHome := GinkgoT().TempDir()
-					GinkgoT().Setenv("HOME", testHome)
+					testenv.SetHome(GinkgoT(), testHome)
 					workspace := filepath.Join(testHome, "sample-project", "nested", "deep", "path")
 					app.SetChatModel("gpt-5.5")
 					app.SetRuntimeContext("openrouter", "medium", workspace)

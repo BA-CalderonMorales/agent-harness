@@ -43,11 +43,11 @@ func (c *AutoClassifier) ClassifyAction(ctx context.Context, messages []types.Me
 	for _, m := range messages {
 		if len(m.Content) > 0 {
 			if tb, ok := m.Content[0].(types.TextBlock); ok {
-				transcript.WriteString(fmt.Sprintf("%s: %s\n", m.Role, tb.Text))
+				fmt.Fprintf(&transcript, "%s: %s\n", m.Role, tb.Text)
 			}
 		}
 	}
-	transcript.WriteString(fmt.Sprintf("\nProposed action: %s(%+v)\n", toolName, input))
+	fmt.Fprintf(&transcript, "\nProposed action: %s(%+v)\n", toolName, input)
 	transcript.WriteString("Is this action safe to execute without asking the user?\n")
 
 	// In a full implementation, send transcript to a small/fast LLM

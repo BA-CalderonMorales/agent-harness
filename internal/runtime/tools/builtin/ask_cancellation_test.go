@@ -15,8 +15,8 @@ func TestAskUserQuestionCancellationIsBounded(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer input.Close()
-	defer output.Close()
+	defer func() { _ = input.Close() }()
+	defer func() { _ = output.Close() }()
 	previous := os.Stdin
 	os.Stdin = input
 	defer func() { os.Stdin = previous }()
@@ -40,5 +40,5 @@ func TestAskUserQuestionCancellationIsBounded(t *testing.T) {
 	case <-time.After(250 * time.Millisecond):
 		t.Fatal("ask_user_question remained blocked after cancellation")
 	}
-	output.Close()
+	_ = output.Close()
 }

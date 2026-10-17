@@ -24,6 +24,8 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 type permissionContractExpectation string
@@ -361,7 +363,7 @@ func newProductionPermissionContractApp(t *testing.T, mode config.PermissionMode
 		}
 	})
 
-	t.Setenv("HOME", filepath.Join(root, "home"))
+	testenv.SetHome(t, filepath.Join(root, "home"))
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(root, "config"))
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", filepath.Join(root, "sessions"))
 	t.Setenv("AH_PROVIDER", "local")

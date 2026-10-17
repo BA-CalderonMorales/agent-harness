@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // streamingAssistant returns the in-progress assistant message by its
@@ -101,7 +103,7 @@ func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
 		msg.StreamedChunks = m.chunkCount
 		msg.Thinking = true
 	} else {
-		id := fmt.Sprintf("assistant-%d", time.Now().UnixNano())
+		id := "assistant-" + uuid.NewString()
 		m.messages = append(m.messages, ChatMessage{
 			ID:             id,
 			Role:           "assistant",

@@ -90,8 +90,42 @@ func TestLsGroupedUnderShellHeader(t *testing.T) {
 	}
 }
 
-// TestDurationRightAlignedConsistently: single rows and group headers
-// both right-align their duration at the width edge.
+// TestToolRowDurationFlushRight pins the row's geometry: the duration is
+// the row's last visible token and it ends exactly on the row's width
+// budget, so a column of calls lines up. The old math added the short
+// tag's width twice plus an 8-column fudge, which stranded the duration
+// ~13 columns short of the edge — the loudest thing on the row (live
+// dogfood). The tag itself is deliberately absent: beside a duration a
+// `#d82b` reads as a color code, so it moved to the expanded record and
+// the collapsed group header stopped carrying it too.
+func TestToolRowDurationFlushRight(t *testing.T) {
+	m := NewChatModel()
+	start := time.Date(2026, 9, 7, 12, 34, 56, 0, time.UTC)
+	for _, width := range []int{40, 48, 60, 80, 120} {
+		row := m.formatToolContentAt(width, "Shell", "go test ./... 2>&1 | tail -40", ToolStatusSuccess, start, 2*time.Second)
+		plain := strings.TrimRight(ansiStrip(row), " ")
+		if !strings.HasSuffix(plain, "2.0s") {
+			t.Fatalf("width %d: duration is not the row's last visible token: %q", width, plain)
+		}
+		if got := lipgloss.Width(plain); got != width {
+			t.Fatalf("width %d: row is %d columns, want exactly %d: %q", width, got, width, plain)
+		}
+		if strings.Contains(plain, "#") {
+			t.Fatalf("width %d: the short tag must not ride the summary row: %q", width, plain)
+		}
+	}
+
+	// A running call keeps the same shape: the ellipsis sits in the
+	// duration column, so settling a call does not reflow the list.
+	running := m.formatToolContentAt(80, "bash", "go test ./...", ToolStatusRunning, start, 0)
+	if plain := strings.TrimRight(ansiStrip(running), " "); !strings.HasSuffix(plain, "…") {
+		t.Fatalf("running row lost its duration-column marker: %q", plain)
+	}
+}
+
+// TestDurationRightAlignedConsistently: the rendered transcript row ends
+// flush on the pane's right edge, not a few columns short of it, and the
+// viewport shows the duration as the row's last token.
 func TestDurationRightAlignedConsistently(t *testing.T) {
 	m := NewChatModel()
 	m.width = 120
@@ -106,30 +140,17 @@ func TestDurationRightAlignedConsistently(t *testing.T) {
 	m.refreshViewportWithFollow(true)
 	line := renderedLines(m.viewport.View())[0]
 	if !strings.Contains(line, "2.0s") {
-		t.Fatalf("duration missing from group header: %q", line)
+		t.Fatalf("duration missing from tool row: %q", line)
 	}
-	// Right-aligned within the row's own render width: the duration
-	// (plus the stable short tag, Task 3c — the tag is the new
-	// right-most token by design) ends at the row's content edge. The
-	// viewport pads bubble-nested rows out to the pane width, so
-	// measure the trailing gap against the row's rendered width, not
-	// the pane: at most the 2 reserved caret/pad columns of trailing
-	// space before the viewport padding.
-	trimmed := strings.TrimRight(line, " ")
-	contentW := lipgloss.Width(trimmed)
-	trail := lipgloss.Width(line) - contentW
-	// Trail = (pane − row render width) + at most 2 internal pad cols.
-	// The row render width is pane−8−1 (bubble inner minus left
-	// border), so the gap can be up to 9+2; assert the tag/duration
-	// ends within the row's own budget by checking the gap never
-	// exceeds the bubble slack (9) plus the 2 internal pad columns.
-	if trail > 11 {
-		t.Fatalf("duration not right-aligned (more than bubble slack + 2 trailing columns): %q", line)
+	last := strings.TrimRight(ansiStrip(line), " ")
+	if !strings.HasSuffix(last, "2.0s") {
+		t.Fatalf("duration is not the row's last visible token: %q", last)
 	}
-	last := strings.TrimRight(ansiStrip(trimmed), " ")
-	if !strings.HasSuffix(last, "#5e16") {
-		// The tag is the row's last visible token (Task 3c).
-		t.Fatalf("tag is not the row's last visible token: %q", last)
+	// The transcript spans the frame's inner width, so a standalone tool
+	// row's duration lands on the right edge: only the pane's own frame
+	// border sits beyond it.
+	if gap := lipgloss.Width(line) - lipgloss.Width(last); gap > 1 {
+		t.Fatalf("duration is %d columns short of the pane edge: %q", gap, last)
 	}
 }
 

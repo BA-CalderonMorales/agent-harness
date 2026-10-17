@@ -21,6 +21,29 @@ func TestSystemPromptOpensWithAcknowledgment(t *testing.T) {
 	}
 }
 
+// TestSystemPromptAgreesOnTheGoalBeforeActing pins the steering the user
+// asked for: answer first, understand before changing, and write the plan
+// with todo_write before the first mutating call — so the agent guides the
+// user toward the goal instead of guessing at it with tools.
+func TestSystemPromptAgreesOnTheGoalBeforeActing(t *testing.T) {
+	prompt := strings.Join(strings.Fields(BuildSystemPrompt(SystemPromptConfig{})), " ")
+	for _, want := range []string{
+		"## Before You Act",
+		"Answer first, then work",
+		"Understand before changing",
+		"ask ONE specific question and stop",
+		"never ask a question after you have already begun changing files",
+		"call todo_write BEFORE the first mutating tool call",
+		"exactly one item in_progress",
+		"Keep the list current",
+		"never delete an item to hide it",
+	} {
+		if !strings.Contains(prompt, want) {
+			t.Errorf("system prompt missing the before-you-act contract %q", want)
+		}
+	}
+}
+
 func TestSystemPromptContinuesAcceptedWorkWithDurableHandoff(t *testing.T) {
 	prompt := strings.Join(strings.Fields(BuildSystemPrompt(SystemPromptConfig{})), " ")
 	for _, want := range []string{

@@ -191,7 +191,6 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 		nextLimit, receiptAdmitted := budget.TryRecordResult(block.Name, len(receipt), toolDef.MaxResultSizeChars)
 		if receiptAdmitted {
 			result.Data = receipt
-			admitted = true
 			break
 		}
 		if nextLimit >= receiptLimit {

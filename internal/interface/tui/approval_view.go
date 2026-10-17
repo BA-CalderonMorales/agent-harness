@@ -2,9 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"strings"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/charmbracelet/lipgloss"
-	"strings"
 )
 
 // View renders the approval dialog
@@ -21,102 +22,82 @@ func (m ApprovalDialogModel) View() string {
 	if m.request == nil {
 		return ""
 	}
+	return renderModal(m.width, m.height, m.modalSpec())
+}
 
-	// The dialog must fit the terminal at every size: title and the
-	// decision options stay pinned, while the command/preview detail
-	// scrolls between them (j/k). On a short terminal the old layout
-	// clipped the top and bottom — exactly the command being approved
-	// and the keys that answer it.
-	var sections []string
+// dialogWidth is the frame's outer width, resolved by the shared modal
+// width policy so the approval prompt matches every other overlay
+// instead of carrying its own 66-column rule.
+func (m ApprovalDialogModel) dialogWidth() int {
+	return panelWidth(modalMaxWidth, m.width)
+}
 
-	// Title row: what is being asked, and of which tool. Destructive
-	// commands wear the warning, never a decoration.
-	title := TitleStyle.Render("Approval required")
-	if m.request.Command.IsDestructive {
-		title = WarningStyle.Render("Approval required · destructive")
+// visibleDetailRows uses the shared frame budget after reserving the
+// decision choices or suggestion input.
+func (m ApprovalDialogModel) visibleDetailRows() int {
+	reserved := len(m.options) + 2 // decision rows and window markers
+	if m.suggestMode {
+		reserved = 4 // suggestion prompt/input and window markers
 	}
-	tool := ToolCallStyle.Render(" · " + m.request.Command.DisplayName)
-	sections = append(sections, title+tool)
+	rows := modalBodyRows(m.width, m.height, m.modalBaseSpec()) - reserved
+	if rows < 0 {
+		return 0
+	}
+	return rows
+}
 
-	sections = append(sections, "")
+func (m ApprovalDialogModel) modalBaseSpec() modalSpec {
+	title := "Approval required"
+	if m.request != nil && m.request.Command.IsDestructive {
+		title += " · destructive"
+	}
+	if m.request != nil && m.request.Command.DisplayName != "" {
+		title += " · " + m.request.Command.DisplayName
+	}
+	footer := "1-4 instant · esc rejects · j/k detail"
+	if m.suggestMode {
+		footer = "Enter: send rejection + message · Esc: back to options"
+	}
+	return modalSpec{title: title, footer: footer, preferredWidth: modalMaxWidth}
+}
 
+func (m ApprovalDialogModel) modalSpec() modalSpec {
+	spec := m.modalBaseSpec()
 	detailLines := m.detailLines()
-	maxScroll := len(detailLines) - m.visibleDetailRows()
+	visibleRows := m.visibleDetailRows()
+	maxScroll := len(detailLines) - visibleRows
 	if maxScroll < 0 {
 		maxScroll = 0
 	}
-	scroll := m.scroll
-	if scroll > maxScroll {
-		scroll = maxScroll
+	start := m.scroll
+	if start < 0 {
+		start = 0
 	}
-	end := scroll + m.visibleDetailRows()
+	if start > maxScroll {
+		start = maxScroll
+	}
+	end := start + visibleRows
 	if end > len(detailLines) {
 		end = len(detailLines)
 	}
-	if scroll > end {
-		scroll = end
+	for _, line := range detailLines[start:end] {
+		spec.items = append(spec.items, modalItem{lines: []string{line}})
 	}
-	sections = append(sections, detailLines[scroll:end]...)
 
 	if m.suggestMode {
-		// Reject + Suggest input: the text goes to the agent as the deny
-		// reason, so it can adapt instead of retrying blind.
-		prompt := InfoStyle.Render("Message to agent (what to do instead):")
-		input := ListSelectedStyle.Render(m.suggestBuf + "▏")
-		help := HelpDimStyle.Render(fitBlock(m.dialogWidth()-4, "Enter: send rejection + message · Esc: back to options"))
-		sections = append(sections, prompt, input, help)
-	} else {
-		// Options
-		optionsDisplay := m.renderOptions()
-		sections = append(sections, optionsDisplay)
-
-		// Help text — short enough to hold one row at dialog width,
-		// wrapped where it must. A hint that splits mid-word is strain,
-		// not help.
-		sections = append(sections, "")
-		help := HelpDimStyle.Render(fitBlock(m.dialogWidth()-4, "1-4 instant · esc rejects · j/k detail"))
-		sections = append(sections, help)
+		spec.items = append(spec.items,
+			modalTextItem(InfoStyle.Render("Message to agent (what to do instead):")),
+			modalTextItem(ListSelectedStyle.Render(m.suggestBuf+"▏")),
+		)
+		spec.cursor = len(spec.items) - 1
+		return spec
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left, sections...)
-
-	// The frame hugs its content up to a comfortable reading width and
-	// yields to the pane below it — a modal that touches the pane edges
-	// on a phone reads as broken, and a 100-column slab on desktop
-	// reads as lazy.
-	dialogStyle := lipgloss.NewStyle().
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(1, 2).
-		Width(m.dialogWidth())
-
-	dialog := dialogStyle.Render(content)
-
-	// Center the dialog
-	return placeOverlay(m.width, m.height, dialog)
-}
-
-// dialogWidth is the frame's outer width: a comfortable read on
-// desktop, pane-bound on a phone.
-func (m ApprovalDialogModel) dialogWidth() int {
-	w := 66
-	if m.width-2 < w {
-		w = m.width - 2
+	for i := range m.options {
+		spec.items = append(spec.items, modalTextItem(m.renderOption(i)))
 	}
-	if w < 10 {
-		w = 10
-	}
-	return w
-}
-
-// visibleDetailRows is how many detail lines fit between the pinned
-// title and the pinned options at the current terminal height.
-func (m ApprovalDialogModel) visibleDetailRows() int {
-	rows := m.height - 13
-	if rows < 3 {
-		rows = 3
-	}
-	return rows
+	spec.cursor = len(spec.items) - len(m.options) + m.selected
+	return spec
 }
 
 // detailLines renders the scrollable middle: the command block, its
@@ -193,38 +174,32 @@ func (m ApprovalDialogModel) riskStyle(risk string) lipgloss.Style {
 	}
 }
 
-func (m ApprovalDialogModel) renderOptions() string {
-	var options []string
+func (m ApprovalDialogModel) renderOption(i int) string {
+	opt := m.options[i]
+	selected := i == m.selected
 
-	for i, opt := range m.options {
-		selected := i == m.selected
-
-		// Keycap + verb: the key is the affordance (instant), the
-		// number is the fallback. The description rides along when the
-		// frame is wide enough to carry it without wrapping.
-		key := PromptStyle.Render(opt.Key)
-		label := opt.Label
-		row := fmt.Sprintf("%s · %s", key, label)
-		if selected {
-			row = ModePromptStyle.Render("▸ " + row)
-		} else {
-			row = "  " + row
-		}
-		if opt.Description != "" && m.dialogWidth() >= 52 {
-			row += HelpDimStyle.Render(" — " + opt.Description)
-		}
-		if opt.IsDangerous {
-			row = ErrorStyle.Render(row)
-		} else if selected {
-			row = ModePromptStyle.Render(row)
-		}
-		row = fitBlock(m.dialogWidth()-4, row)
-
-		option := row
-		options = append(options, option)
+	// Keycap + verb: the key is the affordance (instant), the
+	// number is the fallback. The description rides along when the
+	// frame is wide enough to carry it without wrapping.
+	key := PromptStyle.Render(opt.Key)
+	label := opt.Label
+	row := fmt.Sprintf("%s · %s", key, label)
+	if selected {
+		row = ModePromptStyle.Render("▸ " + row)
+	} else {
+		row = "  " + row
 	}
+	if opt.Description != "" && m.dialogWidth() >= 52 {
+		row += HelpDimStyle.Render(" — " + opt.Description)
+	}
+	if opt.IsDangerous {
+		row = ErrorStyle.Render(row)
+	} else if selected {
+		row = ModePromptStyle.Render(row)
+	}
+	row = fitBlock(m.dialogWidth()-4, row)
 
-	return lipgloss.JoinVertical(lipgloss.Left, options...)
+	return row
 }
 
 func (m ApprovalDialogModel) renderNotification() string {

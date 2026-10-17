@@ -1,38 +1,18 @@
 # Release Patterns Quick Reference
 
-> One-page reference for release workflow patterns.
+> One-page pointer for the release checks.
+>
+> The authoritative runbook is `../release-workflow/SKILL.md`. Where the two
+> disagree, that file wins.
 
 ---
 
 ## The Golden Rules
 
-1. **Isolated Commits** - Each step = one commit
-2. **CI-First** - Wait for green before next step  
-3. **Always Return to Develop** - Never end on main
-
----
-
-## The 5-Step Release
-
-```bash
-# 1. Version bump (develop)
-sed -i 's/Version   = "X.X.X"/Version   = "X.X.Y"/' cmd/*/main.go
-git add -A && git commit -m "chore(release): bump version to vX.X.Y"
-git push origin develop
-
-# 2. Wait for CI, then merge to main
-git checkout main && git merge develop && git push origin main
-
-# 3. Wait for CI, then tag
-git tag -a "vX.X.Y" -m "Release vX.X.Y"
-git push origin "vX.X.Y"
-
-# 4. Wait for release workflow
-gh run watch
-
-# 5. CRITICAL: Return to develop
-git checkout develop
-```
+1. **Remote first** - the remote is the source of truth; anchor on `origin/*`
+2. **One change per commit** - never combine a version bump with a feature
+3. **Never merge on red** - CI green before every merge
+4. **Never end on `main`** - the cycle closes by cutting the next release branch off develop
 
 ---
 
@@ -40,42 +20,57 @@ git checkout develop
 
 ```bash
 CODE=$(grep -E 'Version\s*=\s*"[^"]+"' cmd/*/main.go | sed 's/.*"\([^"]*\)".*/\1/')
-GIT=$(git describe --tags --abbrev=0 | sed 's/^v//')
+# Remote, not git describe: `git describe --tags` returns the newest tag
+# reachable from HEAD, and release tags land on main - on develop it
+# reports an older release.
+GIT=$(git ls-remote --tags origin | grep -oE 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1 | sed 's|refs/tags/v||')
 GH=$(gh release list --limit 1 --json tagName -q '.[0].tagName' | sed 's/^v//')
 
-echo "Code: $CODE | Git: $GIT | GitHub: $GH"
+echo "Code: $CODE | Remote: $GIT | GitHub: $GH"
 [ "$CODE" = "$GIT" ] && [ "$GIT" = "$GH" ] && echo "[OK]" || echo "[!] Mismatch"
 ```
+
+Expect a mismatch between code and remote **after** the version bump commit:
+the release is pending, not drifting. This is also why `make release` fails
+mid-cycle.
 
 ---
 
 ## Cross-Repo Sync Checklist
 
-When releasing multiple harnesses:
+Each repo runs the full remote flow on its own; there is no batch command.
 
 - [ ] agent-harness released
-- [ ] lumina-bot released  
+- [ ] lumina-bot released
 - [ ] terminal-jarvis released
+- [ ] Every repo's develop and main synced from origin
+- [ ] Every repo's CD green and release published
 - [ ] All versions aligned
-- [ ] All CI green
+- [ ] Next release/X.Y.Z+1 cut in each
 
 ---
 
 ## Emergency Hotfix
 
-```bash
-git checkout main
-git checkout -b hotfix/critical
-# Fix + version bump (same commit)
-git commit -m "fix: critical issue + bump vX.X.Y-hotfix1"
-git checkout main && git merge hotfix/critical
-git tag -a "vX.X.Y-hotfix1" -m "Hotfix vX.X.Y-hotfix1"
-git push origin main --follow-tags
-git checkout develop && git merge main && git push origin develop
-```
+Remote CD is the preferred route even for a hotfix: cut the fix on a
+`release/X.Y.Z` branch and let CI build and publish it. There is no
+documented local shortcut - a locally built and locally tagged release carries
+no pipeline provenance, no pipeline checksums, and no release record. If CD is
+genuinely unavailable, say so plainly before reaching for anything else, and
+follow the traps section of the runbook.
 
 ---
 
-## Remember
+## Where the commands live
 
-> "Isolated commits, CI-first, always return to develop."
+| Task | Home |
+|------|------|
+| The ship sequence | `../release-workflow/SKILL.md` |
+| Version alignment, multi-repo sync, anti-patterns | `SKILL.md` in this directory |
+| Tag and semver gates | `scripts/check-version-matches.sh`, `.githooks/pre-push` |
+| Branch naming gate | `scripts/check-branch-name.sh` |
+| Prune merged branches | `scripts/prune-branches.sh --dry-run` first |
+
+`scripts/release.sh` and `scripts/release/publish.sh` are superseded. They push
+straight to `develop` and `main`, bypassing the release branch, its naming
+gate, PR review and CI. Do not run them.

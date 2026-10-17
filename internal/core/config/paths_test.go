@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 func TestDataHomePrecedence(t *testing.T) {
@@ -14,13 +16,13 @@ func TestDataHomePrecedence(t *testing.T) {
 
 	t.Setenv("AGENT_HARNESS_DATA_HOME", "")
 	t.Setenv("XDG_DATA_HOME", "/xdg/data")
-	if got := DataHome(); got != "/xdg/data/agent-harness" {
+	if got := DataHome(); got != filepath.Join("/xdg/data", "agent-harness") {
 		t.Fatalf("DataHome = %q, want the XDG path", got)
 	}
 
 	t.Setenv("XDG_DATA_HOME", "")
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	want := filepath.Join(home, ".local", "share", "agent-harness")
 	if got := DataHome(); got != want {
 		t.Fatalf("DataHome = %q, want %q", got, want)
@@ -35,14 +37,14 @@ func TestConfigHomePrecedence(t *testing.T) {
 
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "/xdg/config")
-	if got := ConfigHome(); got != "/xdg/config/agent-harness" {
+	if got := ConfigHome(); got != filepath.Join("/xdg/config", "agent-harness") {
 		t.Fatalf("ConfigHome = %q, want the XDG path", got)
 	}
 }
 
 func TestMigrateLegacyHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 
@@ -87,7 +89,7 @@ func TestMigrateLegacyHome(t *testing.T) {
 
 func TestMigrateLegacyHome_NeverClobbersNewHome(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("XDG_DATA_HOME", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
 

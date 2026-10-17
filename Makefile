@@ -1,13 +1,27 @@
-.PHONY: help build test mutation-test run clean install fmt lint check-remote release
+.PHONY: help build test mutation-test run clean install fmt lint check-remote release verify-structure verify
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
+RUN_ARGS ?=
+MUTATION_TARGETS ?=
 
-# Cap Go heap so runs cannot balloon to the WSL VM limit and get OOM-killed
-# (the agent-harness.test OOM loop that ate the host). GOGC stays loose:
-# the limit, not the collector frequency, is what contains the heap.
-export GOMEMLIMIT := 6GiB
-export GOGC := 250
+ifeq ($(OS),Windows_NT)
+# PowerShell can invoke native GNU Make without adding Git's Unix tools to
+# the user's PATH. GIT_BASH_ROOT can override a nonstandard Git install.
+GIT_WINDOWS_EXE := $(subst \,/,$(shell where.exe git.exe))
+GIT_BASH_ROOT ?= $(subst /cmd/git.exe,,$(GIT_WINDOWS_EXE))
+SHELL := $(GIT_BASH_ROOT)/bin/bash.exe
+export PATH := $(GIT_BASH_ROOT)/usr/bin;$(PATH)
+BINARY_NAME := agent-harness.exe
+TEST_GUARD := powershell.exe -NoProfile -File scripts/verify/memguard.ps1
+else
+TEST_GUARD := bash scripts/verify/memguard.sh
+endif
+
+# Leave room for compilers and the OS on an 8GB development machine.
+# These soft Go runtime limits remain configurable through the environment.
+export GOMEMLIMIT ?= 2GiB
+export GOGC ?= 100
 
 # Hard RSS ceiling for test runs. GOMEMLIMIT is soft — a live-heap leak
 # walks straight past it (tui.test did, twice) — so the memguard kills
@@ -70,7 +84,7 @@ test:
 	@printf '==> Running Go tests\n'
 	@printf '    GOMEMLIMIT: %s (soft heap goal)\n' "$(GOMEMLIMIT)"
 	@printf '    memguard:   %sMB RSS ceiling (hard OOM guard)\n' "$(MEMGUARD_MB)"
-	@bash scripts/verify/memguard.sh "$(MEMGUARD_MB)" go test -v -timeout 15m ./... || { \
+	@$(TEST_GUARD) "$(MEMGUARD_MB)" go test -v -timeout 15m ./... || { \
 		status=$$?; \
 		printf '\n[fail] Go tests failed with exit status %s. Review the failing package output above.\n' "$$status"; \
 		exit $$status; \
@@ -80,7 +94,7 @@ test:
 mutation-test:
 	@printf '==> Running mutation tests\n'
 	@printf '    Targets: defaults from scripts/verify/mutation-test.sh\n'
-	@./scripts/verify/mutation-test.sh || { \
+	@bash scripts/verify/mutation-test.sh $(MUTATION_TARGETS) || { \
 		status=$$?; \
 		printf '\n[fail] Mutation tests failed with exit status %s. Review surviving mutants or setup errors above.\n' "$$status"; \
 		exit $$status; \
@@ -90,7 +104,7 @@ mutation-test:
 run: build
 	@printf '==> Starting Agent Harness\n'
 	@printf '    Command: %s/%s\n\n' "$(BUILD_DIR)" "$(BINARY_NAME)"
-	@$(BUILD_DIR)/$(BINARY_NAME) || { \
+	@$(BUILD_DIR)/$(BINARY_NAME) $(RUN_ARGS) || { \
 		status=$$?; \
 		printf '\n[fail] Agent Harness exited with status %s.\n' "$$status"; \
 		printf '       If the app panicked, inspect the panic/output above first.\n'; \
@@ -131,7 +145,7 @@ lint:
 
 verify-structure:
 	@printf '==> Checking file structure (<= 400 lines per source file)\n'
-	@./scripts/verify-structure.sh
+	@bash scripts/verify-structure.sh
 
 verify: verify-structure
 	@printf '==> Running tests\n'

@@ -19,7 +19,7 @@ func TestHTTPProber_ProbeOpenAICompatible(t *testing.T) {
 			name: "successful probe with models",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"data":[{"id":"gpt-4"},{"id":"gpt-3.5"}]}`))
+				_, _ = w.Write([]byte(`{"data":[{"id":"gpt-4"},{"id":"gpt-3.5"}]}`))
 			},
 			wantReadiness: ProviderReady,
 			wantMsgSubstr: "2 models available",
@@ -28,7 +28,7 @@ func TestHTTPProber_ProbeOpenAICompatible(t *testing.T) {
 			name: "successful probe with no models",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"data":[]}`))
+				_, _ = w.Write([]byte(`{"data":[]}`))
 			},
 			wantReadiness: ProviderWarning,
 			wantMsgSubstr: "no models available",
@@ -69,7 +69,7 @@ func TestHTTPProber_ProbeOpenAICompatible(t *testing.T) {
 			name: "invalid JSON",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`invalid json`))
+				_, _ = w.Write([]byte(`invalid json`))
 			},
 			wantReadiness: ProviderWarning,
 			wantMsgSubstr: "invalid response format",
@@ -112,7 +112,7 @@ func TestHTTPProber_ProbeOllama(t *testing.T) {
 			name: "successful probe with models",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"models":[{"name":"llama2"},{"name":"codellama"}]}`))
+				_, _ = w.Write([]byte(`{"models":[{"name":"llama2"},{"name":"codellama"}]}`))
 			},
 			wantReadiness: ProviderReady,
 			wantMsgSubstr: "2 models available",
@@ -121,7 +121,7 @@ func TestHTTPProber_ProbeOllama(t *testing.T) {
 			name: "successful probe with no models",
 			handler: func(w http.ResponseWriter, r *http.Request) {
 				w.WriteHeader(http.StatusOK)
-				w.Write([]byte(`{"models":[]}`))
+				_, _ = w.Write([]byte(`{"models":[]}`))
 			},
 			wantReadiness: ProviderWarning,
 			wantMsgSubstr: "no models pulled",

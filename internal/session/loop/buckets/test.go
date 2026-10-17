@@ -139,12 +139,12 @@ func (t *TestBucket) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 
 	// Build summary
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Test Results (%s):\n", framework))
-	summary.WriteString(fmt.Sprintf("  Passed: %d\n", testResult.Passed))
-	summary.WriteString(fmt.Sprintf("  Failed: %d\n", testResult.Failed))
-	summary.WriteString(fmt.Sprintf("  Skipped: %d\n", testResult.Skipped))
+	fmt.Fprintf(&summary, "Test Results (%s):\n", framework)
+	fmt.Fprintf(&summary, "  Passed: %d\n", testResult.Passed)
+	fmt.Fprintf(&summary, "  Failed: %d\n", testResult.Failed)
+	fmt.Fprintf(&summary, "  Skipped: %d\n", testResult.Skipped)
 	if testResult.Coverage > 0 {
-		summary.WriteString(fmt.Sprintf("  Coverage: %.1f%%\n", testResult.Coverage))
+		fmt.Fprintf(&summary, "  Coverage: %.1f%%\n", testResult.Coverage)
 	}
 	summary.WriteString("\n")
 
@@ -152,7 +152,7 @@ func (t *TestBucket) handleRunTests(ctx loop.ExecutionContext) loop.LoopResult {
 	if len(testResult.Failures) > 0 {
 		summary.WriteString("Failures:\n")
 		for _, fail := range testResult.Failures {
-			summary.WriteString(fmt.Sprintf("  ✗ %s\n    %s\n", fail.Name, fail.Message))
+			fmt.Fprintf(&summary, "  ✗ %s\n    %s\n", fail.Name, fail.Message)
 		}
 		summary.WriteString("\n")
 	}
@@ -302,7 +302,7 @@ func (t *TestBucket) parseTestOutput(output string, framework string) *TestResul
 
 			// Parse coverage
 			if match := covRe.FindStringSubmatch(line); match != nil {
-				fmt.Sscanf(match[1], "%f", &result.Coverage)
+				_, _ = fmt.Sscanf(match[1], "%f", &result.Coverage)
 			}
 		}
 
@@ -313,10 +313,10 @@ func (t *TestBucket) parseTestOutput(output string, framework string) *TestResul
 
 		for _, line := range strings.Split(output, "\n") {
 			if match := passRe.FindStringSubmatch(line); match != nil {
-				fmt.Sscanf(match[1], "%d", &result.Passed)
+				_, _ = fmt.Sscanf(match[1], "%d", &result.Passed)
 			}
 			if match := failRe.FindStringSubmatch(line); match != nil {
-				fmt.Sscanf(match[1], "%d", &result.Failed)
+				_, _ = fmt.Sscanf(match[1], "%d", &result.Failed)
 			}
 		}
 	}

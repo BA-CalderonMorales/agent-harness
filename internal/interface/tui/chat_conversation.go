@@ -75,9 +75,9 @@ func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage
 				if content.Len() > 0 {
 					content.WriteString("\n")
 				}
-				content.WriteString(fmt.Sprintf("→ %s %s", b.Name, input))
+				fmt.Fprintf(&content, "→ %s %s", b.Name, input)
 			} else {
-				content.WriteString(fmt.Sprintf("→ %s", b.Name))
+				fmt.Fprintf(&content, "→ %s", b.Name)
 			}
 			parts = append(parts, TurnPart{ToolID: b.ID})
 		case types.ToolResultBlock:
@@ -88,7 +88,7 @@ func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage
 			if content.Len() > 0 {
 				content.WriteString("\n")
 			}
-			content.WriteString(fmt.Sprintf("%v", b.Content))
+			fmt.Fprintf(&content, "%v", b.Content)
 		}
 	}
 
