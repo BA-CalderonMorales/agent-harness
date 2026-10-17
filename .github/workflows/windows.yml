@@ -1,0 +1,58 @@
+name: Windows Make
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+permissions:
+  contents: read
+
+jobs:
+  windows-make:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: powershell
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.26.8'
+          cache: true
+      - name: Set up native Make and isolated profile
+        run: |
+          if (-not (Get-Command make -ErrorAction SilentlyContinue)) {
+            choco install make --yes --no-progress
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+          $profileRoot = Join-Path $env:RUNNER_TEMP 'agent-harness-home'
+          $installRoot = Join-Path $env:RUNNER_TEMP 'agent-harness-bin'
+          New-Item -ItemType Directory -Force $profileRoot,$installRoot | Out-Null
+          "HOME=$profileRoot" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "USERPROFILE=$profileRoot" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+          "GOBIN=$installRoot" | Out-File $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Build and run
+        run: |
+          make build
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          make run RUN_ARGS=--version
+          exit $LASTEXITCODE
+      - name: Test with native memory guard
+        run: make test
+      - name: Verify
+        run: make verify
+      - name: Install
+        run: |
+          make install
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path $env:GOBIN 'agent-harness.exe') --version
+          exit $LASTEXITCODE
+      - name: Check mutation runner
+        env:
+          GO_MUTESTING_MATCH: unmarshalContentBlock
+          GO_MUTESTING_TIMEOUT_SECONDS: '60'
+        run: make mutation-test MUTATION_TARGETS=./pkg/types
+      - name: Clean
+        run: make clean

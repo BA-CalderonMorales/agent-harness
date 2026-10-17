@@ -1,0 +1,3 @@
+*.sh text eol=lf
+Makefile text eol=lf
+scripts/verify/mutation-equivalents.txt text eol=lf
