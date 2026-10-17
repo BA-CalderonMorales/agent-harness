@@ -197,9 +197,16 @@ func (m *HomeModel) renderSessionRow(i int) string {
 	if label == "" {
 		label = fmt.Sprintf("Session %s", s.ID[:min(8, len(s.ID))])
 	}
+	// Only the row under the cursor is highlighted. The active session
+	// used to force the same highlight, so with the cursor parked on a
+	// quick action the dashboard showed two selected rows at once — "New
+	// chat" and the session you were already in — which reads as two
+	// things being ready to open. Highlight means "this is what Enter
+	// will act on", so it belongs to the cursor alone; the Sessions tab
+	// still marks the active session with its status badge.
 	marker := IndicatorUnselected
 	style := ListItemStyle
-	if s.IsActive || m.cursorSessionIndex() == i {
+	if m.cursorSessionIndex() == i {
 		marker = IndicatorSelected
 		style = ListSelectedStyle
 	}
