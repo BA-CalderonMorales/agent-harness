@@ -10,12 +10,14 @@ import (
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 func TestResolveLocalPathHandlesRelativeEnvAndHome(t *testing.T) {
 	root := t.TempDir()
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 	t.Setenv("MODEL_NAME", "ornith.gguf")
 
 	got, err := resolveLocalPath(root, "./models/$MODEL_NAME")

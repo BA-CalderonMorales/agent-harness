@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sort"
 	"strings"
 	"time"
@@ -48,6 +49,9 @@ type storeMeta struct {
 // projectSlug turns a project directory into a filesystem-safe session
 // group name. /home/me/proj → home-me-proj.
 func projectSlug(cwd string) string {
+	if runtime.GOOS == "windows" {
+		cwd = strings.ReplaceAll(filepath.ToSlash(cwd), ":", "")
+	}
 	return strings.ReplaceAll(strings.Trim(cwd, "/"), "/", "-")
 }
 
@@ -101,7 +105,7 @@ func (sm *SessionManager) createSessionFile(path string) error {
 	if err != nil {
 		return fmt.Errorf("failed to create session file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	for _, event := range events {
 		if err := writeEvent(f, event); err != nil {
 			return err
@@ -138,7 +142,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	if err != nil {
 		return fmt.Errorf("failed to open session file: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	for i := from; i < len(s.Messages); i++ {
 		raw, err := json.Marshal(s.Messages[i])

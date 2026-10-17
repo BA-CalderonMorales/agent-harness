@@ -14,6 +14,8 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 // TestWizardModelsLiveList is the lightning bolt: the wizard's model
@@ -104,7 +106,7 @@ func TestWizardEndpointPinning(t *testing.T) {
 // persona carries over, and the manager re-anchors on the fresh session.
 func TestStartFreshSessionPersistsPrevious(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", root)
+	testenv.SetHome(t, root)
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", filepath.Join(root, "sessions"))
 
 	sm, err := state.NewSessionManager()
@@ -163,7 +165,7 @@ func TestStartFreshSessionPersistsPrevious(t *testing.T) {
 // retained), and the greeting points at /help.
 func TestCompleteLoginGreetsWithFreshSession(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", root)
+	testenv.SetHome(t, root)
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", filepath.Join(root, "sessions"))
 
 	sm, err := state.NewSessionManager()

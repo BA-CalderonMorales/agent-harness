@@ -14,6 +14,8 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 type compactionContractClient struct {
@@ -257,7 +259,7 @@ func TestEstimateTokensCoversEveryContentBlockType(t *testing.T) {
 func TestOversizedToolResultKeepsHeadTailAndDurableReceipt(t *testing.T) {
 	tools.ResetBudgetForNewTurn()
 	t.Cleanup(tools.ResetBudgetForNewTurn)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 
 	fullResult := "HEAD-" + strings.Repeat("x", 60_000) + "-TAIL"
 	largeTool := tools.NewTool(tools.Tool{

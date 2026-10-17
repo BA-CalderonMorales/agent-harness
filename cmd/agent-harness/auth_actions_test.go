@@ -7,6 +7,8 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 // TestResetDeletesProjectSessions pins the portability fix: /reset must
@@ -16,7 +18,7 @@ import (
 // timestamped .jsonl per project directory).
 func TestResetDeletesProjectSessions(t *testing.T) {
 	root := t.TempDir()
-	t.Setenv("HOME", root)
+	testenv.SetHome(t, root)
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", filepath.Join(root, "sessions"))
 
 	sm, err := state.NewSessionManager()

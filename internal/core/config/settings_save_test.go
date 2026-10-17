@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -167,7 +168,9 @@ func TestLocalLayerOverridesUserSettings(t *testing.T) {
 	root := t.TempDir()
 	writeProjectYAML(t, root)
 
-	NewLayeredLoader(root).SaveSettings(SourceUser, map[string]interface{}{"provider": "openrouter", "model": "openai/gpt-4o"})
+	if err := NewLayeredLoader(root).SaveSettings(SourceUser, map[string]interface{}{"provider": "openrouter", "model": "openai/gpt-4o"}); err != nil {
+		t.Fatal(err)
+	}
 
 	localDir := filepath.Join(root, ".agent-harness")
 	if err := os.MkdirAll(localDir, 0755); err != nil {
@@ -250,6 +253,9 @@ func TestZeroNumericSettingsDoNotClobberProject(t *testing.T) {
 }
 
 func TestSaveSettings_FileModeIs0600(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows uses ACLs rather than POSIX permission bits")
+	}
 	configHome := t.TempDir()
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", configHome)
 	clearConfigEnv(t)
