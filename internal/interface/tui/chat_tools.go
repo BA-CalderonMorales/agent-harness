@@ -303,7 +303,7 @@ func compactCommandForWidth(cmd string, maxLen int) string {
 	fields := strings.Fields(cmd)
 	if len(fields) > 0 {
 		last := fields[len(fields)-1]
-		if strings.Contains(last, "/") {
+		if strings.ContainsAny(last, `/\`) {
 			name := pathBase(last)
 			prefix := strings.Join(fields[:len(fields)-1], " ")
 			candidate := ".../" + name
@@ -338,11 +338,11 @@ func truncateDisplayWidth(text string, maxWidth int) string {
 }
 
 func pathBase(path string) string {
-	path = strings.TrimRight(path, "/")
+	path = strings.TrimRight(path, `/\`)
 	if path == "" {
 		return path
 	}
-	idx := strings.LastIndex(path, "/")
+	idx := strings.LastIndexAny(path, `/\`)
 	if idx < 0 {
 		return path
 	}

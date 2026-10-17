@@ -295,6 +295,7 @@ func TestToolRunNeverMergesAcrossTurns(t *testing.T) {
 		m = model.(ChatModel)
 	}
 
+	m.refreshViewportWithFollow(true)
 	lines := renderedLines(m.viewport.View())
 	joined := strings.Join(lines, "\n")
 	// Each turn renders its own group; the two turns' calls must not
