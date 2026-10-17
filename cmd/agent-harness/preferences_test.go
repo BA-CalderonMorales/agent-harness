@@ -100,3 +100,21 @@ func TestCredentialsDoNotReplacePreferredModel(t *testing.T) {
 		t.Fatalf("model = %q, want chosen", app.config.Model)
 	}
 }
+
+// An empty resumed session carries no conversation whose model to keep, so
+// it follows the configured default. Before this, a session created before
+// a boot-time model reset stayed on the stale model forever and the saved
+// default never took effect until the user started another chat.
+func TestResumeEmptySessionAdoptsConfiguredModel(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", Model: "chosen"}, "stale")
+	if _, err := app.sessionManager.SaveCurrent(); err != nil {
+		t.Fatal(err)
+	}
+	app.cwd, _ = os.Getwd()
+	if err := app.initSession(); err != nil {
+		t.Fatal(err)
+	}
+	if app.session.Model != "chosen" {
+		t.Fatalf("empty resumed session model = %q, want the configured %q", app.session.Model, "chosen")
+	}
+}
