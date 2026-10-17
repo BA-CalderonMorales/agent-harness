@@ -266,8 +266,8 @@ func (m *ModelPickerModel) fitViewport() {
 	if budget := modalBodyRows(m.width, m.height, spec); want > budget {
 		want = budget
 	}
-	if want < 3 {
-		want = 3
+	if want < 1 {
+		want = 1
 	}
 	m.viewport.Height = want
 }
