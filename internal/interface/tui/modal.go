@@ -61,16 +61,19 @@ type modalSpec struct {
 }
 
 // panelWidth resolves the panel's outer width: the preferred width
-// capped to the pane, with a floor so a phone pane still gets a dialog
-// rather than a sliver.
+// capped to the pane, with a floor when the pane is wide enough for it.
 func panelWidth(preferred, termWidth int) int {
 	if preferred <= 0 {
 		preferred = modalMaxWidth
 	}
-	if maxPanel := termWidth - 2; preferred > maxPanel {
+	maxPanel := termWidth - 2
+	if maxPanel < 1 {
+		maxPanel = 1
+	}
+	if preferred > maxPanel {
 		preferred = maxPanel
 	}
-	if preferred < modalMinWidth {
+	if preferred < modalMinWidth && maxPanel >= modalMinWidth {
 		preferred = modalMinWidth
 	}
 	return preferred
@@ -209,11 +212,11 @@ func modalBodyRows(termWidth, termHeight int, spec modalSpec) int {
 }
 
 // windowModalItems lays out as many items as fit in budget rows while
-// keeping the cursor's item visible. Two rows are reserved for the
-// boundary markers, so a marker can never push the cursor's own row out
-// of view; the window then grows outward from the cursor, alternating
-// up and down, so a cursor at one end of a long list keeps its
-// neighbours above it rather than sliding the list to the top.
+// keeping the cursor's item visible. Boundary markers use only the rows
+// left after the cursor, so they never push its row out of view; the
+// window then grows outward from the cursor, alternating up and down,
+// so a cursor at one end of a long list keeps its neighbours above it
+// rather than sliding the list to the top.
 func windowModalItems(items []modalItem, cursor, budget int) []string {
 	n := len(items)
 	if n == 0 || budget <= 0 {
@@ -221,6 +224,15 @@ func windowModalItems(items []modalItem, cursor, budget int) []string {
 	}
 	if cursor < 0 || cursor >= n {
 		cursor = 0
+	}
+	if budget == 1 {
+		// There is no room for boundary markers on a one-row pane. Keep
+		// the selected item's first row visible instead of letting a
+		// marker hide it when renderModal applies its final row cap.
+		if len(items[cursor].lines) == 0 {
+			return []string{""}
+		}
+		return []string{items[cursor].lines[0]}
 	}
 
 	rows := budget - 2 // marker headroom
