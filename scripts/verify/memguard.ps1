@@ -7,7 +7,8 @@ if ($args.Count -eq 0) {
     [Console]::Error.WriteLine('usage: memguard.ps1 <rss-limit-mb> <command> [args...]')
     exit 2
 }
-$commandPath = (Get-Command $args[0] -CommandType Application -ErrorAction Stop).Source
+$commandPath = (Get-Command $args[0] -CommandType Application -ErrorAction Stop |
+    Select-Object -First 1).Source
 $commandArgs = [string[]]@($args | Select-Object -Skip 1)
 
 Add-Type -TypeDefinition @'
