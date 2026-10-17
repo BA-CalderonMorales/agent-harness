@@ -13,7 +13,7 @@ import (
 
 func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<- types.LLMEvent) {
 	defer close(out)
-	defer body.Close()
+	defer func() { _ = body.Close() }()
 
 	readFinished := make(chan struct{})
 	defer close(readFinished)

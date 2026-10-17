@@ -9,6 +9,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -141,13 +142,24 @@ func maskKey(key string) string {
 // key wins, then the stored key for THIS provider (per-provider key
 // set — switching providers never loses the keys you already entered).
 func (m *LoginDialogModel) probeKey() string {
-	if strings.TrimSpace(m.apiKeyBuf) != "" {
-		return strings.TrimSpace(m.apiKeyBuf)
-	}
-	if key, ok := m.stored.keys[m.provider()]; ok {
+	if key := normalizeLoginKey(m.apiKeyBuf); key != "" {
 		return key
 	}
+	if key, ok := m.stored.keys[m.provider()]; ok {
+		return normalizeLoginKey(key)
+	}
 	return ""
+}
+
+// normalizeLoginKey removes clipboard control characters, including a Windows
+// NUL terminator, before a key is used in an HTTP header or saved by the wizard.
+func normalizeLoginKey(key string) string {
+	return strings.TrimSpace(strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return -1
+		}
+		return r
+	}, key))
 }
 
 // finishKey resolves the key the login completes with.
@@ -239,7 +251,7 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 		case "esc":
 			return false, true, "", "", ""
 		case "enter":
-			if strings.TrimSpace(m.apiKeyBuf) == "" {
+			if normalizeLoginKey(m.apiKeyBuf) == "" {
 				m.errorMsg = "API key cannot be empty."
 				return false, false, "", "", ""
 			}
@@ -273,7 +285,7 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 			if msg.String() == "esc" || msg.String() == "q" {
 				return false, true, "", "", ""
 			}
-			return true, false, m.provider(), strings.TrimSpace(m.apiKeyBuf), ""
+			return true, false, m.provider(), m.finishKey(), ""
 		}
 	}
 	return false, false, "", "", ""

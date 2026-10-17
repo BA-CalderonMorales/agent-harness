@@ -94,7 +94,7 @@ func checkHTTPEndpoint(ctx context.Context, url string) runtimeCheck {
 	if err != nil {
 		return runtimeCheck{Name: "Endpoint", Warning: true, Detail: fmt.Sprintf("%s is not reachable: %v", url, err)}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return runtimeCheck{Name: "Endpoint", Warning: true, Detail: fmt.Sprintf("%s returned HTTP %d", url, resp.StatusCode)}

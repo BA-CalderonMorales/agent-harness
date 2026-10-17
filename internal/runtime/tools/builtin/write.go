@@ -64,7 +64,7 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		}
 
 		if err := os.Rename(tempPath, path); err != nil {
-			os.Remove(tempPath)
+			_ = os.Remove(tempPath)
 			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
 		}
 

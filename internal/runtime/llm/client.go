@@ -103,7 +103,7 @@ func (c *HTTPClient) Stream(ctx context.Context, req Request) (<-chan types.LLME
 		// surfaces in the chat pane and session files, so the key must
 		// never ride along.
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4<<10))
-		resp.Body.Close()
+		_ = resp.Body.Close()
 		// Unwrap the provider's JSON error envelope so the pane shows the
 		// one actionable sentence instead of raw braces and quotations.
 		return nil, fmt.Errorf("LLM API error %d: %s", resp.StatusCode, sanitizeError(fmt.Errorf("%s", apiErrorMessage(body)), c.APIKey))

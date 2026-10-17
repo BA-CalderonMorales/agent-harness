@@ -116,7 +116,10 @@ func (r *BehaviorRunner) Run(test BehaviorTest) TestResult {
 
 	// Execute after hook
 	if r.hooks.AfterEach != nil {
-		r.hooks.AfterEach(test, result)
+		if err := r.hooks.AfterEach(test, result); err != nil {
+			result.Error = err
+			result.Passed = false
+		}
 	}
 
 	return result
@@ -170,7 +173,7 @@ func createTempWorkDir() string {
 }
 
 func cleanupWorkDir(dir string) {
-	os.RemoveAll(dir)
+	_ = os.RemoveAll(dir)
 }
 
 // Assertions for behavior tests

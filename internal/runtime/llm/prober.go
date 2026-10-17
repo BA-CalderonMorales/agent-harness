@@ -103,7 +103,7 @@ func (p *HTTPProber) probeOpenAICompatible(ctx context.Context) (ProviderReadine
 		}
 		return ProviderUnavailable, sanitizeError(err, p.APIKey)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	switch resp.StatusCode {
 	case http.StatusOK:
@@ -147,7 +147,7 @@ func (p *HTTPProber) probeOllama(ctx context.Context) (ProviderReadiness, string
 		}
 		return ProviderUnavailable, sanitizeError(err, p.APIKey)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return ProviderWarning, fmt.Sprintf("HTTP %d", resp.StatusCode)

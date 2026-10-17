@@ -108,7 +108,7 @@ func AppendSystemContext(prompt string, ctx map[string]string) string {
 	var sb strings.Builder
 	sb.WriteString(prompt)
 	for k, v := range ctx {
-		sb.WriteString(fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k))
+		fmt.Fprintf(&sb, "\n\n<%s>\n%s\n</%s>", k, v, k)
 	}
 	return sb.String()
 }

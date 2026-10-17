@@ -68,7 +68,7 @@ func (t *stdioTransport) Start(ctx context.Context) error {
 }
 
 func drainStderr(r io.ReadCloser) {
-	defer r.Close()
+	defer func() { _ = r.Close() }()
 	buf := make([]byte, 64*1024)
 	for {
 		_, err := r.Read(buf)

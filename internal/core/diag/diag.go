@@ -239,7 +239,7 @@ func write(entry Entry) {
 	if err != nil {
 		return
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Sync is intentionally skipped: diagnostics are best-effort and
 	// must stay cheap on the hot paths that call them.

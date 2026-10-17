@@ -12,6 +12,8 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 func TestHomeNewChatCreatesDistinctSession(t *testing.T) {
@@ -70,7 +72,7 @@ func TestHomeExportSessionWritesCurrentSession(t *testing.T) {
 	sessionDir := t.TempDir()
 	exportDir := t.TempDir()
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", sessionDir)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	originalWD, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Getwd() error = %v", err)

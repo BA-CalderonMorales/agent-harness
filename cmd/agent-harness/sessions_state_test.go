@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
@@ -16,8 +15,7 @@ func TestGetSessionInfosSurfacesUnreadableFileWithoutPrivateDetails(t *testing.T
 		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
 	}
 	privateText := "secret transcript content"
-	projectSlug := strings.ReplaceAll(strings.Trim(dir, "/"), "/", "-")
-	projectDir := filepath.Join(dir, projectSlug)
+	projectDir := manager.GetSessionsDir()
 	if err := os.MkdirAll(projectDir, 0700); err != nil {
 		t.Fatalf("create disposable project session dir: %v", err)
 	}

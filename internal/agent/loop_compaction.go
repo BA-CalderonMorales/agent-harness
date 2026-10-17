@@ -179,7 +179,7 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, mode
 	b.WriteString("Preserve the original user goal, constraints, decisions and approvals, pending work, plans, files changed, tool findings or receipts, errors, and verification status.\n")
 	b.WriteString("State uncertainty explicitly. Put the original goal and unresolved work first.\n\n")
 	for _, msg := range msgs {
-		b.WriteString(fmt.Sprintf("%s: ", msg.Role))
+		fmt.Fprintf(&b, "%s: ", msg.Role)
 		for _, block := range msg.Content {
 			switch blk := block.(type) {
 			case types.TextBlock:
@@ -188,9 +188,9 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, mode
 				b.WriteString("[reasoning omitted from durable summary input]")
 			case types.ToolUseBlock:
 				input, _ := json.Marshal(blk.Input)
-				b.WriteString(fmt.Sprintf("[tool id=%s name=%s input=%s]", blk.ID, blk.Name, input))
+				fmt.Fprintf(&b, "[tool id=%s name=%s input=%s]", blk.ID, blk.Name, input)
 			case types.ToolResultBlock:
-				b.WriteString(fmt.Sprintf("[tool result id=%s error=%t: %s]", blk.ToolUseID, blk.IsError, blk.Content))
+				fmt.Fprintf(&b, "[tool result id=%s error=%t: %s]", blk.ToolUseID, blk.IsError, blk.Content)
 			}
 		}
 		b.WriteString("\n")

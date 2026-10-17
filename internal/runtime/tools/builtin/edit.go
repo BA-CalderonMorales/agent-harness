@@ -92,7 +92,7 @@ var FileEditTool = tools.NewTool(tools.Tool{
 
 		if err := os.Rename(tempPath, path); err != nil {
 			// Try to clean up temp file
-			os.Remove(tempPath)
+			_ = os.Remove(tempPath)
 			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
 		}
 

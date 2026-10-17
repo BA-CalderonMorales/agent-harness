@@ -174,7 +174,7 @@ func (m SessionsModel) renderSessionItem(session SessionInfo, selected bool, wid
 	// real remainder renders the row wider than its pane.
 	avail := width - chrome - ageCell - statusCell
 	if avail < 0 {
-		statusStr, statusCell = "", 0
+		statusStr = ""
 		avail = width - chrome - ageCell
 	}
 	if avail < 0 {

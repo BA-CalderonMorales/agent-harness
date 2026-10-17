@@ -15,6 +15,7 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/permissions"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -55,8 +56,10 @@ func NewFixture(t *testing.T) *Fixture {
 
 	// Session manager with temp session dir
 	sessionDir := filepath.Join(workDir, "sessions")
-	os.MkdirAll(sessionDir, 0755)
-	t.Setenv("HOME", workDir) // redirect session storage to temp dir; restore after the test
+	if err := os.MkdirAll(sessionDir, 0755); err != nil {
+		t.Fatal(err)
+	}
+	testenv.SetHome(t, workDir) // redirect session storage to temp dir; restore after the test
 
 	sm, err := state.NewSessionManager()
 	if err != nil {

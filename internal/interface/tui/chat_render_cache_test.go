@@ -20,7 +20,7 @@ func benchTranscript(n int) *ChatModel {
 			continue
 		}
 		var b strings.Builder
-		b.WriteString(fmt.Sprintf("### Answer %d\n\n", i))
+		fmt.Fprintf(&b, "### Answer %d\n\n", i)
 		b.WriteString("Here is the explanation with **bold** and `inline code`.\n\n")
 		b.WriteString(strings.Repeat("The parser walks tokens in order and updates state. ", 12))
 		b.WriteString("\n\n```go\nfunc handle(w *Writer) error {\n\treturn w.Flush()\n}\n```\n")

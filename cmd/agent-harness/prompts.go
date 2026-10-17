@@ -73,15 +73,15 @@ func (app *App) summarizeMessages(msgs []types.Message) (string, error) {
 	var b strings.Builder
 	b.WriteString("Summarize the following conversation concisely. Preserve key decisions, facts, and context:\n\n")
 	for _, msg := range msgs {
-		b.WriteString(fmt.Sprintf("%s: ", msg.Role))
+		fmt.Fprintf(&b, "%s: ", msg.Role)
 		for _, block := range msg.Content {
 			switch blk := block.(type) {
 			case types.TextBlock:
 				b.WriteString(blk.Text)
 			case types.ToolUseBlock:
-				b.WriteString(fmt.Sprintf("[tool: %s]", blk.Name))
+				fmt.Fprintf(&b, "[tool: %s]", blk.Name)
 			case types.ToolResultBlock:
-				b.WriteString(fmt.Sprintf("[result: %v]", blk.Content))
+				fmt.Fprintf(&b, "[result: %v]", blk.Content)
 			}
 		}
 		b.WriteString("\n")

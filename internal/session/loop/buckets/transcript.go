@@ -168,7 +168,7 @@ func (t *TranscriptBucket) handleSummarize(ctx loop.ExecutionContext) loop.LoopR
 
 	// Generate simple summary
 	var summary strings.Builder
-	summary.WriteString(fmt.Sprintf("Conversation Summary (%d messages):\n\n", len(source)-startIdx))
+	fmt.Fprintf(&summary, "Conversation Summary (%d messages):\n\n", len(source)-startIdx)
 
 	// Count by role
 	roleCount := make(map[string]int)
@@ -185,16 +185,16 @@ func (t *TranscriptBucket) handleSummarize(ctx loop.ExecutionContext) loop.LoopR
 
 	summary.WriteString("Message counts:\n")
 	for role, count := range roleCount {
-		summary.WriteString(fmt.Sprintf("  %s: %d\n", role, count))
+		fmt.Fprintf(&summary, "  %s: %d\n", role, count)
 	}
 	if toolCount > 0 {
-		summary.WriteString(fmt.Sprintf("  tool calls: %d\n", toolCount))
+		fmt.Fprintf(&summary, "  tool calls: %d\n", toolCount)
 	}
 
 	// List topics (keywords from user messages)
 	topics := extractTopics(source[startIdx:])
 	if len(topics) > 0 {
-		summary.WriteString(fmt.Sprintf("\nKey topics: %s", strings.Join(topics, ", ")))
+		fmt.Fprintf(&summary, "\nKey topics: %s", strings.Join(topics, ", "))
 	}
 
 	result := summary.String()

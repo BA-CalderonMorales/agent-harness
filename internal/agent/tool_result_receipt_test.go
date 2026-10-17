@@ -6,17 +6,20 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 func TestPersistToolResultReceiptIsBoundedAndPrivate(t *testing.T) {
 	home := t.TempDir()
-	t.Setenv("HOME", home)
+	testenv.SetHome(t, home)
 
 	fullResult := "HEAD-" + strings.Repeat("private-output-", 2_000) + "-TAIL"
 	const receiptLimit = 1_024
@@ -49,14 +52,14 @@ func TestPersistToolResultReceiptIsBoundedAndPrivate(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat result directory: %v", err)
 	}
-	if got := dirInfo.Mode().Perm(); got != 0o700 {
+	if got := dirInfo.Mode().Perm(); runtime.GOOS != "windows" && got != 0o700 {
 		t.Fatalf("result directory mode = %o, want 700", got)
 	}
 	fileInfo, err := os.Stat(resultPath)
 	if err != nil {
 		t.Fatalf("stat result file: %v", err)
 	}
-	if got := fileInfo.Mode().Perm(); got != 0o600 {
+	if got := fileInfo.Mode().Perm(); runtime.GOOS != "windows" && got != 0o600 {
 		t.Fatalf("result file mode = %o, want 600", got)
 	}
 }
@@ -64,7 +67,7 @@ func TestPersistToolResultReceiptIsBoundedAndPrivate(t *testing.T) {
 func TestRunSingleToolHonorsToolSpecificReceiptLimitBeforeTurnLimit(t *testing.T) {
 	tools.ResetBudgetForNewTurn()
 	t.Cleanup(tools.ResetBudgetForNewTurn)
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 
 	fullResult := "HEAD-" + strings.Repeat("bounded-output-", 200) + "-TAIL"
 	if len(fullResult) >= tools.DefaultMaxCharsPerTurn {

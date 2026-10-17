@@ -8,14 +8,16 @@ import (
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 // newCredentialTestEnv redirects the credential store to a temp home
 // and seeds it with a secure config. Credential paths derive from
-// os.UserHomeDir, so HOME is the redirect point.
+// os.UserHomeDir, so both HOME and USERPROFILE are redirected.
 func newCredentialTestEnv(t *testing.T) *config.CredentialManager {
 	t.Helper()
-	t.Setenv("HOME", t.TempDir())
+	testenv.SetHome(t, t.TempDir())
 	t.Setenv("AH_API_KEY", "")
 	t.Setenv("AGENT_HARNESS_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")

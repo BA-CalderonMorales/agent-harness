@@ -30,7 +30,7 @@ func NewAnimatedText() *AnimatedText {
 
 // Print prints text (no animation for now)
 func (at *AnimatedText) Print(text string) {
-	fmt.Fprint(at.out, text)
+	_, _ = fmt.Fprint(at.out, text)
 }
 
 // Sprint returns the string

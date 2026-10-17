@@ -164,8 +164,8 @@ func CleanupHandler(list func() ([]CleanupSession, error), del func(id string) e
 			var b strings.Builder
 			b.WriteString("Saved sessions (oldest first):\n")
 			for _, s := range sessions {
-				b.WriteString(fmt.Sprintf("  %s  %6s  %d msgs  %s\n",
-					s.ID, humanSize(s.SizeBytes), s.MessageCount, s.UpdatedAt.Format("2006-01-02 15:04")))
+				fmt.Fprintf(&b, "  %s  %6s  %d msgs  %s\n",
+					s.ID, humanSize(s.SizeBytes), s.MessageCount, s.UpdatedAt.Format("2006-01-02 15:04"))
 			}
 			if all {
 				b.WriteString("\nRerun with --confirm to delete ALL non-active sessions.")
@@ -194,7 +194,7 @@ func CleanupHandler(list func() ([]CleanupSession, error), del func(id string) e
 		for _, id := range targets {
 			if err := del(id); err != nil {
 				failed++
-				b.WriteString(fmt.Sprintf("  ✗ %s: %v\n", id, err))
+				fmt.Fprintf(&b, "  ✗ %s: %v\n", id, err)
 			} else {
 				deleted++
 			}

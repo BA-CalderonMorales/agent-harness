@@ -47,7 +47,7 @@ func diagEntryForFrameTest(site, msg string) diag.Entry {
 func TestFrameStableAcrossTabSwitches(t *testing.T) {
 	for _, size := range [][2]int{{50, 24}, {60, 30}, {70, 40}} {
 		w, h := size[0], size[1]
-		var refRows, refBorder int = -1, -1
+		var refRows, refBorder = -1, -1
 		for tab := viewID(0); tab < viewCount; tab++ {
 			app := NewApp()
 			app.Update(tea.WindowSizeMsg{Width: w, Height: h})

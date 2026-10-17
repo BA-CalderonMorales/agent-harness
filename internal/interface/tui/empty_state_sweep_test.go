@@ -85,7 +85,9 @@ func assertEmptyStateShape(t *testing.T, tab, sizeName string, view string, w, h
 	}
 
 	if dir := os.Getenv("AH_CAPTURE_DIR"); dir != "" {
-		os.MkdirAll(dir, 0o755)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
 		name := filepath.Join(dir, fmt.Sprintf("%s-%s.txt", tab, sizeName))
 		if err := os.WriteFile(name, []byte(view), 0o644); err != nil {
 			t.Fatalf("capture write: %v", err)

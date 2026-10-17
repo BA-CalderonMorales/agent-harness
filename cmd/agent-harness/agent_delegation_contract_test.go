@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -32,10 +33,18 @@ func (c *delegatedSequenceClient) Stream(_ context.Context, req llm.Request) (<-
 
 	var events []types.LLMEvent
 	switch turn {
-	case 1:
-		events = llm.MockToolUseResponse("write", `{"file_path":"`+c.path+`","content":"delegated"}`)
-	case 2:
-		events = llm.MockToolUseResponse("read", `{"file_path":"`+c.path+`"}`)
+	case 1, 2:
+		toolName := "read"
+		input := map[string]string{"file_path": c.path}
+		if turn == 1 {
+			toolName = "write"
+			input["content"] = "delegated"
+		}
+		data, err := json.Marshal(input)
+		if err != nil {
+			return nil, err
+		}
+		events = llm.MockToolUseResponse(toolName, string(data))
 	default:
 		events = llm.MockTextResponse("delegated child complete")
 	}

@@ -221,7 +221,7 @@ func (fs *FileSystemBucket) handleWrite(ctx loop.ExecutionContext) loop.LoopResu
 	}
 
 	if err := os.Rename(tempPath, fullPath); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return loop.LoopResult{
 			Success: false,
 			Error:   loop.WrapError("rename_failed", err),

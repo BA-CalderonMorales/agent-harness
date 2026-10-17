@@ -203,25 +203,33 @@ func TestAllSlashCommandsQuickCheckProperties(t *testing.T) {
 			handler := BranchHandler(listFn, createFn, switchFn, deleteFn)
 
 			// List
-			handler("")
+			if _, err := handler(""); err != nil {
+				return false
+			}
 			if lastOp != "list" {
 				return false
 			}
 
 			// Create
-			handler("create " + branchName)
+			if _, err := handler("create " + branchName); err != nil {
+				return false
+			}
 			if lastOp != "create" || lastArg != branchName {
 				return false
 			}
 
 			// Switch
-			handler("switch " + branchName)
+			if _, err := handler("switch " + branchName); err != nil {
+				return false
+			}
 			if lastOp != "switch" || lastArg != branchName {
 				return false
 			}
 
 			// Delete
-			handler("delete " + branchName)
+			if _, err := handler("delete " + branchName); err != nil {
+				return false
+			}
 			if lastOp != "delete" || lastArg != branchName {
 				return false
 			}
@@ -378,7 +386,7 @@ func isValidCommandName(s string) bool {
 		return false
 	}
 	for _, r := range s {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-') {
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' {
 			return false
 		}
 	}
