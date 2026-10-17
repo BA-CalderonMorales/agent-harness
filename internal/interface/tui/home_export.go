@@ -2,7 +2,6 @@ package tui
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/charmbracelet/bubbletea"
 )
@@ -86,50 +85,35 @@ func (m ExportPickerModel) Update(msg tea.Msg) (ExportPickerModel, bool, bool) {
 	return m, false, false
 }
 
-// View renders the modal overlay.
+// View renders the modal overlay through the shared modal frame, so the
+// export list wears the same chrome and scroll window as every other
+// overlay.
 func (m ExportPickerModel) View(width, height int) string {
 	if !m.visible {
 		return ""
 	}
 
-	var b strings.Builder
-	b.WriteString(HelpTitleStyle.Render("Export session"))
-	b.WriteString("\n")
-	b.WriteString(HelpDimStyle.Render("Pick a session to export · Enter exports · Esc cancels"))
-	b.WriteString("\n\n")
-
-	if len(m.sessions) == 0 {
-		b.WriteString(HelpDimStyle.Render("  No sessions to export."))
-	}
-
+	items := make([]modalItem, 0, len(m.sessions))
 	for i, s := range m.sessions {
-		label := fmt.Sprintf("%s  %s  (%d msgs)", shortSessionStamp(s), s.Title, s.MessageCount)
+		marker, style := IndicatorUnselected, ListItemStyle
 		if i == m.cursor {
-			b.WriteString(ListSelectedStyle.Render(IndicatorSelected + " " + label))
-		} else {
-			b.WriteString(ListItemStyle.Render(IndicatorUnselected + " " + label))
+			marker, style = IndicatorSelected, ListSelectedStyle
 		}
-		b.WriteString("\n")
+		label := fmt.Sprintf("%s  %s  (%d msgs)", shortSessionStamp(s), s.Title, s.MessageCount)
+		items = append(items, modalItem{lines: []string{style.Render(marker + label)}})
+	}
+	if len(items) == 0 {
+		items = append(items, modalItem{lines: []string{HelpDimStyle.Render("No sessions to export.")}})
 	}
 
-	content := PanelPrimary.Width(panelWidth(width)).Render(b.String())
-	return placeOverlay(width, height, content)
-}
-
-// panelWidth sizes the modal: half the terminal with a floor wide
-// enough that the hint line and session rows never wrap.
-func panelWidth(width int) int {
-	w := width / 2
-	if w < 70 {
-		w = 70
-	}
-	if w > width-4 {
-		w = width - 4
-	}
-	if w < 20 {
-		w = 20
-	}
-	return w
+	return renderModal(width, height, modalSpec{
+		title:          "Export session",
+		hint:           "Pick a session to write to disk.",
+		items:          items,
+		footer:         "j/k: navigate  Enter: export  Esc: cancel",
+		preferredWidth: modalMaxWidth,
+		cursor:         m.cursor,
+	})
 }
 
 // shortSessionStamp renders the session's relative age for the list.

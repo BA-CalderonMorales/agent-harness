@@ -1,5 +1,43 @@
 # Changelog
 
+## [0.3.37] - 2026-09-15
+
+### Added
+- Every overlay renders through one shared modal frame: a single width
+  policy, one padding, and one scroll window that marks "... n more
+  above/below" instead of dropping content, so a short pane can reach
+  the whole list. Done before this, each modal picked its own width and
+  placement, and the ones without a scroll window simply ran off the
+  bottom of the pane.
+- The login wizard shows where to get an API key for each hosted
+  provider. The local runtimes (local, ollama, flm) are left out, since
+  they authenticate with nothing.
+- A boot-time credential failure now carries its fix: where to get a key
+  and which key opens the wizard, instead of a bare verdict.
+- The agent agrees on the goal before acting: answer first, ask one
+  specific question when the request is ambiguous, then write the plan
+  with `todo_write` before the first change.
+- Suggested next steps, opened with `s` in the chat tab: a short list
+  derived from the turn that just ran, each entry carrying the reason it
+  is suggested, run with Enter like typed input.
+
+### Fixed
+- The chat composer and the working indicator are no longer clipped on a
+  short pane. A 100x16 pane lost both, so the driver could not see that
+  work was happening or type; the chrome is now measured and yields the
+  decoration before the composer.
+- The command palette always rendered its tersest footer hint, because
+  the candidate list was ordered shortest-first while the loop returned
+  the first fit.
+- Selected rows in the model picker and command palette sat one column
+  right of their neighbours; both selection markers are the same width.
+- An unrecognized `todo_write` status is rejected with the allowed values
+  instead of being accepted and silently rendered as pending, and the
+  plan is echoed back so the model can read what it wrote.
+- The login wizard asked ollama and flm for an API key the moment after
+  promising they needed none.
+- A model with no recorded provider no longer renders an empty `[]` tag.
+
 ## [0.3.36] - 2026-09-14
 
 ### Added

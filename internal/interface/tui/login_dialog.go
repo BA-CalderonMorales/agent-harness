@@ -7,10 +7,10 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
 )
 
 // LoginStep is one stage of the modal wizard.
@@ -219,11 +219,11 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 			}
 		case "enter", " ":
 			p := m.provider()
-			// The key step is skipped only when local needs none or the
-			// stored key belongs to THIS provider — a key minted for
+			// The key step is skipped when the runtime needs no key or
+			// the stored key belongs to THIS provider — a key minted for
 			// another provider probed with 401s and dead-ended the
 			// login.
-			if p == "local" || m.hasStoredKey(p) {
+			if !providerNeedsKey(p) || m.hasStoredKey(p) {
 				m.step = LoginStepModel
 				m.loadModels()
 			} else {
@@ -279,80 +279,88 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 	return false, false, "", "", ""
 }
 
-// View renders the dialog centered over the app.
+// View renders the dialog over the app through the shared modal frame,
+// so the wizard, the provider switch, and the pickers share one width,
+// one frame, and one scroll window.
 func (m LoginDialogModel) View() string {
 	if !m.showing {
 		return ""
 	}
 
-	var body strings.Builder
+	spec := modalSpec{preferredWidth: modalMaxWidth}
 	switch m.step {
 	case LoginStepProvider:
-		body.WriteString(HelpTitleStyle.Render("Login - choose provider") + "\n\n")
-		for i, p := range loginProviders {
-			marker := "  "
-			if i == m.providerIdx {
-				marker = IndicatorSelected + " "
-			}
-			body.WriteString(marker + p + "\n")
-			body.WriteString(HelpDimStyle.Render("    "+providerBlurbs[p]) + "\n")
-		}
-		body.WriteString("\n" + HelpDimStyle.Render("j/k: navigate  Enter: select  Esc: cancel"))
+		spec.title = "Login - choose provider"
+		spec.hint = "Pick where your models live. Keys are remembered per provider."
+		spec.items = m.providerItems()
+		spec.cursor = m.providerIdx
+		spec.footer = "j/k: navigate  Enter: select  Esc: cancel"
 
 	case LoginStepAPIKey:
-		body.WriteString(HelpTitleStyle.Render("Login - API key") + "\n\n")
-		body.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n\n")
-		body.WriteString(HelpDimStyle.Render("Enter API key (masked; safe to paste):") + "\n")
-		body.WriteString("  " + PromptStyle.Render(strings.Repeat("*", len(m.apiKeyBuf))+"█") + "\n")
-		if m.errorMsg != "" {
-			body.WriteString("\n" + ErrorStyle.Render(m.errorMsg) + "\n")
-		}
-		body.WriteString("\n" + HelpDimStyle.Render("Enter: continue  Esc: cancel"))
+		spec.title = "Login - API key"
+		spec.items = []modalItem{modalTextItem(m.apiKeyBody())}
+		spec.cursor = -1
+		spec.footer = "Enter: continue  Esc: cancel"
 
 	case LoginStepModel:
-		body.WriteString(HelpTitleStyle.Render("Login - model") + "\n")
-		body.WriteString(HelpDimStyle.Render("Provider: "+m.provider()+"  ·  the list below is live from the endpoint") + "\n")
-		if m.probeErr != "" {
-			body.WriteString(ErrorStyle.Render("[!] Could not reach endpoint: "+m.probeErr) + "\n")
-			body.WriteString(HelpDimStyle.Render("    Showing the static catalog; Enter still finishes.") + "\n")
+		spec.title = "Login - model"
+		spec.hint = "Provider: " + m.provider() + "  ·  the list below is live from the endpoint"
+		spec.items = []modalItem{modalTextItem(m.modelBody())}
+		spec.cursor = -1
+		spec.footer = "Type to filter  j/k: navigate  Enter: finish  Esc: cancel"
+	}
+
+	return renderModal(m.width, m.height, spec)
+}
+
+// providerItems builds the provider step's rows: each provider is one
+// item of two lines, so a name and its blurb scroll together.
+func (m LoginDialogModel) providerItems() []modalItem {
+	items := make([]modalItem, 0, len(loginProviders))
+	for i, p := range loginProviders {
+		marker, style := IndicatorUnselected, HelpDimStyle
+		if i == m.providerIdx {
+			marker, style = IndicatorSelected, InfoStyle
 		}
-		body.WriteString("\n")
-		body.WriteString(m.picker.viewport.View())
-		body.WriteString("\n" + HelpDimStyle.Render("Type to filter  j/k: navigate  Enter: finish  Esc: cancel"))
+		items = append(items, modalItem{lines: []string{
+			style.Render(marker + p),
+			HelpDimStyle.Render("    " + providerBlurbs[p]),
+		}})
 	}
+	return items
+}
 
-	// The provider step lists blurbs and needs a wider panel; the model
-	// step hosts the picker viewport. lipgloss truncates content wider
-	// than the style width, so the panel must fit its step's longest line.
-	panelWidth := 64
-	if m.step == LoginStepAPIKey {
-		panelWidth = 48
-	} else if m.step == LoginStepModel {
-		// Full-width panel: live model ids (accounts/fireworks/models/...)
-		// are far longer than a fixed 54-col panel can show.
-		panelWidth = m.width - 4
-		if panelWidth < 54 {
-			panelWidth = 54
+// apiKeyBody is the key step: where a key comes from for this provider,
+// the masked field, and any error. The acquisition steps are the answer
+// to "how do I get one?" at the moment the wizard asks.
+func (m LoginDialogModel) apiKeyBody() string {
+	var b strings.Builder
+	b.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n")
+	if steps, ok := keyStepsFor(m.provider()); ok {
+		b.WriteString("\n" + HelpDimStyle.Render("How to get a key:") + "\n")
+		for i, s := range steps.Steps {
+			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  %d. %s", i+1, s)) + "\n")
 		}
+		b.WriteString("  " + InfoStyle.Render(steps.URL) + "\n")
 	}
-	// The frame is the width plus two border columns; on a narrow pane
-	// the frame must yield or its rows wrap — a broken frame reads as
-	// two dialogs. The body wraps to the inner width to stay inside it.
-	if maxPanel := m.width - 2; panelWidth > maxPanel {
-		panelWidth = maxPanel
+	b.WriteString("\n" + HelpDimStyle.Render("Paste it here (masked; safe to paste):") + "\n")
+	b.WriteString("  " + PromptStyle.Render(strings.Repeat("*", len(m.apiKeyBuf))+"█") + "\n")
+	if m.errorMsg != "" {
+		b.WriteString("\n" + ErrorStyle.Render(m.errorMsg))
 	}
-	if panelWidth < 10 {
-		panelWidth = 10
-	}
+	return b.String()
+}
 
-	panel := lipgloss.NewStyle().
-		Width(panelWidth).
-		BorderStyle(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(1, 2)
-
-	bodyText := fitBlock(panelWidth-4, body.String())
-	return placeOverlay(m.width, m.height, panel.Render(bodyText))
+// modelBody is the model step: the live-probed picker, with a probe
+// failure reported above it rather than silently swapped for a default.
+func (m LoginDialogModel) modelBody() string {
+	var b strings.Builder
+	if m.probeErr != "" {
+		b.WriteString(ErrorStyle.Render("[!] Could not reach endpoint: "+m.probeErr) + "\n")
+		b.WriteString(HelpDimStyle.Render("Showing the static catalog; Enter still finishes.") + "\n\n")
+	}
+	b.WriteString(m.picker.viewport.View())
+	return b.String()
 }
 
 // hasStoredKey reports whether the store holds a key for this provider.

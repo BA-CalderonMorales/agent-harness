@@ -106,11 +106,36 @@ func envPinnedKey(provider string) bool {
 // Environment variables take precedence over saved credentials.
 func (app *App) applySecureConfig(secureCfg *config.SecureConfig) {
 	app.secureConfig = secureCfg
-	if secureCfg.Provider != "" && os.Getenv("AH_PROVIDER") == "" && os.Getenv("AGENT_HARNESS_PROVIDER") == "" {
+
+	envProviderPinned := os.Getenv("AH_PROVIDER") != "" || os.Getenv("AGENT_HARNESS_PROVIDER") != ""
+	envKeyPinned := os.Getenv("AH_API_KEY") != "" || os.Getenv("AGENT_HARNESS_API_KEY") != ""
+
+	// Layered settings own the provider, exactly as they own the model
+	// below. The store's Provider is the last provider logged into — a
+	// single slot, not a preference — so letting it win dragged a
+	// machine back to `local` on every boot (and to the login wall
+	// behind it) while a provider sat chosen on disk. It still fills
+	// the gap for a machine that has never picked one.
+	if secureCfg.Provider != "" && !envProviderPinned && !app.config.LayerSet("provider") {
 		app.config.Provider = secureCfg.Provider
 	}
-	if secureCfg.APIKey != "" && os.Getenv("AH_API_KEY") == "" && os.Getenv("AGENT_HARNESS_API_KEY") == "" {
-		app.config.APIKey = secureCfg.APIKey
+
+	// The key must belong to the provider that actually won. The store's
+	// active key is minted for the store's provider, so applying it
+	// after a provider change hands one service another's secret —
+	// local's dummy key travelling as a Bearer token was the "using
+	// stored API key" 401. Prefer the key recorded for this provider,
+	// keep a config/env key that was already authenticating it, and
+	// take the single-slot value only when it was minted here.
+	if !envKeyPinned && app.config.APIKey == "" {
+		switch {
+		case secureCfg.APIKey != "" && secureCfg.Provider == app.config.Provider:
+			app.config.APIKey = secureCfg.APIKey
+		default:
+			if key := secureCfg.ProviderKeys[app.config.Provider]; key != "" {
+				app.config.APIKey = key
+			}
+		}
 	}
 	// Layered settings own the preferred model; the credential store may
 	// still contain the model chosen during an earlier login.

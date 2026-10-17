@@ -708,7 +708,7 @@ var _ = Describe("App", func() {
 				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
 				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
 				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
-				Expect(view).To(ContainSubstring("effort medium"))
+				Expect(view).To(ContainSubstring("[effort: medium]"))
 				Expect(view).To(ContainSubstring(`"?" help`))
 				Expect(view).To(ContainSubstring("$0.12"))
 				Expect(view).ToNot(ContainSubstring(testHome))

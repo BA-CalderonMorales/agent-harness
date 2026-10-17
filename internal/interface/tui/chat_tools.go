@@ -74,7 +74,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
 			}
 			m.messages[i].ToolStatus = status
-			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, shortToolTag(id), status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
+			m.messages[i].Content = m.formatToolContent(toolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
 			m.messages[i].bumpRev()
 			m.refreshViewport()
 			return
@@ -86,7 +86,7 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	msg := ChatMessage{
 		ID:              id,
 		Role:            "tool",
-		Content:         m.formatToolContent(toolDisplayName, command, shortToolTag(id), status, started, 0),
+		Content:         m.formatToolContent(toolDisplayName, command, status, started, 0),
 		Timestamp:       started,
 		IsTool:          true,
 		ToolName:        toolName,
@@ -103,14 +103,19 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 // structured tool line, so the detail column aligns down a turn.
 const toolNameColumn = 8
 
-// shortToolTag derives the stable short identifier rendered on tool
-// rows (goal 0.3.29 Task 3c, Slice 1): the first four hex characters
-// of the FNV-1a 64 hash of the tool-use ID — the same ID the audit log
-// records as ToolCallID, so a tag typed into the Logs filter (Slice 2)
-// joins the chat row to the full command, permission decision, and
-// audit trail. Always derived, never stored: a scheme change never
-// migrates data. An empty ID yields an empty tag (rows that have no
-// tool-use ID — legacy records — render without one).
+// shortToolTag derives the stable short identifier that joins a tool
+// call to its full record (goal 0.3.29 Task 3c, Slice 1): the first
+// four hex characters of the FNV-1a 64 hash of the tool-use ID — the
+// same ID the audit log records as ToolCallID, so a tag typed into the
+// Logs filter (Slice 2) joins the chat record to the full command,
+// permission decision, and audit trail. Always derived, never stored: a
+// scheme change never migrates data. An empty ID yields an empty tag
+// (records that have no tool-use ID — legacy data — render without
+// one).
+//
+// It renders on the record, not on the summary row: beside a duration a
+// `#d82b` reads as a color code (live dogfood finding), so the row the
+// user scans carries no tag and the expanded record does.
 func shortToolTag(toolID string) string {
 	if toolID == "" {
 		return ""
@@ -123,39 +128,39 @@ func shortToolTag(toolID string) string {
 // formatToolContent renders one tool event as a structured log record,
 // Splunk-shaped but readable at a glance:
 //
-//	01:20:03 ✓ bash     git log --oneline -8                  0.4s  #a1b2
-//	01:20:05 ✓ read     pkg/format/format.go                  0.1s  #c93f
-//	01:20:07 → grep     "ToolStatus" in internal/               …
+//	01:20:03 ✓ bash     git log --oneline -8                    0.4s
+//	01:20:05 ✓ read     pkg/format/format.go                    0.1s
+//	01:20:07 → grep     "ToolStatus" in internal/                 …
 //
-// Time · status glyph · tool name (padded) · target detail · right-
-// aligned duration (live calls show a running ellipsis instead) · the
-// stable short tag (Task 3c) that joins the row to its Logs records.
-func (m *ChatModel) formatToolContent(toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
-	return m.formatToolContentAt(m.width, toolDisplayName, command, tag, status, started, elapsed)
+// Time · status glyph · tool name (padded) · target detail, then the
+// duration right-aligned against the row's right edge so a column of
+// calls reads as a settled list. Running calls put an ellipsis in the
+// duration column instead, so the list does not reflow when a call
+// settles.
+func (m *ChatModel) formatToolContent(toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	return m.formatToolContentAt(m.width, toolDisplayName, command, status, started, elapsed)
 }
 
 // formatToolContentAt renders the record for a width budget — nested
 // rows live inside the response bubble, which is narrower than the
-// pane, and a full-width row wraps its duration onto its own line.
-// The command truncates to THIS width (the caller's actual budget),
-// not the pane width baked in at creation time: a record created at
-// pane width and re-rendered inside the bubble used to exceed the
-// bubble's inner budget and wrap its duration onto a second line
-// (goal 0.3.29 Task 3b).
-func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag string, status ToolStatus, started time.Time, elapsed time.Duration) string {
-	var glyph string
+// pane, so the budget is the caller's actual space and a full-width row
+// would wrap its duration onto its own line.
+//
+// The layout is a fixed head (timestamp, glyph, name column and their
+// separators), one elastic detail column, and a fixed duration. The
+// duration is padded out to the row's right edge, so it is the column
+// that lines up turn after turn; the detail yields first. Nothing here
+// double-counts: the old reservation added the tag width twice and an
+// 8-column fudge on top, which left the duration stranded ~13 columns
+// short of the edge (live dogfood: the gap was the loudest thing on the
+// row). Display width, never len(): glyphs are multi-byte.
+func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
+	glyph := "✓"
 	switch status {
 	case ToolStatusRunning:
 		glyph = "→"
 	case ToolStatusError:
 		glyph = "✗"
-	default:
-		glyph = "✓"
-	}
-
-	detail := command
-	if detail != "" {
-		detail = m.truncateCommandForWidthAt(width, toolDisplayName, detail)
 	}
 
 	timeStr := started.Format("15:04:05")
@@ -164,50 +169,34 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command, tag
 		name += strings.Repeat(" ", pad)
 	}
 
-	glyphAndName := glyph + " " + name
-	line := fmt.Sprintf("%s %s %s",
-		ToolTimeStyle.Render(timeStr),
-		glyph+" "+name,
-		detail,
-	)
+	dur := "…"
+	if status != ToolStatusRunning {
+		dur = formatElapsed(elapsed)
+	}
 
-	if status == ToolStatusRunning {
-		return line + ToolTimeStyle.Render("  …")
-	}
-	dur := formatElapsed(elapsed)
-	// The short tag rides at the row's right end, after the duration:
-	// it is the pointer to the full record (Logs filter, Task 3c) and
-	// must survive truncation of the command text.
-	if tag != "" {
-		dur = dur + "  " + tag
-	}
-	// Display-width padding: glyph and dot runes are multi-byte, so
-	// len() would over-count and shove the duration off the edge. The
-	// fixed reservation: two caret columns the render path prepends
-	// (▸ folded / ▾ open), two leading spaces before the timestamp, and
-	// the tag width when present (2-space separator + tag) — the tag
-	// rides at the row's right end after the duration (Task 3c).
-	tagWidth := 0
-	if tag != "" {
-		tagWidth = 2 + lipgloss.Width(tag)
-	}
-	// The detail budget is the authority: whatever is left after the
-	// fixed columns and a 2-column pad. Overruns re-truncate here —
-	// the pad is never allowed to go negative and push the duration
-	// onto a second line (goal 0.3.29 Task 3b).
-	fixed := lipgloss.Width(timeStr) + lipgloss.Width(glyphAndName) + lipgloss.Width(dur) + tagWidth + 8
-	budget := width - fixed
+	// Head: timestamp, space, glyph, space, padded name column. Its
+	// width is fixed for every row of a turn, which is what lets the
+	// duration land in the same column each time.
+	head := ToolTimeStyle.Render(timeStr) + " " + glyph + " " + name
+	headW := lipgloss.Width(timeStr) + 3 + lipgloss.Width(name)
+	durW := lipgloss.Width(dur)
+
+	// The detail takes what is left after the head, one separating
+	// space, the duration, and one column of minimum pad.
+	detail := command
+	budget := width - headW - 1 - durW - 1
 	if budget < 1 {
 		budget = 1
 	}
 	if lipgloss.Width(detail) > budget {
-		detail = truncateDisplayWidth(detail, budget)
+		detail = compactCommandForWidth(detail, budget)
 	}
-	pad := width - fixed - lipgloss.Width(detail)
+
+	pad := width - headW - 1 - lipgloss.Width(detail) - durW
 	if pad < 1 {
 		pad = 1
 	}
-	return line + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
+	return head + " " + detail + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
 }
 
 // ExpandLatestRecord expands the most recent expandable record — a
@@ -291,45 +280,14 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 }
 
 // truncateCommand truncates a command for display with ellipsis.
-// Deprecated: use truncateCommandForWidthAt for responsive width-aware truncation.
+// Deprecated: the tool row truncates to its own measured budget with
+// compactCommandForWidth; this byte-based form survives only for the
+// input-map previews in extractCommandFromToolInput.
 func (m *ChatModel) truncateCommand(cmd string, maxLen int) string {
 	if len(cmd) <= maxLen {
 		return cmd
 	}
 	return cmd[:maxLen-3] + "..."
-}
-
-// truncateCommandForWidthAt is the width-parameterized form: the budget
-// comes from the caller's render width (pane or bubble inner width), so
-// a nested re-render truncates to the space it actually has.
-//
-// The reservation accounts for the row's real fixed costs: timestamp
-// (8) + space (1) + glyph+name column + spaces (2) + the two caret
-// columns the render path prepends + minimum padding (2) + duration
-// (up to 5). The old `width − name − 8` ignored the timestamp and
-// duration entirely, so the pad floor of 2 shipped an over-wide row
-// and the duration wrapped (goal 0.3.29 Task 3b).
-func (m *ChatModel) truncateCommandForWidthAt(width int, toolDisplayName, cmd string) string {
-	name := toolDisplayName
-	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
-		name += strings.Repeat(" ", pad)
-	}
-	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur
-	// 8 ts + 1 space + glyph/name + 1 space + 2 caret + 2 min-pad + 5 dur + 7 tag
-	maxCmdLen := width - 8 - 1 - lipgloss.Width(name) - 1 - 2 - 2 - 5 - 7
-	if maxCmdLen < 12 {
-		maxCmdLen = 12 // absolute minimum so something is visible
-	}
-	if lipgloss.Width(cmd) > 40 && strings.Contains(cmd, "/") {
-		compact := compactCommandForWidth(cmd, maxCmdLen)
-		if lipgloss.Width(compact) < lipgloss.Width(cmd) {
-			return compact
-		}
-	}
-	if lipgloss.Width(cmd) <= maxCmdLen {
-		return cmd
-	}
-	return compactCommandForWidth(cmd, maxCmdLen)
 }
 
 func compactCommandForWidth(cmd string, maxLen int) string {

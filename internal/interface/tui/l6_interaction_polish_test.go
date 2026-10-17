@@ -13,7 +13,7 @@ import (
 func TestL6ToolRowKeepsUnicodeAndWidth(t *testing.T) {
 	model := NewChatModel()
 	command := "echo " + strings.Repeat("😀", 30)
-	row := model.formatToolContentAt(60, "Shell", command, "#abcd", ToolStatusSuccess, time.Date(2026, 9, 7, 12, 34, 56, 0, time.UTC), 2*time.Second)
+	row := model.formatToolContentAt(60, "Shell", command, ToolStatusSuccess, time.Date(2026, 9, 7, 12, 34, 56, 0, time.UTC), 2*time.Second)
 	if !utf8.ValidString(row) {
 		t.Fatalf("tool row is not valid UTF-8: %q", row)
 	}
@@ -32,7 +32,7 @@ func TestR6ToolTruncationKeepsGraphemesANSIAndDisplayWidth(t *testing.T) {
 		"echo " + strings.Repeat("🏳️‍🌈", 20),
 		"echo \x1b[31m" + strings.Repeat("界", 20) + "\x1b[0m",
 	} {
-		row := model.formatToolContentAt(48, "Shell", command, "#abcd", ToolStatusSuccess, time.Now(), time.Second)
+		row := model.formatToolContentAt(48, "Shell", command, ToolStatusSuccess, time.Now(), time.Second)
 		if !utf8.ValidString(row) {
 			t.Fatalf("truncated row is not valid UTF-8: %q", row)
 		}

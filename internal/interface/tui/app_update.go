@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
@@ -332,21 +331,22 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		a.homeModel.SetSetupRequired(msg.Readiness == 4)
 		// Every readiness state is a durable system message: it lands
 		// exactly once at the top of the chat pane and mirrors into the
-		// diagnostics stream (the Logs tab) at the matching level.
+		// diagnostics stream (the Logs tab) at the matching level. A
+		// credential failure carries its fix (see readinessNotice), so the
+		// boot-time precheck tells the user what to do before the first
+		// prompt instead of dead-ending on a failed turn.
+		notice := readinessNotice(a.provider, msg.Readiness, msg.Message)
 		switch msg.Readiness {
 		case 1: // ProviderReady
-			a.logSystemMessage(fmt.Sprintf("Provider ready: %s", msg.Message))
 			diag.Info("provider.ready", msg.Message)
 		case 2: // ProviderWarning
-			a.logSystemMessage(fmt.Sprintf("Provider warning: %s", msg.Message))
 			diag.Warnf("provider.warning", "%s", msg.Message)
 		case 3: // ProviderUnavailable
-			a.logSystemMessage(fmt.Sprintf("Provider unavailable: %s", msg.Message))
 			diag.Warnf("provider.unavailable", "%s", msg.Message)
 		case 4: // ProviderMisconfigured
-			a.logSystemMessage(fmt.Sprintf("Provider misconfigured: %s", msg.Message))
 			diag.Errorf("provider.misconfigured", "%s", msg.Message)
 		}
+		a.logSystemMessage(notice)
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 	}

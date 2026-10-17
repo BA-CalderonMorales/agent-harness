@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 )
@@ -72,6 +73,22 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 			}
 		}
 		return a, cmd, true
+	}
+
+	// When the next-steps picker is open, delegate to it: the modal owns
+	// every key until Enter runs the chosen step or Esc cancels. The
+	// chosen prompt is submitted exactly like typed input, so the turn it
+	// starts is an ordinary turn.
+	if a.nextSteps.IsShowing() {
+		chosen, closed := a.nextSteps.Update(msg)
+		if closed && chosen != nil {
+			prompt := chosen.Prompt
+			if strings.HasPrefix(prompt, "/") {
+				return a, func() tea.Msg { return UserCommandMsg{Command: prompt} }, true
+			}
+			return a, func() tea.Msg { return UserSubmitMsg{Text: prompt} }, true
+		}
+		return a, nil, true
 	}
 
 	// When the export picker is open, delegate to it: the modal owns
@@ -362,6 +379,14 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 				// never hidden by either state.
 				a.chatModel.ToggleToolsCollapsed()
 				return a, nil, true
+			case "s":
+				// Suggested next steps. Chat only: the suggestions are
+				// derived from the conversation, so on any other tab they
+				// would be a list about nothing.
+				if a.activeView == viewChat {
+					a.nextSteps.Open(a.width, a.height, a.chatModel.deriveNextSteps())
+					return a, nil, true
+				}
 			}
 
 			// Navigate-mode affordance: an unmatched printable key in

@@ -99,6 +99,23 @@ type LayeredConfig struct {
 	SessionDir string
 }
 
+// LayerSet reports whether any configuration layer explicitly set key.
+//
+// A value that only came from the built-in defaults reports false, and
+// the difference is load-bearing for the provider: the credential store
+// owns the *last provider logged into*, so it may fill the gap when no
+// layer names one but must never override a provider that is already on
+// disk. Without the distinction the default is indistinguishable from a
+// choice, and every boot fell back to the default provider — the same
+// trap the preferred model already avoids.
+func (c *LayeredConfig) LayerSet(key string) bool {
+	if c == nil {
+		return false
+	}
+	_, ok := c.merged[key]
+	return ok
+}
+
 // PermissionMode controls what tools can do
 type PermissionMode int
 
