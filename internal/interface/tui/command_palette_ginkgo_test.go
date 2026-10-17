@@ -369,9 +369,9 @@ var _ = Describe("CommandPaletteModel", func() {
 		})
 
 		Context("Given a very narrow terminal", func() {
-			It("should constrain viewport width to minimum", func() {
+			It("should constrain viewport width to the available panel", func() {
 				palette.Open(20, 10)
-				Expect(palette.viewport.Width).To(BeNumerically(">=", 30))
+				Expect(palette.viewport.Width).To(Equal(modalInnerWidth(panelWidth(palette.modalSpec().preferredWidth, 20))))
 			})
 		})
 

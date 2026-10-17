@@ -363,6 +363,7 @@ func paletteFooterHint(panelWidth int, canScroll bool) string {
 		"j/k:nav Enter:select Tab:auto",
 		"j/k:nav Enter:select",
 		"Esc:cancel Enter:select",
+		"Esc/Enter",
 	}
 	for _, base := range candidates {
 		if lipgloss.Width(base+scroll) <= inner {
