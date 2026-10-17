@@ -72,7 +72,9 @@ func (m ChatModel) deriveNextSteps() []NextStep {
 			looked = true
 		}
 		if msg.ToolName == "todo_write" {
-			openTodos += openTodoCount(msg.ToolInputJSON)
+			// todo_write replaces the plan, so only its latest payload
+			// describes the work that remains at the end of the turn.
+			openTodos = openTodoCount(msg.ToolInputJSON)
 		}
 	}
 
