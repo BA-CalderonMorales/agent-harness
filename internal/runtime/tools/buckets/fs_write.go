@@ -44,7 +44,7 @@ func (fs *FileSystemBucket) handleWrite(ctx tools.ToolExecutionContext) tools.To
 	}
 
 	if err := os.Rename(tempPath, fullPath); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return tools.ToolResult{
 			Data: tools.WrapToolError("rename_failed", err),
 		}

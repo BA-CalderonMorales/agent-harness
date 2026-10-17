@@ -49,7 +49,7 @@ func TestToolCallsNestInsideAgentResponse(t *testing.T) {
 	if headerRow < 0 || tool1Row < 0 || tool2Row < 0 || answerRow < 0 {
 		t.Fatalf("turn block incomplete:\n%s", view)
 	}
-	if !(headerRow < tool1Row && tool1Row < tool2Row && tool2Row < answerRow) {
+	if headerRow >= tool1Row || tool1Row >= tool2Row || tool2Row >= answerRow {
 		t.Fatalf("expected header < tools < answer, got rows %d/%d/%d/%d", headerRow, tool1Row, tool2Row, answerRow)
 	}
 	// The nested tools sit one step in — visually inside the block.
@@ -87,7 +87,7 @@ func TestStreamingToolsRenderStandaloneThenNest(t *testing.T) {
 	headerRow := strings.Index(view, "Agent ")
 	toolRow := strings.Index(view, "Listing directory")
 	answerRow := strings.Index(view, "Working")
-	if headerRow < 0 || toolRow < 0 || answerRow < 0 || !(headerRow < toolRow && toolRow < answerRow) {
+	if headerRow < 0 || toolRow < 0 || answerRow < 0 || headerRow >= toolRow || toolRow >= answerRow {
 		t.Fatalf("tool did not absorb into the response block:\n%s", view)
 	}
 }
@@ -142,7 +142,7 @@ func TestToolsNestWhereTheyHappened(t *testing.T) {
 	if onIt < 0 || tools < 0 || got < 0 {
 		t.Fatalf("segmented turn incomplete:\n%s", view)
 	}
-	if !(onIt < tools && tools < got) {
+	if onIt >= tools || tools >= got {
 		t.Fatalf("expected prose < tools < prose, got rows %d/%d/%d", onIt, tools, got)
 	}
 	// Inside the bubble: the tool row carries the bubble border.

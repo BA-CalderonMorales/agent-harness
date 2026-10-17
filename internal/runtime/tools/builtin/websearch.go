@@ -50,7 +50,7 @@ var WebSearchTool = tools.NewTool(tools.Tool{
 		if err != nil {
 			return tools.ToolResult{}, err
 		}
-		defer resp.Body.Close()
+		defer func() { _ = resp.Body.Close() }()
 
 		// For the pattern demonstration, we return a structured result
 		result := map[string]any{

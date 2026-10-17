@@ -63,11 +63,6 @@ func (sp *SmartPrompt) HistoryUp(current string) (string, bool) {
 		return "", false
 	}
 
-	if sp.historyIdx == -1 {
-		// Save current input before going to history
-		// (would need to be passed in or stored)
-	}
-
 	if sp.historyIdx < len(sp.history)-1 {
 		sp.historyIdx++
 		return sp.history[len(sp.history)-1-sp.historyIdx], true

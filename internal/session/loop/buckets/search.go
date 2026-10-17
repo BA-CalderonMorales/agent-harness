@@ -296,7 +296,7 @@ func ParseGrepResults(output string) []SearchResult {
 
 		file := parts[0]
 		lineNum := 0
-		fmt.Sscanf(parts[1], "%d", &lineNum)
+		_, _ = fmt.Sscanf(parts[1], "%d", &lineNum)
 		content := parts[2]
 
 		key := fmt.Sprintf("%s:%d", file, lineNum)

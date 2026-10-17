@@ -265,7 +265,9 @@ func TestManager_YoloMode_ShowsCommand(t *testing.T) {
 	}
 
 	for _, cmd := range commands {
-		manager.CheckApproval(cmd)
+		if _, err := manager.CheckApproval(cmd); err != nil {
+			t.Fatal(err)
+		}
 	}
 
 	if len(handler.showedCommands) != 3 {
@@ -518,7 +520,9 @@ func BenchmarkCheckApproval_YoloMode(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		manager.CheckApproval(cmd)
+		if _, err := manager.CheckApproval(cmd); err != nil {
+			b.Fatal(err)
+		}
 	}
 }
 
@@ -529,6 +533,8 @@ func BenchmarkCheckApproval_CachedPattern(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		manager.CheckApproval(cmd)
+		if _, err := manager.CheckApproval(cmd); err != nil {
+			b.Fatal(err)
+		}
 	}
 }

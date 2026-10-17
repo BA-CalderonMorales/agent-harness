@@ -157,7 +157,7 @@ func (w *WebBucket) handleFetch(ctx loop.ExecutionContext) loop.LoopResult {
 			Error:   loop.WrapError("fetch_failed", err),
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return loop.LoopResult{

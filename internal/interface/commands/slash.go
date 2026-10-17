@@ -57,8 +57,8 @@ func (sr *SlashRegistry) IsFeatureFlagged(name string) bool {
 func (sr *SlashRegistry) FeatureFlagMessage(name string) string {
 	desc := sr.featureFlags[name]
 	var b strings.Builder
-	b.WriteString(fmt.Sprintf("/%s — coming soon\n", name))
-	b.WriteString(fmt.Sprintf("  %s\n\n", desc))
+	fmt.Fprintf(&b, "/%s — coming soon\n", name)
+	fmt.Fprintf(&b, "  %s\n\n", desc)
 	b.WriteString("  This command is planned for an upcoming release.\n")
 	b.WriteString("  We are working to stabilize it with full test coverage.\n\n")
 	b.WriteString("  In the meantime, OpenCode (https://opencode.ai) offers\n")

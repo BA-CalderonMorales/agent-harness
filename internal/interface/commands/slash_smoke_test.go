@@ -249,15 +249,18 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 			})
 
 			By("dispatching with simple args")
-			registry.Handle("/echo hello")
+			_, _, err := registry.Handle("/echo hello")
+			Expect(err).NotTo(HaveOccurred())
 			Expect(receivedArgs).To(Equal("hello"))
 
 			By("dispatching with complex args")
-			registry.Handle("/echo hello world")
+			_, _, err = registry.Handle("/echo hello world")
+			Expect(err).NotTo(HaveOccurred())
 			Expect(receivedArgs).To(Equal("hello world"))
 
 			By("dispatching with no args")
-			registry.Handle("/echo")
+			_, _, err = registry.Handle("/echo")
+			Expect(err).NotTo(HaveOccurred())
 			Expect(receivedArgs).To(Equal(""))
 		})
 
@@ -269,7 +272,8 @@ var _ = Describe("Slash Registry Smoke Tests", func() {
 			})
 
 			By("dispatching with extra spaces")
-			registry.Handle("/capture   spaced   args  ")
+			_, _, err := registry.Handle("/capture   spaced   args  ")
+			Expect(err).NotTo(HaveOccurred())
 			Expect(receivedArgs).To(Equal("spaced   args"))
 		})
 	})

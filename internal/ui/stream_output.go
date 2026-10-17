@@ -18,10 +18,10 @@ func (sr *StreamRenderer) PrintAgentOutput(text string) {
 	lines := strings.Split(text, "\n")
 	for i, line := range lines {
 		if i > 0 {
-			fmt.Fprintln(sr.out)
+			_, _ = fmt.Fprintln(sr.out)
 		}
 		if line != "" {
-			fmt.Fprint(sr.out, line)
+			_, _ = fmt.Fprint(sr.out, line)
 		}
 	}
 }
@@ -41,10 +41,10 @@ func (sr *StreamRenderer) PrintToolStart(toolID, toolName, description string) {
 	sr.toolStack = append(sr.toolStack, toolInfo)
 
 	// Print tool start with arrow indicator
-	fmt.Fprintf(sr.out, "\n→ %s\n", DimStyle.Render(action))
+	_, _ = fmt.Fprintf(sr.out, "\n→ %s\n", DimStyle.Render(action))
 
 	// Show kaomoji spinner on next line
-	fmt.Fprintf(sr.out, "   %s %s\n",
+	_, _ = fmt.Fprintf(sr.out, "   %s %s\n",
 		DimStyle.Render(KaomojiFrames[0]),
 		DimStyle.Render("running..."))
 }
@@ -88,13 +88,13 @@ func (sr *StreamRenderer) PrintToolComplete(toolUseID string, result string) {
 
 	// Clear the spinner line and show success
 	action := FormatToolAction(toolName, "")
-	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
+	_, _ = fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
 		SuccessStyle.Render("✓"),
 		DimStyle.Render(action))
 
 	// Show result summary if significant
 	if len(result) > 0 && len(result) < 100 {
-		fmt.Fprintf(sr.out, "   %s\n", DimStyle.Render(Truncate(result, 80)))
+		_, _ = fmt.Fprintf(sr.out, "   %s\n", DimStyle.Render(Truncate(result, 80)))
 	}
 }
 
@@ -119,12 +119,12 @@ func (sr *StreamRenderer) PrintToolError(toolUseID string, err error) {
 
 	// Clear the spinner line and show error
 	action := FormatToolAction(toolName, "")
-	fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
+	_, _ = fmt.Fprintf(sr.out, "\033[2A\033[K   %s %s\n",
 		ErrorStyle.Render("✗"),
 		ErrorStyle.Render(action))
 
 	if err != nil {
-		fmt.Fprintf(sr.out, "   %s\n", ErrorStyle.Render(err.Error()))
+		_, _ = fmt.Fprintf(sr.out, "   %s\n", ErrorStyle.Render(err.Error()))
 	}
 }
 
@@ -137,7 +137,7 @@ func (sr *StreamRenderer) PrintProgress(message string) {
 	sr.spinnerIdx = (sr.spinnerIdx + 1) % len(BrailleFrames)
 	frame := BrailleFrames[sr.spinnerIdx]
 
-	fmt.Fprintf(sr.out, "\r   %s %s",
+	_, _ = fmt.Fprintf(sr.out, "\r   %s %s",
 		DimStyle.Render(frame),
 		DimStyle.Render(message))
 }
@@ -147,7 +147,7 @@ func (sr *StreamRenderer) ClearProgress() {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	fmt.Fprintf(sr.out, "\r\033[K")
+	_, _ = fmt.Fprintf(sr.out, "\r\033[K")
 }
 
 // PrintUserMessage shows the user's input with diamond indicator
@@ -155,7 +155,7 @@ func (sr *StreamRenderer) PrintUserMessage(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	fmt.Fprintf(sr.out, "\n◆ %s\n", text)
+	_, _ = fmt.Fprintf(sr.out, "\n◆ %s\n", text)
 }
 
 // PrintSeparator prints a subtle separator
@@ -172,7 +172,7 @@ func (sr *StreamRenderer) PrintSeparator() {
 	}
 
 	sep := strings.Repeat("─", width)
-	fmt.Fprintf(sr.out, "\n%s\n", DimStyle.Render(sep))
+	_, _ = fmt.Fprintf(sr.out, "\n%s\n", DimStyle.Render(sep))
 }
 
 // PrintSuggestion prints a helpful suggestion
@@ -180,7 +180,7 @@ func (sr *StreamRenderer) PrintSuggestion(text string) {
 	sr.mu.Lock()
 	defer sr.mu.Unlock()
 
-	fmt.Fprintf(sr.out, "   %s %s\n",
+	_, _ = fmt.Fprintf(sr.out, "   %s %s\n",
 		DimStyle.Render("tip:"),
 		DimStyle.Render(text))
 }
@@ -191,7 +191,7 @@ func (sr *StreamRenderer) Flush() {
 	defer sr.mu.Unlock()
 
 	if f, ok := sr.out.(*os.File); ok {
-		f.Sync()
+		_ = f.Sync()
 	}
 }
 

@@ -136,7 +136,7 @@ func (ui *UIBucket) handleTodo(ctx loop.ExecutionContext) loop.LoopResult {
 		if todo, ok := t.(map[string]any); ok {
 			content, _ := todo["content"].(string)
 			status, _ := todo["status"].(string)
-			result.WriteString(fmt.Sprintf("  %d. [%s] %s\n", i+1, status, content))
+			fmt.Fprintf(&result, "  %d. [%s] %s\n", i+1, status, content)
 		}
 	}
 

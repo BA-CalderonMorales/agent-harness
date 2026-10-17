@@ -106,19 +106,19 @@ func exportMarkdown(msgs []types.Message) string {
 func exportText(msgs []types.Message) string {
 	var b strings.Builder
 	b.WriteString("Agent Harness Transcript\n\n")
-	b.WriteString(fmt.Sprintf("Exported: %s\n\n", time.Now().Format(time.RFC3339)))
+	fmt.Fprintf(&b, "Exported: %s\n\n", time.Now().Format(time.RFC3339))
 	for _, m := range msgs {
 		if m.Role == types.RoleSystem {
 			continue
 		}
-		b.WriteString(fmt.Sprintf("== %s ==\n", strings.ToUpper(string(m.Role))))
+		fmt.Fprintf(&b, "== %s ==\n", strings.ToUpper(string(m.Role)))
 		for _, block := range m.Content {
 			switch v := block.(type) {
 			case types.TextBlock:
 				b.WriteString(redactExportString(v.Text))
 				b.WriteString("\n\n")
 			case types.ToolUseBlock:
-				b.WriteString(fmt.Sprintf("[tool use: %s]\n", v.Name))
+				fmt.Fprintf(&b, "[tool use: %s]\n", v.Name)
 				inputJSON, _ := json.MarshalIndent(redactExportMap(v.Input), "", "  ")
 				b.WriteString(redactExportString(string(inputJSON)))
 				b.WriteString("\n\n")

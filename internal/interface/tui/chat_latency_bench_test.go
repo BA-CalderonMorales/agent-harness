@@ -45,7 +45,7 @@ func benchBulkTranscript(b *testing.B, n int) *ChatModel {
 			})
 		case 1, 2:
 			var c strings.Builder
-			c.WriteString(fmt.Sprintf("### Answer %d\n\n", i))
+			fmt.Fprintf(&c, "### Answer %d\n\n", i)
 			c.WriteString(strings.Repeat("The parser walks tokens in order and updates state. ", 12))
 			chat.messages = append(chat.messages, ChatMessage{
 				ID: fmt.Sprintf("a-%d", i), Role: "assistant",

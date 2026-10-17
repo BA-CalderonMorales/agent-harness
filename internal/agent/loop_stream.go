@@ -199,7 +199,6 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				toolInputBuffer += e.Delta
 			case types.LLMMessageStop:
-				sawStop = true
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
 				l.LastUsage = e.Usage
@@ -213,7 +212,6 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				if currentText != "" {
 					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
-					currentText = ""
 				}
 				// Yield the assembled message
 				select {

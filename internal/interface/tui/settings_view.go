@@ -231,9 +231,9 @@ func (m SettingsModel) renderSetting(setting Setting, selected bool) string {
 	// Editing: the value is replaced by the input line.
 	if selected && m.editing {
 		b.WriteString("\n")
-		b.WriteString(fmt.Sprintf("    %s %s",
+		fmt.Fprintf(&b, "    %s %s",
 			HelpDimStyle.Render("→"),
-			PromptStyle.Render(m.editBuf+"█")))
+			PromptStyle.Render(m.editBuf+"█"))
 		return b.String()
 	}
 
