@@ -4,13 +4,14 @@
 
 agent-harness never keeps API keys in plaintext by default:
 
-- **Encrypted credential store** — `~/.config/agent-harness/credentials.enc`
-  (AES-256-GCM, Argon2id key derivation, file mode `0600`, directory mode
-  `0700`). Set or update it with `/login`; the key input is hidden and
-  never written to chat history or session files.
+- **Encrypted credential store** — `credentials.enc` in the resolved
+  config home (AES-256-GCM, Argon2id key derivation, file mode `0600`,
+  directory mode `0700`). Set or update it with `/login`; the key input is
+  hidden and never written to chat history or session files.
 - **Plaintext-free config** — `agent-harness.yml` and user settings
-  (`~/.config/agent-harness/settings.json`; `AGENT_HARNESS_CONFIG_HOME`,
-  else `XDG_CONFIG_HOME`, else `~/.config`) never contain key material.
+  (`settings.json`, `credentials.enc` and its `master.key` all sit in the
+  same home: `AGENT_HARNESS_CONFIG_HOME`, else `XDG_CONFIG_HOME/agent-harness`,
+  else `~/.config/agent-harness`) never contain key material.
 - **Environment variables** — `AH_API_KEY` / `AGENT_HARNESS_API_KEY`
   (and `NVIDIA_API_KEY` for the nvidia provider) are read at boot and
   never persisted.
@@ -18,6 +19,15 @@ agent-harness never keeps API keys in plaintext by default:
 `/config` shows the credential store path and a masked key preview
 (`abcd...wxyz`) — never the key itself. `/export` writes conversation
 transcripts only; keys are never part of them.
+
+The store, user settings, and machine key all resolve from the config home,
+so pointing the harness at a profile — `AGENT_HARNESS_CONFIG_HOME`, then
+`XDG_CONFIG_HOME/agent-harness`, then `~/.config/agent-harness` — moves
+your credentials with it. Two profiles therefore keep separate keys and
+cannot clobber each other. If a store only exists at the default home when
+you first switch profiles, it is relocated into the selected home once at
+startup, so keys you already entered keep working rather than stranding you
+at the login prompt.
 
 ## What decides the provider, and which key it uses
 
