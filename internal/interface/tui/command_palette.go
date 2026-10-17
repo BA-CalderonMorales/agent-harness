@@ -77,8 +77,8 @@ func (m *CommandPaletteModel) Open(width, height int) {
 	spec := m.modalSpec()
 	panelW := panelWidth(spec.preferredWidth, width)
 	vpH := modalBodyRows(width, height, spec)
-	if vpH < 3 {
-		vpH = 3
+	if vpH < 1 {
+		vpH = 1
 	}
 
 	if !m.ready {
@@ -244,8 +244,8 @@ func (m *CommandPaletteModel) fitViewport() {
 	if budget := modalBodyRows(m.width, m.height, spec); want > budget {
 		want = budget
 	}
-	if want < 3 {
-		want = 3
+	if want < 1 {
+		want = 1
 	}
 	m.viewport.Height = want
 }
