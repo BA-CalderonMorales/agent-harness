@@ -272,11 +272,12 @@ var _ = Describe("App", func() {
 				Expect(updated.mode).To(Equal(ModeNormal))
 			})
 
-			It("should blur active view when exiting insert mode", func() {
-				app.homeModel.Focus()
+			It("should blur the chat composer when exiting insert mode", func() {
+				app.activeView = viewChat
+				app.chatModel.Focus()
 				model, _ := app.Update(tea.KeyMsg{Type: tea.KeyEsc})
 				updated := model.(*App)
-				Expect(updated.homeModel.focused).To(BeFalse())
+				Expect(updated.chatModel.focused).To(BeFalse())
 			})
 
 			It("should not switch view on 'h' in insert mode", func() {
