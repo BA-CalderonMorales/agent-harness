@@ -30,6 +30,10 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 	}()
 
+	if cmd, handled := a.handleLoginLinkMessage(msg); handled {
+		return a, cmd
+	}
+
 	var cmds []tea.Cmd
 
 	switch msg := msg.(type) {
