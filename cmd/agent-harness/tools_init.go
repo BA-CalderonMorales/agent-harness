@@ -8,7 +8,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	toolmcp "github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/mcp"
 	"os"
-	"time"
 )
 
 // initTools registers all built-in tools and MCP tools.
@@ -31,14 +30,11 @@ func (app *App) initTools() {
 
 	app.mcpManager = mcp.NewManager()
 	if len(app.config.McpServers) > 0 {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := app.mcpManager.LoadAndConnect(ctx, app.config.McpServers); err != nil {
+		if err := app.mcpManager.LoadAndConnect(context.Background(), app.config.McpServers); err != nil {
 			fmt.Fprintf(os.Stderr, "Warning: failed to connect MCP servers: %v\n", err)
-		} else {
-			for _, def := range app.mcpManager.AllToolDefs() {
-				app.toolRegistry.RegisterMCP(toolmcp.Wrap(def, app.mcpManager))
-			}
+		}
+		for _, def := range app.mcpManager.AllToolDefs() {
+			app.toolRegistry.RegisterMCP(toolmcp.Wrap(def, app.mcpManager))
 		}
 	}
 }

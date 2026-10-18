@@ -75,6 +75,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	defer func() { _ = app.mcpManager.Close() }()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -88,6 +89,7 @@ func run() error {
 			_, _ = app.sessionManager.SaveCurrent()
 		}
 		cancel()
+		_ = app.mcpManager.Close()
 		os.Exit(0)
 	}()
 

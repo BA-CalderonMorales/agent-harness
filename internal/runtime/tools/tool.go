@@ -16,6 +16,7 @@ type ValidationResult struct {
 // ToolResult wraps the output of a tool call.
 type ToolResult struct {
 	Data            any
+	IsError         bool // Tool-reported failure; distinct from a transport error.
 	NewMessages     []types.Message
 	ContextModifier func(ctx Context) Context
 }
