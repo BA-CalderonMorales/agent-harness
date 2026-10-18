@@ -4,6 +4,18 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
+// enterNavigationMode stops typing while keeping the active list usable.
+// Home, Sessions, Logs, and Settings need focus for Enter and action keys;
+// only the Chat composer must lose focus when leaving insert mode.
+func (a *App) enterNavigationMode() {
+	a.mode = ModeNormal
+	a.chatModel.SetModeLabel("navigate")
+	a.blurActive()
+	if a.activeView != viewChat {
+		a.focusActive()
+	}
+}
+
 func (a *App) switchView(v viewID) tea.Cmd {
 	a.blurActive()
 	a.activeView = v

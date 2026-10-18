@@ -74,7 +74,11 @@ func (app *App) initSession() error {
 		app.session = resumed
 		// Historical chats retain their model without replacing the user's
 		// default for new chats. An explicit environment pin wins in both.
-		if app.config.ModelPinned || resumed.Model == "" {
+		// An empty session has no conversation whose model to preserve, so
+		// it follows the configured default too: otherwise a session created
+		// before a boot-time model reset kept the stale model forever, and
+		// the user's saved default never showed up until another chat began.
+		if app.config.ModelPinned || resumed.Model == "" || len(resumed.Messages) == 0 {
 			resumed.Model = model
 		}
 		// Apply configured persona if valid and session has no persona set

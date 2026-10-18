@@ -20,4 +20,7 @@ override every config file layer.
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by
-`internal/core/config/`.
+`internal/core/config/`. The config home holds `settings.json`, the
+encrypted `credentials.enc`, and its `master.key`; pointing it at a profile
+(`AGENT_HARNESS_CONFIG_HOME`, else `XDG_CONFIG_HOME/agent-harness`, else
+`~/.config/agent-harness`) carries those credentials with it.

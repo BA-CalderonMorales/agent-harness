@@ -54,11 +54,14 @@ func (app *App) applyModelContext(model string) {
 // line read "glm-5p3-flash · local" — a Fireworks model pointed at a
 // local server.
 //
-// Two checks: hosted providers compare against the static catalog
-// (offline, deterministic); local providers compare against the live
-// /v1/models list, because any model name is legitimate on a local
-// server and only the endpoint knows what it serves. An unreachable or
-// silent endpoint keeps the current model — no evidence, no reset.
+// A model the static catalog knows always fits, so the common case stays
+// offline and deterministic. Otherwise the check defers to the live
+// /v1/models list: the catalog is a curated snapshot of a provider's
+// serving list, not that list's full extent, so a model the live picker
+// offers (or the user types) is legitimate even when the snapshot omits
+// it. Absence from the snapshot is not evidence. An unreachable or silent
+// endpoint keeps the current model — no evidence, no reset — which is the
+// rule local providers have always followed and hosted ones now share.
 // Returns the previous model when a reset happened.
 func (app *App) ensureModelFitsProvider(cfg *config.LayeredConfig, sessionModel string) (string, bool) {
 	if cfg == nil {
@@ -72,44 +75,57 @@ func (app *App) ensureModelFitsProvider(cfg *config.LayeredConfig, sessionModel 
 		return "", false
 	}
 
+	// A model the curated catalog knows always fits — no probe needed, and
+	// the decision stays offline for the common case.
 	if !config.IsLocalProvider(cfg.Provider) {
 		for _, item := range getModelsForProvider(cfg.Provider, model) {
 			if item.ID == model {
 				return "", false
 			}
 		}
-	} else {
-		if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
-			infos, err := c.ListModelsDetailed()
-			if err != nil || len(infos) == 0 {
-				return "", false // endpoint silent: no evidence, no reset
-			}
-			known := false
-			for _, info := range infos {
-				if info.ID == model {
-					known = true
-					break
-				}
-			}
-			if !known {
-				previous := model
-				cfg.Model = config.DefaultModel
-				if cfg.Model == previous {
-					return "", false
-				}
-				return previous, true
-			}
-			return "", false
-		}
+	}
+
+	// Not in the catalog (or a local provider, whose catalog is only a
+	// convenience list). Absence from the snapshot is not evidence the
+	// model is wrong: a model chosen from the live picker, or typed, is
+	// legitimate. Reset only when the endpoint is reachable and positively
+	// omits the model; silence keeps it — the "no evidence, no reset" rule.
+	if !app.providerOmitsModel(model) {
 		return "", false
 	}
 
 	previous := model
-	cfg.Model = config.DefaultModelForProvider(cfg.Provider)
+	if config.IsLocalProvider(cfg.Provider) {
+		cfg.Model = config.DefaultModel
+	} else {
+		cfg.Model = config.DefaultModelForProvider(cfg.Provider)
+	}
 	if cfg.Model == previous {
 		return "", false
 	}
 	return previous, true
+}
+
+// providerOmitsModel reports whether the live provider endpoint is
+// reachable and, from its own model list, positively does not serve
+// model. A silent, empty, or unreachable list returns false so a model is
+// never reset without evidence; non-HTTP clients (and tests) return false
+// for the same reason.
+func (app *App) providerOmitsModel(model string) bool {
+	c, ok := app.client.(*llm.HTTPClient)
+	if !ok || c == nil {
+		return false
+	}
+	infos, err := c.ListModelsDetailed()
+	if err != nil || len(infos) == 0 {
+		return false
+	}
+	for _, info := range infos {
+		if info.ID == model {
+			return false
+		}
+	}
+	return true
 }
 
 // getModelsForProvider returns models appropriate for the provider.

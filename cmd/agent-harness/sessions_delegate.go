@@ -51,6 +51,12 @@ func (d *tuiSessionsDelegate) OnSessionDelete(id string) {
 // deleteSession removes a session, replacing the active one if needed so
 // the harness always has a live session. Shared by the Sessions tab and
 // the Home dashboard's Recent Sessions list.
+//
+// Deleting never moves the user between tabs: the replacement is swapped
+// into the Chat view in place (SwitchToChat false) so deleting from Home
+// or Sessions leaves the user on the tab they deleted from. The switch was
+// the surprise — the deletion is confirmed on the tab you are already on,
+// so yanking to Chat contradicted where the action was taken.
 func (app *App) deleteSession(id string, tuiApp *tui.App) {
 	isActive := app.session != nil && app.session.ID == id
 	if isActive {
@@ -80,7 +86,7 @@ func (app *App) deleteSession(id string, tuiApp *tui.App) {
 			Sessions:       app.getSessionInfos(),
 			Notice:         sprintf("Deleted session %s; replacement active", shortID(id)),
 			NoticeType:     "success",
-			SwitchToChat:   true,
+			SwitchToChat:   false,
 			PermissionMode: app.config.PermissionMode.String(),
 			EstTokens:      app.session.EstimateTokens(),
 		})

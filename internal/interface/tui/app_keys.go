@@ -197,17 +197,13 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		// they left.
 		if a.agentCancelFunc != nil {
 			a.CancelAgent()
-			a.mode = ModeNormal
-			a.chatModel.SetModeLabel("navigate")
-			a.blurActive()
+			a.enterNavigationMode()
 			return a, func() tea.Msg {
 				return AgentCancelMsg{}
 			}, true
 		}
 		if !a.activeViewConsumesEsc() {
-			a.mode = ModeNormal
-			a.chatModel.SetModeLabel("navigate")
-			a.blurActive()
+			a.enterNavigationMode()
 			return a, nil, true
 		}
 	}
@@ -216,9 +212,7 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		// Mode switching
 		switch msg.String() {
 		case "ctrl+n":
-			a.mode = ModeNormal
-			a.chatModel.SetModeLabel("navigate")
-			a.blurActive()
+			a.enterNavigationMode()
 			return a, nil, true
 		case "i":
 			if a.mode == ModeNormal {

@@ -69,22 +69,20 @@ func NewCredentialManager() *CredentialManager {
 	}
 }
 
-// SecureConfigPath returns the path for encrypted config
+// SecureConfigPath returns the encrypted credential store's path under
+// the resolved config home. The store follows AGENT_HARNESS_CONFIG_HOME
+// (then XDG_CONFIG_HOME) exactly as settings.json does, so pointing the
+// harness at a profile isolates its credentials too. It used to hardcode
+// the literal ~/.config/agent-harness, which meant every profile shared
+// one file and a login in one clobbered another's keys.
 func SecureConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		home = "."
-	}
-	return filepath.Join(home, ".config", "agent-harness", "credentials.enc")
+	return filepath.Join(ConfigHome(), "credentials.enc")
 }
 
-// LegacyConfigPath returns the old plaintext config path
+// LegacyConfigPath returns the pre-store plaintext credential path under
+// the resolved config home.
 func LegacyConfigPath() string {
-	home, err := os.UserHomeDir()
-	if err != nil || home == "" {
-		home = "."
-	}
-	return filepath.Join(home, ".config", "agent-harness", "config.json")
+	return filepath.Join(ConfigHome(), "config.json")
 }
 
 // HasSecureCredentials checks if encrypted credentials exist

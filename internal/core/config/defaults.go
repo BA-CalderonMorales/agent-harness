@@ -59,7 +59,11 @@ func DefaultModelForProvider(provider string) string {
 	case "local":
 		return DefaultModel
 	case "fireworks":
-		return "accounts/fireworks/models/llama-v3p3-70b-instruct"
+		// Must match a live-served catalog entry. The old
+		// llama-v3p3-70b-instruct default was retired from the serving
+		// list, so a genuine reset (a model the endpoint no longer
+		// serves) landed on an id that 404s on the next request.
+		return "accounts/fireworks/models/glm-5p3-flash"
 	case "nvidia":
 		// Must match the NVIDIA catalog entry: the unversioned
 		// "nemotron-3.5-lightning" id is not a served NIM model, so the
