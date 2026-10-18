@@ -1,5 +1,30 @@
 # Changelog
 
+## [0.3.38] - 2026-10-17
+
+### Fixed
+- Home actions remain focused after Escape or Ctrl+N, so New Chat and Export
+  respond to Enter, Space, and their action keys.
+- The API-key login modal offers clickable provider links, Ctrl+O to open the
+  page, and Ctrl+Y to copy its URL, with feedback inside the modal.
+- MCP subprocesses now start and complete initialization through the official
+  Go SDK. Paginated catalogs, concurrent calls, cancellation, and late replies
+  preserve request identity. Failed startup cleans up; healthy servers remain
+  available when another server fails; shutdown closes owned processes.
+- MCP results retain structured evidence, provenance, resources, and actionable
+  tool errors. Oversized evidence keeps its complete private retrieval file;
+  error status survives budgeting, audit, model continuation, and session reload.
+  Matching progress notifications appear as sanitized transient TUI status.
+- Test fixtures clear inherited application and XDG storage overrides, preventing
+  tests from writing to the developer's real credential, settings, and data roots.
+
+### Validation
+- Independent raw JSON-RPC fixtures exercise lifecycle and failure recovery.
+  End-to-end tests cover both agent execution modes and approval checkpoints.
+- An opt-in REA 6.5.0 compatibility check verifies executable evidence against
+  SHA-256, Go build metadata, and exact source byte ranges. See
+  [MCP evidence and lifecycle](mcp-evidence.md) for reproduction and limitations.
+
 ## [0.3.37] - 2026-09-15
 
 ### Added
