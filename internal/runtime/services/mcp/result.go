@@ -24,6 +24,9 @@ func renderToolResult(result *CallToolResult) (Result, error) {
 	for _, content := range result.Content {
 		if item, ok := content.(*sdk.TextContent); ok {
 			text = append(text, item.Text)
+			if len(item.Meta) > 0 || item.Annotations != nil {
+				plain = false
+			}
 		} else {
 			plain = false
 		}

@@ -6,6 +6,21 @@ import (
 	"testing"
 )
 
+func TestTextContentMetadataIsNotFlattened(t *testing.T) {
+	var input CallToolResult
+	wire := `{"content":[{"type":"text","text":"target bytes","_meta":{"provenance":{"untrusted_content":true}},"annotations":{"audience":["assistant"],"priority":0.5}}]}`
+	if err := json.Unmarshal([]byte(wire), &input); err != nil {
+		t.Fatal(err)
+	}
+	got, err := renderToolResult(&input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got.Content, `"untrusted_content":true`) || !strings.Contains(got.Content, `"annotations"`) {
+		t.Fatal("plain-text shortcut discarded block-level provenance/annotations")
+	}
+}
+
 func TestResultPreservesStructuredOnlyMediaResourcesAndErrorMetadata(t *testing.T) {
 	for _, wire := range []string{
 		`{"content":[],"structuredContent":{"evidence_id":"structured-only"}}`,
