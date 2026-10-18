@@ -207,8 +207,15 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 	}
 
 	mapped := toolDef.MapResult(result.Data, block.ID)
-	if err := auditEvent("success", tools.Allow, "", time.Since(started).Milliseconds(), nil); err != nil {
-		return types.Message{}, fmt.Errorf("tool succeeded but outcome audit failed: %w", err)
+	mapped.IsError = mapped.IsError || result.IsError
+	outcome, outcomeMessage := "success", ""
+	var outcomeErr error
+	if mapped.IsError {
+		outcome, outcomeMessage = "failure", "tool reported failure"
+		outcomeErr = fmt.Errorf("%s", outcomeMessage)
+	}
+	if err := auditEvent(outcome, tools.Allow, outcomeMessage, time.Since(started).Milliseconds(), outcomeErr); err != nil {
+		return types.Message{}, fmt.Errorf("tool outcome audit failed: %w", err)
 	}
 	return types.Message{
 		Role:    types.RoleUser,

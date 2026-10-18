@@ -19,9 +19,10 @@ func Wrap(def svcmcp.WrappedToolDef, mgr *svcmcp.Manager) tools.Tool {
 	}
 
 	return tools.NewTool(tools.Tool{
-		Name:        fmt.Sprintf("mcp_%s_%s", def.ServerName, def.Name),
-		Description: def.Description,
-		InputSchema: func() map[string]any { return schema },
+		Name:         fmt.Sprintf("mcp_%s_%s", def.ServerName, def.Name),
+		Description:  def.Description,
+		InputSchema:  func() map[string]any { return schema },
+		OutputSchema: func() map[string]any { return def.OutputSchema },
 		Capabilities: tools.CapabilityFlags{
 			IsEnabled:               func() bool { return true },
 			IsConcurrencySafe:       func(map[string]any) bool { return false },
@@ -38,11 +39,15 @@ func Wrap(def svcmcp.WrappedToolDef, mgr *svcmcp.Manager) tools.Tool {
 			}
 		},
 		Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
-			result, err := mgr.CallTool(ctx.AbortController, def.ServerName, def.Name, input)
+			var progress func(svcmcp.ProgressUpdate)
+			if onProgress != nil {
+				progress = func(update svcmcp.ProgressUpdate) { onProgress(update) }
+			}
+			result, err := mgr.CallToolWithProgress(ctx.AbortController, def.ServerName, def.Name, input, progress)
 			if err != nil {
 				return tools.ToolResult{}, err
 			}
-			return tools.ToolResult{Data: result}, nil
+			return tools.ToolResult{Data: result.Content, IsError: result.IsError}, nil
 		},
 		MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 			content, _ := result.(string)

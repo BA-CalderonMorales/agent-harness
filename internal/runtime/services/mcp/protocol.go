@@ -1,104 +1,28 @@
 package mcp
 
-import "encoding/json"
-
-type JSONRPCRequest struct {
-	JSONRPC string `json:"jsonrpc"`
-	ID      int    `json:"id"`
-	Method  string `json:"method"`
-	Params  any    `json:"params,omitempty"`
-}
-
-type JSONRPCResponse struct {
-	JSONRPC string          `json:"jsonrpc"`
-	ID      int             `json:"id"`
-	Result  json.RawMessage `json:"result,omitempty"`
-	Error   *JSONRPCError   `json:"error,omitempty"`
-}
-
-type JSONRPCError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
-	Data    any    `json:"data,omitempty"`
-}
-
-const (
-	MethodInitialize = "initialize"
-	MethodToolsList  = "tools/list"
-	MethodToolsCall  = "tools/call"
+import (
+	"fmt"
+	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type InitializeParams struct {
-	ProtocolVersion string             `json:"protocolVersion"`
-	Capabilities    ClientCapabilities `json:"capabilities"`
-	ClientInfo      Info               `json:"clientInfo"`
+// Retain the full protocol result: structured evidence, resource links,
+// embedded resources, and provenance all survive the harness boundary.
+type InitializeResult = sdk.InitializeResult
+type CallToolResult = sdk.CallToolResult
+
+// ProgressUpdate is observational: it must never replace tool output.
+type ProgressUpdate struct {
+	Message  string  `json:"message,omitempty"`
+	Progress float64 `json:"progress"`
+	Total    float64 `json:"total,omitempty"`
 }
 
-type ClientCapabilities struct {
-	Roots struct{} `json:"roots,omitempty"`
-}
-
-type Info struct {
-	Name    string `json:"name"`
-	Version string `json:"version"`
-}
-
-type InitializeResult struct {
-	ProtocolVersion string             `json:"protocolVersion"`
-	Capabilities    ServerCapabilities `json:"capabilities"`
-	ServerInfo      Info               `json:"serverInfo"`
-}
-
-type ServerCapabilities struct {
-	Tools struct{} `json:"tools,omitempty"`
-}
-
-// ToolDef is declared in mcp.go to avoid redeclaration.
-// MarshalJSON and UnmarshalJSON are provided here to ensure
-// correct camelCase JSON field names for the MCP protocol.
-
-func (t ToolDef) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Name        string         `json:"name"`
-		Description string         `json:"description"`
-		InputSchema map[string]any `json:"inputSchema"`
-	}{
-		Name:        t.Name,
-		Description: t.Description,
-		InputSchema: t.InputSchema,
-	})
-}
-
-func (t *ToolDef) UnmarshalJSON(data []byte) error {
-	var aux struct {
-		Name        string         `json:"name"`
-		Description string         `json:"description"`
-		InputSchema map[string]any `json:"inputSchema"`
+func (p ProgressUpdate) String() string {
+	if p.Message != "" {
+		return p.Message
 	}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
+	if p.Total > 0 {
+		return fmt.Sprintf("Tool progress: %g / %g", p.Progress, p.Total)
 	}
-	t.Name = aux.Name
-	t.Description = aux.Description
-	t.InputSchema = aux.InputSchema
-	return nil
-}
-
-type ListToolsResult struct {
-	Tools []ToolDef `json:"tools"`
-}
-
-type CallToolParams struct {
-	Name      string         `json:"name"`
-	Arguments map[string]any `json:"arguments,omitempty"`
-}
-
-type CallToolResult struct {
-	Content []ContentItem `json:"content"`
-	IsError bool          `json:"isError,omitempty"`
-}
-
-type ContentItem struct {
-	Type string `json:"type"`
-	Text string `json:"text,omitempty"`
+	return fmt.Sprintf("Tool progress: %g", p.Progress)
 }

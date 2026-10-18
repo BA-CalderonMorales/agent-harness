@@ -343,8 +343,8 @@ agent-harness
 
 Hosted providers remain available. Use `/login` in the TUI, or set
 `AH_PROVIDER`, `AH_MODEL`, and `AH_API_KEY`. Remote credentials are encrypted
-with AES-256-GCM and stored at `~/.agent-harness/credentials.enc` with 0600
-permissions.
+with AES-256-GCM and stored at `~/.config/agent-harness/credentials.enc` with
+0600 permissions.
 
 See [Local Model Setup](local-models.md) for model download and YAML details.
 
@@ -354,14 +354,16 @@ agent-harness uses the following directories:
 
 - **Root config**: `./agent-harness.yml`
 - **Config**: `~/.config/agent-harness/settings.json`
+- **Credentials**: `~/.config/agent-harness/credentials.enc`
 - **Sessions**: `~/.local/share/agent-harness/sessions/`
 - **Skills**: `./.agent-harness/skills/`
 - **Local Config**: `./.agent-harness/settings.local.json`
 
 `XDG_CONFIG_HOME` and `XDG_DATA_HOME` change the corresponding roots.
 `AGENT_HARNESS_CONFIG_HOME` and `AGENT_HARNESS_DATA_HOME` override the complete
-application paths. Existing settings and sessions in `~/.agent-harness` migrate
-at startup; unknown files remain in place.
+application paths. The credential store follows the config home, so a profile
+carries its own keys. Existing settings, sessions, and credentials in
+`~/.agent-harness` migrate at startup; unknown files remain in place.
 
 ---
 
@@ -400,7 +402,7 @@ If you forget your master password:
 
 ```bash
 # Remove the encrypted credentials
-rm ~/.agent-harness/credentials.enc
+rm ~/.config/agent-harness/credentials.enc
 
 # Run setup again
 agent-harness

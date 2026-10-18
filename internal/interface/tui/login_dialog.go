@@ -12,6 +12,7 @@ import (
 	"unicode"
 
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // LoginStep is one stage of the modal wizard.
@@ -58,6 +59,7 @@ type LoginDialogModel struct {
 	providerIdx int
 	apiKeyBuf   string
 	errorMsg    string
+	linkNotice  string
 
 	// modelsProvider is wired by the app (SetLoginModelsProvider); the
 	// model step is the live-probed picker, not a free-text field.
@@ -116,6 +118,7 @@ func (m *LoginDialogModel) Open(width, height int, stored StoredCredentials) {
 	m.providerIdx = 0
 	m.apiKeyBuf = ""
 	m.errorMsg = ""
+	m.linkNotice = ""
 	m.probeErr = ""
 	m.picker = NewModelPicker()
 	m.stored = stored
@@ -353,7 +356,11 @@ func (m LoginDialogModel) apiKeyBody() string {
 		for i, s := range steps.Steps {
 			b.WriteString(HelpDimStyle.Render(fmt.Sprintf("  %d. %s", i+1, s)) + "\n")
 		}
-		b.WriteString("  " + InfoStyle.Render(steps.URL) + "\n")
+		b.WriteString("  " + ansi.SetHyperlink(steps.URL) + InfoStyle.Underline(true).Render(steps.URL) + ansi.ResetHyperlink() + "\n")
+		b.WriteString(HelpDimStyle.Render("  Click link / Ctrl+O: open  Ctrl+Y: copy URL") + "\n")
+		if m.linkNotice != "" {
+			b.WriteString(InfoStyle.Render(m.linkNotice) + "\n")
+		}
 	}
 	b.WriteString("\n" + HelpDimStyle.Render("Paste it here (masked; safe to paste):") + "\n")
 	b.WriteString("  " + PromptStyle.Render(strings.Repeat("*", len(m.apiKeyBuf))+"█") + "\n")

@@ -102,3 +102,77 @@ func TestEnsureModelFitsProviderLocalUsesLiveList(t *testing.T) {
 		t.Fatal("live-served model must not reset")
 	}
 }
+
+// The user's repro: a Fireworks model chosen from the live picker is not in
+// the curated static catalog, so boot reset it to the provider default and
+// the saved choice never took effect. With the endpoint reachable and
+// serving the model, the choice must be kept.
+func TestEnsureModelFitsProviderKeepsLiveHostedModel(t *testing.T) {
+	const chosen = "accounts/fireworks/models/deepseek-v4p1-flash"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": chosen, "context_length": 1048576},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	app := &App{client: llm.NewHTTPClientWithBaseURL("fireworks", "key", srv.URL)}
+	cfg := &config.LayeredConfig{Provider: "fireworks", Model: chosen}
+
+	if previous, reset := app.ensureModelFitsProvider(cfg, cfg.Model); reset {
+		t.Fatalf("live-served hosted model was reset: %q -> %q", previous, cfg.Model)
+	}
+	if cfg.Model != chosen {
+		t.Fatalf("model = %q, want the chosen %q", cfg.Model, chosen)
+	}
+}
+
+// The stranding case still resets: the endpoint is reachable and does not
+// serve the configured model, so it is a leftover from another provider.
+func TestEnsureModelFitsProviderResetsHostedModelEndpointRejects(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": "accounts/fireworks/models/glm-5p3-flash", "context_length": 1048576},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	app := &App{client: llm.NewHTTPClientWithBaseURL("fireworks", "key", srv.URL)}
+	cfg := &config.LayeredConfig{Provider: "fireworks", Model: "accounts/fireworks/models/not-served"}
+
+	previous, reset := app.ensureModelFitsProvider(cfg, cfg.Model)
+	if !reset {
+		t.Fatal("a hosted model the endpoint does not serve must reset")
+	}
+	if previous != "accounts/fireworks/models/not-served" {
+		t.Fatalf("previous = %q", previous)
+	}
+	if cfg.Model != config.DefaultModelForProvider("fireworks") {
+		t.Fatalf("model = %q, want the fireworks default", cfg.Model)
+	}
+}
+
+// No endpoint and no catalog entry: the curated catalog is not the
+// provider's full serving list, so absence is not evidence. A model chosen
+// from the live picker must survive boot instead of being clobbered to the
+// default. A catalog-known model is kept by the offline short circuit.
+func TestEnsureModelFitsProviderKeepsHostedModelWithoutEvidence(t *testing.T) {
+	app := &App{} // no client: nothing to ask
+	cfg := &config.LayeredConfig{Provider: "fireworks", Model: "accounts/fireworks/models/deepseek-v4p1-flash"}
+
+	if previous, reset := app.ensureModelFitsProvider(cfg, cfg.Model); reset {
+		t.Fatalf("reset without endpoint evidence: %q -> %q", previous, cfg.Model)
+	}
+	if cfg.Model != "accounts/fireworks/models/deepseek-v4p1-flash" {
+		t.Fatalf("model = %q, want it unchanged", cfg.Model)
+	}
+
+	cfg.Model = "accounts/fireworks/models/glm-5p3-flash" // in the curated catalog
+	if _, reset := app.ensureModelFitsProvider(cfg, cfg.Model); reset {
+		t.Fatal("a catalog-known model must not reset")
+	}
+}

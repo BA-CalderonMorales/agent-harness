@@ -106,6 +106,11 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		}
 
 		switch e := event.(type) {
+		case types.ProgressMessage:
+			// Progress is temporary tool activity, never model speech or
+			// session evidence. Strip terminal controls from server messages.
+			text := strings.Join(strings.Fields(tui.SanitizeANSI(fmt.Sprint(e.Data))), " ")
+			tuiApp.Send(tui.StatusMsg{Text: text, Type: "info"})
 		case types.StreamContextCompacted:
 			// Persist the exact message snapshot used by subsequent model
 			// requests without replacing persona, plan mode, or session identity.

@@ -7,10 +7,12 @@ import (
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/state"
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 func TestParseExportArgsDefaultsToText(t *testing.T) {
+	testenv.SetHome(t, t.TempDir())
 	format, path, err := parseExportArgs("", "12345678-1234")
 	if err != nil {
 		t.Fatalf("parseExportArgs() error = %v", err)
@@ -24,6 +26,7 @@ func TestParseExportArgsDefaultsToText(t *testing.T) {
 }
 
 func TestParseExportArgsInfersFormatFromPath(t *testing.T) {
+	testenv.SetHome(t, t.TempDir())
 	tests := []struct {
 		args       string
 		wantFormat string

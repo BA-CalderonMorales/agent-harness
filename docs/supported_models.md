@@ -149,15 +149,15 @@ in the model picker.
 
 | Model | Status | Notes |
 |-------|--------|-------|
-| `accounts/fireworks/models/llama-v3p3-70b-instruct` | ✅ Default | Solid all-round tool use |
+| `accounts/fireworks/models/glm-5p3-flash` | ✅ Default | Fast all-round tool use, 1M window |
+| `accounts/fireworks/models/glm-5p3` | ✅ Supported | Same family, no flash tier |
 | `accounts/fireworks/models/deepseek-v4-flash-0731` | ✅ Supported | Fast reasoning-capable flash model |
-| `accounts/fireworks/models/mixtral-8x22b-instruct` | ✅ Supported | High-throughput mixture of experts |
 
 ### Configuration
 
 ```bash
 export AGENT_HARNESS_PROVIDER="fireworks"
-export AGENT_HARNESS_MODEL="accounts/fireworks/models/llama-v3p3-70b-instruct"
+export AGENT_HARNESS_MODEL="accounts/fireworks/models/glm-5p3-flash"
 ```
 
 Or run `/login` and pick Fireworks (the key is stored encrypted).

@@ -63,8 +63,10 @@ func newApp() (*App, error) {
 
 	// Legacy storage moves into the XDG homes before anything reads a
 	// path: the config loader, credential store, and session manager
-	// all resolve their locations from here on.
-	storageNotice := config.MigrateLegacyHome()
+	// all resolve their locations from here on. A credential store
+	// written before the store followed the config home is relocated
+	// into the selected profile so keys already entered survive.
+	storageNotice := strings.TrimSpace(config.MigrateLegacyHome() + "\n" + config.AdoptLegacyCredentialStore())
 
 	app := &App{cwd: cwd, approvedCommands: make(map[string]bool)}
 
