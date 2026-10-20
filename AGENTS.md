@@ -28,6 +28,8 @@
 | Command approval and permissions stacking | `docs/command-approval.md` |
 | Branch protection and release flow | `docs/branch-protection.md`, Makefile release targets |
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
+| Security posture and accepted risks | `docs/security-review.md` |
+| Complexity hot spots and coverage gaps | `docs/complexity-analysis.md` |
 | Environment variables | `docs/environment-variables.md` |
 | Recent DX improvements | `docs/dx-improvements.md` |
 | Everything else | `README.md`, then this file again |
@@ -43,6 +45,8 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   OpenAI-compatible endpoint; `./scripts/ah-fast.sh` for small Ollama smoke
   tests; `./scripts/ah-local.sh` for the local server flow.
 - Structure check: `make verify` reports files over the line budget.
+- Complexity snapshot: `make complexity` ranks functions and packages; see
+  `docs/complexity-analysis.md` before choosing a file to refactor.
 - `/persona <name>` switches behavior mode; `/audit` shows tool activity;
   `/commit <message>` stages and commits; `h`/`c` jump between Home and Chat.
 

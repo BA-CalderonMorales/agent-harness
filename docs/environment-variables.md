@@ -17,6 +17,9 @@ override every config file layer.
 - `AH_API_KEY`: API key (not needed for local or ollama)
 - `AH_PERMISSION_MODE`: read-only, workspace-write, danger-full-access
 - `AH_PERSONA`: default persona (developer, designer, pm, scientist, explorer)
+- `AGENT_HARNESS_ALLOW_PRIVATE_FETCH`: set to `1` to let `web_fetch` reach
+  loopback, private, and link-local hosts (off by default; needed for tests
+  and local documentation servers)
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by
