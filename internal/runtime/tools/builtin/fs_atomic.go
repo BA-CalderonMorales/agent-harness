@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 )
 
 // writeFileAtomic replaces a file without exposing a partially written
@@ -40,9 +42,29 @@ func writeFileAtomic(path string, data []byte, perm os.FileMode) error {
 		cleanup()
 		return err
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
+	if err := renameReplacing(tmpPath, path); err != nil {
 		cleanup()
 		return fmt.Errorf("failed to replace %s: %w", path, err)
 	}
 	return nil
+}
+
+// renameReplacing renames temp onto path. Windows refuses a rename while
+// another handle has the destination open (a concurrent writer, an
+// indexer, or antivirus), so it retries briefly before giving up. Other
+// platforms return their error immediately: POSIX rename is atomic and
+// has no equivalent transient sharing violation.
+func renameReplacing(tempPath, path string) error {
+	const attempts = 10
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err = os.Rename(tempPath, path); err == nil {
+			return nil
+		}
+		if runtime.GOOS != "windows" {
+			return err
+		}
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+	return err
 }
