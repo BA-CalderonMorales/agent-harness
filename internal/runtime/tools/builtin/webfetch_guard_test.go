@@ -153,6 +153,21 @@ func TestWebFetchStopsRedirectLoops(t *testing.T) {
 	}
 }
 
+func TestRefusePrivateHostRejectsLocalNames(t *testing.T) {
+	ctx := context.Background()
+	for _, host := range []string{"localhost", "127.0.0.1", "169.254.169.254", "10.0.0.1", "::1"} {
+		if err := refusePrivateHost(ctx, host); err == nil {
+			t.Errorf("refusePrivateHost(%q) = nil, want a refusal", host)
+		}
+	}
+	// Public IP literals need no DNS and keep the check from failing open.
+	for _, host := range []string{"1.1.1.1", "8.8.8.8"} {
+		if err := refusePrivateHost(ctx, host); err != nil {
+			t.Errorf("refusePrivateHost(%q) = %v, want nil", host, err)
+		}
+	}
+}
+
 func TestWebFetchToolValidatesInput(t *testing.T) {
 	valid := WebFetchTool.ValidateInput(map[string]any{"url": "https://example.com"}, toolsContextForTest())
 	if !valid.Valid {

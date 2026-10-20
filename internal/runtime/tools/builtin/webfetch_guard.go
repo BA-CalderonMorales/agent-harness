@@ -119,6 +119,23 @@ func newWebFetchClient(allowPrivate bool) *http.Client {
 	}
 }
 
+// refusePrivateHost resolves a hostname and rejects it when any answer is
+// outside the public internet. dialPublic repeats the check at connect
+// time; this preflight is what covers an HTTP proxy, where the transport
+// dials the proxy and never sees the target address.
+func refusePrivateHost(ctx context.Context, host string) error {
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("cannot resolve %s: %w", host, err)
+	}
+	for _, resolved := range ips {
+		if blockedFetchIP(resolved.IP) {
+			return fmt.Errorf("refusing to fetch non-public address %s (%s); set %s=1 to allow local and private hosts", host, resolved.IP, allowPrivateFetchEnv)
+		}
+	}
+	return nil
+}
+
 // dialPublic resolves a host and connects only to public addresses. The
 // connection is made to the resolved IP, so a second DNS answer cannot
 // swap in a private target between the check and the dial.

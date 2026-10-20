@@ -80,7 +80,14 @@ func fetchWebContent(parent context.Context, rawURL string) (string, string, err
 	}
 	req.Header.Set("User-Agent", webFetchUserAgent)
 
-	client := newWebFetchClient(allowPrivateFetch())
+	allowPrivate := allowPrivateFetch()
+	if !allowPrivate {
+		if err := refusePrivateHost(ctx, req.URL.Hostname()); err != nil {
+			return "", "", err
+		}
+	}
+
+	client := newWebFetchClient(allowPrivate)
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", err
