@@ -92,6 +92,35 @@ func TestLoadSecureRefusesSymlinkedStore(t *testing.T) {
 	}
 }
 
+func TestLoadSecureRefusesSymlinkedMachineKey(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("symlink creation needs elevated privileges on Windows")
+	}
+	testenv.SetHome(t, t.TempDir())
+
+	cm := NewCredentialManager()
+	if err := cm.SaveSecure(&SecureConfig{Provider: "openrouter", APIKey: "sk-test"}); err != nil {
+		t.Fatalf("SaveSecure() error = %v", err)
+	}
+	key := MachineKeyPath()
+	real := key + ".real"
+	if err := os.Rename(key, real); err != nil {
+		t.Fatalf("move machine key: %v", err)
+	}
+	if err := os.Symlink(real, key); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+
+	_, err := NewCredentialManager().LoadSecure()
+	if err == nil {
+		t.Fatal("LoadSecure() = nil error, want a machine-key refusal")
+	}
+	// The original key must survive: regenerating would brick the store.
+	if data, readErr := os.ReadFile(real); readErr != nil || len(data) < 32 {
+		t.Fatalf("machine key was replaced or damaged: len=%d err=%v", len(data), readErr)
+	}
+}
+
 func requirePOSIXPerms(t *testing.T) {
 	t.Helper()
 	if runtime.GOOS == "windows" {

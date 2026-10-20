@@ -122,6 +122,15 @@ func (cm *CredentialManager) machineKey() ([]byte, error) {
 	if err == nil && len(data) >= 32 {
 		return data, nil
 	}
+	if err != nil && !os.IsNotExist(err) {
+		// A present-but-unreadable key (symlink, permissions, SMB
+		// oddity) must not be replaced: regenerating would silently
+		// render the existing store undecryptable.
+		return nil, fmt.Errorf("failed to read machine key: %w", err)
+	}
+	if err == nil {
+		return nil, fmt.Errorf("machine key at %s is corrupt or too short", path)
+	}
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("failed to generate machine key: %w", err)
