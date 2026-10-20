@@ -1,9 +1,10 @@
-.PHONY: help build test mutation-test run clean install fmt lint check-remote release verify-structure verify
+.PHONY: help build test mutation-test run clean install fmt lint check-remote release verify-structure verify complexity
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
 RUN_ARGS ?=
 MUTATION_TARGETS ?=
+COMPLEXITY_ARGS ?=
 
 ifeq ($(OS),Windows_NT)
 # PowerShell can invoke native GNU Make without adding Git's Unix tools to
@@ -53,6 +54,8 @@ help:
 	@printf '  make install        Install %s into GOPATH/GOBIN\n' "$(BINARY_NAME)"
 	@printf '  make clean          Remove build artifacts\n'
 	@printf '  make release        Check remote release state, then build\n'
+	@printf '  make verify         Run structure check and the full Go test suite\n'
+	@printf '  make complexity     Report function and package complexity hot spots\n'
 
 build:
 	@printf '==> Building %s\n' "$(BINARY_NAME)"
@@ -155,3 +158,9 @@ verify: verify-structure
 		exit $$status; \
 	}
 	@printf '[ok] All checks passed\n'
+
+# Advisory by default: prints the ranked hot spots without failing. Add
+# -strict or -max-complexity=N when ratcheting a threshold.
+complexity:
+	@printf '==> Complexity report (source only, tests excluded)\n'
+	@cd scripts/verify/complexity-report && go run . -root ../../.. $(COMPLEXITY_ARGS)
