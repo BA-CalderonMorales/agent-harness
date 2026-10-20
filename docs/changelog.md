@@ -28,7 +28,8 @@
 ### Changed
 - The toolchain moves to go1.26.9 in `go.mod`, CI, release, and Windows
   workflows, and the `golang.org/x/*` modules are current. This clears
-  nine reachable standard-library advisories and four in `x/net`.
+  nine reachable standard-library advisories, five of which also
+affected `x/net`.
 - `make complexity` reports function and package complexity hot spots
   from `scripts/verify/complexity-report/`, optionally gated with
   `COMPLEXITY_ARGS="-strict"` or `-max-complexity=N`.

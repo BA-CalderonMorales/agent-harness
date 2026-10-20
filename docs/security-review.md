@@ -78,8 +78,8 @@ change there.
 
 `govulncheck` reported nine reachable standard-library advisories fixed in
 go1.26.9 (HTTP/2 framing and flow control, HTTP/1 CONNECT
-desynchronization, TLS ECH handling, MIME header parsing) plus four in
-`golang.org/x/net` v0.57.0, fixed in v0.60.0.
+desynchronization, TLS ECH handling, MIME header parsing), five of which
+also affected `golang.org/x/net` v0.57.0 and are fixed in v0.60.0.
 
 The toolchain directive, CI, release, and Windows workflows, and the
 install docs now say 1.26.9, and the `x/*` modules are current. A rerun
