@@ -1,11 +1,10 @@
 package builtin
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net/http"
-	"strings"
-	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -31,8 +30,11 @@ var WebFetchTool = tools.NewTool(tools.Tool{
 	},
 	ValidateInput: func(input map[string]any, ctx tools.Context) tools.ValidationResult {
 		url := getString(input, "url")
-		if url == "" || !strings.HasPrefix(url, "http") {
+		if url == "" {
 			return tools.ValidationResult{Valid: false, Message: "valid http/https URL is required"}
+		}
+		if err := validateFetchURL(url); err != nil {
+			return tools.ValidationResult{Valid: false, Message: err.Error()}
 		}
 		return tools.ValidationResult{Valid: true}
 	},
@@ -41,23 +43,11 @@ var WebFetchTool = tools.NewTool(tools.Tool{
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		url := getString(input, "url")
-		client := &http.Client{Timeout: 30 * time.Second}
-		resp, err := client.Get(url)
+		status, content, err := fetchWebContent(ctx.AbortController, url)
 		if err != nil {
 			return tools.ToolResult{}, err
 		}
-		defer func() { _ = resp.Body.Close() }()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return tools.ToolResult{}, err
-		}
-
-		content := string(body)
-		if len(content) > 10000 {
-			content = content[:10000] + "\n... (truncated)"
-		}
-		return tools.ToolResult{Data: fmt.Sprintf("Status: %s\n\n%s", resp.Status, content)}, nil
+		return tools.ToolResult{Data: fmt.Sprintf("Status: %s\n\n%s", status, content)}, nil
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: result.(string)}
@@ -70,3 +60,47 @@ var WebFetchTool = tools.NewTool(tools.Tool{
 		return "Fetching URL"
 	},
 })
+
+// fetchWebContent performs the guarded request and returns the status
+// line plus a bounded amount of body text. The body read is capped so a
+// hostile or misconfigured server cannot exhaust memory before the
+// truncation check runs.
+func fetchWebContent(parent context.Context, rawURL string) (string, string, error) {
+	if err := validateFetchURL(rawURL); err != nil {
+		return "", "", err
+	}
+	ctx := parent
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return "", "", err
+	}
+	req.Header.Set("User-Agent", webFetchUserAgent)
+
+	client := newWebFetchClient(allowPrivateFetch())
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", "", err
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	body, err := io.ReadAll(io.LimitReader(resp.Body, webFetchMaxBodyBytes+1))
+	if err != nil {
+		return "", "", err
+	}
+	truncated := len(body) > webFetchMaxBodyBytes
+	if truncated {
+		body = body[:webFetchMaxBodyBytes]
+	}
+
+	content := string(body)
+	if len(content) > webFetchMaxOutput {
+		content = content[:webFetchMaxOutput] + "\n... (truncated)"
+	} else if truncated {
+		content += "\n... (truncated at 1 MiB)"
+	}
+	return resp.Status, content, nil
+}
