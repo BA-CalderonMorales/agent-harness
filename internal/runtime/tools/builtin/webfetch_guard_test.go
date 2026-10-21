@@ -153,6 +153,28 @@ func TestWebFetchStopsRedirectLoops(t *testing.T) {
 	}
 }
 
+func TestGuardedFetchClientDoesNotUseEnvironmentProxy(t *testing.T) {
+	guarded := newWebFetchClient(false)
+	tr, ok := guarded.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want *http.Transport", guarded.Transport)
+	}
+	if tr.Proxy != nil {
+		t.Fatal("guarded transport still consults a proxy; a proxy can forward a redirect to a private address")
+	}
+
+	// The opt-in path keeps proxy support, since the operator has
+	// already accepted local and private destinations.
+	optedIn := newWebFetchClient(true)
+	in, ok := optedIn.Transport.(*http.Transport)
+	if !ok {
+		t.Fatalf("transport = %T, want *http.Transport", optedIn.Transport)
+	}
+	if in.Proxy == nil {
+		t.Fatal("opted-in transport lost proxy support")
+	}
+}
+
 func TestRefusePrivateHostRejectsLocalNames(t *testing.T) {
 	ctx := context.Background()
 	for _, host := range []string{"localhost", "127.0.0.1", "169.254.169.254", "10.0.0.1", "::1"} {

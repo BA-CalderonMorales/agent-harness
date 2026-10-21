@@ -99,6 +99,12 @@ func newWebFetchClient(allowPrivate bool) *http.Client {
 	transport := http.DefaultTransport.(*http.Transport).Clone()
 	transport.ResponseHeaderTimeout = webFetchTimeout
 	if !allowPrivate {
+		// An environment proxy defeats the destination policy: the
+		// dialer would vet the proxy, and a redirect through it can
+		// reach a private address regardless of what the URL says.
+		// Guarded fetches therefore connect directly; opting into
+		// private destinations also opts back into proxy support.
+		transport.Proxy = nil
 		dialer := &net.Dialer{Timeout: webFetchDialTimeout, KeepAlive: 30 * time.Second}
 		transport.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
 			return dialPublic(ctx, dialer, network, addr)

@@ -19,7 +19,9 @@ override every config file layer.
 - `AH_PERSONA`: default persona (developer, designer, pm, scientist, explorer)
 - `AGENT_HARNESS_ALLOW_PRIVATE_FETCH`: set to `1` to let `web_fetch` reach
   loopback, private, and link-local hosts (off by default; needed for tests
-  and local documentation servers)
+  and local documentation servers). Guarded fetches connect directly and
+  ignore `HTTP_PROXY`/`HTTPS_PROXY`, because a proxy can forward a redirect
+  to a private address; opting in restores proxy support
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by

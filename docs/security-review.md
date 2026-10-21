@@ -63,7 +63,10 @@ credentials before the request; resolves the host and refuses loopback,
 private, link-local, CGNAT, and multicast addresses; dials the resolved
 address so a second DNS answer cannot swap in a private target; stops
 after five redirects; and reads at most 1 MiB before applying the same
-10k-character window as before.
+10k-character window as before. Guarded fetches also ignore an
+environment HTTP proxy: the dialer would otherwise vet the proxy rather
+than the destination, and a proxy can forward a redirect to a private
+address.
 
 Local and private destinations remain available on purpose:
 
