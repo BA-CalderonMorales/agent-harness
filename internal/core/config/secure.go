@@ -118,15 +118,24 @@ func machineKeyPath() string {
 // undecryptable on the next boot).
 func (cm *CredentialManager) machineKey() ([]byte, error) {
 	path := machineKeyPath()
-	data, err := os.ReadFile(path)
+	data, err := readPrivateFile(path)
 	if err == nil && len(data) >= 32 {
 		return data, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		// A present-but-unreadable key (symlink, permissions, SMB
+		// oddity) must not be replaced: regenerating would silently
+		// render the existing store undecryptable.
+		return nil, fmt.Errorf("failed to read machine key: %w", err)
+	}
+	if err == nil {
+		return nil, fmt.Errorf("machine key at %s is corrupt or too short", path)
 	}
 	key := make([]byte, 32)
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("failed to generate machine key: %w", err)
 	}
-	if err := os.MkdirAll(filepath.Dir(path), secureDirPerms); err != nil {
+	if err := ensurePrivateDir(filepath.Dir(path)); err != nil {
 		return nil, fmt.Errorf("failed to create config directory: %w", err)
 	}
 	if err := writeFileSecure(path, key, secureFilePerms); err != nil {
@@ -137,7 +146,7 @@ func (cm *CredentialManager) machineKey() ([]byte, error) {
 
 // LoadSecure loads credentials from encrypted storage
 func (cm *CredentialManager) LoadSecure() (*SecureConfig, error) {
-	data, err := os.ReadFile(cm.configPath)
+	data, err := readPrivateFile(cm.configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read secure config: %w", err)
 	}
@@ -286,7 +295,7 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 
 	// Ensure directory exists with secure permissions
 	dir := filepath.Dir(cm.configPath)
-	if err := os.MkdirAll(dir, secureDirPerms); err != nil {
+	if err := ensurePrivateDir(dir); err != nil {
 		return fmt.Errorf("failed to create config directory: %w", err)
 	}
 
@@ -352,7 +361,7 @@ func (cm *CredentialManager) ClearSecureConfig() error {
 // This is called when the user changes the model at runtime
 func (cm *CredentialManager) UpdateDefaultModel(model string) error {
 	// Load existing credentials
-	data, err := os.ReadFile(cm.configPath)
+	data, err := readPrivateFile(cm.configPath)
 	if err != nil {
 		return fmt.Errorf("failed to read secure config: %w", err)
 	}

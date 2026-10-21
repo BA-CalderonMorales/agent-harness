@@ -1,6 +1,6 @@
 # Windows development
 
-Use native Windows Go 1.26.8 or newer, GNU Make, and Git for Windows.
+Use native Windows Go 1.26.9 or newer, GNU Make, and Git for Windows.
 Install these in permanent locations and add their executable directories to
 your user PATH. Reopen PowerShell after changing PATH.
 
