@@ -1,5 +1,54 @@
 # Changelog
 
+## [0.3.39] - 2026-10-20
+
+### Fixed
+- `web_fetch` no longer treats any `http`-prefixed string as a URL. It
+  accepts only http and https with a host and no embedded credentials,
+  refuses loopback, private, link-local, and carrier-grade NAT
+  destinations after DNS resolution (which also covers redirects and
+  rebinding), stops after five redirects, and reads at most 1 MiB before
+  applying the existing 10k-character window. Set
+  `AGENT_HARNESS_ALLOW_PRIVATE_FETCH=1` to allow local and private hosts
+  for local servers and tests. Non-2xx responses still return their
+  status and body.
+- The `write` and `edit` tools stage through a unique temp file in the
+  destination directory instead of a predictable `<path>.tmp`, so
+  concurrent calls cannot interleave and a planted symlink is replaced
+  rather than followed.
+- Credential loads repair a loose `credentials.enc`, `master.key`, or
+  config-directory mode and refuse a symlinked store; saving tightens a
+  loose config directory to 0700.
+- Session exports redact authorization and x-api-key headers, private
+  key blocks, `secret://` references, and the xAI, Google, Hugging Face,
+  GitLab, npm, PyPI, and `sk_live_` token formats, in addition to the
+  existing key/value, OpenAI, Anthropic, GitHub, AWS, and local-path
+  rules.
+
+### Changed
+- The toolchain moves to go1.26.9 in `go.mod`, CI, release, and Windows
+  workflows, and the `golang.org/x/*` modules are current. This clears
+  nine reachable standard-library advisories, five of which also
+affected `x/net`.
+- `make complexity` reports function and package complexity hot spots
+  from `scripts/verify/complexity-report/`, optionally gated with
+  `COMPLEXITY_ARGS="-strict"` or `-max-complexity=N`.
+
+### Added
+- `docs/security-review.md` records the threat model, the findings
+  fixed here, and the risks accepted with a follow-up plan.
+- `docs/complexity-analysis.md` records per-domain size, complexity,
+  coverage, and a ranked set of maintainability recommendations.
+
+### Validation
+- New tests cover the fetch guard (schemes, private addresses, redirect
+  limits, body bounds, status preservation), atomic writes, credential
+  permission repair and symlink refusal, and the widened export
+  redaction rules.
+- `go build ./...`, `go vet ./...`, `go test ./...`, and
+  `govulncheck ./...` pass; the vulnerability scan reports no reachable
+  findings.
+
 ## [0.3.38] - 2026-10-17
 
 ### Fixed

@@ -57,15 +57,9 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 			}
 		}
 
-		// Atomic write: temp file then rename
-		tempPath := path + ".tmp"
-		if err := os.WriteFile(tempPath, []byte(content), 0644); err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to write temp file: %w", err)
-		}
-
-		if err := os.Rename(tempPath, path); err != nil {
-			_ = os.Remove(tempPath)
-			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
+		// Atomic write: unique temp file then rename
+		if err := writeFileAtomic(path, []byte(content), 0644); err != nil {
+			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
 		}
 
 		// Update stale tracker and invalidate cache

@@ -23,6 +23,7 @@ surface in one take.
 | [Loop architecture](loop-architecture.md) | The agent loop, buckets, naming pattern |
 | [Loop ledger](loop.md) | The validated-experiment ledger behind the features |
 | [Command approval](command-approval.md) | How commands get approved, permissions stacking |
+| [Security review](security-review.md) | Threat model, findings fixed and accepted |
 | [TUI design patterns](tui-design-patterns.md) | The screen patterns the UI reuses |
 | [Services and features](services-features.md) | The runtime services surface |
 
@@ -41,5 +42,6 @@ surface in one take.
 
 | Document | What |
 |---|---|
+| [Complexity analysis](complexity-analysis.md) | Domain size, hot spots, coverage gaps, and `make complexity` |
 | [Demo](demo.md) | The recording, the mock server, making new demos |
 | [Release notes](releases/v0.1.1.md) | The release ledger |

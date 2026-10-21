@@ -84,16 +84,9 @@ var FileEditTool = tools.NewTool(tools.Tool{
 			updated = strings.Replace(content, oldStr, newStr, 1)
 		}
 
-		// Write atomically: write to temp file then rename
-		tempPath := path + ".tmp"
-		if err := os.WriteFile(tempPath, []byte(updated), 0644); err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to write temp file: %w", err)
-		}
-
-		if err := os.Rename(tempPath, path); err != nil {
-			// Try to clean up temp file
-			_ = os.Remove(tempPath)
-			return tools.ToolResult{}, fmt.Errorf("failed to rename file: %w", err)
+		// Write atomically: unique temp file then rename
+		if err := writeFileAtomic(path, []byte(updated), 0644); err != nil {
+			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
 		}
 
 		// Update stale tracker with new content
