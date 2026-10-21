@@ -73,6 +73,12 @@ func TestRedactExportStringCoversCommonCredentialShapes(t *testing.T) {
 			want: "<redacted-private-key>",
 		},
 		{
+			name:  "json header object",
+			input: `{"Authorization":"Bearer opaque-value","x-api-key":"dummy"}`,
+			leaks: []string{"opaque-value", `"dummy"`},
+			want:  "Authorization",
+		},
+		{
 			name:  "secret reference",
 			input: "loaded via secret://cmd:gcloud secrets versions access latest --secret=openai-key now",
 			leaks: []string{"gcloud secrets", "openai-key"},
@@ -91,6 +97,36 @@ func TestRedactExportStringCoversCommonCredentialShapes(t *testing.T) {
 				t.Fatalf("redactExportString(%q) = %q, want it to contain %q", tt.input, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestRedactExportMapTreatsHeaderMapsAsSensitive covers structured
+// exports, where a header travels as a map key rather than as visible
+// "Header: value" text.
+func TestRedactExportMapTreatsHeaderMapsAsSensitive(t *testing.T) {
+	got := redactExportMap(map[string]any{
+		"Authorization": "Bearer opaque-value",
+		"x-api-key":     "dummy",
+		"Cookie":        "session=abc123",
+		"nested": map[string]any{
+			"authorization": "Basic dXNlcjpwYXNz",
+		},
+		"safe": "keep",
+	})
+	for _, key := range []string{"Authorization", "x-api-key", "Cookie", "authorization"} {
+		if key == "authorization" {
+			nested, ok := got["nested"].(map[string]any)
+			if !ok || nested[key] != "<redacted>" {
+				t.Fatalf("nested[%q] = %#v, want <redacted>", key, nested)
+			}
+			continue
+		}
+		if got[key] != "<redacted>" {
+			t.Fatalf("%s = %#v, want <redacted>", key, got[key])
+		}
+	}
+	if got["safe"] != "keep" {
+		t.Fatalf("safe = %#v, want ordinary values preserved", got["safe"])
 	}
 }
 
