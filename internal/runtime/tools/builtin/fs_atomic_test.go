@@ -27,12 +27,22 @@ func TestWriteFileAtomicReplacesContent(t *testing.T) {
 		t.Fatalf("content = %q, want the replacement text", data)
 	}
 	if runtime.GOOS != "windows" {
-		info, err := os.Stat(path)
-		if err != nil {
-			t.Fatalf("Stat() error = %v", err)
+		// Compare with the API the helper replaced: os.WriteFile applies
+		// the process umask, and so must the staging file.
+		control := filepath.Join(dir, "control.txt")
+		if err := os.WriteFile(control, []byte("control"), 0644); err != nil {
+			t.Fatalf("seed control: %v", err)
 		}
-		if got := info.Mode().Perm(); got != 0644 {
-			t.Fatalf("mode = %o, want 644", got)
+		gotInfo, err := os.Stat(path)
+		if err != nil {
+			t.Fatalf("Stat(%s) error = %v", path, err)
+		}
+		wantInfo, err := os.Stat(control)
+		if err != nil {
+			t.Fatalf("Stat(control) error = %v", err)
+		}
+		if gotInfo.Mode().Perm() != wantInfo.Mode().Perm() {
+			t.Fatalf("mode = %o, want %o (os.WriteFile under the same umask)", gotInfo.Mode().Perm(), wantInfo.Mode().Perm())
 		}
 	}
 	assertNoTempFiles(t, dir)
