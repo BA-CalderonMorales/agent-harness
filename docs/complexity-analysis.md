@@ -10,15 +10,15 @@ Snapshot taken at 0.3.39, before the release commit:
 | Metric | Value |
 |---|---|
 | Source files | 298 |
-| Source lines | 47,380 |
-| Functions | 1,869 |
+| Source lines | 47,451 |
+| Functions | 1,871 |
 | Packages | 50 |
-| Test lines | 34,110 (0.72x source) |
+| Test lines | 34,250 (0.72x source) |
 | Source files over the 400-line goal | 10 |
 | Functions at complexity 21 or higher | 34 |
 
-The distribution is steep and healthy at the low end: 1,486 functions at
-complexity 1-5, 272 at 6-10, 57 at 11-15, 20 at 16-20, and 34 at 21 or
+The distribution is steep and healthy at the low end: 1,487 functions at
+complexity 1-5, 273 at 6-10, 57 at 11-15, 20 at 16-20, and 34 at 21 or
 above. The tail is small enough to name.
 
 Cyclomatic complexity here is `1 +` every branch (`if`, `for`, `range`,
@@ -30,14 +30,14 @@ the numbers describe the code a maintainer has to hold in their head.
 | Domain | Files | Source lines | Functions | Max complexity | Over 400 | Tests |
 |---|---:|---:|---:|---:|---:|---:|
 | `internal/interface/tui` | 71 | 15,226 | 570 | 101 | 9 | 15,538 |
-| `internal/runtime` | 65 | 6,799 | 207 | 62 | 0 | 3,335 |
+| `internal/runtime` | 65 | 6,851 | 209 | 62 | 0 | 3,439 |
 | `internal/session` | 36 | 6,305 | 260 | 20 | 0 | 0 |
 | `cmd/agent-harness` | 39 | 5,078 | 166 | 42 | 0 | 4,993 |
-| `internal/core` | 32 | 4,756 | 214 | 43 | 1 | 2,414 |
+| `internal/core` | 32 | 4,759 | 214 | 43 | 1 | 2,450 |
 | `internal/agent` | 17 | 3,119 | 116 | 46 | 0 | 3,549 |
 | `internal/ui` | 13 | 2,312 | 123 | 27 | 0 | 156 |
 | `pkg` | 8 | 1,045 | 71 | 12 | 0 | 276 |
-| tests, e2e, scripts | 17 | 2,740 | 142 | 24 | 0 | 3,849 |
+| tests, e2e, scripts | 17 | 2,756 | 142 | 24 | 0 | 3,849 |
 
 Three observations drive the recommendations:
 
@@ -49,7 +49,7 @@ Three observations drive the recommendations:
    Untested and unreachable is dead weight for maintainers and a trap for
    agents that find it first and assume it runs.
 3. **`internal/runtime/tools/builtin` is where untrusted input meets the
-   OS and the network, and it has the thinnest coverage** (36.8%, versus
+   OS and the network, and it has the thinnest coverage** (39.1%, versus
    82.2% for the TUI). New security tests in 0.3.39 raised the fetch
    path; the shell classifier and filesystem tools remain lightly covered.
 
@@ -109,13 +109,13 @@ domains:
 | `internal/runtime/tools` | 72.7% |
 | `internal/core/diag` | 81.1% |
 | `internal/core/planning` | 66.4% |
-| `internal/agent` | 65.9% |
+| `internal/agent` | 66.1% |
 | `internal/core/state` | 63.7% |
 | `internal/core/config` | 54.9% |
 | `cmd/agent-harness` | 49.6% |
 | `internal/runtime/permissions` | 47.6% |
 | `pkg/git` | 35.3% |
-| `internal/runtime/tools/builtin` | 36.8% |
+| `internal/runtime/tools/builtin` | 39.1% |
 | `internal/ui` | 7.7% |
 | `internal/session`, `internal/skills`, `internal/tasks`, `internal/core/audit`, `pkg/bash`, `pkg/sandbox` | no tests |
 
