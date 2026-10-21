@@ -88,6 +88,9 @@ func fetchWebContent(parent context.Context, rawURL string) (string, string, err
 	}
 
 	client := newWebFetchClient(allowPrivate)
+	// The transport is per-fetch (its dialer carries the destination
+	// policy), so its idle pool must not outlive the call.
+	defer client.CloseIdleConnections()
 	resp, err := client.Do(req)
 	if err != nil {
 		return "", "", err
