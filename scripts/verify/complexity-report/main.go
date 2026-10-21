@@ -75,6 +75,22 @@ func main() {
 	asJSON := flag.Bool("json", false, "emit JSON instead of a text report")
 	flag.Parse()
 
+	// Validate before analysis: a negative -top panics when the ranked
+	// list is sliced, and -top=0 would hide the very rows a complexity
+	// gate is supposed to inspect.
+	if *top <= 0 {
+		fmt.Fprintln(os.Stderr, "complexity-report: -top must be greater than zero")
+		os.Exit(2)
+	}
+	if *budget <= 0 {
+		fmt.Fprintln(os.Stderr, "complexity-report: -budget must be greater than zero")
+		os.Exit(2)
+	}
+	if *maxComplexity < 0 {
+		fmt.Fprintln(os.Stderr, "complexity-report: -max-complexity cannot be negative")
+		os.Exit(2)
+	}
+
 	rep, err := analyze(*root, *top, *budget)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
