@@ -12,7 +12,7 @@ import (
 func (m *ChatModel) AddMessage(role, content string) {
 	msg := ChatMessage{
 		Role:      role,
-		Content:   content,
+		Content:   SanitizeTerminalText(content),
 		Timestamp: time.Now(),
 	}
 	m.messages = append(m.messages, msg)
@@ -28,7 +28,7 @@ func (m *ChatModel) AddMessage(role, content string) {
 func (m *ChatModel) PrependSystemNote(content string) {
 	note := ChatMessage{
 		Role:      "system",
-		Content:   content,
+		Content:   SanitizeTerminalText(content),
 		Timestamp: time.Now(),
 	}
 	m.messages = append([]ChatMessage{note}, m.messages...)
@@ -64,8 +64,9 @@ func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage
 		switch b := block.(type) {
 		case types.TextBlock:
 			if b.Text != "" {
-				content.WriteString(b.Text)
-				parts = append(parts, TurnPart{Text: b.Text})
+				text := SanitizeTerminalText(b.Text)
+				content.WriteString(text)
+				parts = append(parts, TurnPart{Text: text})
 			}
 		case types.ToolUseBlock:
 			isTool = true
@@ -88,7 +89,7 @@ func (m ChatModel) chatMessageFromSessionMessage(msg types.Message) (ChatMessage
 			if content.Len() > 0 {
 				content.WriteString("\n")
 			}
-			fmt.Fprintf(&content, "%v", b.Content)
+			fmt.Fprintf(&content, "%v", SanitizeTerminalText(b.Content))
 		}
 	}
 

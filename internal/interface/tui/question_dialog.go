@@ -261,10 +261,11 @@ func (m QuestionDialogModel) modalSpec() modalSpec {
 	}
 
 	items := []modalItem{
-		{lines: wrapLines(inner-2, PromptStyle.Render("? ")+m.request.Question)},
+		{lines: wrapLines(inner-2, PromptStyle.Render("? ")+SanitizeTerminalText(m.request.Question))},
 	}
 
 	for i, option := range m.request.Options {
+		option = SanitizeTerminalText(option)
 		marker := "  "
 		row := fmt.Sprintf("%s%d) %s", marker, i+1, option)
 		if i == m.selected && len(m.input) == 0 {
