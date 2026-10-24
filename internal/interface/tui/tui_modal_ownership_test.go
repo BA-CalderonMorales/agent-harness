@@ -104,3 +104,75 @@ func TestOverlaysOwnTheKeyboard(t *testing.T) {
 		})
 	}
 }
+
+// Esc means "back out one level": every overlay closes on Esc, and the
+// agent turn is not cancelled on the way out.
+func TestOverlaysCloseOnEscape(t *testing.T) {
+	cases := []struct {
+		name    string
+		open    func(*App)
+		visible func(*App) bool
+	}{
+		{
+			name: "approval",
+			open: func(a *App) {
+				a.approvalDialog.Show(approval.NewApprovalRequest(approval.CommandInfo{
+					ID: "cmd-1", ToolName: "bash", DisplayName: "bash", Command: "ls",
+				}))
+			},
+			visible: func(a *App) bool { return a.approvalDialog.IsVisible() },
+		},
+		{
+			name: "question",
+			open: func(a *App) {
+				a.questionDialog.Show(NewQuestionRequest(nil, "Proceed?", []string{"yes"}))
+			},
+			visible: func(a *App) bool { return a.questionDialog.IsVisible() },
+		},
+		{
+			name:    "login",
+			open:    func(a *App) { a.loginDialog.Open(80, 24, StoredCredentials{}) },
+			visible: func(a *App) bool { return a.loginDialog.IsShowing() },
+		},
+		{
+			name:    "provider picker",
+			open:    func(a *App) { a.providerPicker.Open(80, 24) },
+			visible: func(a *App) bool { return a.providerPicker.IsShowing() },
+		},
+		{
+			name:    "model picker",
+			open:    func(a *App) { a.modelPicker.Open(80, 24) },
+			visible: func(a *App) bool { return a.modelPicker.IsShowing() },
+		},
+		{
+			name:    "command palette",
+			open:    func(a *App) { a.commandPalette.Open(80, 24) },
+			visible: func(a *App) bool { return a.commandPalette.IsShowing() },
+		},
+		{
+			name:    "export picker",
+			open:    func(a *App) { a.exportPicker.Open(80, 24, nil) },
+			visible: func(a *App) bool { return a.exportPicker.visible },
+		},
+		{
+			name:    "next steps",
+			open:    func(a *App) { a.nextSteps.Open(80, 24, nil) },
+			visible: func(a *App) bool { return a.nextSteps.IsShowing() },
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			app := NewApp()
+			app.width, app.height = 80, 24
+			tc.open(app)
+			if !tc.visible(app) {
+				t.Fatalf("%s overlay is not visible after opening", tc.name)
+			}
+			app.Update(tea.KeyMsg{Type: tea.KeyEsc})
+			if tc.visible(app) {
+				t.Fatalf("%s overlay stayed open after Esc", tc.name)
+			}
+		})
+	}
+}
