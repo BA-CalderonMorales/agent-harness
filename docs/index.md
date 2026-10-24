@@ -26,6 +26,7 @@ surface in one take.
 | [OpenShell](openshell.md) | Optional kernel-enforced sandbox runtime and policy examples |
 | [Security review](security-review.md) | Threat model, findings fixed and accepted |
 | [TUI design patterns](tui-design-patterns.md) | The screen patterns the UI reuses |
+| [Terminal testing](tui-testing.md) | Rendering the real model in tests, golden frames |
 | [Services and features](services-features.md) | The runtime services surface |
 
 ## Operating it

@@ -48,6 +48,9 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 - Structure check: `make verify` reports files over the line budget.
 - Complexity snapshot: `make complexity` ranks functions and packages; see
   `docs/complexity-analysis.md` before choosing a file to refactor.
+- Terminal tests: `internal/testharness/ttui` renders the real model and
+  asserts on the frame a terminal receives (see `docs/tui-testing.md`).
+  Golden files regenerate with `go test ./... -update`.
 - `/persona <name>` switches behavior mode; `/audit` shows tool activity;
   `/commit <message>` stages and commits; `h`/`c` jump between Home and Chat.
 
