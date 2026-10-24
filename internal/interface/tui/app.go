@@ -62,6 +62,7 @@ type App struct {
 	logsModel      LogsModel
 	settingsModel  SettingsModel
 	approvalDialog ApprovalDialogModel
+	questionDialog QuestionDialogModel
 
 	// UI state
 	showHelp       bool
@@ -165,6 +166,7 @@ func NewApp() *App {
 		logsModel:      NewLogsModel(),
 		settingsModel:  NewSettingsModel(),
 		approvalDialog: NewApprovalDialog(),
+		questionDialog: NewQuestionDialog(),
 		helpModel:      NewHelp(),
 		commandPalette: NewCommandPalette(),
 		modelPicker:    NewModelPicker(),

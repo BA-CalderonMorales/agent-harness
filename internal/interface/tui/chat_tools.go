@@ -275,6 +275,10 @@ func (m *ChatModel) extractCommandFromToolInput(toolName string, input map[strin
 		if query, ok := input["query"].(string); ok && query != "" {
 			return fmt.Sprintf("search '%s'", m.truncateCommand(query, 40))
 		}
+	case "ask", "ask_user_question", "AskTool":
+		if question, ok := input["question"].(string); ok && question != "" {
+			return question
+		}
 	}
 	return ""
 }

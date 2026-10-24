@@ -195,6 +195,10 @@ func (app *App) extractCommandForDisplay(toolName string, toolInput map[string]a
 		}
 	case "write", "edit":
 		return extractWriteEditDisplay(toolInput)
+	case "ask", "ask_user_question":
+		if question, ok := toolInput["question"].(string); ok {
+			return question
+		}
 	default:
 		return extractGenericDisplay(toolInput, toolName)
 	}

@@ -31,7 +31,11 @@ func (a App) view() string {
 		return a.helpModel.View()
 	}
 
-	// Render approval dialog overlay first (if visible)
+	// Render blocking overlays first (if visible): a pending question
+	// means the agent is waiting, and an approval is equally modal.
+	if a.questionDialog.IsVisible() {
+		return a.questionDialog.View()
+	}
 	if a.approvalDialog.IsVisible() {
 		return a.approvalDialog.View()
 	}

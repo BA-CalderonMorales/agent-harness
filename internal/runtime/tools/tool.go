@@ -163,6 +163,10 @@ type Context struct {
 	// SubAgentQuery executes a sub-agent query with fresh context.
 	// If nil, sub-agent spawning falls back to placeholder behavior.
 	SubAgentQuery func(prompt string) (string, error)
+	// AskUser asks the operator a question through the host UI. A nil
+	// callback means no interactive surface is available, so tools that
+	// need input must fall back to their own prompt or fail.
+	AskUser func(ctx context.Context, question string, options []string) (answer string, cancelled bool, err error)
 }
 
 // QueryChainTracking prevents infinite recursion.

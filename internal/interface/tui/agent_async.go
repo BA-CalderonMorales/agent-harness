@@ -44,7 +44,7 @@ func getToolDisplayName(toolName string) string {
 		return "Web Search"
 	case "agent", "AgentTool":
 		return "Agent"
-	case "ask", "AskTool":
+	case "ask", "ask_user_question", "AskTool":
 		return "Ask"
 	case "todo", "TodoTool":
 		return "Todo"
