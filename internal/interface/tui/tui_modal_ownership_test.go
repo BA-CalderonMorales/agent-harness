@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"testing"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -35,7 +36,7 @@ func TestOverlaysOwnTheKeyboard(t *testing.T) {
 		{
 			name: "question",
 			open: func(a *App) {
-				a.questionDialog.Show(NewQuestionRequest(nil, "Proceed?", []string{"yes", "no"}))
+				a.questionDialog.Show(NewQuestionRequest(context.TODO(), "Proceed?", []string{"yes", "no"}))
 			},
 			visible: func(a *App) bool { return a.questionDialog.IsVisible() },
 		},
@@ -125,7 +126,7 @@ func TestOverlaysCloseOnEscape(t *testing.T) {
 		{
 			name: "question",
 			open: func(a *App) {
-				a.questionDialog.Show(NewQuestionRequest(nil, "Proceed?", []string{"yes"}))
+				a.questionDialog.Show(NewQuestionRequest(context.TODO(), "Proceed?", []string{"yes"}))
 			},
 			visible: func(a *App) bool { return a.questionDialog.IsVisible() },
 		},

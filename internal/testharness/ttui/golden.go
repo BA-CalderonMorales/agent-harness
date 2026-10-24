@@ -70,10 +70,13 @@ func AssertGolden(t *testing.T, name, got string) {
 	if err != nil {
 		t.Fatalf("ttui: golden %s is missing (%v); regenerate with: go test ./... -update", path, err)
 	}
-	if string(want) != got {
+	// A checkout with CRLF endings must still match: the frame is
+	// normalized to LF, so the golden is read the same way.
+	wantText := strings.ReplaceAll(string(want), "\r\n", "\n")
+	if wantText != got {
 		actualPath := path + ".actual"
 		_ = os.WriteFile(actualPath, []byte(got), 0o644)
-		t.Fatalf("ttui: golden %s does not match the rendered frame.\n%s\nactual written to %s", path, firstDifference(string(want), got), actualPath)
+		t.Fatalf("ttui: golden %s does not match the rendered frame.\n%s\nactual written to %s", path, firstDifference(wantText, got), actualPath)
 	}
 }
 

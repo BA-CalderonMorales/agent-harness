@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -19,7 +20,7 @@ func TestQuestionDialogGolden(t *testing.T) {
 	h := ttui.New(t, app)
 	h.Resize(80, 24)
 
-	req := NewQuestionRequest(nil, "Which environment should the deploy target?", []string{"staging", "production"})
+	req := NewQuestionRequest(context.TODO(), "Which environment should the deploy target?", []string{"staging", "production"})
 	h.Send(QuestionRequestMsg{Request: req})
 
 	h.AssertFitsWidth(80)
