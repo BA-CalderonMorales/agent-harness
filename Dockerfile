@@ -41,7 +41,11 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # OpenShell's policy defaults expect an unprivileged "sandbox" user.
-RUN useradd --create-home --uid 1000 --shell /bin/bash sandbox \
+# The base image already owns uid 1000 with the "ubuntu" account, so
+# that account goes first: the harness user keeps a predictable uid,
+# which is what makes a bind-mounted workspace usable.
+RUN (id ubuntu >/dev/null 2>&1 && userdel -r ubuntu || true) \
+    && useradd --create-home --uid 1000 --shell /bin/bash sandbox \
     && mkdir -p /workspace \
     && chown sandbox:sandbox /workspace
 
