@@ -44,7 +44,7 @@ silently assumed.
 | S-1 | High | `web_fetch` allowed SSRF to loopback, private, and link-local hosts, followed redirects without rechecking, and read an unbounded body | Fixed |
 | S-2 | High | Reachable standard-library and `x/net` advisories (HTTP/2 framing, flow control, TLS ECH, MIME parsing) in the pinned toolchain | Fixed |
 | S-3 | High | Project-scoped config can execute commands and read local files at boot through `.mcp.json` and `secret://cmd:`/`secret://file:` | Accepted, see below |
-| S-4 | Medium | Terminal escape sequences in model or tool output are rendered without filtering | Open |
+| S-4 | Medium | Terminal escape sequences in model or tool output are rendered without filtering | Fixed |
 | S-5 | Medium | Destructive-command detection is substring matching and is easy to bypass | Accepted, see below |
 | S-6 | Low | `write` and `edit` staged through a predictable `<path>.tmp` file | Fixed |
 | S-7 | Low | Credential files did not repair loose permissions and did not reject symlinks | Fixed |
@@ -129,11 +129,13 @@ tool text. A crafted response can emit OSC 52 (clipboard write), OSC 8
 determined caller do anything, so this matters mainly for content the
 user asked the model to fetch.
 
-The fix needs care: the chat pane intentionally renders some ANSI from
-tool output, and a blanket strip would regress colored `git` and test
-output. The recommended approach is a filter at ingestion that removes
-OSC, DCS, and non-SGR CSI sequences while keeping SGR color, with the
-filter covered by golden tests against the existing transcript fixtures.
+Fixed in 0.3.41. One filter now sits at every ingestion point:
+streaming replies, restored sessions, tool rows, log entries, the
+approval dialog, and the question modal. It keeps SGR so colored `git`
+and test output still look colored, and drops OSC, DCS, PM, APC, SOS,
+non-SGR CSI, stray C0 controls, and the C1 range. The question and its
+options are filtered before the user sees them, so the answer the model
+receives is the answer that was shown.
 
 ### S-5: destructive-command detection is advisory
 
