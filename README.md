@@ -8,7 +8,9 @@
 > that can modify files and execute commands. For the safest experience, test in
 > a remote development environment such as
 > [GitHub Codespaces](https://github.com/codespaces), [Coder](https://coder.com/),
-> or [DevPod](https://devpod.sh/).
+> or [DevPod](https://devpod.sh/). For a local boundary the agent cannot prompt
+> its way out of, run the harness under
+> [NVIDIA OpenShell](docs/openshell.md) (optional, Linux/macOS/WSL 2).
 
 [![Go](https://img.shields.io/badge/Go-1.26-blue.svg?logo=go&style=flat-square)](https://go.dev/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
@@ -150,6 +152,8 @@ for, and how the loop moves a turn: [Architecture](docs/architecture.md).
 | [Conversation flow](docs/conversation_flow.md) | How a turn moves through the app |
 | [Loop architecture](docs/loop-architecture.md) | The agent loop, buckets, naming |
 | [Command approval](docs/command-approval.md) | How commands get approved |
+| [OpenShell](docs/openshell.md) | Optional kernel-enforced sandbox runtime |
+| [Security review](docs/security-review.md) | Findings, accepted risks, threat model |
 | [Branch protection](docs/branch-protection.md) | Release flow and branch rules |
 | [Supported models](docs/supported_models.md) | Provider/model matrix |
 | [Demo](docs/demo.md) | The recording, the mock server, making new demos |

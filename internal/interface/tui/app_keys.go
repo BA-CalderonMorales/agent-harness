@@ -132,6 +132,15 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, nil, true
 	}
 
+	// A pending question owns the keyboard before any global chord: the
+	// agent is blocked on the answer, and the composer must not see the
+	// keystrokes.
+	if a.questionDialog.IsVisible() {
+		dialog, cmd := a.questionDialog.Update(msg)
+		a.questionDialog = dialog
+		return a, cmd, true
+	}
+
 	// When approval dialog is open, delegate to it
 	if a.approvalDialog.IsVisible() {
 		dialog, cmd := a.approvalDialog.Update(msg)
@@ -466,6 +475,8 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	// that never learned the pane renders as a sliver.
 	a.approvalDialog.width = width
 	a.approvalDialog.height = height
+	a.questionDialog.width = width
+	a.questionDialog.height = height
 
 	// Touch-first default on phone panes in touch hosts (tmux,
 	// Termux): with mouse capture on, a tap becomes a click event and

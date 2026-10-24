@@ -73,6 +73,9 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	toolCtx.SubAgentQuery = func(prompt string) (string, error) {
 		return app.runDelegatedAgent(ctx, prompt, toolCtx, canUseTool)
 	}
+	if tuiApp != nil {
+		toolCtx.AskUser = app.requestUserQuestion
+	}
 
 	params := agent.QueryParams{
 		Messages:        app.session.Messages,
@@ -256,6 +259,9 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, parentT
 		AbortController:   subCtx,
 		QueryTracking:     tools.QueryChainTracking{ChainID: parentToolCtx.QueryTracking.ChainID, Depth: parentToolCtx.QueryTracking.Depth + 1},
 		RequireCanUseTool: true,
+	}
+	if app.tuiApp != nil {
+		childCtx.AskUser = app.requestUserQuestion
 	}
 	childLoop := agent.NewLoop(app.client)
 	childLoop.Config.DefaultMaxTurns = delegatedAgentMaxTurns

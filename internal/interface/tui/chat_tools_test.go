@@ -36,3 +36,13 @@ func TestCompactCommandForWidthNeverPanics(t *testing.T) {
 		}
 	}
 }
+func TestExtractCommandShowsAskQuestion(t *testing.T) {
+	var m ChatModel
+	got := m.extractCommandFromToolInput("ask_user_question", map[string]any{
+		"question": "Deploy to production?",
+		"options":  []any{"yes", "no"},
+	})
+	if got != "Deploy to production?" {
+		t.Fatalf("extractCommandFromToolInput(ask) = %q, want the question text", got)
+	}
+}

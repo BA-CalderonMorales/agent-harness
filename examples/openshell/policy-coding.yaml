@@ -1,0 +1,65 @@
+# Coding-oriented OpenShell policy for the agent-harness image.
+#
+# Same filesystem boundary as policy-minimal.yaml, plus GitHub over HTTPS
+# so `git clone`, `git fetch`, and `git push` work. The GitHub rules are
+# L4 (host and port only) because Git's smart-HTTP transport needs POSTs
+# that a read-only REST rule would reject; narrow them to L7 if your
+# workflow only reads.
+#
+# Extend the network section for package registries or MCP servers your
+# work needs; see https://docs.nvidia.com/openshell/latest/how-it-works/policies/schema
+
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /lib64
+    - /bin
+    - /sbin
+    - /etc
+    - /opt
+    - /proc
+    - /dev/urandom
+    - /var/log
+  read_write:
+    - /workspace
+    - /tmp
+    - /dev/null
+    - /dev/zero
+    - /home/sandbox/.config/agent-harness
+    - /home/sandbox/.local/share/agent-harness
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  openrouter_inference:
+    name: openrouter-inference
+    endpoints:
+      - host: openrouter.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+    binaries:
+      - { path: /usr/local/bin/agent-harness }
+
+  github_git:
+    name: github-git
+    endpoints:
+      - { host: github.com, port: 443 }
+      - { host: codeload.github.com, port: 443 }
+      - { host: objects.githubusercontent.com, port: 443 }
+      - { host: raw.githubusercontent.com, port: 443 }
+    binaries:
+      - { path: /usr/bin/git }
+      - { path: /usr/lib/git-core/git-remote-https }
+      - { path: /usr/lib/git-core/git-remote-http }
+      - { path: /usr/bin/ssh }

@@ -172,6 +172,23 @@ pre-filter. That is a feature-sized change, not a patch.
 | `bash` can do anything the user can | The agent is a coding tool. Read-only and plan modes plus the approval dialog are the guardrails. |
 | Release artifacts are unsigned | Checksums are published by CD; signing and provenance attestation are a release-engineering follow-up. |
 
+### Out-of-process containment
+
+Every accepted risk above assumes the harness enforces its own boundary.
+Users who need a boundary the agent cannot prompt away can run the harness
+under [NVIDIA OpenShell](openshell.md): a kernel-enforced sandbox with
+Landlock filesystem rules, seccomp and an unprivileged user, and
+default-deny egress bound to specific binaries. Provider profiles keep
+API keys outside the sandbox and inject them only at approved endpoints.
+
+That confines the accepted risks rather than deleting them. An agent may
+still do anything the operator's policy allows, project configuration
+still executes inside the sandbox, and the approval dialog still matters
+as a UX control. The difference is that a compromised agent can no longer
+reach the host filesystem, the user's credentials, or an arbitrary
+destination. See [Running under OpenShell](openshell.md) and the
+[decision record](design/openshell-integration-decision.md).
+
 ## Verifying the fixes
 
 ```bash

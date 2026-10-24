@@ -223,18 +223,25 @@ source ~/.bashrc  # or source ~/.zshrc
 
 ## Docker
 
-### Using Pre-built Images (Coming Soon)
+### Published Images
+
+Release tags publish `linux/amd64` and `linux/arm64` images to GHCR. Use the
+release tag (`0.3.40`), the minor tag (`0.3`), or `latest`:
 
 ```bash
-# Pull the image
-docker pull ghcr.io/ba-calderonmorales/agent-harness:latest
+docker pull ghcr.io/ba-calderonmorales/agent-harness:0.3.40
 
 # Run interactively
 docker run -it --rm \
   -v $(pwd):/workspace \
   -e OPENROUTER_API_KEY=$OPENROUTER_API_KEY \
-  ghcr.io/ba-calderonmorales/agent-harness:latest
+  ghcr.io/ba-calderonmorales/agent-harness:0.3.40
 ```
+
+The image runs as the unprivileged `sandbox` user (uid 1000) with
+`/workspace` as the working directory. Host files you mount must be readable
+and writable by that uid. For a kernel-enforced boundary rather than plain
+container isolation, see [Running under OpenShell](openshell.md).
 
 ### Building Your Own Image
 
@@ -262,7 +269,8 @@ services:
     image: ghcr.io/ba-calderonmorales/agent-harness:latest
     volumes:
       - .:/workspace
-      - ~/.agent-harness:/home/agent/.agent-harness
+      - ~/.config/agent-harness:/home/sandbox/.config/agent-harness
+      - ~/.local/share/agent-harness:/home/sandbox/.local/share/agent-harness
     environment:
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY}
     working_dir: /workspace
