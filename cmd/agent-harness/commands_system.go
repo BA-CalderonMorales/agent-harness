@@ -38,6 +38,11 @@ func (app *App) initCommandsSystem() {
 			func() string { return app.getPermissionsReport() },
 		))
 
+	app.cmdRegistry.Register("doctor", "Check that everything is ready",
+		commands.StatusHandler(func() string {
+			return app.formatReadinessReport()
+		}))
+
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			return app.formatAgentsList()
