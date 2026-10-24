@@ -226,6 +226,7 @@ func (a App) renderActiveView() string {
 	// app knows about the approval dialog, the chat model knows about
 	// the running tool and the turn's tool calls.
 	a.chatModel.SetLoopBeat(a.currentLoopBeat())
+	a.chatModel.SyncPlaceholder()
 
 	// Reserve space for the fixed chrome: tab bar (3 with padding and
 	// border) + status bar (3 with its top and bottom padding), plus

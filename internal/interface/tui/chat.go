@@ -626,15 +626,27 @@ func (m *ChatModel) Blur() {
 }
 
 // togglePlaceholder keeps the composer honest about its mode: in navigate
-// mode the placeholder says what to press; in typing mode it invites text.
+// mode the placeholder says what to press; in typing mode it says what
+// typing will do right now.
 func (m *ChatModel) togglePlaceholder() {
-	if m.focused {
-		m.textarea.Placeholder = "Type a message..."
-	} else {
+	m.SyncPlaceholder()
+}
+
+// SyncPlaceholder says what typing does at this moment. During a turn,
+// typing queues a message for the next turn and /steer redirects the
+// running one — an affordance nobody can find is not an affordance, so
+// the composer names it.
+func (m *ChatModel) SyncPlaceholder() {
+	switch {
+	case !m.focused:
 		// Navigate mode advertises the two keys that move you forward:
 		// start typing, or ask what to do next. next-steps is otherwise
 		// undiscoverable, and an affordance nobody finds is not one.
 		m.textarea.Placeholder = `"i" to type a message · "s" next steps`
+	case m.turnInFlight():
+		m.textarea.Placeholder = "Agent is working — type to queue · /steer to redirect now"
+	default:
+		m.textarea.Placeholder = "Type a message..."
 	}
 }
 func (m *ChatModel) SetInput(text string) {
