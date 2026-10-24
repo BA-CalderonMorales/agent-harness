@@ -93,6 +93,7 @@ func (m ChatModel) currentReasoningText() string {
 }
 
 func (m *ChatModel) updateOrCreateStreamingMessage(content string) {
+	content = SanitizeTerminalText(content)
 	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content
@@ -151,6 +152,7 @@ func (m *ChatModel) deriveParts(buffer string) []TurnPart {
 // write the reply into the wrong message - the user's bubble stayed empty
 // while a system note absorbed the content.
 func (m *ChatModel) finalizeStreamingMessage(content string) {
+	content = SanitizeTerminalText(content)
 	parts := m.deriveParts(content)
 	if msg := m.streamingAssistant(); msg != nil {
 		msg.Content = content

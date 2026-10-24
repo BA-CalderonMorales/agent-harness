@@ -56,6 +56,9 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	if toolDisplayName == "" {
 		toolDisplayName = toolName
 	}
+	// The command text is model-authored: it reaches the terminal as a
+	// tool row, so it carries the same filter as any other model text.
+	command = SanitizeTerminalText(command)
 
 	// Look for existing message with same ID
 	for i := range m.messages {

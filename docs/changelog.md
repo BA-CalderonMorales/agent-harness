@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.3.41] - 2026-10-24
+
+### Fixed
+- Terminal control sequences in model, tool, and log text are filtered
+  before they reach the terminal. A response could emit OSC 52 (clipboard
+  write), OSC 8 (hyperlink), or cursor and erase sequences and take over
+  the pane; the filter drops OSC, DCS, PM, APC, SOS, non-SGR CSI, stray
+  C0 controls, and the C1 range while keeping SGR, so colored `git` and
+  test output still look colored. It covers streaming replies, restored
+  sessions, tool rows, log entries, the approval dialog, and the question
+  modal. The question and its options are filtered before the user sees
+  them, so the answer the model receives is the answer that was shown.
+  This closes the open S-4 item in the security review.
+- The CI security job pins `govulncheck` to v1.9.0. Installing `@latest`
+  made the scan depend on whatever upstream shipped that day, which failed
+  a release pull request on a download error rather than on a finding.
+
+### Added
+- `internal/testharness/ttui`, a terminal harness that renders the real
+  model and asserts on the characters a terminal would receive: frame
+  width, content, and golden files (regenerate with `go test ./...
+  -update`).
+- Terminal tests for the home and chat panes at 40x15, 80x24, and
+  120x30, for input ownership (no overlay leaks a keystroke or a chord
+  into the composer), for every overlay closing on Esc, and for a 16 KB
+  paste keeping the frame intact.
+- `docs/tui-testing.md` describes the harness, the golden workflow, and
+  what belongs in a terminal test.
+
 ## [0.3.40] - 2026-10-24
 
 ### Fixed

@@ -1,0 +1,23 @@
+
+
+
+
+
+ ╭────────────────────────────────────────────────────────────────────────────╮
+ │                                                                            │
+ │   Approval required · bash                                                 │
+ │                                                                            │
+ │  $ go test ./...                                                           │
+ │  ▸ a · Approve — Run this command                                          │
+ │    A · Approve All — Always run similar commands                           │
+ │    r · Reject — Skip this command                                          │
+ │    R · Reject + Suggest — tell the agent what to do instead                │
+ │                                                                            │
+ │  1-4 instant · esc rejects · j/k detail                                    │
+ │                                                                            │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+
