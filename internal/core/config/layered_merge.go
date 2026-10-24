@@ -57,6 +57,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	if v, ok := stringValue(config.merged, "local_server_command"); ok {
 		config.ServerCommand = v
 	}
+	if v, ok := boolValue(config.merged, "reduced_motion"); ok {
+		config.ReducedMotion = v
+	}
 	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v
 	}

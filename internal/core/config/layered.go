@@ -97,6 +97,12 @@ type LayeredConfig struct {
 
 	// SessionDir overrides the default session storage directory
 	SessionDir string
+
+	// ReducedMotion turns off the app's animation: the working
+	// indicator stops shimmering and every animated element holds
+	// still. The information stays (the elapsed clock still counts);
+	// only the movement goes.
+	ReducedMotion bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.

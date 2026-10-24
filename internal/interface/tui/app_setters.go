@@ -14,6 +14,14 @@ func (a *App) AddMessage(role, content string) {
 }
 
 // SetInput sets the chat input text.
+// SetReducedMotion turns the app's animation off. The information every
+// animated element carries (the elapsed clock, the current beat) stays;
+// only the movement goes.
+func (a *App) SetReducedMotion(reduced bool) {
+	a.reducedMotion = reduced
+	a.chatModel.SetReducedMotion(reduced)
+}
+
 func (a *App) SetInput(text string) {
 	a.chatModel.SetInput(text)
 }

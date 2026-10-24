@@ -22,6 +22,9 @@ override every config file layer.
   and local documentation servers). Guarded fetches connect directly and
   ignore `HTTP_PROXY`/`HTTPS_PROXY`, because a proxy can forward a redirect
   to a private address; opting in restores proxy support
+- `AGENT_HARNESS_REDUCED_MOTION`: set to `1` to hold the interface still
+  (no shimmer, no movement); `reduced_motion: true` in settings does the
+  same. The information stays, only the motion goes
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by

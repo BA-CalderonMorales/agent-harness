@@ -55,6 +55,10 @@ type App struct {
 	activeView viewID
 	mode       Mode
 
+	// reducedMotion holds the frame still: animated elements render one
+	// static state instead of moving.
+	reducedMotion bool
+
 	// Sub-models
 	homeModel      *HomeModel
 	chatModel      ChatModel

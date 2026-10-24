@@ -193,12 +193,15 @@ const PasteBurstThreshold = 20 * time.Millisecond
 // ChatModel is the chat view model
 // ---------------------------------------------------------------------------
 type ChatModel struct {
-	width    int
-	height   int
-	messages []ChatMessage
-	viewport fastViewport
-	textarea textarea.Model
-	focused  bool
+	width  int
+	height int
+	// reducedMotion holds the frame still: animated elements render one
+	// static state instead of moving.
+	reducedMotion bool
+	messages      []ChatMessage
+	viewport      fastViewport
+	textarea      textarea.Model
+	focused       bool
 
 	// State
 	thinking     bool
@@ -693,4 +696,10 @@ func (m ChatModel) GetSteerQueue() []string {
 		out = append(out, q.Text)
 	}
 	return out
+}
+
+// SetReducedMotion turns the chat's animation off: the working
+// indicator holds still instead of shimmering.
+func (m *ChatModel) SetReducedMotion(reduced bool) {
+	m.reducedMotion = reduced
 }

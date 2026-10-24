@@ -130,7 +130,7 @@ func TestWorkingAnimShimmers(t *testing.T) {
 		t.Fatalf("shimmer visited %d of %d letters over a full sweep", len(seen), n)
 	}
 	// Text is stable across ticks even though the highlight moves.
-	if stripANSI(workingAnim(word, 0)) != word || stripANSI(workingAnim(word, 3)) != word {
+	if stripANSI(workingAnim(word, 0, false)) != word || stripANSI(workingAnim(word, 3, false)) != word {
 		t.Fatalf("anim text changed across ticks; word must animate in place")
 	}
 }

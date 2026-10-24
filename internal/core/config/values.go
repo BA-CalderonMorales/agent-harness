@@ -47,6 +47,14 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	applyEnvString(firstEnv("AH_LOCAL_SERVER_COMMAND", "AGENT_HARNESS_LOCAL_SERVER_COMMAND"), &config.ServerCommand)
 	applyEnvString(firstEnv("AH_PERSONA", "AGENT_HARNESS_PERSONA"), &config.Persona)
 	applyEnvString(firstEnv("AH_SESSION_DIR", "AGENT_HARNESS_SESSION_DIR"), &config.SessionDir)
+	// Reduced motion can be pinned from the environment, which is how a
+	// shared session, a screen reader, or a remote shell asks for a
+	// still interface without editing settings.
+	if v := firstEnv("AH_REDUCED_MOTION", "AGENT_HARNESS_REDUCED_MOTION"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			config.ReducedMotion = parsed
+		}
+	}
 	applyEnvPermissionMode(firstEnv("AH_PERMISSION_MODE", "AGENT_HARNESS_PERMISSION_MODE"), &config.PermissionMode)
 	applyEnvString(firstEnv("AH_EXECUTION_MODE", "AGENT_HARNESS_EXECUTION_MODE"), &config.ExecutionMode)
 	applyEnvBool(firstEnv("AH_PERM_READ", "AGENT_HARNESS_PERM_READ"), &config.PermRead, &config.PermExplicit)

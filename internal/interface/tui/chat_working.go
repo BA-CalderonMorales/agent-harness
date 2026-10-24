@@ -42,7 +42,12 @@ func workingBrightIndex(tick, wordLen int) int {
 // a time brightens, sweeping through the word on the tick clock. The
 // elapsed clock is the real progress signal; the shimmer just proves
 // the frame is live.
-func workingAnim(word string, tick int) string {
+func workingAnim(word string, tick int, reducedMotion bool) string {
+	if reducedMotion {
+		// Still, but present: the line says the agent is working and
+		// how long it has been working. Only the sweep stops.
+		return HelpDimStyle.Render(word)
+	}
 	bright := workingBrightIndex(tick, len([]rune(word)))
 	var b strings.Builder
 	for i, r := range word {
@@ -75,7 +80,7 @@ func (m ChatModel) workingStatusLine(tick int) string {
 	// is running; the indicator only needs to say work is happening
 	// and for how long.
 	return fmt.Sprintf("%s · %s",
-		workingAnim(workingWord(), tick),
+		workingAnim(workingWord(), tick, m.reducedMotion),
 		formatElapsed(m.elapsed))
 }
 

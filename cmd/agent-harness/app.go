@@ -165,6 +165,9 @@ func (app *App) run() error {
 	tuiApp.SetChatModel(app.session.Model)
 	tuiApp.SetChatPersona(app.session.Persona)
 	tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
+	// Reduced motion is a setting, not a preference of the moment: it
+	// has to reach the interface before the first frame is drawn.
+	tuiApp.SetReducedMotion(app.config.ReducedMotion)
 	tuiApp.SetAgentMode(string(app.agentMode))
 	tuiApp.SetAgentModeChangedHandler(func(mode string) {
 		app.applyAgentMode(agentMode(mode))
