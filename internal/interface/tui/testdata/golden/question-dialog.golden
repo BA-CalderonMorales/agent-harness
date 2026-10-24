@@ -1,0 +1,23 @@
+
+
+
+
+
+
+ ╭────────────────────────────────────────────────────────────────────────────╮
+ │                                                                            │
+ │   Question from the agent                                                  │
+ │                                                                            │
+ │  ? Which environment should the deploy target?                             │
+ │  ▸ 1) staging                                                              │
+ │    2) production                                                           │
+ │    > ▏                                                                     │
+ │                                                                            │
+ │  1-9 pick · ↑/↓ select · enter send · esc skip                             │
+ │                                                                            │
+ ╰────────────────────────────────────────────────────────────────────────────╯
+
+
+
+
+

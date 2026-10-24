@@ -127,7 +127,10 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 	// The command is the thing being approved: prompt glyph + bright
 	// text, wrapped to the frame. No background fill — the command
 	// reads on the terminal's own background like every other block.
-	cmdText := cmd.Command
+	// The command, its description, and the preview are model-authored
+	// and render inside the frame: filter them like any other model
+	// text so the dialog cannot be made to repaint the pane.
+	cmdText := SanitizeTerminalText(cmd.Command)
 	if cmdText == "" {
 		cmdText = "(no command details)"
 	}
@@ -139,7 +142,7 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 	// description, and showing the command twice asks the reader to
 	// diff it; suppress the echo.
 	if cmd.Description != "" && cmd.Description != cmd.Command {
-		desc := HelpDimStyle.Render(fitBlock(inner, cmd.Description))
+		desc := HelpDimStyle.Render(fitBlock(inner, SanitizeTerminalText(cmd.Description)))
 		sections = append(sections, desc)
 	}
 
@@ -147,7 +150,7 @@ func (m ApprovalDialogModel) renderCommandDisplay(cmd approval.CommandInfo) stri
 	if cmd.Preview != "" {
 		sections = append(sections, "")
 		sections = append(sections, WarningStyle.Render("Preview of changes:"))
-		sections = append(sections, HelpDimStyle.Render(fitBlockCode(inner, wrapText(cmd.Preview, textW))))
+		sections = append(sections, HelpDimStyle.Render(fitBlockCode(inner, wrapText(SanitizeTerminalText(cmd.Preview), textW))))
 	}
 
 	// Risk assessment for shell commands

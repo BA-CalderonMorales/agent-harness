@@ -5,20 +5,20 @@ than guessed. The numbers are reproducible with `make complexity`; see
 [the report tool](../scripts/verify/complexity-report/README.md) for the
 definitions and flags.
 
-Snapshot taken at 0.3.40, before the release commit:
+Snapshot taken at 0.3.41, before the release commit:
 
 | Metric | Value |
 |---|---|
-| Source files | 300 |
-| Source lines | 47,881 |
-| Functions | 1,892 |
-| Packages | 50 |
-| Test lines | 34,512 (0.72x source) |
+| Source files | 303 |
+| Source lines | 48,327 |
+| Functions | 1,917 |
+| Packages | 51 |
+| Test lines | 34,874 (0.72x source) |
 | Source files over the 400-line goal | 10 |
 | Functions at complexity 21 or higher | 34 |
 
-The distribution is steep and healthy at the low end: 1,502 functions at
-complexity 1-5, 277 at 6-10, 58 at 11-15, 21 at 16-20, and 34 at 21 or
+The distribution is steep and healthy at the low end: 1,522 functions at
+complexity 1-5, 280 at 6-10, 59 at 11-15, 22 at 16-20, and 34 at 21 or
 above. The tail is small enough to name.
 
 Cyclomatic complexity here is `1 +` every branch (`if`, `for`, `range`,
@@ -29,15 +29,15 @@ the numbers describe the code a maintainer has to hold in their head.
 
 | Domain | Files | Source lines | Functions | Max complexity | Over 400 | Tests |
 |---|---:|---:|---:|---:|---:|---:|
-| `internal/interface/tui` | 72 | 15,565 | 587 | 102 | 9 | 15,718 |
+| `internal/interface/tui` | 73 | 15,718 | 593 | 102 | 9 | 16,080 |
 | `internal/runtime` | 65 | 6,898 | 212 | 62 | 0 | 3,521 |
 | `internal/session` | 36 | 6,305 | 260 | 20 | 0 | 0 |
-| `cmd/agent-harness` | 40 | 5,122 | 167 | 42 | 0 | 4,993 |
+| `cmd/agent-harness` | 40 | 5,131 | 167 | 42 | 0 | 4,993 |
 | `internal/core` | 32 | 4,759 | 214 | 43 | 1 | 2,450 |
 | `internal/agent` | 17 | 3,119 | 116 | 46 | 0 | 3,549 |
 | `internal/ui` | 13 | 2,312 | 123 | 27 | 0 | 156 |
 | `pkg` | 8 | 1,045 | 71 | 12 | 0 | 276 |
-| tests, e2e, scripts | 17 | 2,756 | 142 | 24 | 0 | 3,849 |
+| tests, e2e, scripts | 19 | 3,040 | 161 | 24 | 0 | 3,849 |
 
 Three observations drive the recommendations:
 
@@ -50,7 +50,7 @@ Three observations drive the recommendations:
    agents that find it first and assume it runs.
 3. **`internal/runtime/tools/builtin` is where untrusted input meets the
    OS and the network, and it has the thinnest coverage** (40.4%, versus
-   82.2% for the TUI). Tests added in 0.3.39 and 0.3.40 raised the fetch
+   82.7% for the TUI). Tests added in 0.3.39 and 0.3.40 raised the fetch
    and ask paths; the shell classifier and filesystem tools remain lightly
    covered.
 
@@ -85,7 +85,7 @@ Files over the 400-line goal, all but one in the TUI:
 |---:|---|
 | 696 | `internal/interface/tui/chat.go` |
 | 674 | `internal/interface/tui/chat_view.go` |
-| 561 | `internal/interface/tui/logs.go` |
+| 566 | `internal/interface/tui/logs.go` |
 | 559 | `internal/interface/tui/chat_update.go` |
 | 507 | `internal/interface/tui/app_keys.go` |
 | 483 | `internal/interface/tui/chat_turns.go` |
@@ -101,7 +101,7 @@ domains:
 
 | Package | Coverage |
 |---|---:|
-| `internal/interface/tui` | 82.2% |
+| `internal/interface/tui` | 82.7% |
 | `internal/interface/tui/themeinit` | 100% |
 | `internal/interface/approval` | 89.2% |
 | `internal/interface/commands` | 86.4% |

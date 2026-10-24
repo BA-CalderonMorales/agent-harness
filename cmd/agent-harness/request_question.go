@@ -19,6 +19,15 @@ func (app *App) requestUserQuestion(ctx context.Context, question string, option
 		ctx = context.Background()
 	}
 
+	// The question and its options are model-authored and render in the
+	// dialog, so they are filtered before the user sees them. The answer
+	// the user picks is the filtered text, which is what the model gets
+	// back.
+	question = tui.SanitizeTerminalText(question)
+	for i, option := range options {
+		options[i] = tui.SanitizeTerminalText(option)
+	}
+
 	req := tui.NewQuestionRequest(ctx, question, options)
 	app.tuiApp.Send(tui.QuestionRequestMsg{Request: req})
 

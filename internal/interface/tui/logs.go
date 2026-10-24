@@ -107,6 +107,11 @@ func (m *LogsModel) AppendEntry(e diag.Entry) {
 	if e.Seq == 0 {
 		e.Seq = diag.AllocateSeq()
 	}
+	// Log lines carry command output and model text; they render in the
+	// pane, so they get the same terminal filter.
+	e.Message = SanitizeTerminalText(e.Message)
+	e.Detail = sanitizeTerminalLines(e.Detail)
+	e.Stack = sanitizeTerminalLines(e.Stack)
 	m.entries = append(m.entries, e)
 	m.refresh()
 }

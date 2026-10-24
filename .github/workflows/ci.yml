@@ -221,7 +221,11 @@ jobs:
         # x/crypto/openpgp advisory, which has no fixed version). CI
         # fails on reachable findings; unreachable advisories are noise.
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
+          # Pinned on purpose: @latest pulled whatever upstream shipped
+          # that day, so the scan could change (or fail to download) on
+          # an unrelated commit. v1.9.0 is the version this repository
+          # validates against locally.
+          go install golang.org/x/vuln/cmd/govulncheck@v1.9.0
           govulncheck ./... || [ $? -eq 3 ]
 
   # Secret scanning
