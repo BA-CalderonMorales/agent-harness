@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -36,13 +37,40 @@ func (r *Registry) Get(name string) (Skill, bool) {
 	return s, ok
 }
 
-// All returns all registered skills.
+// All returns every registered skill, sorted by name. The order is
+// stable on purpose: the skill list reaches the system prompt, and a
+// stable prompt keeps provider-side caching intact.
 func (r *Registry) All() []Skill {
 	out := make([]Skill, 0, len(r.skills))
 	for _, s := range r.skills {
 		out = append(out, s)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
+}
+
+// LoadFromDirs discovers skills across several roots. Later roots win:
+// the project copy of a skill overrides the user-level one of the same
+// name. A root that does not exist is skipped; any other read error is
+// returned.
+func LoadFromDirs(dirs ...string) (*Registry, error) {
+	reg := NewRegistry()
+	for _, dir := range dirs {
+		if dir == "" {
+			continue
+		}
+		sub, err := LoadFromDirectory(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, err
+		}
+		for _, skill := range sub.All() {
+			reg.Register(skill)
+		}
+	}
+	return reg, nil
 }
 
 // LoadFromDirectory discovers skills in a directory.

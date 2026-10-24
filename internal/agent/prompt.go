@@ -18,10 +18,14 @@ type SystemPromptConfig struct {
 	PermissionMode   string
 	WorkingDirectory string
 	Skills           []string
-	RecentCommits    []string
-	StatusFiles      []string
-	TopLevelFiles    []string
-	PlanMode         bool
+	// SubAgents lists the installed sub-agent definitions (name and
+	// description) so the model can delegate to a named specialist
+	// instead of the generic worker.
+	SubAgents     []string
+	RecentCommits []string
+	StatusFiles   []string
+	TopLevelFiles []string
+	PlanMode      bool
 }
 
 // BuildSystemPrompt creates a comprehensive system prompt with clear guidance
@@ -187,6 +191,17 @@ DO NOT execute tools until the user confirms the plan.`)
 	if len(config.Skills) > 0 {
 		parts = append(parts, "\n## Additional Context\n")
 		parts = append(parts, config.Skills...)
+	}
+
+	// Add the installed sub-agents, so agent_type names something real.
+	if len(config.SubAgents) > 0 {
+		parts = append(parts, "\n## Sub-Agents\n")
+		parts = append(parts, "You can delegate a task to one of these specialists with the agent tool,")
+		parts = append(parts, "passing its name as agent_type. Delegate when the task needs a different")
+		parts = append(parts, "lens than your own, not to do work you can do yourself.")
+		for _, agent := range config.SubAgents {
+			parts = append(parts, "- "+agent)
+		}
 	}
 
 	return strings.Join(parts, "\n")

@@ -160,9 +160,11 @@ type Context struct {
 	PreserveToolUseResults  bool
 	RequireCanUseTool       bool
 	RenderedSystemPrompt    string
-	// SubAgentQuery executes a sub-agent query with fresh context.
-	// If nil, sub-agent spawning falls back to placeholder behavior.
-	SubAgentQuery func(prompt string) (string, error)
+	// SubAgentQuery executes a sub-agent query with fresh context. The
+	// agentType names the sub-agent definition to use (empty means the
+	// generic worker). If nil, sub-agent spawning falls back to
+	// placeholder behavior.
+	SubAgentQuery func(prompt string, agentType string) (string, error)
 	// AskUser asks the operator a question through the host UI. A nil
 	// callback means no interactive surface is available, so tools that
 	// need input must fall back to their own prompt or fail.

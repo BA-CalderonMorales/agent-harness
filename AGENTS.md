@@ -30,6 +30,7 @@
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
 | Security posture and accepted risks | `docs/security-review.md` |
 | Optional runtime isolation (OpenShell) | `docs/openshell.md`, `examples/openshell/` |
+| Sub-agent definitions and delegation | `docs/subagents.md`, `.agent-harness/agents/` |
 | Complexity hot spots and coverage gaps | `docs/complexity-analysis.md` |
 | Environment variables | `docs/environment-variables.md` |
 | Recent DX improvements | `docs/dx-improvements.md` |

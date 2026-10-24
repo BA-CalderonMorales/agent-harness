@@ -161,6 +161,8 @@ Cost: 450 input + 890 output tokens (~$0.0032) across 3 turns
 
 | Command | Description | Example |
 |---------|-------------|---------|
+| `/doctor` | Check that everything is ready, and what fixes it | `/doctor` |
+| `/keys` | List the keyboard shortcuts | `/keys` |
 | `/agents` | List/manage sub-agents | `/agents` |
 | `/skills` | List/manage skills | `/skills` |
 
