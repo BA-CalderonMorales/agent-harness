@@ -5,8 +5,6 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
-	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
-	"path/filepath"
 )
 
 func (app *App) initCommandsSystem() {
@@ -47,8 +45,7 @@ func (app *App) initCommandsSystem() {
 
 	app.cmdRegistry.Register("skills", "Show available skills",
 		commands.SkillsHandler(func(args string) string {
-			skillsDir := filepath.Join(app.cwd, ".workspace", "skills")
-			reg, _ := skills.LoadFromDirectory(skillsDir)
+			reg := app.loadSkills()
 			if args != "" {
 				if sk, ok := reg.Get(args); ok {
 					return formatSkillDetail(sk)

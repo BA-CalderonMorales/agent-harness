@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
-	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"strings"
 	"time"
@@ -24,7 +23,7 @@ func (app *App) buildSystemPrompt() string {
 		}
 	}
 
-	skillPrompts := loadSkillPrompts()
+	skillPrompts := app.loadSkillPrompts()
 
 	var recentCommits, statusFiles, topFiles []string
 	if app.gitContext != nil && app.gitContext.IsRepo {
@@ -47,20 +46,6 @@ func (app *App) buildSystemPrompt() string {
 	}
 
 	return agent.BuildSystemPrompt(cfg)
-}
-
-// loadSkillPrompts loads skill prompts from directory.
-func loadSkillPrompts() []string {
-	skillReg, err := skills.LoadFromDirectory(".agent-harness/skills")
-	if err != nil {
-		return nil
-	}
-
-	var prompts []string
-	for _, sk := range skillReg.All() {
-		prompts = append(prompts, sk.FormatPrompt())
-	}
-	return prompts
 }
 
 // buildWelcomeMessage creates a contextual welcome message.
