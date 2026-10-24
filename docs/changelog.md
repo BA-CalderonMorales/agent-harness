@@ -1,5 +1,48 @@
 # Changelog
 
+## [0.3.42] - 2026-10-24
+
+### Added
+- Sub-agent definitions: a Markdown file with frontmatter under
+  `.agent-harness/agents` (project) or `<config home>/agents` (user). The
+  name, description, model, and tool allowlist come from the file, and the
+  body becomes the child's instructions. The agent tool's `agent_type`
+  used to be accepted and then ignored — it only changed the label on the
+  transcript row — so every delegation was the same generic worker. The
+  installed definitions now reach the model in the system prompt, `/agents`
+  lists them, and an unknown name is an error that lists the available
+  ones rather than a silent fallback. A delegated worker still never gets
+  the agent tool, and the parent's permission callback still decides
+  every call.
+- `/doctor`, a first-run readiness checklist: one line per fact (workspace,
+  provider, api key, endpoint, model, skills, sub-agents, mcp,
+  permissions) and a `Next:` line naming the first fix worth acting on.
+  The endpoint check reuses the boot prober, so the checklist and the
+  status bar never disagree.
+- `/keys`, a listing of the app's keyboard shortcuts.
+- `docs/subagents.md`, the definition format, the precedence rules, and
+  three roles worth copying.
+
+### Fixed
+- Skills resolve from one place. The system prompt loaded the project's
+  `.agent-harness/skills` while `/skills` listed `.workspace/skills`, so
+  the agent could know a skill the user could not see and `/skills` could
+  list a skill the agent never received. One resolver now serves both,
+  walking the user config home, the legacy workspace root, and the
+  project skills, with later roots overriding earlier ones. The skill
+  list is sorted by name, which keeps the system prompt stable for
+  provider-side caching.
+
+### Changed
+- The key bindings are data. The global chords, the view switches, the
+  mode bindings, and the navigate-mode bindings each carry their keys, a
+  name, a description, and the guard that decides whether they apply,
+  and `/keys` lists them. `handleKeys` drops from complexity 102 to 61
+  and from 366 to 222 lines, and `app_keys.go` now fits the 400-line
+  budget. The guards carry the old conditions exactly: a binding whose
+  view does not apply is not claimed and the key falls through to the
+  view behind it.
+
 ## [0.3.41] - 2026-10-24
 
 ### Fixed

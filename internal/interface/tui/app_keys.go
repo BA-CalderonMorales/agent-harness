@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -148,21 +147,11 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		return a, cmd, true
 	}
 
-	// Global chords: palette and reasoning-effort cycle.
-	switch msg.String() {
-	case "ctrl+p":
-		return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
-	case ":":
-		// k9s-style: ':' opens the command palette from any normal-mode
-		// view. In insert mode ':' types into the composer untouched.
-		if a.mode == ModeNormal {
-			return a, func() tea.Msg { return openCommandPaletteMsg{} }, true
-		}
-	case "ctrl+r":
-		if a.onUserCommand != nil {
-			a.onUserCommand("/effort", &a)
-		}
-		return a, nil, true
+	// Global chords: palette and reasoning-effort cycle. The table
+	// lives in keymap.go, so the bindings are data and /keys can list
+	// them.
+	if cmd, handled, claimed := a.handleGlobalBinding(msg); claimed {
+		return a, cmd, handled
 	}
 
 	switch msg.Type {
@@ -218,59 +207,15 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 	}
 
 	if !a.activeViewCapturesAllKeys() {
-		// Mode switching
-		switch msg.String() {
-		case "ctrl+n":
-			a.enterNavigationMode()
-			return a, nil, true
-		case "i":
-			if a.mode == ModeNormal {
-				a.mode = ModeInsert
-				a.chatModel.SetModeLabel("typing")
-				a.focusActive()
-				return a, nil, true
-			}
-		case "/":
-			// Slash commands are typed, and the composer is blurred in
-			// navigate mode — a '/' there silently vanished (typed
-			// commands died unfired). Focus the composer with the slash
-			// pre-inserted: the command is already on screen.
-			if a.mode == ModeNormal && a.activeView == viewChat {
-				a.mode = ModeInsert
-				a.chatModel.SetModeLabel("typing")
-				a.focusActive()
-				a.chatModel.SetInput("/")
-				return a, nil, true
-			}
-		case "m":
-			// Mouse capture toggle: the app owns the mouse for scroll and
-			// click targeting, which makes terminal text selection fight
-			// the UI. 'm' hands the mouse back to the terminal for
-			// native select-and-copy, and 'm' again restores capture.
-			// On a phone pane capture-off is the touch default: taps
-			// raise the soft keyboard, flicks scroll the terminal.
-			a.mouseCapture = !a.mouseCapture
-			a.mouseCaptureTouched = true
-			if a.mouseCapture {
-				a.ShowStatus(`Mouse capture on — "m" to select-copy`, "info")
-				return a, tea.Batch(func() tea.Msg { return tea.EnableMouseCellMotion() }, a.statusFlashCmd()), true
-			}
-			a.ShowStatus(`Mouse capture off — select to copy · "m" restores`, "info")
-			return a, tea.Batch(func() tea.Msg { return tea.DisableMouse() }, a.statusFlashCmd()), true
+		// Mode switching (keymap_mode.go): type, slash command, mouse
+		// capture, navigate mode.
+		if cmd, handled, claimed := a.runBinding(modeKeyBindings, msg); claimed {
+			return a, cmd, handled
 		}
 
 		// View switching shortcuts
-		switch msg.String() {
-		case "ctrl+1", "1":
-			return a, a.switchView(viewHome), true
-		case "ctrl+2", "2":
-			return a, a.switchView(viewChat), true
-		case "ctrl+3", "3":
-			return a, a.switchView(viewSessions), true
-		case "ctrl+4", "4":
-			return a, a.switchView(viewLogs), true
-		case "ctrl+5", "5":
-			return a, a.switchView(viewSettings), true
+		if cmd, handled, claimed := a.handleViewBinding(msg); claimed {
+			return a, cmd, handled
 		}
 
 		// Navigation in normal mode
@@ -285,111 +230,12 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 					return a, nil, true
 				}
 			}
-			switch msg.String() {
-			case "enter":
-				// Chat: expand the most recent tool call's full record
-				// (Esc folds it back).
-				if a.activeView == viewChat {
-					a.chatModel.ExpandLatestRecord()
-					return a, nil, true
-				}
-			case "y":
-				// Chat: copy the expanded record — or the latest reply
-				// when nothing is expanded — to the clipboard. The TUI
-				// captures the mouse, so selection-based copying fights
-				// the UI; 'y' hands the specific text over instead.
-				if a.activeView == viewChat {
-					if text, label := a.chatModel.CopyRecord(); text != "" {
-						copied := copyToClipboard(text)
-						a.flashCopyStatus(label, copied)
-					} else {
-						a.flashCopyStatus("", false)
-					}
-					return a, nil, true
-				}
-			case "Y":
-				// Chat: copy the WHOLE conversation, first message to
-				// last, role-labeled — for bug reports and hand-offs.
-				if a.activeView == viewChat {
-					if text, n := a.chatModel.CopyConversation(); n > 0 {
-						copied := copyToClipboard(text)
-						a.flashCopyStatus(fmt.Sprintf("conversation (%d messages, %d chars)", n, len(text)), copied)
-					} else {
-						a.flashCopyStatus("", false)
-					}
-					return a, nil, true
-				}
-			case "j", "down":
-				a.scrollActiveView(1)
-				return a, nil, true
-			case "k", "up":
-				a.scrollActiveView(-1)
-				return a, nil, true
-			case "g", "home":
-				a.gotoActiveViewTop()
-				return a, nil, true
-			case "G", "end":
-				a.gotoActiveViewBottom()
-				return a, nil, true
-			case "ctrl+u":
-				a.scrollActiveView(-a.halfPageLines())
-				return a, nil, true
-			case "ctrl+d":
-				a.scrollActiveView(a.halfPageLines())
-				return a, nil, true
-			case "x", "X":
-				if a.activeView != viewLogs {
-					return a, nil, false
-				}
-				if msg.String() == "x" {
-					if _, ok := a.logsModel.DeleteSelected(); ok {
-						a.ShowStatus(fmt.Sprintf("Log entry deleted — %d left", a.logsModel.Count()), "info")
-						return a, a.statusFlashCmd(), true
-					}
-					return a, nil, true
-				}
-				cleared := a.logsModel.ClearAll()
-				a.ShowStatus(fmt.Sprintf("Diagnostics stream cleared — %d entries gone", cleared), "info")
-				return a, a.statusFlashCmd(), true
-			case "h":
-				if a.activeView != viewSessions {
-					return a, a.switchView(viewHome), true
-				}
-			case "c":
-				if a.activeView != viewSessions {
-					return a, a.switchView(viewChat), true
-				}
-			case "l":
-				// Vim-right: the next tab, matching h for Home. The
-				// setup dead-end keeps its advertised handle — the
-				// statusbar badge and home banner say "(l: login)" only
-				// when the provider is not ready, so 'l' opens the
-				// wizard exactly when the affordance is on screen.
-				// Routed as a UserCommandMsg (not a direct handler
-				// call): handleKeys works on a copy, and a synchronous
-				// handler mutation (startLogin opens the dialog) would
-				// be clobbered when *a = next copies the pre-call state
-				// back. The msg path runs on the live app, exactly like
-				// a typed /login.
-				if a.providerReadiness != 1 {
-					return a, func() tea.Msg { return UserCommandMsg{Command: "/login"} }, true
-				}
-				return a, a.switchView((a.activeView + 1) % viewCount), true
-			case "t":
-				// Toggle tool-run collapsing: the long-horizon trace
-				// reads as count lines by default; 't' expands or
-				// collapses the detail. Errors and running tools are
-				// never hidden by either state.
-				a.chatModel.ToggleToolsCollapsed()
-				return a, nil, true
-			case "s":
-				// Suggested next steps. Chat only: the suggestions are
-				// derived from the conversation, so on any other tab they
-				// would be a list about nothing.
-				if a.activeView == viewChat {
-					a.nextSteps.Open(a.width, a.height, a.chatModel.deriveNextSteps())
-					return a, nil, true
-				}
+
+			// The navigate-mode bindings are data (keymap_navigation.go):
+			// the guard decides whether a binding claims the key, and a
+			// binding that claims it always consumes it.
+			if cmd, handled, claimed := a.runBinding(navigateKeyBindings, msg); claimed {
+				return a, cmd, handled
 			}
 
 			// Navigate-mode affordance: an unmatched printable key in

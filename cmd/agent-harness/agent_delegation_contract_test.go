@@ -74,7 +74,7 @@ func TestDelegatedAgentRunsMultipleToolsWithParentPermission(t *testing.T) {
 		AbortController: context.Background(),
 		Options:         tools.Options{MainLoopModel: "test-model", Tools: []tools.Tool{builtin.AgentTool, builtin.FileWriteTool, builtin.FileReadTool}},
 	}
-	result, err := app.runDelegatedAgent(context.Background(), "write then read the result", parentCtx, canUse)
+	result, err := app.runDelegatedAgent(context.Background(), "write then read the result", "", parentCtx, canUse)
 	if err != nil {
 		t.Fatalf("delegation failed: %v", err)
 	}
@@ -99,7 +99,7 @@ func TestDelegatedAgentRunsMultipleToolsWithParentPermission(t *testing.T) {
 
 func TestDelegatedAgentReportsNonCompleteTerminal(t *testing.T) {
 	app := &App{config: &config.LayeredConfig{MaxTokens: 256}, session: state.NewSession("test-model"), client: &terminalClient{}, cwd: t.TempDir()}
-	_, err := app.runDelegatedAgent(context.Background(), "stop", tools.Context{}, func(string, map[string]any, tools.Context) (tools.PermissionDecision, error) {
+	_, err := app.runDelegatedAgent(context.Background(), "stop", "", tools.Context{}, func(string, map[string]any, tools.Context) (tools.PermissionDecision, error) {
 		return tools.PermissionDecision{Behavior: tools.Allow}, nil
 	})
 	if err == nil || !strings.Contains(err.Error(), "delegated worker failed") {

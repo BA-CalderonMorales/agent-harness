@@ -1,12 +1,13 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/persona"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/commands"
-	"github.com/BA-CalderonMorales/agent-harness/internal/skills"
-	"path/filepath"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
 
 func (app *App) initCommandsSystem() {
@@ -40,6 +41,20 @@ func (app *App) initCommandsSystem() {
 			func() string { return app.getPermissionsReport() },
 		))
 
+	app.cmdRegistry.Register("keys", "List the keyboard shortcuts",
+		commands.StatusHandler(func() string {
+			rows := tui.BindingRows()
+			if len(rows) == 0 {
+				return "No key bindings registered."
+			}
+			return "Keyboard shortcuts\n\n" + strings.Join(rows, "\n")
+		}))
+
+	app.cmdRegistry.Register("doctor", "Check that everything is ready",
+		commands.StatusHandler(func() string {
+			return app.formatReadinessReport()
+		}))
+
 	app.cmdRegistry.Register("agents", "Show available agents",
 		commands.AgentsHandler(func(args string) string {
 			return app.formatAgentsList()
@@ -47,8 +62,7 @@ func (app *App) initCommandsSystem() {
 
 	app.cmdRegistry.Register("skills", "Show available skills",
 		commands.SkillsHandler(func(args string) string {
-			skillsDir := filepath.Join(app.cwd, ".workspace", "skills")
-			reg, _ := skills.LoadFromDirectory(skillsDir)
+			reg := app.loadSkills()
 			if args != "" {
 				if sk, ok := reg.Get(args); ok {
 					return formatSkillDetail(sk)
