@@ -82,6 +82,11 @@ type ApprovalRequestMsg struct {
 	Request *approval.ApprovalRequest
 }
 
+// QuestionRequestMsg is sent when a tool asks the operator a question.
+type QuestionRequestMsg struct {
+	Request *QuestionRequest
+}
+
 // AgentCancelMsg is sent when the user cancels agent execution (ESC key)
 type AgentCancelMsg struct{}
 

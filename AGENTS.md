@@ -29,6 +29,7 @@
 | Branch protection and release flow | `docs/branch-protection.md`, Makefile release targets |
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
 | Security posture and accepted risks | `docs/security-review.md` |
+| Optional runtime isolation (OpenShell) | `docs/openshell.md`, `examples/openshell/` |
 | Complexity hot spots and coverage gaps | `docs/complexity-analysis.md` |
 | Environment variables | `docs/environment-variables.md` |
 | Recent DX improvements | `docs/dx-improvements.md` |

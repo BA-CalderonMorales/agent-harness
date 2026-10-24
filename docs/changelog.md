@@ -1,5 +1,42 @@
 # Changelog
 
+## [0.3.40] - 2026-10-24
+
+### Fixed
+- `ask_user_question` no longer writes its prompt to stdout and reads
+  `os.Stdin` while the TUI owns the terminal. Under a full-screen terminal
+  (including Omarchy's) the question landed inside a rendered frame and the
+  reader raced Bubble Tea for keystrokes, so the options were unusable. The
+  tool now asks through a modal: digits 1-9 pick a numbered option, typing
+  takes a free-form answer, Enter sends, Esc skips, and cancelling the turn
+  closes the modal instead of leaving it owning the keyboard. The stdin path
+  remains for headless runs, and the transcript row shows the question text.
+- The ask row's display name and command preview accept the registered
+  `ask_user_question` name instead of dumping the raw input map.
+
+### Added
+- An official container image: multi-stage build, Ubuntu 24.04 runtime as the
+  unprivileged `sandbox` user, `/workspace` workdir, and `bash`, `git`,
+  `curl`, and CA certificates. The `Container` workflow builds every PR
+  (amd64, no push) and publishes `linux/amd64` and `linux/arm64` images on
+  `main` and `v*` tags.
+- `docs/openshell.md` and `examples/openshell/` document running the harness
+  under NVIDIA OpenShell with a restrictive policy, a GitHub-enabled variant,
+  and an OpenRouter provider profile that keeps the real key outside the
+  sandbox. The security review now names this as the out-of-process
+  mitigation for the accepted `bash` risk.
+- `docs/design/openshell-integration-decision.md` records why the integration
+  stays external, why the Go SDK waits for 1.0, and why NVIDIA Sentry is out
+  of scope (BlueField-4 reference design, no download).
+
+### Validation
+- New tests cover the question modal (option picks, typed answers, editing
+  keys, Esc, context cancellation, and app-level key ownership), the host
+  callback contract, and the ask display path. The full suite and a race run
+  over the touched packages pass.
+- The container workflow is the build gate for the image; the release tag
+  publishes the versioned and `latest` tags.
+
 ## [0.3.39] - 2026-10-20
 
 ### Fixed

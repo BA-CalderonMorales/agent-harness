@@ -217,6 +217,14 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return a, tea.Batch(cmds...)
 
 	// -------------------------------------------------------------------------
+	// Question request - show the question dialog
+	// -------------------------------------------------------------------------
+	case QuestionRequestMsg:
+		a.questionDialog.Show(msg.Request)
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	// -------------------------------------------------------------------------
 	// Tool executing notification - show in chat
 	// -------------------------------------------------------------------------
 	case ToolExecutingMsg:
@@ -259,6 +267,7 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// Agent cancellation - handle cancel signal
 	// -------------------------------------------------------------------------
 	case AgentCancelMsg:
+		a.questionDialog.CancelPending()
 		if chatModel, cmd := a.chatModel.Update(msg); chatModel != nil {
 			if m, ok := chatModel.(ChatModel); ok {
 				a.chatModel = m

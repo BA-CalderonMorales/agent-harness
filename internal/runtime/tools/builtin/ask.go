@@ -50,49 +50,7 @@ var AskUserQuestionTool = tools.NewTool(tools.Tool{
 		return tools.PermissionDecision{Behavior: tools.Allow, UpdatedInput: input}
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
-		question := getString(input, "question")
-		fmt.Printf("\n[Agent asks] %s\n", question)
-
-		if opts, ok := input["options"].([]any); ok && len(opts) > 0 {
-			fmt.Println("Options:")
-			for i, o := range opts {
-				fmt.Printf("  %d) %v\n", i+1, o)
-			}
-		}
-
-		fmt.Print("Your answer: ")
-		abort := ctx.AbortController
-		if abort == nil {
-			abort = context.Background()
-		}
-		if err := abort.Err(); err != nil {
-			return tools.ToolResult{}, err
-		}
-		answerCh := make(chan struct {
-			answer string
-			err    error
-		}, 1)
-		go func() {
-			reader := bufio.NewReader(os.Stdin)
-			answer, err := reader.ReadString('\n')
-			answerCh <- struct {
-				answer string
-				err    error
-			}{answer: answer, err: err}
-		}()
-		var answer string
-		var err error
-		select {
-		case result := <-answerCh:
-			answer, err = result.answer, result.err
-		case <-abort.Done():
-			return tools.ToolResult{}, abort.Err()
-		}
-		if err != nil {
-			return tools.ToolResult{}, err
-		}
-		answer = strings.TrimSpace(answer)
-		return tools.ToolResult{Data: answer}, nil
+		return askUser(input, ctx)
 	},
 	MapResult: func(result any, toolUseID string) types.ToolResultBlock {
 		content, _ := result.(string)
@@ -100,3 +58,88 @@ var AskUserQuestionTool = tools.NewTool(tools.Tool{
 	},
 	UserFacingName: func(map[string]any) string { return "ask" },
 })
+
+// askUser routes the question through the host UI when one is wired
+// (the TUI), and falls back to a terminal prompt for headless runs.
+//
+// The fallback reads os.Stdin directly, which is only safe when no
+// full-screen program owns the terminal. Under the TUI that is the
+// "nasty" case: writes land in the middle of the rendered frame and the
+// reader races Bubble Tea for keystrokes. The AskUser callback exists so
+// the TUI owns both the rendering and the input.
+func askUser(input map[string]any, ctx tools.Context) (tools.ToolResult, error) {
+	question := getString(input, "question")
+	options := questionOptions(input["options"])
+
+	if ctx.AskUser != nil {
+		answer, cancelled, err := ctx.AskUser(ctx.AbortController, question, options)
+		if err != nil {
+			return tools.ToolResult{}, err
+		}
+		if cancelled {
+			return tools.ToolResult{Data: "The user cancelled the question without answering."}, nil
+		}
+		return tools.ToolResult{Data: strings.TrimSpace(answer)}, nil
+	}
+
+	return askUserOnStdio(question, options, ctx.AbortController)
+}
+
+func questionOptions(raw any) []string {
+	var options []string
+	switch values := raw.(type) {
+	case []string:
+		options = append(options, values...)
+	case []any:
+		for _, value := range values {
+			if text, ok := value.(string); ok {
+				options = append(options, text)
+			}
+		}
+	}
+	out := options[:0]
+	for _, option := range options {
+		if trimmed := strings.TrimSpace(option); trimmed != "" {
+			out = append(out, trimmed)
+		}
+	}
+	return out
+}
+
+func askUserOnStdio(question string, options []string, abort context.Context) (tools.ToolResult, error) {
+	fmt.Printf("\n[Agent asks] %s\n", question)
+	for i, option := range options {
+		fmt.Printf("  %d) %s\n", i+1, option)
+	}
+
+	fmt.Print("Your answer: ")
+	if abort == nil {
+		abort = context.Background()
+	}
+	if err := abort.Err(); err != nil {
+		return tools.ToolResult{}, err
+	}
+
+	answerCh := make(chan struct {
+		answer string
+		err    error
+	}, 1)
+	go func() {
+		reader := bufio.NewReader(os.Stdin)
+		answer, err := reader.ReadString('\n')
+		answerCh <- struct {
+			answer string
+			err    error
+		}{answer: answer, err: err}
+	}()
+
+	select {
+	case result := <-answerCh:
+		if result.err != nil {
+			return tools.ToolResult{}, result.err
+		}
+		return tools.ToolResult{Data: strings.TrimSpace(result.answer)}, nil
+	case <-abort.Done():
+		return tools.ToolResult{}, abort.Err()
+	}
+}

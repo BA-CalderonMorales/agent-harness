@@ -1,0 +1,42 @@
+# OpenRouter provider profile for the agent-harness image.
+#
+# The credential is exposed to the sandbox as the OPENROUTER_API_KEY
+# placeholder. agent-harness reads that variable at boot, and OpenShell
+# substitutes the real key only on requests from the listed binary to
+# openrouter.ai. The real key never enters the sandbox.
+#
+# Import and create:
+#   openshell profile lint -f examples/openshell/provider-openrouter.yaml
+#   openshell profile import -f examples/openshell/provider-openrouter.yaml
+#   OPENROUTER_API_KEY=... openshell provider create \
+#     --name openrouter --type agent-harness-openrouter --from-existing
+#
+# For another OpenAI-compatible provider, copy this file, change the id,
+# endpoint host, and credential variable, and keep the binary path.
+
+id: agent-harness-openrouter
+display_name: OpenRouter (agent-harness)
+description: OpenRouter inference for the agent-harness image
+category: inference
+inference_capable: true
+
+credentials:
+  - name: api_key
+    description: OpenRouter API key
+    env_vars: [OPENROUTER_API_KEY]
+    required: true
+    auth_style: bearer
+    header_name: authorization
+
+discovery:
+  credentials: [api_key]
+
+endpoints:
+  - host: openrouter.ai
+    port: 443
+    protocol: rest
+    access: read-write
+    enforcement: enforce
+
+binaries:
+  - /usr/local/bin/agent-harness
