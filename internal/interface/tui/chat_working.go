@@ -83,6 +83,14 @@ func (m ChatModel) workingStatusLine(tick int) string {
 	if track := loopTrackLine(m.loopBeat, m.width); track != "" {
 		lead = track
 	}
+	// A delegation is a flight between places: the sub-agent left, and
+	// the user should see that rather than guess from a spinner.
+	if m.delegationInFlight() {
+		if lead != "" {
+			lead += HelpDimStyle.Render(" · ")
+		}
+		lead += ModePromptStyle.Render("✈ delegating")
+	}
 	return fmt.Sprintf("%s · %s",
 		lead,
 		formatElapsed(m.elapsed))

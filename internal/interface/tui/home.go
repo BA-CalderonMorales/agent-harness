@@ -43,6 +43,7 @@ type HomeModel struct {
 	tagline         string
 	sessions        []SessionInfo
 	model           string
+	provider        string
 	permissionMode  string
 	persona         string
 	estimatedTokens int
@@ -137,6 +138,11 @@ func (m *HomeModel) SetSessions(sessions []SessionInfo) {
 }
 
 // SetStatus updates the runtime status display.
+// SetProvider records the active provider for the home base strip.
+func (m *HomeModel) SetProvider(provider string) {
+	m.provider = provider
+}
+
 func (m *HomeModel) SetStatus(model, permissionMode, persona string, estimatedTokens int) {
 	m.model = model
 	m.permissionMode = permissionMode
@@ -157,6 +163,16 @@ func (m *HomeModel) Init() tea.Cmd {
 }
 
 // Update handles messages.
+// homeStripRows returns the height the pinned home base strip takes, or
+// zero when the pane is too short to afford it. A short pane keeps its
+// rows for the things the user can act on.
+func homeStripRows(height int) int {
+	if height >= 12 {
+		return 3
+	}
+	return 0
+}
+
 func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
@@ -168,7 +184,7 @@ func (m *HomeModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// pane can spare pushes the view past its budget and the frame's
 		// clip then eats the footer — the trap the chat composer had. A
 		// short pane should shrink the list, never the chrome.
-		vpHeight := msg.Height - homeChromeRows
+		vpHeight := msg.Height - homeChromeRows - homeStripRows(msg.Height)
 		if vpHeight < 1 {
 			vpHeight = 1
 		}

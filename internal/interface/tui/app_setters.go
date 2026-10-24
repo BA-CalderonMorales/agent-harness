@@ -129,6 +129,7 @@ func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
 	}
 	a.chatModel.SetProvider(provider)
 	a.chatModel.SetEffort(effortProfile)
+	a.homeModel.SetProvider(provider)
 }
 
 // SetTelemetry pushes context-usage and cost numbers for the bottom bar.

@@ -114,3 +114,10 @@ func loopTrackLine(beat string, width int) string {
 	}
 	return track
 }
+
+// delegationInFlight reports whether the running tool is a delegation.
+// The agent tool spawns a sub-agent with its own context: while it runs,
+// the turn is a flight between places.
+func (m ChatModel) delegationInFlight() bool {
+	return m.currentTool != nil && m.currentTool.Name == "agent"
+}
