@@ -222,6 +222,11 @@ func gutterFor(width int) int {
 }
 
 func (a App) renderActiveView() string {
+	// The beat track reads live state, so it is resolved per frame: the
+	// app knows about the approval dialog, the chat model knows about
+	// the running tool and the turn's tool calls.
+	a.chatModel.SetLoopBeat(a.currentLoopBeat())
+
 	// Reserve space for the fixed chrome: tab bar (3 with padding and
 	// border) + status bar (3 with its top and bottom padding), plus
 	// the app frame's top and bottom border rows. The reserve must

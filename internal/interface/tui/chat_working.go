@@ -74,13 +74,17 @@ func (m ChatModel) workingStatusLine(tick int) string {
 	if !m.thinking && !m.streaming {
 		return ""
 	}
-	// The animated word + elapsed clock, whether or not a tool is
-	// running. Live feedback: the "Shell ×2" class-and-count read as
-	// content, not status — the user watches the transcript for WHAT
-	// is running; the indicator only needs to say work is happening
-	// and for how long.
+	// The beat track when the app knows which beat the turn is in, the
+	// animated word otherwise. Live feedback: the "Shell ×2"
+	// class-and-count read as content, not status — the user watches
+	// the transcript for WHAT is running; the indicator only needs to
+	// say where the turn is and for how long.
+	lead := workingAnim(workingWord(), tick, m.reducedMotion)
+	if track := loopTrackLine(m.loopBeat, m.width); track != "" {
+		lead = track
+	}
 	return fmt.Sprintf("%s · %s",
-		workingAnim(workingWord(), tick, m.reducedMotion),
+		lead,
 		formatElapsed(m.elapsed))
 }
 

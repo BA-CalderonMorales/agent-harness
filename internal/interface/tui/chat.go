@@ -198,10 +198,13 @@ type ChatModel struct {
 	// reducedMotion holds the frame still: animated elements render one
 	// static state instead of moving.
 	reducedMotion bool
-	messages      []ChatMessage
-	viewport      fastViewport
-	textarea      textarea.Model
-	focused       bool
+	// loopBeat is the beat of the turn in flight ("ask", "plan",
+	// "review", "try"), set by the app before each frame.
+	loopBeat string
+	messages []ChatMessage
+	viewport fastViewport
+	textarea textarea.Model
+	focused  bool
 
 	// State
 	thinking     bool
@@ -702,4 +705,9 @@ func (m ChatModel) GetSteerQueue() []string {
 // indicator holds still instead of shimmering.
 func (m *ChatModel) SetReducedMotion(reduced bool) {
 	m.reducedMotion = reduced
+}
+
+// SetLoopBeat records the beat of the turn in flight.
+func (m *ChatModel) SetLoopBeat(beat string) {
+	m.loopBeat = beat
 }
