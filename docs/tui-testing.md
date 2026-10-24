@@ -53,6 +53,21 @@ go test ./... -update
 The golden diff in the pull request is the review artifact: a rendering
 change should look like a rendering change, not like a mystery.
 
+## What the harness already pins
+
+`internal/interface/tui` uses it for:
+
+- **Input ownership.** Every overlay (approval, question, login, provider
+  and model pickers, command palette, export picker) must keep the
+  keyboard: a typed character never reaches the composer, and a global
+  chord never fires behind an open modal.
+- **Frame width.** The home and chat panes render without a line wider
+  than the pane at 40x15, 80x24, and 120x30.
+- **Large paste.** A 16 KB paste stays inside the frame and the composer
+  says the region scrolls.
+- **Golden frames.** The question and approval overlays, whose content
+  the test controls.
+
 ## What belongs here
 
 - Frame invariants: nothing wider than the pane, chrome present, the

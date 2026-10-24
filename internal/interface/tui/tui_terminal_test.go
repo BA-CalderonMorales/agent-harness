@@ -1,7 +1,10 @@
 package tui
 
 import (
+	"strings"
 	"testing"
+
+	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/ttui"
@@ -77,4 +80,23 @@ func TestChatFitsEveryPaneSize(t *testing.T) {
 			h.AssertContains("list the files")
 		}
 	}
+}
+
+// A large paste must not corrupt the frame: the composer collapses it to
+// a preview, and the pane stays inside its width.
+func TestLargePasteKeepsTheFrameIntact(t *testing.T) {
+	app := NewApp()
+	app.mode = ModeInsert
+	app.activeView = viewChat
+	app.chatModel.Focus()
+	h := ttui.New(t, app)
+	h.Resize(80, 24)
+
+	paste := strings.Repeat("payload-", 2000)
+	h.Key(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(paste)})
+
+	h.AssertFitsWidth(80)
+	// The composer keeps the pasted text in a scrollable region and
+	// says so, instead of pushing the frame wider than the pane.
+	h.AssertContains("payload-", "to scroll")
 }
