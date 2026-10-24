@@ -1,0 +1,53 @@
+# Minimal OpenShell policy for the agent-harness image.
+#
+# It allows inference to OpenRouter and nothing else. Filesystem access is
+# limited to the workspace and the harness's own config/data trees. Use
+# policy-coding.yaml when the agent should also reach GitHub.
+#
+# Apply at sandbox creation:
+#   openshell sandbox create --policy examples/openshell/policy-minimal.yaml ...
+#
+# Paths are static: changing them means recreating the sandbox. The network
+# section is hot-reloadable with `openshell policy set`.
+
+version: 1
+
+filesystem_policy:
+  include_workdir: true
+  read_only:
+    - /usr
+    - /lib
+    - /lib64
+    - /bin
+    - /sbin
+    - /etc
+    - /opt
+    - /proc
+    - /dev/urandom
+    - /var/log
+  read_write:
+    - /workspace
+    - /tmp
+    - /dev/null
+    - /dev/zero
+    - /home/sandbox/.config/agent-harness
+    - /home/sandbox/.local/share/agent-harness
+
+landlock:
+  compatibility: best_effort
+
+process:
+  run_as_user: sandbox
+  run_as_group: sandbox
+
+network_policies:
+  openrouter_inference:
+    name: openrouter-inference
+    endpoints:
+      - host: openrouter.ai
+        port: 443
+        protocol: rest
+        enforcement: enforce
+        access: full
+    binaries:
+      - { path: /usr/local/bin/agent-harness }
