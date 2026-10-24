@@ -39,6 +39,7 @@ func (app *App) buildSystemPrompt() string {
 		PermissionMode:   app.config.PermissionMode.String(),
 		WorkingDirectory: app.cwd,
 		Skills:           skillPrompts,
+		SubAgents:        app.subAgentSummaries(),
 		RecentCommits:    recentCommits,
 		StatusFiles:      statusFiles,
 		TopLevelFiles:    topFiles,

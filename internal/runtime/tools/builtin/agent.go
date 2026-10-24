@@ -20,8 +20,10 @@ var AgentTool = tools.NewTool(tools.Tool{
 					"description": "The task to delegate to the sub-agent",
 				},
 				"agent_type": map[string]any{
-					"type":        "string",
-					"description": "Optional agent specialization (e.g., 'reviewer', 'tester')",
+					"type": "string",
+					"description": "Optional sub-agent to delegate to, by name (e.g. 'reviewer', " +
+						"'tester'). The installed sub-agents are listed in the system prompt; " +
+						"omit it for a generic worker.",
 				},
 			},
 			"required": []string{"prompt"},
@@ -47,18 +49,21 @@ var AgentTool = tools.NewTool(tools.Tool{
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		prompt := getString(input, "prompt")
+		// An empty agent_type means the generic worker. A named one
+		// selects an installed sub-agent definition.
 		agentType := getString(input, "agent_type")
-		if agentType == "" {
-			agentType = "default"
+		displayType := agentType
+		if displayType == "" {
+			displayType = "default"
 		}
 
 		// If SubAgentQuery is wired, use it for real execution
 		if ctx.SubAgentQuery != nil {
-			result, err := ctx.SubAgentQuery(prompt)
+			result, err := ctx.SubAgentQuery(prompt, agentType)
 			if err != nil {
 				return tools.ToolResult{}, fmt.Errorf("sub-agent failed: %w", err)
 			}
-			return tools.ToolResult{Data: fmt.Sprintf("[Sub-agent %s]\n%s", agentType, result)}, nil
+			return tools.ToolResult{Data: fmt.Sprintf("[Sub-agent %s]\n%s", displayType, result)}, nil
 		}
 
 		return tools.ToolResult{}, fmt.Errorf("sub-agent unavailable: delegated execution is not configured")

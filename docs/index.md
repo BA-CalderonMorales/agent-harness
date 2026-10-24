@@ -27,6 +27,7 @@ surface in one take.
 | [Security review](security-review.md) | Threat model, findings fixed and accepted |
 | [TUI design patterns](tui-design-patterns.md) | The screen patterns the UI reuses |
 | [Terminal testing](tui-testing.md) | Rendering the real model in tests, golden frames |
+| [Sub-agents](subagents.md) | Definition files, named delegation, tool and model bounds |
 | [Services and features](services-features.md) | The runtime services surface |
 
 ## Operating it

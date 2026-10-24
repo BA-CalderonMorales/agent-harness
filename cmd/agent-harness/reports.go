@@ -95,6 +95,10 @@ func (app *App) formatAgentsList() string {
 	}
 	sb.WriteString("\nSub-agent Delegation:\n")
 	sb.WriteString("  Agent-harness spawns sub-agents dynamically for complex multi-step workflows.")
+	if defs := app.formatAgentDefinitions(); defs != "" {
+		sb.WriteString("\n\n")
+		sb.WriteString(defs)
+	}
 	return sb.String()
 }
 

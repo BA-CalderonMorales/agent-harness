@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/agents"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -70,8 +71,8 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		AbortController:   ctx,
 		RequireCanUseTool: true,
 	}
-	toolCtx.SubAgentQuery = func(prompt string) (string, error) {
-		return app.runDelegatedAgent(ctx, prompt, toolCtx, canUseTool)
+	toolCtx.SubAgentQuery = func(prompt string, agentType string) (string, error) {
+		return app.runDelegatedAgent(ctx, prompt, agentType, toolCtx, canUseTool)
 	}
 	if tuiApp != nil {
 		toolCtx.AskUser = app.requestUserQuestion
@@ -241,18 +242,54 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 // runDelegatedAgent executes a child with fresh messages and bounded runtime.
 // The parent's context and permission callback are deliberately retained: a
 // child cannot outlive its request or bypass the user's tool decisions.
-func (app *App) runDelegatedAgent(parent context.Context, prompt string, parentToolCtx tools.Context, canUseTool tools.CanUseToolFn) (string, error) {
+func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentType string, parentToolCtx tools.Context, canUseTool tools.CanUseToolFn) (string, error) {
 	subCtx, subCancel := context.WithTimeout(parent, delegatedAgentTimeout)
 	defer subCancel()
+
+	// A named sub-agent comes from a definition file: its own
+	// instructions, its own tool set, its own model. An unknown name is
+	// an error rather than a silent generic worker, so the model can
+	// correct itself instead of thinking it delegated to a specialist.
+	definition, hasDefinition := agents.Definition{}, false
+	if agentType != "" {
+		registry := app.loadAgentDefs()
+		def, ok := registry.Get(agentType)
+		if !ok {
+			names := make([]string, 0, registry.Len())
+			for _, def := range registry.All() {
+				names = append(names, def.Name)
+			}
+			if len(names) == 0 {
+				return "", fmt.Errorf("unknown sub-agent type %q: no agent definitions are installed", agentType)
+			}
+			return "", fmt.Errorf("unknown sub-agent type %q (available: %s)", agentType, strings.Join(names, ", "))
+		}
+		definition, hasDefinition = def, true
+	}
+
+	allowed := map[string]bool{}
+	if hasDefinition && len(definition.Tools) > 0 {
+		for _, name := range definition.Tools {
+			allowed[strings.ToLower(name)] = true
+		}
+	}
 	childTools := make([]tools.Tool, 0, len(parentToolCtx.Options.Tools))
 	for _, tool := range parentToolCtx.Options.Tools {
-		if tool.Name != builtin.AgentTool.Name {
-			childTools = append(childTools, tool)
+		if tool.Name == builtin.AgentTool.Name {
+			continue
 		}
+		if len(allowed) > 0 && !allowed[strings.ToLower(tool.Name)] {
+			continue
+		}
+		childTools = append(childTools, tool)
+	}
+	childModel := app.session.Model
+	if hasDefinition && definition.Model != "" && !strings.EqualFold(definition.Model, "inherit") {
+		childModel = definition.Model
 	}
 	childCtx := tools.Context{
 		Options: tools.Options{
-			MainLoopModel: app.session.Model,
+			MainLoopModel: childModel,
 			Tools:         childTools,
 			Debug:         false,
 		},
@@ -269,7 +306,7 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, parentT
 	childLoop.Config.StreamingToolExecution = false
 	stream, err := childLoop.Query(subCtx, agent.QueryParams{
 		Messages:        []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
-		SystemPrompt:    app.buildSystemPrompt() + "\n\nYou are a bounded delegated worker. Report exactly what you inspected or changed, and state failures plainly.",
+		SystemPrompt:    delegatedSystemPrompt(app.buildSystemPrompt(), definition, hasDefinition),
 		CanUseTool:      canUseTool,
 		ToolUseContext:  childCtx,
 		MaxOutputTokens: app.config.MaxTokens,
