@@ -216,37 +216,16 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 		state.toolCallCount += len(toolUses)
 
-		// Count repeats across consecutive tool rounds only. A command
-		// repeated after intervening work (test, edit, test) is normal.
-		// Alternating cycles remain bounded by the tool and turn budgets.
-		currentTools := make(map[string]int, len(toolUses))
-		maxIdentical := l.Config.MaxIdenticalToolUses
-		if maxIdentical <= 0 {
-			maxIdentical = 1
-		}
-		for _, tu := range toolUses {
-			key := toolCallSignature(tu)
-			currentTools[key]++
-			count := state.executedTools[key] + currentTools[key]
-			if count > maxIdentical {
-				msg := fmt.Sprintf("[Tool loop detected: %s was called %d times with identical input. Stopping to prevent runaway exploration.]",
-					tu.Name, count)
-				select {
-				case out <- types.StreamMessage{Message: types.Message{
-					Role:    types.RoleSystem,
-					Content: []types.ContentBlock{types.TextBlock{Text: msg}},
-				}}:
-				case <-ctx.Done():
-					out <- types.StreamError{Error: ctx.Err()}
-					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
-				}
-				return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg}
+		toolUses, err = l.prepareRepeatedTools(ctx, state, toolUses, params.ToolUseContext.Options.Tools, out)
+		if err != nil {
+			if ctx.Err() != nil {
+				return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 			}
+			return Terminal{Reason: TerminalReasonBlockingLimit, Message: assistantMsg, Error: err}
 		}
-		for key := range currentTools {
-			currentTools[key] += state.executedTools[key]
+		if len(toolUses) == 0 {
+			continue // A rejected duplicate has a corrective result; let the model adapt.
 		}
-		state.executedTools = currentTools
 
 		// Execute tools
 		if l.Config.StreamingToolExecution {

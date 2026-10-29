@@ -19,11 +19,17 @@ const (
 	ProviderErrRateLimit
 	ProviderErrAuth
 	ProviderErrModelNotFound
+	ProviderErrToolLoop
+	ProviderErrAgentLimit
 )
 
 // String names the category for diagnostics entries.
 func (c ProviderErrorCategory) String() string {
 	switch c {
+	case ProviderErrToolLoop:
+		return "tool-loop"
+	case ProviderErrAgentLimit:
+		return "agent-limit"
 	case ProviderErrTimeout:
 		return "timeout"
 	case ProviderErrConnection:
@@ -45,6 +51,10 @@ func (c ProviderErrorCategory) String() string {
 func ClassifyProviderError(errStr string) ProviderErrorCategory {
 	s := strings.ToLower(errStr)
 	switch {
+	case strings.HasPrefix(s, "tool repetition limit:"):
+		return ProviderErrToolLoop
+	case strings.Contains(s, "agent turn ended: blocking_limit"), strings.Contains(s, "agent turn ended: max_turns"):
+		return ProviderErrAgentLimit
 	case strings.Contains(s, "timeout"), strings.Contains(s, "timed out"), strings.Contains(s, "deadline"):
 		return ProviderErrTimeout
 	case strings.Contains(s, "connection"), strings.Contains(s, "network"), strings.Contains(s, "dial "), strings.Contains(s, "unreachable"):
@@ -64,6 +74,10 @@ func ClassifyProviderError(errStr string) ProviderErrorCategory {
 // never involve API keys — their hints point at the model server.
 func ProviderErrorFeedback(category ProviderErrorCategory, errStr string, isLocal bool) string {
 	switch category {
+	case ProviderErrToolLoop:
+		return "[!] " + errStr + "\n\n[>] Review the last tool error and send a corrected path or approach to continue in this session."
+	case ProviderErrAgentLimit:
+		return "[!] The agent reached a work limit. Your conversation is preserved.\n\n[>] Review the limit notice above, then send a follow-up to continue. Use /limit only when the notice identifies a tool-call budget."
 	case ProviderErrTimeout:
 		return "[!] Model timed out. The model may be overloaded or unresponsive.\n\n" +
 			"[>] Try switching models: type /model <name> or press Tab to go to Settings\n" +

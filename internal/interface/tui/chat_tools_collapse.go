@@ -64,7 +64,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		// Normalize through the display-name mapping so every entry
 		// path (registry UserFacingName like "ls", ToolExecutingMsg,
 		// session reload) classifies under the same group header —
-		// `ls` belongs to "Shell" wherever it came from.
+		// directory reads stay distinct from shell execution.
 		name := getToolDisplayName(msg.ToolName)
 		if current == nil || current.name != name {
 			current = &group{name: name, start: msg.ToolStartedAt}

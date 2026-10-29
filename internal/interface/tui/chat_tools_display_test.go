@@ -10,7 +10,7 @@ import (
 )
 
 // These tests pin the 0.3.28 codex-style tool-call display (Task 4):
-// grouped headers with indented sub-lists, class renames (ls → Shell,
+// grouped headers with indented sub-lists, class labels (ls → List Files,
 // edit → Update), and todo calls rendered as a visible checklist.
 
 // TestTodoCallRendersChecklist: a todo_write call renders as checkbox
@@ -58,9 +58,8 @@ func TestTodoChecklistNilWithoutInput(t *testing.T) {
 	}
 }
 
-// TestLsGroupedUnderShellHeader: consecutive bash+ls+ls calls all group
-// under one "Shell" header — ls never gets its own header class.
-func TestLsGroupedUnderShellHeader(t *testing.T) {
+// Directory reads stay distinct from actual shell execution.
+func TestDirectoryListsStayDistinctFromShell(t *testing.T) {
 	m := NewChatModel()
 	m.width = 120
 	m.resize(120, 40)
@@ -68,13 +67,17 @@ func TestLsGroupedUnderShellHeader(t *testing.T) {
 	m = model.(ChatModel)
 	calls := []struct{ name, cmd string }{
 		{"bash", "echo start"},
-		{"ls", "ls /tmp"},
-		{"ls", "ls /var"},
+		{"ls", "/tmp"},
+		{"ls", "/var"},
 	}
 	for i, c := range calls {
+		input := map[string]any{"path": c.cmd}
+		if c.name == "bash" {
+			input = map[string]any{"command": c.cmd}
+		}
 		model, _ = m.Update(AgentToolStartMsg{
-			ToolID: string(rune('a' + i)), ToolName: c.name, DisplayName: c.name,
-			Input: map[string]any{"command": c.cmd},
+			ToolID: string(rune('a' + i)), ToolName: c.name, DisplayName: getToolDisplayName(c.name),
+			Input: input,
 		})
 		m = model.(ChatModel)
 		model, _ = m.Update(AgentToolDoneMsg{ToolID: string(rune('a' + i)), Success: true})
@@ -83,9 +86,12 @@ func TestLsGroupedUnderShellHeader(t *testing.T) {
 	m.refreshViewportWithFollow(true)
 	content := m.viewport.View()
 	if n := strings.Count(content, "Shell"); n != 1 {
-		t.Fatalf("bash+ls+ls rendered %d Shell headers, want 1 grouped:\n%s", n, content)
+		t.Fatalf("bash+ls+ls rendered %d Shell headers, want only the bash header:\n%s", n, content)
 	}
-	if !strings.Contains(content, "$ echo start") || !strings.Contains(content, "ls /tmp") || !strings.Contains(content, "ls /var") {
+	if n := strings.Count(content, "List Files"); n != 1 {
+		t.Fatalf("directory calls rendered %d List Files headers, want 1 grouped:\n%s", n, content)
+	}
+	if !strings.Contains(content, "echo start") || !strings.Contains(content, "ls /tmp") || !strings.Contains(content, "ls /var") {
 		t.Fatalf("sub-list rows missing:\n%s", content)
 	}
 }

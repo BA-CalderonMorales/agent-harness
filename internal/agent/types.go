@@ -111,6 +111,8 @@ type loopState struct {
 	// signature has run across consecutive tool rounds. Intervening
 	// rounds without that signature reset its count, allowing rechecks.
 	executedTools map[string]int
+	// One failed read may receive corrective feedback instead of ending the turn.
+	repeatedReadRecoveryUsed bool
 }
 
 // Prominent token thresholds.

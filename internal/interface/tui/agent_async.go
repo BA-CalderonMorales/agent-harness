@@ -23,9 +23,8 @@ func getToolDisplayName(toolName string) string {
 	case "bash", "BashTool":
 		return "Shell"
 	case "ls", "ls_recursive", "list_files", "LsTool":
-		// Low-level directory listing belongs to the shell class —
-		// its own header for `ls` is noise (goal 0.3.28 Task 4.2).
-		return "Shell"
+		// Directory tools read paths; only bash executes shell commands.
+		return "List Files"
 	case "read", "ReadTool":
 		return "Read File"
 	case "write", "WriteTool":

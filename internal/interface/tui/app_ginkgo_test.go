@@ -1188,8 +1188,8 @@ var _ = Describe("getToolDisplayName", func() {
 			Expect(getToolDisplayName("edit")).To(Equal("Update"))
 		})
 
-		It("should classify ls under the Shell class", func() {
-			Expect(getToolDisplayName("ls")).To(Equal("Shell"))
+		It("should distinguish directory listing from shell execution", func() {
+			Expect(getToolDisplayName("ls")).To(Equal("List Files"))
 		})
 
 		It("should return Find Files for glob", func() {

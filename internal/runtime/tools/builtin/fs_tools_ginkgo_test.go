@@ -60,11 +60,9 @@ var _ = Describe("Filesystem Tools", func() {
 
 		Context("Given a missing path", func() {
 			It("should return an error message", func() {
-				result, err := ListDirectoryTool.Call(map[string]any{"path": filepath.Join(tmpDir, "nope")}, ctx, nil, nil)
-				Expect(err).ToNot(HaveOccurred())
-
-				content, _ := result.Data.(string)
-				Expect(content).To(ContainSubstring("error:"))
+				_, err := ListDirectoryTool.Call(map[string]any{"path": filepath.Join(tmpDir, "nope")}, ctx, nil, nil)
+				Expect(err).To(HaveOccurred())
+				Expect(err.Error()).To(ContainSubstring("directory"))
 			})
 		})
 

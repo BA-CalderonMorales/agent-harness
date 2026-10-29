@@ -21,10 +21,28 @@ func TestClassifyProviderError(t *testing.T) {
 		{"model gpt-x does not exist", ProviderErrModelNotFound},
 		{"404 not found", ProviderErrModelNotFound},
 		{"something entirely novel", ProviderErrUnknown},
+		{"tool repetition limit: ls_recursive requested the same input 3 times", ProviderErrToolLoop},
+		{"agent turn ended: blocking_limit", ProviderErrAgentLimit},
+		{"agent turn ended: max_turns", ProviderErrAgentLimit},
 	}
 	for _, tc := range cases {
 		if got := ClassifyProviderError(tc.err); got != tc.want {
 			t.Errorf("ClassifyProviderError(%q) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
+
+func TestAgentLoopFailureDoesNotSuggestChangingProviders(t *testing.T) {
+	for _, text := range []string{
+		"tool repetition limit: ls_recursive requested the same input 3 times; the repeated call was not executed",
+		"agent turn ended: blocking_limit",
+	} {
+		feedback := ProviderErrorFeedback(ClassifyProviderError(text), text, true)
+		if strings.Contains(feedback, "/model") || strings.Contains(feedback, "Settings") || strings.Contains(feedback, "isn't responding") {
+			t.Fatalf("agent limit incorrectly blamed the provider: %s", feedback)
+		}
+		if !strings.Contains(feedback, "continue") {
+			t.Fatalf("missing continuation guidance: %s", feedback)
 		}
 	}
 }
