@@ -13,13 +13,13 @@ import (
 // FileWriteTool creates or overwrites a file with stale-write protection.
 var FileWriteTool = tools.NewTool(tools.Tool{
 	Name:        "write",
-	Description: "Write content to a file. Creates the file if it does not exist. Protected against concurrent modifications.",
+	Description: "Create or overwrite a file using file_path and content (the complete file text). content is required, including for an intentional empty file. old_string/new_string belong to edit, not write. Protected against concurrent modifications.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
 			"properties": map[string]any{
 				"file_path": map[string]any{"type": "string"},
-				"content":   map[string]any{"type": "string"},
+				"content":   map[string]any{"type": "string", "description": "Complete file text. Required; use an explicit empty string only when intentionally emptying the file."},
 			},
 			"required": []string{"file_path", "content"},
 		}
@@ -36,6 +36,9 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		if path == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path is required"}
 		}
+		if _, err := requiredStringArgument(input, "content", "write"); err != nil {
+			return tools.ValidationResult{Valid: false, Message: err.Error() + "; send the complete file text in content, or use edit for old_string/new_string replacements"}
+		}
 		// UNC path security
 		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
 			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
@@ -47,7 +50,10 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		path := getString(input, "file_path")
-		content := getString(input, "content")
+		content, inputErr := requiredStringArgument(input, "content", "write")
+		if inputErr != nil {
+			return tools.ToolResult{}, inputErr
+		}
 
 		// Check if file exists - if so, apply stale-write protection
 		_, err := os.Stat(path)
@@ -82,7 +88,10 @@ var FileWriteTool = tools.NewTool(tools.Tool{
 		}
 		parts := strings.Split(path, "/")
 		filename := parts[len(parts)-1]
-		content := getString(input, "content")
+		content, ok := input["content"].(string)
+		if !ok {
+			return fmt.Sprintf("Invalid write for %s: content must be supplied as a string", filename)
+		}
 		// Determine if creating or updating
 		if _, err := os.Stat(path); os.IsNotExist(err) {
 			return fmt.Sprintf("Creating %s (%d bytes)", filename, len(content))
