@@ -1,5 +1,9 @@
 # Local Model Setup
 
+For the planned Lemonade evaluation, model candidates, NPU checks, and
+multimodal limitations, see [Lemonade on the ZBook](lemonade.md). That setup
+is pending host installation and does not change the defaults below.
+
 agent-harness is local-first by default. The checked-in `agent-harness.yml`
 targets an OpenAI-compatible local server, with DeepReinforce Ornith-1.0 GGUF
 as the intended default model.
