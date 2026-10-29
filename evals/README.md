@@ -37,6 +37,7 @@ python evals/run.py list               # cases with resolved prompts
 python evals/run.py run coding         # one case
 python evals/run.py run coding recovery
 python evals/run.py run --all          # every case, in order
+python evals/run.py review PATH         # review a saved case report
 python evals/run.py coding             # same as: run coding
 ```
 
@@ -128,3 +129,23 @@ out-of-scope files, then cover selection validation, one build per batch, case
 isolation, continuation after failure, interruption, blocked preflight, and
 prepare-only. Ordinary Go tests continue covering tool validation, bounded
 repetition, permissions, and UI state; they are not replaced by live model evals.
+
+## Feedback loop
+
+After a session, inspect its saved report and transcript, then run
+`python evals/run.py review <case>/report.json`. Record observed outcomes and
+keep suspected causes tentative. The review command never invokes a model or
+changes objective checks. A blocked or interrupted run cannot receive a task
+verdict.
+
+For a failure, first decide whether it is deterministic. Tool argument
+validation, permission state, changed files, and test results should have
+focused regression tests. Prompt choice, recovery quality, and interaction
+require a live session with the selected model. Fix the diagnosed cause, rerun
+the affected check, then try one unfamiliar task. Example: ask it to rename a
+small function in a disposable Go package, run the package tests, and preserve
+unrelated files. This is a manual generalization check, not a hidden benchmark.
+
+Count another assistant or manual work outside Agent-Harness only when it was
+needed to finish the request. Ordinary approvals and shell commands run inside
+the app do not count. Record `unknown` when the evidence is unclear.

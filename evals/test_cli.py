@@ -211,3 +211,36 @@ class EvalCliTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class ReviewTests(unittest.TestCase):
+    def setUp(self):
+        self.temp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path = Path(self.temp.name) / "report.json"
+        self.original = {"status": "needs_review", "checks": {"passed": True},
+                         "source_revision": "abc", "review": {"task_completion": "unreviewed"}}
+        self.path.write_text(json.dumps(self.original))
+
+    def test_review_saves_feedback_and_preserves_evidence(self):
+        answers = iter(["pass", "pass", "pass", "", "unknown", "4 tests passed", "no", ""])
+        runner.review_report(self.path, lambda _: next(answers))
+        report = json.loads(self.path.read_text())
+        self.assertEqual(report["checks"], self.original["checks"])
+        self.assertEqual(report["source_revision"], "abc")
+        self.assertEqual(report["review"]["task_completion"], "pass")
+        self.assertEqual(report["review"]["needed_external_tool"], "no")
+
+    def test_invalid_review_leaves_report_unchanged(self):
+        before = self.path.read_bytes()
+        answers = iter(["pass", "pass", "pass", "invalid"])
+        with self.assertRaises(ValueError):
+            runner.review_report(self.path, lambda _: next(answers))
+        self.assertEqual(self.path.read_bytes(), before)
+
+    def test_blocked_report_cannot_be_reviewed_as_pass(self):
+        data = {**self.original, "status": "blocked"}
+        self.path.write_text(json.dumps(data))
+        before = self.path.read_bytes()
+        with self.assertRaises(ValueError):
+            runner.review_report(self.path, lambda _: "pass")
+        self.assertEqual(self.path.read_bytes(), before)

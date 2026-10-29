@@ -22,6 +22,10 @@ RESULTS = ROOT / "evals/results"
 DEFAULT_MODEL = "qwen3.5-4b-FLM"
 ENDPOINT = "http://127.0.0.1:13305/v1"
 STATUSES = ("needs_review", "fail", "blocked", "interrupted", "not_run")
+VERDICTS = ("pass", "fail", "capability_gap", "unreviewed")
+CATEGORIES = ("responsiveness", "tool_arguments", "recovery", "permissions",
+             "capability_honesty", "scope_and_verification", "interaction", "other")
+CAUSES = ("harness", "model", "environment", "eval", "unknown")
 # A case needs a local model, not the host's credentials. The app runs
 # model-chosen tools and the verifier imports model-written code, so both
 # subprocesses get this scrubbed view instead of whatever keys happen to
@@ -369,6 +373,67 @@ def exit_code(summary):
     return 0 if statuses == {"needs_review"} else 1
 
 
+def review_report(path, input_fn=input):
+    """Collect human review without changing machine-collected evidence."""
+    report_path = Path(path)
+    try:
+        report = json.loads(report_path.read_text())
+    except (OSError, UnicodeError, json.JSONDecodeError) as error:
+        raise ValueError(f"cannot read report {report_path}: {error}") from error
+    if not isinstance(report, dict) or not isinstance(report.get("review"), dict):
+        raise ValueError("report must contain a review object")
+    if report.get("status") in {"blocked", "interrupted", "not_run", "running"}:
+        raise ValueError(f"report status is {report['status']}; review cannot produce a task verdict")
+
+    fields = {
+        "task_completion": VERDICTS,
+        "honesty": ("pass", "fail", "unreviewed"),
+        "interaction": ("pass", "fail", "unreviewed"),
+    }
+    updated = dict(report["review"])
+    for field, choices in fields.items():
+        while True:
+            answer = input_fn(f"{field} [{'/'.join(choices)}] (keep {updated.get(field, 'unreviewed')}): ").strip()
+            if not answer:
+                answer = updated.get(field, "unreviewed")
+            if answer in choices:
+                updated[field] = answer
+                break
+            print("Choose one of: " + ", ".join(choices))
+    category = input_fn("failure category [" + "/".join(CATEGORIES) + "] (blank if none): ").strip()
+    if category and category not in CATEGORIES:
+        raise ValueError("unknown failure category; report was not changed")
+    cause = input_fn("suspected cause [" + "/".join(CAUSES) + "] (unknown): ").strip() or "unknown"
+    if cause not in CAUSES:
+        raise ValueError("unknown cause; report was not changed")
+    note = input_fn("evidence note (blank if none): ").strip()
+    external = input_fn("Needed another assistant or manual work outside Agent-Harness? [yes/no/unknown]: ").strip().lower()
+    if external not in {"yes", "no", "unknown"}:
+        raise ValueError("answer yes, no, or unknown; report was not changed")
+    reason = input_fn("Why? (blank if unknown/not needed): ").strip()
+    updated.update({"failure_category": category or None, "suspected_cause": cause,
+                    "evidence_note": note, "needed_external_tool": external,
+                    "external_tool_reason": reason or None})
+    report["review"] = updated
+    save_atomic(report_path, report)
+
+
+def save_atomic(path, payload):
+    """Replace the report atomically after all review input validates."""
+    temp_name = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", dir=path.parent,
+                                         prefix=path.name + ".", delete=False) as temp:
+            temp_name = temp.name
+            temp.write(json.dumps(payload, indent=2) + "\n")
+            temp.flush()
+            os.fsync(temp.fileno())
+        os.replace(temp_name, path)
+    finally:
+        if temp_name and os.path.exists(temp_name):
+            os.unlink(temp_name)
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="python evals/run.py",
@@ -379,12 +444,15 @@ def build_parser():
                 "  python evals/run.py run coding\n"
                 "  python evals/run.py run coding recovery\n"
                 "  python evals/run.py run --all\n"
+                "  python evals/run.py review evals/results/<batch>/<case>/report.json\n"
                 "  python evals/run.py coding          # same as: run coding\n\n"
                 "Each case gets a fresh fixture, settings, home and session directory.\n"
                 "You paste the prompt, approve the expected work, and quit the app.\n"
                 "--all only queues the cases; it does not automate the TUI or the model."))
-    sub = parser.add_subparsers(dest="command", metavar="{list,run}")
+    sub = parser.add_subparsers(dest="command", metavar="{list,run,review}")
     sub.add_parser("list", help="show cases and resolved prompts")
+    review = sub.add_parser("review", help="record human feedback on a saved report")
+    review.add_argument("report", help="case report.json")
     run = sub.add_parser("run", help="run selected cases sequentially")
     run.add_argument("cases", nargs="*", metavar="case", help=f"one or more of: {', '.join(CASES)}")
     run.add_argument("--all", action="store_true", help="run every case in order")
@@ -405,6 +473,14 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.command is None:
         parser.print_help()
+        return 0
+    if args.command == "review":
+        try:
+            review_report(args.report)
+        except ValueError as error:
+            print(f"error: {error}", file=sys.stderr)
+            return 2
+        print(f"Review saved: {args.report}")
         return 0
     if args.command == "list":
         for name, case in CASES.items():
