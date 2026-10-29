@@ -96,7 +96,7 @@ func TestR6WorkingStatusReservesComposerSpace(t *testing.T) {
 		if len(lines) > model.height {
 			t.Fatalf("width %d: active view has %d rows, want <= %d", width, len(lines), model.height)
 		}
-		if !strings.Contains(view, "Thinking") || !strings.Contains(view, "ready") || !strings.Contains(view, "effort") {
+		if !strings.Contains(view, "Thinking") || !strings.Contains(view, "ready") || !strings.Contains(view, `"Esc" to stop`) {
 			t.Fatalf("width %d: working/status/composer hierarchy missing:\n%s", width, view)
 		}
 	}

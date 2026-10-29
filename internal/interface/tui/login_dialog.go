@@ -198,7 +198,7 @@ func (m *LoginDialogModel) loadModels() {
 			vpH = 12
 		}
 		m.picker.viewport = newViewport(vpW, vpH)
-		m.picker.SetTitle("Models - " + m.provider())
+		m.picker.SetTitle("Models - " + connectionLabel(m.provider()))
 		m.picker.SetModels(models)
 		for i, model := range m.picker.filtered {
 			if model.IsDefault {
@@ -328,13 +328,13 @@ func (m LoginDialogModel) View() string {
 		spec.footer = "j/k: navigate  Enter: select  Esc: cancel"
 
 	case LoginStepAPIKey:
-		spec.title = "Login - API key"
+		spec.title = "Connect · API key"
 		spec.items = []modalItem{modalTextItem(m.apiKeyBody())}
 		spec.cursor = -1
 		spec.footer = "Enter: continue  Esc: cancel"
 
 	case LoginStepModel:
-		spec.title = "Login - model"
+		spec.title = "Connect · Choose model"
 		spec.hint = "Connection: " + connectionLabel(m.provider())
 		if m.probeErr == "" {
 			spec.hint += " · available models"
@@ -357,7 +357,7 @@ func (m LoginDialogModel) providerItems() []modalItem {
 // to "how do I get one?" at the moment the wizard asks.
 func (m LoginDialogModel) apiKeyBody() string {
 	var b strings.Builder
-	b.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n")
+	b.WriteString(HelpDimStyle.Render("Connection: "+connectionLabel(m.provider())) + "\n")
 	if steps, ok := keyStepsFor(m.provider()); ok {
 		b.WriteString("\n" + HelpDimStyle.Render("How to get a key:") + "\n")
 		for i, s := range steps.Steps {

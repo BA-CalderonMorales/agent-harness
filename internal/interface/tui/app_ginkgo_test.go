@@ -708,9 +708,9 @@ var _ = Describe("App", func() {
 				view := app.View()
 
 				Expect(view).To(ContainSubstring("[ready]"))
-				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
-				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
-				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
+				Expect(view).To(ContainSubstring("gpt-5.5"))            // mode line
+				Expect(view).To(ContainSubstring("sample-project"))     // bottom bar path
+				Expect(view).To(ContainSubstring("hosted: OpenRouter")) // mode line connection
 				Expect(view).To(ContainSubstring("[effort: medium]"))
 				Expect(view).To(ContainSubstring(`"?" help`))
 				Expect(view).To(ContainSubstring("$0.12"))

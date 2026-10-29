@@ -112,6 +112,12 @@
 
 ### Changed
 
+- The composer names local and hosted connections, explains approval modes,
+  and shows send/newline hints when space permits. Esc-to-stop stays visible
+  during a turn, including when the composer is unfocused. Tool summaries
+  fit narrow panes and keep multiline commands on one row; expanded records
+  retain the original input. Connection dialogs use consistent labels.
+
 - The tab bar and composer close with full-width accent rules, and the
   status footer sits in the same inset text column with no rule above it.
   Top and bottom chrome now read as desktop bands instead of floating bars

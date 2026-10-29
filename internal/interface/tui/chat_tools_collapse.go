@@ -103,6 +103,9 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 
 	var b strings.Builder
 	for gi, g := range groups {
+		if gi > 0 {
+			b.WriteString("\n")
+		}
 		dur := ""
 		if gi == len(groups)-1 {
 			dur = ToolTimeStyle.Render(formatElapsed(span))

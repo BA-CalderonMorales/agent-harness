@@ -170,39 +170,32 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 		glyph = "✗"
 	}
 
-	timeStr := started.Format("15:04:05")
-	name := toolDisplayName
-	if pad := toolNameColumn - lipgloss.Width(name); pad > 0 {
-		name += strings.Repeat(" ", pad)
+	// A summary occupies one row even when the underlying command is
+	// multiline. The expanded record retains the original input.
+	detail := strings.Join(strings.Fields(command), " ")
+	if width < 12 {
+		return ansi.Truncate(glyph+" "+detail, max(0, width), "…")
 	}
-
 	dur := "…"
 	if status != ToolStatusRunning && status != ToolStatusPending {
 		dur = formatElapsed(elapsed)
 	}
-
-	// Head: timestamp, space, glyph, space, padded name column. Its
-	// width is fixed for every row of a turn, which is what lets the
-	// duration land in the same column each time.
-	head := ToolTimeStyle.Render(timeStr) + " " + glyph + " " + name
-	headW := lipgloss.Width(timeStr) + 3 + lipgloss.Width(name)
-	durW := lipgloss.Width(dur)
-
-	// The detail takes what is left after the head, one separating
-	// space, the duration, and one column of minimum pad.
-	detail := command
-	budget := width - headW - 1 - durW - 1
-	if budget < 1 {
-		budget = 1
+	prefix := glyph + " "
+	// Keep the action legible in a split pane; timestamps remain in
+	// expanded records and on wider rows.
+	if width >= 64 {
+		prefix = ToolTimeStyle.Render(started.Format("15:04:05")) + " " + prefix
 	}
-	if lipgloss.Width(detail) > budget {
-		detail = compactCommandForWidth(detail, budget)
+	nameBudget := max(1, width-lipgloss.Width(prefix)-lipgloss.Width(dur)-min(12, width/3)-3)
+	name := ansi.Truncate(toolDisplayName, nameBudget, "…")
+	if pad := min(toolNameColumn, nameBudget) - lipgloss.Width(name); pad > 0 {
+		name += strings.Repeat(" ", pad)
 	}
-
-	pad := width - headW - 1 - lipgloss.Width(detail) - durW
-	if pad < 1 {
-		pad = 1
-	}
+	head := prefix + name
+	headW, durW := lipgloss.Width(head), lipgloss.Width(dur)
+	budget := max(0, width-headW-durW-2)
+	detail = compactCommandForWidth(detail, budget)
+	pad := max(1, width-headW-1-lipgloss.Width(detail)-durW)
 	return head + " " + detail + strings.Repeat(" ", pad) + ToolTimeStyle.Render(dur)
 }
 
