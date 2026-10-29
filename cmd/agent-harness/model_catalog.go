@@ -1,7 +1,11 @@
 package main
 
 import (
+	"net/http"
+	"time"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
@@ -28,15 +32,36 @@ func applyCatalogContext(cfg *config.LayeredConfig, model string) {
 	}
 }
 
+// discoveryClient returns a copy of the active client with a short
+// discovery timeout. Model discovery must never inherit the inference
+// timeout: a local client waits up to 45 minutes, and a model switch
+// would freeze the UI behind a dead endpoint.
+func (app *App) discoveryClient() (*llm.HTTPClient, bool) {
+	c, ok := app.client.(*llm.HTTPClient)
+	if !ok || c == nil {
+		return nil, false
+	}
+	discovery := *c
+	httpClient := http.Client{}
+	if c.HTTPClient != nil {
+		httpClient = *c.HTTPClient
+	}
+	httpClient.Timeout = 3 * time.Second
+	discovery.HTTPClient = &httpClient
+	return &discovery, true
+}
+
 // applyModelContext sets config.ContextLength from the provider's own
 // advertised context_length for the model, falling back to the static
 // catalog when the live list is unreachable or silent. The catalog is
 // the honest offline default; the live value wins whenever the endpoint
 // states one, so the context bar never shows a smaller window than the
-// model actually has.
+// model actually has. OpenRouter's free models are the common case: they
+// are not in the curated catalog, so an offline-only lookup left a model
+// with a 1M window running (and compacting) at the local 8k default.
 func (app *App) applyModelContext(model string) {
-	if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
-		if infos, err := c.ListModelsDetailed(); err == nil {
+	if discovery, ok := app.discoveryClient(); ok {
+		if infos, err := discovery.ListModelsDetailed(); err == nil {
 			for _, info := range infos {
 				if info.ID == model && info.ContextLength > 0 {
 					app.config.ContextLength = info.ContextLength
@@ -46,6 +71,34 @@ func (app *App) applyModelContext(model string) {
 		}
 	}
 	applyCatalogContext(app.config, model)
+}
+
+// applyDiscoveredModelContext lands a background discovery result on
+// the event loop. It refuses stale results (provider/model switched) and
+// never mutates the budget while a turn is streaming. Persisting the
+// value is what makes the next boot honest: without it an existing
+// install kept the old 8k local default forever because the curated
+// catalog does not know most live hosted model IDs.
+func (app *App) applyDiscoveredModelContext(tuiApp *tui.App, provider, model string, contextLength int) {
+	if app == nil || app.config == nil || app.session == nil || contextLength <= 0 {
+		return
+	}
+	if provider != app.config.Provider || model != app.session.Model {
+		return
+	}
+	if tuiApp != nil && tuiApp.TurnInFlight() {
+		return
+	}
+	if app.config.ContextLength == contextLength {
+		return
+	}
+	app.config.ContextLength = contextLength
+	if app.loop != nil {
+		app.loop.Config.BlockingTokenLimit = contextLength
+	}
+	diag.Infof("model.context", "%s context window: %d tokens (provider-advertised)", model, contextLength)
+	app.refreshTelemetry(tuiApp)
+	app.commitConfigChange()
 }
 
 // ensureModelFitsProvider resets a model that cannot exist on the
@@ -95,11 +148,7 @@ func (app *App) ensureModelFitsProvider(cfg *config.LayeredConfig, sessionModel 
 	}
 
 	previous := model
-	if config.IsLocalProvider(cfg.Provider) {
-		cfg.Model = config.DefaultModel
-	} else {
-		cfg.Model = config.DefaultModelForProvider(cfg.Provider)
-	}
+	cfg.Model = config.DefaultModelForProvider(cfg.Provider)
 	if cfg.Model == previous {
 		return "", false
 	}
@@ -112,7 +161,11 @@ func (app *App) ensureModelFitsProvider(cfg *config.LayeredConfig, sessionModel 
 // never reset without evidence; non-HTTP clients (and tests) return false
 // for the same reason.
 func (app *App) providerOmitsModel(model string) bool {
-	c, ok := app.client.(*llm.HTTPClient)
+	// This runs on the boot path before the first paint. Use the bounded
+	// discovery client: the inference timeout is minutes (and 45 minutes
+	// for a local server), so inheriting it here could freeze startup
+	// behind an endpoint that accepted the connection and went quiet.
+	c, ok := app.discoveryClient()
 	if !ok || c == nil {
 		return false
 	}
@@ -147,6 +200,8 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "gemma4:2b", Name: "Gemma 4 E2B (Fast)", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "gemma4:2b"},
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "llama3.2:3b"},
 		}
+	case "lemonade":
+		return []tui.ModelItem{{ID: config.DefaultLemonadeModel, Name: "Qwen 3.5 4B (FLM)", Provider: "lemonade", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultLemonadeModel}}
 	case "flm":
 		return []tui.ModelItem{
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "llama3.2:3b"},

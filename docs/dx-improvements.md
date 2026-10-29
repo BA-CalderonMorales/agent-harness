@@ -12,4 +12,4 @@
 - **Edit tool**: supports `replace_all` and gives actionable errors on mismatch
 - **Persisted user settings**: provider/model/effort choices survive restarts via `~/.agent-harness/settings.json`
 - **Composer UX**: centered 84-column input with mode line (mode · model · provider · effort) and a telemetry bottom bar (ctx % · cost · `ctrl+p commands`)
-- **Reasoning effort**: `/effort` command and `ctrl+r` cycle (low/medium/high), persisted and sent as `reasoning_effort`
+- **Reasoning effort**: `/effort` command and `ctrl+r` cycle (low/medium/high), persisted and sent in the provider's own vocabulary (`reasoning_effort` on OpenAI, `reasoning.effort` on OpenRouter)

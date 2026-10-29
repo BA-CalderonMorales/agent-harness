@@ -128,6 +128,88 @@ func TestReadSSECancellationInterruptsBlockedRead(t *testing.T) {
 	}
 }
 
+// TestReadSSESurfacesOpenRouterReasoning pins the hosted wait-state fix:
+// OpenRouter streams thinking as delta.reasoning (vLLM uses
+// reasoning_content), and ignoring it left a free reasoning model silent
+// for its whole 40-second thinking phase, then dumped the answer at once.
+func TestReadSSESurfacesOpenRouterReasoning(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"reasoning":"Let me think "}}]}`,
+		`data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"reasoning":"about it."}}]}`,
+		// A provider echoing both spellings must not double the preview.
+		`data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"reasoning":"Same text.","reasoning_content":"Same text."}}]}`,
+		`data: {"id":"chatcmpl-reasoning","choices":[{"delta":{"content":"The answer."},"finish_reason":"stop"}]}`,
+		`data: [DONE]`,
+		``,
+	}, "\n")
+
+	got := observeSSEEvents(collectSSEEvents(t, context.Background(), io.NopCloser(strings.NewReader(body))))
+
+	if len(got.errors) != 0 {
+		t.Fatalf("unexpected parser errors: %v", got.errors)
+	}
+	if want := []string{"Let me think ", "about it.", "Same text."}; !reflect.DeepEqual(got.reasoning, want) {
+		t.Errorf("reasoning deltas = %#v, want %#v", got.reasoning, want)
+	}
+	if want := []string{"The answer."}; !reflect.DeepEqual(got.text, want) {
+		t.Errorf("text deltas = %#v, want %#v", got.text, want)
+	}
+	if len(got.stops) != 1 || got.stops[0].StopReason != "stop" {
+		t.Errorf("message stops = %#v, want one stop", got.stops)
+	}
+}
+
+// TestReadSSEFailsOnMidStreamRateLimit pins the OpenRouter streaming
+// error shape: after HTTP 200, a rate limit arrives as an error object
+// plus finish_reason "error". Treating it as a normal stop produced an
+// empty response (or silently kept the partial text).
+func TestReadSSEFailsOnMidStreamRateLimit(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"id":"cmpl-mid","choices":[{"delta":{"content":"partial "}}]}`,
+		`data: {"id":"cmpl-mid","error":{"code":429,"message":"Rate limit exceeded","metadata":{"error_type":"rate_limit_exceeded","provider_code":"p1"}},"choices":[{"delta":{},"finish_reason":"error"}]}`,
+		`data: [DONE]`,
+		``,
+	}, "\n")
+
+	got := observeSSEEvents(collectSSEEvents(t, context.Background(), io.NopCloser(strings.NewReader(body))))
+	if want := []string{"partial "}; !reflect.DeepEqual(got.text, want) {
+		t.Errorf("text deltas = %#v, want the partial prose", got.text)
+	}
+	if len(got.errors) != 1 {
+		t.Fatalf("errors = %v, want the mid-stream rate limit", got.errors)
+	}
+	msg := got.errors[0].Error()
+	for _, want := range []string{"429", "Rate limit exceeded", "rate_limit_exceeded", "provider=p1"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("mid-stream error = %q, missing %q", msg, want)
+		}
+	}
+	if len(got.stops) != 0 {
+		t.Errorf("mid-stream error emitted a normal stop: %#v", got.stops)
+	}
+}
+
+// TestReadSSEFailsOnErrorFinishReason covers providers that set
+// finish_reason "error" without an error object.
+func TestReadSSEFailsOnErrorFinishReason(t *testing.T) {
+	body := strings.Join([]string{
+		`data: {"id":"cmpl-err","choices":[{"delta":{"content":"partial"},"finish_reason":"error"}]}`,
+		`data: [DONE]`,
+		``,
+	}, "\n")
+
+	got := observeSSEEvents(collectSSEEvents(t, context.Background(), io.NopCloser(strings.NewReader(body))))
+	if len(got.errors) != 1 {
+		t.Fatalf("errors = %v, want finish_reason=error to fail the stream", got.errors)
+	}
+	if !strings.Contains(got.errors[0].Error(), "finish_reason=error") {
+		t.Fatalf("error = %q, want finish_reason=error", got.errors[0])
+	}
+	if len(got.stops) != 0 {
+		t.Errorf("finish_reason=error emitted a normal stop: %#v", got.stops)
+	}
+}
+
 type sseObservation struct {
 	starts    []string
 	text      []string

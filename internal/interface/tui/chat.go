@@ -169,6 +169,11 @@ const (
 const (
 	ComposerTopPadding    = 1 // blank rows above the input text
 	ComposerBottomPadding = 1 // blank rows below the input text, inside the block
+	// ComposerInset is the horizontal breathing room between the frame
+	// and the composer/footer text. The full-width rule above the input
+	// runs edge to edge; only the text column is inset, so the footer
+	// reads as desktop chrome rather than a floating box.
+	ComposerInset = 2
 )
 
 // PlaceholderDelay is how long the agent section waits before appearing
@@ -199,12 +204,15 @@ type ChatModel struct {
 	// static state instead of moving.
 	reducedMotion bool
 	// loopBeat is the beat of the turn in flight ("ask", "plan",
-	// "review", "try"), set by the app before each frame.
-	loopBeat string
-	messages []ChatMessage
-	viewport fastViewport
-	textarea textarea.Model
-	focused  bool
+	// "review", "try"), set by the app before each frame. loopTrack
+	// gates whether the beat band renders: the track is an opt-in
+	// feature flag, off by default.
+	loopBeat  string
+	loopTrack bool
+	messages  []ChatMessage
+	viewport  fastViewport
+	textarea  textarea.Model
+	focused   bool
 
 	// State
 	thinking     bool
@@ -227,6 +235,10 @@ type ChatModel struct {
 	streamBuffer    string
 	currentTool     *ToolUseBlock
 	turnInterrupted bool
+	// writing marks the segment where assistant prose is arriving: the
+	// status line says "Writing" only while deltas actually flow, not
+	// while the turn waits between model and tool steps.
+	writing bool
 
 	// Index of the assistant message currently being streamed. Tracked so that
 	// mid-stream system/user messages do not break the update target, while
@@ -514,7 +526,7 @@ func (m *ChatModel) syncTextareaHeight() {
 // agree on that width or a wrapped line's row count in inputRows() drifts
 // from what View() actually renders.
 func (m *ChatModel) syncTextareaGeometry() {
-	columnWidth := m.width
+	columnWidth := m.composerWidth()
 	textareaWidth := columnWidth - 8
 	if textareaWidth < 20 {
 		textareaWidth = 20
@@ -580,9 +592,9 @@ func (m ChatModel) inputAreaHeight() int {
 		// row is part of the composer's reserved area.
 		height++
 	}
-	// The live working block (blank · status · blank) reserves its full
-	// height here, so its appearance shrinks the viewport instead of
-	// pushing the composer + mode line off the pane.
+	// The live beat band (one track row) reserves its height here, so its
+	// appearance shrinks the viewport instead of pushing the composer +
+	// mode line off the pane.
 	height += m.workingStatusHeight()
 	if m.showSuggestions && len(m.suggestions) > 0 {
 		visible := len(m.suggestions)
@@ -644,7 +656,9 @@ func (m *ChatModel) SyncPlaceholder() {
 		// undiscoverable, and an affordance nobody finds is not one.
 		m.textarea.Placeholder = `"i" to type a message · "s" next steps`
 	case m.turnInFlight():
-		m.textarea.Placeholder = "Agent is working — type to queue · /steer to redirect now"
+		// The working band already says what is running; the composer
+		// only needs to say what typing does right now.
+		m.textarea.Placeholder = "Type to queue · /steer to redirect"
 	default:
 		m.textarea.Placeholder = "Type a message..."
 	}
@@ -722,4 +736,10 @@ func (m *ChatModel) SetReducedMotion(reduced bool) {
 // SetLoopBeat records the beat of the turn in flight.
 func (m *ChatModel) SetLoopBeat(beat string) {
 	m.loopBeat = beat
+}
+
+// SetLoopTrack enables the Ask/Plan/Review/Try beat band. Disabled by
+// default; the environment flag is the feature gate.
+func (m *ChatModel) SetLoopTrack(enabled bool) {
+	m.loopTrack = enabled
 }

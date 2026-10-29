@@ -21,12 +21,19 @@ type QueryParams struct {
 	QuerySource     types.QuerySource
 	MaxOutputTokens int
 	Temperature     float64
+	// TemperatureSet marks Temperature as an explicit user choice so
+	// 0.0 is sent rather than treated as unset.
+	TemperatureSet  bool
 	ReasoningEffort string
 	MaxTurns        int
 	// MaxToolCalls overrides the loop's default tool ceiling for this
 	// query (the session-scoped /limit knob); 0 keeps the default.
 	MaxToolCalls   int
 	SkipCacheWrite bool
+	// PromptTokens is the estimated fixed cost of this request (system
+	// prompt plus tool schemas). The loop counts it against the context
+	// budget; conversation messages alone understate the window.
+	PromptTokens int
 }
 
 // TerminalReason explains why the query loop ended.
@@ -113,6 +120,9 @@ type loopState struct {
 	executedTools map[string]int
 	// One failed read may receive corrective feedback instead of ending the turn.
 	repeatedReadRecoveryUsed bool
+	// promptTokens is the fixed request cost from QueryParams, counted
+	// against BlockingTokenLimit on every iteration.
+	promptTokens int
 }
 
 // Prominent token thresholds.

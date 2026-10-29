@@ -38,7 +38,7 @@ func TestModalFamilyFitsEveryPane(t *testing.T) {
 		login.Open(w, h, NewStoredCredentials(nil, ""))
 		assertFitsPane(t, label("login/provider"), login.View(), w, h)
 		login.step = LoginStepAPIKey
-		login.providerIdx = 2 // anthropic: the longest key journey
+		login.providerIdx = loginProviderIndex("anthropic") // anthropic: the longest key journey
 		assertFitsPane(t, label("login/apikey"), login.View(), w, h)
 		login.step = LoginStepModel
 		assertFitsPane(t, label("login/model"), login.View(), w, h)
@@ -201,7 +201,7 @@ type familyModal struct {
 func familyModals(w, h int) []familyModal {
 	login := NewLoginDialog()
 	login.Open(w, h, NewStoredCredentials(nil, ""))
-	login.providerIdx = 1 // openai: a provider with a key journey drives the panel width
+	login.providerIdx = loginProviderIndex("openai") // openai: a provider with a key journey drives the panel width
 
 	picker := NewProviderPicker()
 	picker.Open(w, h)

@@ -132,3 +132,12 @@ type SwitchViewMsg struct {
 type GitContextMsg struct {
 	Context *git.Context
 }
+
+// ModelContextMsg delivers the provider-advertised context window for
+// the active model after a background discovery pass. Provider and model
+// guard the result: a switch that lands first makes the result stale.
+type ModelContextMsg struct {
+	Provider      string
+	Model         string
+	ContextLength int
+}

@@ -22,6 +22,12 @@ func (a *App) SetReducedMotion(reduced bool) {
 	a.chatModel.SetReducedMotion(reduced)
 }
 
+// SetLoopTrack opts the chat chrome into the Ask/Plan/Review/Try track.
+// Off by default; the environment flag is the feature gate.
+func (a *App) SetLoopTrack(enabled bool) {
+	a.chatModel.SetLoopTrack(enabled)
+}
+
 func (a *App) SetInput(text string) {
 	a.chatModel.SetInput(text)
 }
@@ -63,9 +69,11 @@ func (a *App) SetThinkingText(text string) {
 	a.chatModel.SetThinkingText(text)
 }
 
-// ShowStatus shows a status message.
+// ShowStatus shows a status message. Error details can carry values the
+// user typed or a config layer supplied, so the flash gets the same
+// terminal filter as transcript text.
 func (a *App) ShowStatus(text string, statusType string) {
-	a.statusMessage = text
+	a.statusMessage = SanitizeTerminalText(text)
 	a.statusType = statusType
 	a.statusGen++
 }

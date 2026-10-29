@@ -542,9 +542,9 @@ var _ = Describe("App", func() {
 			It("should reserve space for tab and status bars", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 				updated := model.(*App)
-				// Sub-models get height minus the chrome (6: tab bar 3
-				// + status bar 3) and the frame's border rows.
-				Expect(updated.homeModel.height).To(Equal(24 - 6 - FrameRows))
+				// Sub-models get height minus the chrome (tab bar 3 +
+				// footer 2) and the frame's border rows.
+				Expect(updated.homeModel.height).To(Equal(24 - ChromeRows - FrameRows))
 			})
 		})
 	})
@@ -692,10 +692,10 @@ var _ = Describe("App", func() {
 				// The frame insets the pane by one border cell per side;
 				// the chat model renders inside that inner width. The
 				// real resize path hands sub-models the content height
-				// (terminal minus the 6-row chrome and the frame's two
+				// (terminal minus the fixed chrome and the frame's two
 				// border rows); MaxHeight clips stale fixtures.
 				app.chatModel.width = 180 - FrameCols
-				app.chatModel.height = 24 - 6 - FrameRows
+				app.chatModel.height = 24 - ChromeRows - FrameRows
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				testenv.SetHome(GinkgoT(), testHome)

@@ -92,7 +92,11 @@ func loopTrackLine(beat string, width int) string {
 		return ""
 	}
 	if width < 34 {
-		return ModePromptStyle.Render("▸ " + label)
+		track := ModePromptStyle.Render("▸ " + label)
+		if beat == beatReview {
+			track += HelpDimStyle.Render(" · waiting for you")
+		}
+		return track
 	}
 	parts := make([]string, 0, len(loopBeats))
 	for _, candidate := range loopBeats {

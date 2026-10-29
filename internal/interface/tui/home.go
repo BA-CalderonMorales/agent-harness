@@ -272,9 +272,11 @@ func (m HomeModel) ConsumesTab() bool {
 	return false
 }
 
-// ConsumesEsc returns whether this view consumes Esc key.
+// ConsumesEsc returns whether this view consumes Esc key. A pending
+// delete confirmation owns Esc: backing out of it must not fall through
+// to the app-level "leave typing mode" or agent-cancel action.
 func (m HomeModel) ConsumesEsc() bool {
-	return false
+	return m.deleting >= 0
 }
 
 // CapturesAllKeys returns whether this view should receive all keys

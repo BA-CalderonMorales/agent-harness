@@ -25,9 +25,10 @@ func applyInputStyles() {
 		Padding(0, 1)
 
 	// InputContainerStyle - the composer. No background paint: a strong
-	// top rule and the mode line below bound the typing area, and the
-	// terminal's own background carries it — the leanest surface there
-	// is. The border brightens with focus (see chat_view).
+	// full-width top rule and the mode line below bound the typing area,
+	// and the terminal's own background carries it — the leanest surface
+	// there is. The rule keeps the theme accent at every mode; the mode
+	// line below is the typing affordance (see chat_view).
 	InputContainerStyle = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderTop(true).

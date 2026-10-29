@@ -39,7 +39,7 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 	if req.MaxTokens > 0 {
 		payload["max_tokens"] = req.MaxTokens
 	}
-	if req.Temperature > 0 {
+	if req.Temperature > 0 || req.TemperatureSet {
 		payload["temperature"] = req.Temperature
 	}
 	if len(toolsPayload) > 0 {
@@ -84,13 +84,22 @@ func (c *HTTPClient) applyReasoningParams(payload map[string]any, req Request) {
 				"budget_tokens": anthropicReasoningBudget(req.ReasoningEffort),
 			}
 		}
-	case "openai", "openrouter", "omniroute":
+	case "openai", "omniroute":
 		// OpenAI-documented reasoning_effort (o-series and reasoning
-		// models); OpenRouter and Omniroute pass it through to models
-		// that support it. Ignored when unset or off.
+		// models); Omniroute passes it through to models that support
+		// it. Ignored when unset or off.
 		switch req.ReasoningEffort {
 		case "low", "medium", "high":
 			payload["reasoning_effort"] = req.ReasoningEffort
+		}
+	case "openrouter":
+		// OpenRouter normalizes effort into its own `reasoning` object;
+		// `reasoning_effort` is not in the model's supported_parameters
+		// and was silently dropped, leaving free reasoning models at
+		// their default budget (the 45-second thinking phase).
+		switch req.ReasoningEffort {
+		case "low", "medium", "high":
+			payload["reasoning"] = map[string]any{"effort": req.ReasoningEffort}
 		}
 	}
 }

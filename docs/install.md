@@ -166,7 +166,7 @@ Expand-Archive -Path "agent-harness.zip" -DestinationPath "$env:USERPROFILE\bin"
 Starting with Agent-Harness 0.4.0, native Termux builds are best-effort,
 not a first-class release target. A Termux installation that cannot provide
 the Go version required by the selected release's `go.mod` is unsupported
-for that release. The current requirement is Go 1.26.9 or newer. Do not
+for that release. The current requirement is Go 1.26.10 or newer. Do not
 lower it to accommodate a delayed Termux package.
 
 This policy follows the release's toolchain requirement rather than a
@@ -262,8 +262,8 @@ docker-compose run --rm agent-harness
 
 ### Prerequisites
 
-- Go 1.26.9 or later (the current patch on the 1.26 line; the
-  standard-library advisories this build avoids are fixed from 1.26.6)
+- Go 1.26.10 or later (the current patch on the 1.26 line; the
+  standard-library advisories this build avoids are fixed by 1.26.10)
 - Git
 
 ### Build

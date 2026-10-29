@@ -56,9 +56,11 @@ func (m *ChatModel) AddOrUpdateToolMessage(id, toolName, toolDisplayName, comman
 	if toolDisplayName == "" {
 		toolDisplayName = toolName
 	}
-	// The command text is model-authored: it reaches the terminal as a
-	// tool row, so it carries the same filter as any other model text.
+	// The command and display name are model- or tool-authored: they
+	// reach the terminal as a tool row, so they carry the same filter as
+	// any other model text.
 	command = SanitizeTerminalText(command)
+	toolDisplayName = SanitizeTerminalText(toolDisplayName)
 
 	// Look for existing message with same ID
 	for i := range m.messages {
@@ -158,8 +160,10 @@ func (m *ChatModel) formatToolContent(toolDisplayName, command string, status To
 // short of the edge (live dogfood: the gap was the loudest thing on the
 // row). Display width, never len(): glyphs are multi-byte.
 func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command string, status ToolStatus, started time.Time, elapsed time.Duration) string {
-	glyph := "✓"
+	glyph := "○"
 	switch status {
+	case ToolStatusSuccess, ToolStatusComplete:
+		glyph = "✓"
 	case ToolStatusRunning:
 		glyph = "→"
 	case ToolStatusError:
@@ -173,7 +177,7 @@ func (m *ChatModel) formatToolContentAt(width int, toolDisplayName, command stri
 	}
 
 	dur := "…"
-	if status != ToolStatusRunning {
+	if status != ToolStatusRunning && status != ToolStatusPending {
 		dur = formatElapsed(elapsed)
 	}
 

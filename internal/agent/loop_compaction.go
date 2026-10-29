@@ -14,8 +14,8 @@ import (
 	"time"
 )
 
-func (l *Loop) isAtBlockingLimit(msgs []types.Message) bool {
-	return estimateTokens(msgs) > l.Config.BlockingTokenLimit
+func (l *Loop) isAtBlockingLimit(msgs []types.Message, promptTokens int) bool {
+	return estimateTokens(msgs)+promptTokens > l.Config.BlockingTokenLimit
 }
 
 // estimateTokens provides a rough character-based token estimate.
@@ -52,7 +52,14 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 	if limit <= 0 {
 		limit = 180000
 	}
-	target := limit * 8 / 10
+	// The fixed prompt and tool schemas ride every request; history can
+	// only use what those leave behind. Ignoring them let a request
+	// exceed the window while the loop believed it was comfortably under.
+	messageBudget := limit - state.promptTokens
+	if messageBudget < 1 {
+		return compactionOutcome{}, fmt.Errorf("prompt overhead (%d tokens) leaves no room in the %d-token context window", state.promptTokens, limit)
+	}
+	target := messageBudget * 8 / 10
 	if target < 1 {
 		target = 1
 	}

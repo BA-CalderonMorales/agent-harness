@@ -8,6 +8,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -105,11 +106,15 @@ type App struct {
 	onUserSubmit   func(string, *App)
 	onUserCommand  func(string, *App)
 	onGitContext   func(*git.Context, *App)
+	onModelContext func(provider, model string, contextLength int)
 	onLogin        LoginHandler
 	onProviderPick ProviderPickHandler
 
-	// Agent cancellation context
-	agentCancelFunc context.CancelFunc
+	// Agent cancellation context. The slot is a pointer so copying the
+	// App value (View and other read-only receivers) never copies the
+	// mutex, and Set/Cancel may race safely: the turn goroutine sets the
+	// function while Esc clears it from the event loop.
+	agentCancel *cancelSlot
 
 	// onAgentModeChanged is the host hook fired after the composer
 	// cycles the agent mode chip; hosts apply the machinery the mode
@@ -178,6 +183,7 @@ func NewApp() *App {
 		exportPicker:   NewExportPicker(),
 		nextSteps:      NewNextSteps(),
 		loginDialog:    NewLoginDialog(),
+		agentCancel:    &cancelSlot{},
 		msgChan:        make(chan tea.Msg, 64),
 		mouseCapture:   true,
 	}
@@ -198,16 +204,43 @@ func NewApp() *App {
 	return app
 }
 
+type cancelSlot struct {
+	mu sync.Mutex
+	fn context.CancelFunc
+}
+
 // SetAgentCancelFunc sets the cancellation function for the current agent execution
 func (a *App) SetAgentCancelFunc(cancel context.CancelFunc) {
-	a.agentCancelFunc = cancel
+	if a.agentCancel == nil {
+		a.agentCancel = &cancelSlot{}
+	}
+	a.agentCancel.mu.Lock()
+	a.agentCancel.fn = cancel
+	a.agentCancel.mu.Unlock()
+}
+
+// AgentRunning reports whether a cancellation function is armed for a
+// live turn. Esc checks this before claiming the key.
+func (a *App) AgentRunning() bool {
+	if a.agentCancel == nil {
+		return false
+	}
+	a.agentCancel.mu.Lock()
+	defer a.agentCancel.mu.Unlock()
+	return a.agentCancel.fn != nil
 }
 
 // CancelAgent cancels the current agent execution
 func (a *App) CancelAgent() {
-	if a.agentCancelFunc != nil {
-		a.agentCancelFunc()
-		a.agentCancelFunc = nil
+	if a.agentCancel == nil {
+		return
+	}
+	a.agentCancel.mu.Lock()
+	cancel := a.agentCancel.fn
+	a.agentCancel.fn = nil
+	a.agentCancel.mu.Unlock()
+	if cancel != nil {
+		cancel()
 	}
 }
 
@@ -225,6 +258,19 @@ func (a *App) SetUserCommandHandler(handler func(string, *App)) {
 // it runs on the event loop, so the receiver may mutate app state safely.
 func (a *App) SetGitContextHandler(handler func(*git.Context, *App)) {
 	a.onGitContext = handler
+}
+
+// SetModelContextHandler receives the provider-advertised context window
+// for the active model after a background discovery pass. It runs on the
+// event loop so the host can update budget state without racing a turn.
+func (a *App) SetModelContextHandler(handler func(provider, model string, contextLength int)) {
+	a.onModelContext = handler
+}
+
+// TurnInFlight reports whether a turn is currently streaming. Hosts use
+// it to defer budget changes that must not land mid-request.
+func (a *App) TurnInFlight() bool {
+	return a.chatModel.turnInFlight()
 }
 
 // SetLoginHandler sets the handler that receives completed login wizard

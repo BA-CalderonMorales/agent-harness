@@ -153,6 +153,9 @@ func (app *App) run() error {
 		app.gitContext = ctx
 		ta.SetProjectInfo(app.getProjectInfo())
 	})
+	tuiApp.SetModelContextHandler(func(provider, model string, contextLength int) {
+		app.applyDiscoveredModelContext(tuiApp, provider, model, contextLength)
+	})
 
 	// Initial data
 	tuiApp.SetChatMessages(app.session.Messages)
@@ -168,6 +171,7 @@ func (app *App) run() error {
 	// Reduced motion is a setting, not a preference of the moment: it
 	// has to reach the interface before the first frame is drawn.
 	tuiApp.SetReducedMotion(app.config.ReducedMotion)
+	tuiApp.SetLoopTrack(app.config.LoopTrack)
 	tuiApp.SetAgentMode(string(app.agentMode))
 	tuiApp.SetAgentModeChangedHandler(func(mode string) {
 		app.applyAgentMode(agentMode(mode))
@@ -190,6 +194,28 @@ func (app *App) run() error {
 	}
 	prober := llm.NewHTTPProber(app.config.Provider, app.config.APIKey, app.config.EndpointURL)
 	tuiApp.StartProviderProbe(prober)
+
+	// The first paint must not wait on /models, but the context bar and
+	// compaction budget cannot stay stale either. Discover the active
+	// model's real window in the background and land it on the event
+	// loop; the handler rejects a result if the provider or model moved
+	// first. Discovery is cached per endpoint, so a login that already
+	// fetched the list costs nothing.
+	if discovery, ok := app.discoveryClient(); ok && app.session != nil && app.session.Model != "" {
+		provider, model := app.config.Provider, app.session.Model
+		go func() {
+			infos, err := discovery.ListModelsDetailed()
+			if err != nil {
+				return
+			}
+			for _, info := range infos {
+				if info.ID == model && info.ContextLength > 0 {
+					tuiApp.Send(tui.ModelContextMsg{Provider: provider, Model: model, ContextLength: info.ContextLength})
+					return
+				}
+			}
+		}()
+	}
 
 	// Storage the user can see is storage the user can manage.
 	app.reportStorageFootprint(tuiApp)

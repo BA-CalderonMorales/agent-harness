@@ -3,6 +3,8 @@ package config
 import "time"
 
 const (
+	DefaultLemonadeEndpoint   = "http://127.0.0.1:13305/v1"
+	DefaultLemonadeModel      = "qwen3.5-4b-FLM"
 	DefaultTagline            = "Your workspace. Your models. Your way."
 	DefaultProvider           = "local"
 	DefaultRuntime            = "llama.cpp"
@@ -43,7 +45,7 @@ func DefaultHTTPTimeoutFor(provider string) time.Duration {
 var EffortLevels = []string{"low", "medium", "high"}
 
 func IsLocalProvider(provider string) bool {
-	return provider == "local" || provider == "ollama" || provider == "flm"
+	return provider == "local" || provider == "ollama" || provider == "flm" || provider == "lemonade"
 }
 
 func DefaultModelForProvider(provider string) string {
@@ -54,6 +56,8 @@ func DefaultModelForProvider(provider string) string {
 		return "claude-3-5-sonnet-20241022"
 	case "ollama":
 		return "gemma4:2b"
+	case "lemonade":
+		return DefaultLemonadeModel
 	case "flm":
 		return "llama3.2:3b"
 	case "local":
@@ -93,6 +97,8 @@ func DefaultEndpointForProvider(provider string) string {
 		return "https://api.cheaperinference.com/v1"
 	case "ollama":
 		return "http://127.0.0.1:11434/v1"
+	case "lemonade":
+		return DefaultLemonadeEndpoint
 	case "flm":
 		return "http://127.0.0.1:52625/v1"
 	case "local":

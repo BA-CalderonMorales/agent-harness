@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"github.com/charmbracelet/x/ansi"
 	"strings"
 	"testing"
 
@@ -14,6 +15,7 @@ func newTestLoginDialog(t *testing.T, models LoginModelsProvider) *LoginDialogMo
 	d := NewLoginDialog()
 	d.SetModelsProvider(models)
 	d.Open(120, 40, StoredCredentials{})
+	d.providerIdx = loginProviderIndex("local")
 	return &d
 }
 
@@ -60,7 +62,7 @@ func TestLoginDialogModelStepFailingProbeShowsErrorNotSilentDefault(t *testing.T
 	})
 
 	// openai goes through the API key step first.
-	d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")}) // openai
+	d.providerIdx = loginProviderIndex("openai")
 	d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	for _, ch := range "sk-test-123" {
 		d.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(string(ch))})
@@ -117,10 +119,11 @@ func TestLoginDialogModelStepEnterWithoutSelectionFallsBackToDefault(t *testing.
 
 func TestLoginDialogProviderStepShowsBlurbs(t *testing.T) {
 	d := newTestLoginDialog(t, nil)
-	view := d.View()
+	d.height = 100
+	view := strings.Join(strings.Fields(ansi.Strip(d.View())), " ")
 	for provider, blurb := range providerBlurbs {
 		if !strings.Contains(view, blurb) {
-			t.Fatalf("provider step missing blurb for %q", provider)
+			t.Fatalf("provider step missing blurb for %q: %s", provider, view)
 		}
 	}
 }

@@ -60,6 +60,10 @@ type LayeredConfig struct {
 	EndpointURL    string
 	ContextLength  int
 	Temperature    float64
+	// TemperatureSet records that temperature was chosen explicitly
+	// (file or environment). Zero is a legal, deterministic choice and
+	// must reach the provider instead of being treated as "unset".
+	TemperatureSet bool
 	MaxTokens      int
 	WorkspacePath  string
 	ServerCommand  string
@@ -103,6 +107,11 @@ type LayeredConfig struct {
 	// still. The information stays (the elapsed clock still counts);
 	// only the movement goes.
 	ReducedMotion bool
+
+	// LoopTrack shows the Ask/Plan/Review/Try beat track in the chat
+	// chrome. Off by default: it is an opt-in reading of the turn's
+	// shape, not part of the default conversation surface.
+	LoopTrack bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.

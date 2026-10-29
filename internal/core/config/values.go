@@ -41,7 +41,12 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 		applyEnvString(firstEnv("NVIDIA_API_KEY"), &config.APIKey)
 	}
 	applyEnvInt(firstEnv("AH_CONTEXT_LENGTH", "AGENT_HARNESS_CONTEXT_LENGTH"), &config.ContextLength)
-	applyEnvFloat(firstEnv("AH_TEMPERATURE", "AGENT_HARNESS_TEMPERATURE"), &config.Temperature)
+	if raw := firstEnv("AH_TEMPERATURE", "AGENT_HARNESS_TEMPERATURE"); raw != "" {
+		if parsed, err := strconv.ParseFloat(raw, 64); err == nil {
+			config.Temperature = parsed
+			config.TemperatureSet = true
+		}
+	}
 	applyEnvInt(firstEnv("AH_MAX_TOKENS", "AGENT_HARNESS_MAX_TOKENS"), &config.MaxTokens)
 	applyEnvString(firstEnv("AH_WORKSPACE_PATH", "AGENT_HARNESS_WORKSPACE_PATH"), &config.WorkspacePath)
 	applyEnvString(firstEnv("AH_LOCAL_SERVER_COMMAND", "AGENT_HARNESS_LOCAL_SERVER_COMMAND"), &config.ServerCommand)
@@ -53,6 +58,13 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 	if v := firstEnv("AH_REDUCED_MOTION", "AGENT_HARNESS_REDUCED_MOTION"); v != "" {
 		if parsed, err := strconv.ParseBool(v); err == nil {
 			config.ReducedMotion = parsed
+		}
+	}
+	// The beat track is opt-in; the feature flag is the environment (or
+	// the loop_track settings key), never an accidental default.
+	if v := firstEnv("AH_LOOP_TRACK", "AGENT_HARNESS_LOOP_TRACK"); v != "" {
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			config.LoopTrack = parsed
 		}
 	}
 	applyEnvPermissionMode(firstEnv("AH_PERMISSION_MODE", "AGENT_HARNESS_PERMISSION_MODE"), &config.PermissionMode)

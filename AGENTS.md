@@ -26,6 +26,7 @@
 | The agent loop, buckets, and naming pattern | `docs/loop-architecture.md` |
 | Composer / chat behavior and conversation flow | `internal/interface/tui/`, `docs/conversation_flow.md` |
 | Desktop interaction quality, recovery, and reference workflows | `docs/desktop-interaction.md` |
+| Small live-model capability checks and baseline evidence | `evals/README.md` |
 | Command approval and permissions stacking | `docs/command-approval.md` |
 | Branch protection and release flow | `docs/branch-protection.md`, Makefile release targets |
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |

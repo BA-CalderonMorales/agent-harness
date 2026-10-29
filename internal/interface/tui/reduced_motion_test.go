@@ -19,10 +19,10 @@ func TestWorkingIndicatorIsStillWithReducedMotion(t *testing.T) {
 	m.reducedMotion = true
 	m.thinking = true
 
-	first := m.workingStatusLine(0)
+	first := m.liveHeaderStatus(0)
 	for _, tick := range []int{1, 3, 7, 11} {
-		if got := m.workingStatusLine(tick); got != first {
-			t.Fatalf("workingStatusLine(%d) = %q, want the still line %q", tick, got, first)
+		if got := m.liveHeaderStatus(tick); got != first {
+			t.Fatalf("liveHeaderStatus(%d) = %q, want the still line %q", tick, got, first)
 		}
 	}
 }
@@ -36,15 +36,15 @@ func TestWorkingIndicatorMovesWithoutReducedMotion(t *testing.T) {
 	var m ChatModel
 	m.thinking = true
 
-	first := m.workingStatusLine(0)
+	first := m.liveHeaderStatus(0)
 	moved := false
 	for _, tick := range []int{1, 2, 3, 4, 5, 6} {
-		if m.workingStatusLine(tick) != first {
+		if m.liveHeaderStatus(tick) != first {
 			moved = true
 		}
 	}
 	if !moved {
-		t.Fatal("workingStatusLine never changed; the shimmer is not animating")
+		t.Fatal("liveHeaderStatus never changed; the shimmer is not animating")
 	}
 }
 
@@ -54,9 +54,9 @@ func TestReducedMotionStillReportsElapsedTime(t *testing.T) {
 	m.thinking = true
 	m.elapsed = 4 * time.Second
 
-	line := m.workingStatusLine(0)
+	line := m.liveHeaderStatus(0)
 	if !containsText(line, "4") {
-		t.Fatalf("workingStatusLine = %q, want the elapsed time to stay visible", line)
+		t.Fatalf("liveHeaderStatus = %q, want the elapsed time to stay visible", line)
 	}
 }
 

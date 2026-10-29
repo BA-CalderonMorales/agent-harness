@@ -3,6 +3,7 @@ package tui
 import (
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
 )
@@ -107,11 +108,41 @@ func TestLoopTrackIsEmptyWithoutABeat(t *testing.T) {
 	}
 }
 
+// The beat track is a feature flag, not part of the default surface:
+// the live phase rides on the Agent header, so the band is opt-in.
+func TestLoopTrackIsFeatureFlaggedOffByDefault(t *testing.T) {
+	m := NewChatModel()
+	m.width, m.height = 100, 24
+	m.resize(100, 24)
+	m.loopBeat = beatAsk
+	model, _ := m.Update(AgentStartMsg{Timestamp: time.Now()})
+	m = model.(ChatModel)
+
+	if got := m.workingStatusLine(0); got != "" {
+		t.Fatalf("default band = %q, want hidden", got)
+	}
+	if got := m.workingStatusHeight(); got != 0 {
+		t.Fatalf("default band height = %d, want 0", got)
+	}
+	if strings.Contains(SanitizeANSI(m.View()), "▸ Ask") {
+		t.Fatal("default view shows the Ask/Plan/Review/Try track")
+	}
+
+	m.SetLoopTrack(true)
+	if got := m.workingStatusHeight(); got != 1 {
+		t.Fatalf("enabled band height = %d, want 1", got)
+	}
+	if !strings.Contains(SanitizeANSI(m.View()), "▸ Ask") {
+		t.Fatal("enabled view is missing the beat track")
+	}
+}
+
 func TestWorkingLineShowsTheTrack(t *testing.T) {
 	var m ChatModel
 	m.width = 80
 	m.thinking = true
 	m.loopBeat = beatReview
+	m.loopTrack = true
 
 	line := m.workingStatusLine(0)
 	if !strings.Contains(line, "Review") {

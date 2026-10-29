@@ -56,6 +56,7 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 		}()
 		state := loopState{
 			messages:                     params.Messages,
+			promptTokens:                 params.PromptTokens,
 			toolUseContext:               params.ToolUseContext,
 			maxOutputTokensOverride:      params.MaxOutputTokens,
 			maxOutputTokensRecoveryCount: 0,
@@ -106,7 +107,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		// Token blocking check with auto-compaction
-		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(state.messages) {
+		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(state.messages, state.promptTokens) {
 			compaction, err := l.compactMessages(ctx, state, false)
 			if err != nil {
 				compactionErr := fmt.Errorf("automatic context compaction failed: %w", err)
@@ -140,6 +141,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			Model:           model,
 			MaxTokens:       8192,
 			Temperature:     params.Temperature,
+			TemperatureSet:  params.TemperatureSet,
 			ReasoningEffort: params.ReasoningEffort,
 		}
 

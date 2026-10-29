@@ -36,11 +36,13 @@ func applyTabStyles() {
 		Bold(true).
 		Underline(true)
 
-	// TabBarStyle with elegant bottom border
+	// TabBarStyle closes the header with a theme rule: the header and
+	// footer bands carry the palette, while the transcript stays quiet
+	// and the composer keeps the accent at the interaction point.
 	TabBarStyle = lipgloss.NewStyle().
 		BorderStyle(lipgloss.NormalBorder()).
 		BorderBottom(true).
-		BorderForeground(ColorBorder).
+		BorderForeground(ColorPrimary).
 		PaddingBottom(0)
 
 	// TitleStyle for view headers (golazo-inspired)

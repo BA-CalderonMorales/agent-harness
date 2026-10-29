@@ -17,10 +17,10 @@ fi
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 binary="$project_root/build/agent-harness"
 
-export AH_PROVIDER=local
+export AH_PROVIDER=lemonade
 export AH_RUNTIME=lemonade
 export AH_ENDPOINT_URL="${AH_LEMONADE_ENDPOINT:-http://127.0.0.1:13305/v1}"
-export AH_MODEL="${AH_LEMONADE_MODEL:-qwen3.5-9b-FLM}"
+export AH_MODEL="${AH_LEMONADE_MODEL:-qwen3.5-4b-FLM}"
 # Never inherit a hosted provider's API key for this local profile.
 export AH_API_KEY="${AH_LEMONADE_API_KEY:-lemonade-local}"
 export AH_CONTEXT_LENGTH="${AH_LEMONADE_CONTEXT_LENGTH:-8192}"

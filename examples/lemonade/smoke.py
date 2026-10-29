@@ -14,7 +14,7 @@ import zlib
 
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--endpoint", default="http://127.0.0.1:13305/v1")
-parser.add_argument("--model", default="qwen3.5-9b-FLM")
+parser.add_argument("--model", default="qwen3.5-4b-FLM")
 parser.add_argument("--timeout", type=float, default=180)
 parser.add_argument("--skip-vision", action="store_true")
 args = parser.parse_args()

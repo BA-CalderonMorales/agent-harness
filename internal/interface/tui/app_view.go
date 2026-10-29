@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
@@ -11,15 +12,45 @@ import (
 
 // View renders the TUI. A panic anywhere in the render tree must never
 // kill the program (bubbletea's own recovery exits): auto mode can be
-// mid-task, and a dead TUI strands the work. The recover degrades to a
-// one-frame error screen; the next Update usually renders clean.
-func (a App) View() string {
+// mid-task, and a dead TUI strands the work. The recover paints a
+// visible failure frame with the log location instead of returning an
+// empty screen; the next Update usually renders clean.
+func (a App) View() (view string) {
 	defer func() {
 		if r := recover(); r != nil {
 			diag.Panic("tui.view", r)
+			view = a.renderViewFailure(r)
 		}
 	}()
 	return a.view()
+}
+
+// renderViewFailure is the last-resort frame: the render tree is broken,
+// but the session, the draft, and the running work are still there. Name
+// the failure, point at the log, and say how to get out — a blank screen
+// is indistinguishable from a dead app.
+func (a App) renderViewFailure(recovered any) string {
+	width := max(a.width, 20)
+	height := max(a.height, 7)
+
+	detail := SanitizeTerminalText(fmt.Sprintf("%v", recovered))
+	detail = clipLine(detail, width-4)
+	logDir := diag.Dir()
+	if logDir == "" {
+		logDir = "unavailable"
+	}
+
+	content := strings.Join([]string{
+		HelpTitleStyle.Render("Render error"),
+		"",
+		HelpDimStyle.Render(detail),
+		"",
+		HelpDimStyle.Render("Your session is safe. Stack and context:"),
+		HelpDimStyle.Render(logDir),
+		"",
+		HelpDimStyle.Render("Any key redraws · q quits"),
+	}, "\n")
+	return viewPadded(width, height, content)
 }
 
 func (a App) view() string {
@@ -112,6 +143,11 @@ func clipToWidth(block string, max int) string {
 const (
 	FrameRows = 2 // top + bottom border rows
 	FrameCols = 2 // left + right border columns
+	// ChromeRows is the fixed vertical chrome inside the frame: the tab
+	// bar (padding + content + rule) and the footer (blank row + the
+	// status line). The footer text sits on the frame's bottom rule, so
+	// the band spends no row on a border or padding of its own.
+	ChromeRows = 5
 )
 
 func frameWidth(termWidth int) int {
@@ -228,12 +264,11 @@ func (a App) renderActiveView() string {
 	a.chatModel.SetLoopBeat(a.currentLoopBeat())
 	a.chatModel.SyncPlaceholder()
 
-	// Reserve space for the fixed chrome: tab bar (3 with padding and
-	// border) + status bar (3 with its top and bottom padding), plus
-	// the app frame's top and bottom border rows. The reserve must
-	// match the chrome's real height — one row short and the pane
-	// scrolls a row of the tab bar off the top.
-	contentHeight := a.height - 6 - FrameRows
+	// Reserve space for the fixed chrome, plus the app frame's top and
+	// bottom border rows. The reserve must match the chrome's real
+	// height — one row short and the pane scrolls a row of the tab bar
+	// off the top.
+	contentHeight := a.height - ChromeRows - FrameRows
 	if contentHeight < 1 {
 		contentHeight = 1
 	}

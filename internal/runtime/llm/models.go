@@ -3,6 +3,7 @@ package llm
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"io"
 	"net/http"
 	"sync"
@@ -36,7 +37,7 @@ func (c *HTTPClient) fetchModels() ([]ModelInfo, error) {
 	if err != nil {
 		return nil, err
 	}
-	if c.Provider != "ollama" && c.Provider != "local" {
+	if !config.IsLocalProvider(c.Provider) {
 		req.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
 	if c.Provider == "openrouter" {
@@ -77,6 +78,10 @@ func (c *HTTPClient) fetchModels() ([]ModelInfo, error) {
 // listModelsCached returns the cached model list for the client's base
 // URL, fetching and caching when stale.
 func (c *HTTPClient) listModelsCached() ([]ModelInfo, error) {
+	// Local models can be pulled or loaded while the app is running.
+	if config.IsLocalProvider(c.Provider) {
+		return c.fetchModels()
+	}
 	modelCacheMu.Lock()
 	cache, ok := modelCaches[c.BaseURL]
 	if ok && time.Since(cache.fetchedAt) < modelCacheTTL {
@@ -98,7 +103,8 @@ func (c *HTTPClient) listModelsCached() ([]ModelInfo, error) {
 }
 
 // ListModels fetches available model IDs from the provider API.
-// Results are cached for 5 minutes. Local OpenAI-compatible servers
+// Hosted results are cached for 5 minutes; local lists are fetched fresh.
+// Local OpenAI-compatible servers
 // (llama.cpp, ollama, demo mocks) serve /v1/models too, so they are
 // probed like any other provider; a server that is down or lacks the
 // endpoint fails the probe and callers fall back to the static catalog.

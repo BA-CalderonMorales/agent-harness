@@ -12,23 +12,64 @@ These are request durations, not per-token rates or production-quality
 scores. Streaming, real coding tasks, and recovery remain unvalidated.
 The agent session cannot elevate privileges or
 access the host system service bus or loopback server.
-No model or default application configuration was changed by the agent.
+Host installation and model loading were performed by the user.
 
 The later 2B coding exercise failed acceptance despite fast smoke checks:
 it changed the excluded test file and emitted write calls without content.
 The resulting implicit truncation exposed a file-tool validation bug,
-which now has regression coverage. Keep 2B experimental and evaluate 4B
-on the same task after the rebuilt mutation guard is active.
+which now has regression coverage. Keep 2B experimental; the later 4B
+result and daily connection flow are recorded below.
 
 The inspected machine has a Ryzen AI 7 PRO 350, Radeon 860M, about 32 GB
 RAM, and an NPU bound to `amdxdna`. A bound driver is not an inference test.
 Use [Lemonade's Linux NPU guide](https://lemonade-server.ai/flm_npu_linux.html)
 to validate firmware, runtime access, and memory-lock requirements.
 
+## Daily use through the app
+
+Build and run normally from the repository:
+
+```bash
+make build
+make run
+```
+
+Open `/login`. Under **On this computer**, choose **Lemonade**, then
+`qwen3.5-4b-FLM`. Lemonade uses port 13305; **FastFlowLM (direct)** connects
+to a separate `flm serve` endpoint on port 52625. **Custom local server**
+keeps the generic OpenAI-compatible connection, whose default is port 8080.
+Hosted inference services appear in their own group.
+
+The Lemonade list comes from its `/v1/models` endpoint. No API key is
+required. The app remembers the connection and selected model in user
+settings for the next ordinary launch, and preselects the remembered model
+when reconnecting. Environment overrides still take precedence.
+
+Use Ctrl+R in the model step after pulling another model or restarting the
+service; Ctrl+B returns to connection selection. An unavailable or empty
+Lemonade endpoint keeps the wizard open with recovery guidance rather than
+pretending an offline catalog entry is installed. Model downloads and
+service installation remain host setup tasks; login does not perform them.
+
+On 2026-10-29, the user-run 4B smoke checks passed text (1.24s), tool call
+(1.97s), tool result (1.51s), and vision (1.40s). The coding acceptance run
+read both fixture files, changed only `names.py`, ran all four tests, and
+reported success accurately. Independent test discovery also passed all
+four tests. The model enumerated the tests rather than using the exact
+requested command. This is one successful task, with positive user feedback
+on speed, rather than a general coding-quality benchmark.
+
+Standalone greetings now omit coding instructions, skill bodies, and tool
+schemas while still querying the selected model with conversation history.
+Compound requests such as "yo! fix names.py" retain the coding path.
+Diagnostics record request sizes and first-text latency without logging
+prompt contents. Cancellation and failure recovery still need host testing
+alongside the in-process regression checks.
+
 ## Model candidates
 
-Start with Qwen3.5-9B as the quality-first candidate and Qwen3.5-4B as the
-smaller alternative. Both have vision and tool-calling entries in the
+Use Qwen3.5-4B as the current working candidate based on the successful
+local task. Keep Qwen3.5-9B for quality comparisons on harder tasks. Both have vision and tool-calling entries in the
 [Lemonade catalog](https://lemonade-server.ai/docs/models.html). Compare
 Gemma-4-12B-it if the initial model's task accuracy is inadequate. These are
 evaluation candidates, not benchmark winners on this machine.
@@ -95,7 +136,7 @@ Do not change global login limits just to validate the system service.
 
 ## Establish a baseline
 
-### Launch Agent-Harness with the verified NPU profile
+### Optional launcher for isolated profile comparisons
 
 From the workspace you want the agent to use:
 
@@ -104,7 +145,8 @@ bash /home/bmoe/Projects/agent-harness/scripts/ah-lemonade.sh
 ```
 
 The launcher checks that the endpoint lists the selected model, builds the
-current app, and launches it in the caller's workspace. It sets the local
+current app, and launches it in the caller's workspace. It defaults to
+`qwen3.5-4b-FLM`. It sets the local
 endpoint, model, placeholder key, 8K input budget, and 4K output limit for
 that process. It does not install packages, start the service, or edit the
 repository's default YAML. The app's normal settings/session persistence
@@ -127,7 +169,8 @@ GGUF baseline below.
 Run the server smoke checks from any directory:
 
 ```bash
-python /home/bmoe/Projects/agent-harness/examples/lemonade/smoke.py
+python /home/bmoe/Projects/agent-harness/examples/lemonade/smoke.py \
+  --model qwen3.5-4b-FLM
 ```
 
 The script sends text, a harmless synthetic tool round trip, and a generated

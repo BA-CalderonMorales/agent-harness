@@ -25,6 +25,9 @@ override every config file layer.
 - `AGENT_HARNESS_REDUCED_MOTION`: set to `1` to hold the interface still
   (no shimmer, no movement); `reduced_motion: true` in settings does the
   same. The information stays, only the motion goes
+- `AH_LOOP_TRACK`: set to `1` to show the Ask/Plan/Review/Try beat track
+  above the composer; `loop_track: true` in settings does the same. Off by
+  default — the live turn phase rides on the Agent header
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by

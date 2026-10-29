@@ -47,6 +47,7 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 	if v, ok := floatValue(config.merged, "temperature"); ok {
 		config.Temperature = v
+		config.TemperatureSet = true
 	}
 	if v, ok := intValue(config.merged, "max_tokens"); ok {
 		config.MaxTokens = v
@@ -59,6 +60,9 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	}
 	if v, ok := boolValue(config.merged, "reduced_motion"); ok {
 		config.ReducedMotion = v
+	}
+	if v, ok := boolValue(config.merged, "loop_track"); ok {
+		config.LoopTrack = v
 	}
 	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v

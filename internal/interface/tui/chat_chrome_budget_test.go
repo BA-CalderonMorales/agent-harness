@@ -50,16 +50,18 @@ func TestChatComposerSurvivesShortPane(t *testing.T) {
 	}
 }
 
-// TestChatWorkingBandHasPaddingAboveAndBelow pins the requested look:
-// the live status line reads as its own band, with a blank row between it
-// and the transcript above and the composer rule below.
-func TestChatWorkingBandHasPaddingAboveAndBelow(t *testing.T) {
+// TestChatWorkingBandIsOneRow pins the requested look: the live band is
+// a single beat-track row directly above the composer rule. The spinner
+// and clock live on the Agent header, at the response bubble.
+func TestChatWorkingBandIsOneRow(t *testing.T) {
 	m := sizedChat(100, 30, true)
+	m.loopBeat = beatAsk
+	m.loopTrack = true
 	lines := strings.Split(SanitizeANSI(m.View()), "\n")
 
 	idx := -1
 	for i, line := range lines {
-		if strings.Contains(line, "Working") {
+		if strings.Contains(line, "▸ Ask") {
 			idx = i
 			break
 		}
@@ -67,11 +69,11 @@ func TestChatWorkingBandHasPaddingAboveAndBelow(t *testing.T) {
 	if idx < 0 {
 		t.Fatalf("no working line in a live turn:\n%s", strings.Join(lines, "\n"))
 	}
-	if idx == 0 || strings.TrimSpace(lines[idx-1]) != "" {
-		t.Fatalf("no blank row above the working band:\n%s", strings.Join(lines, "\n"))
+	if strings.Contains(lines[idx], "Thinking") || strings.Contains(lines[idx], "⣾") {
+		t.Fatalf("working band carries the spinner/phase: %q", lines[idx])
 	}
-	if idx+1 >= len(lines) || strings.TrimSpace(lines[idx+1]) != "" {
-		t.Fatalf("no blank row below the working band:\n%s", strings.Join(lines, "\n"))
+	if idx+1 >= len(lines) || !strings.Contains(lines[idx+1], "─") {
+		t.Fatalf("working band is not directly above the composer rule:\n%s", strings.Join(lines, "\n"))
 	}
 }
 

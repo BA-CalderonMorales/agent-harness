@@ -65,7 +65,7 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// Status messages
 	// -------------------------------------------------------------------------
 	case StatusMsg:
-		a.statusMessage = msg.Text
+		a.statusMessage = SanitizeTerminalText(msg.Text)
 		a.statusType = msg.Type
 		a.statusGen++
 		// Hints expire: a status is a flash, not a state. The
@@ -185,6 +185,10 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 	// -------------------------------------------------------------------------
 	// Model changed - update chat model AND settings so all tabs reflect new model
 	// -------------------------------------------------------------------------
+	case SettingsUpdatedMsg:
+		a.settingsModel.SetSettings(msg.Settings)
+		return a, a.listenForMessages()
+
 	case ModelChangedMsg:
 		a.chatModel.SetModel(msg.Model)
 		a.settingsModel.UpdateSettingValue("model", msg.Model)
@@ -327,6 +331,13 @@ func (a *App) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 
 	case LogEntryMsg:
 		a.logsModel.AppendEntry(msg.Entry)
+		cmds = append(cmds, a.listenForMessages())
+		return a, tea.Batch(cmds...)
+
+	case ModelContextMsg:
+		if a.onModelContext != nil {
+			a.onModelContext(msg.Provider, msg.Model, msg.ContextLength)
+		}
 		cmds = append(cmds, a.listenForMessages())
 		return a, tea.Batch(cmds...)
 

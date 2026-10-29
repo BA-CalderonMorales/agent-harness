@@ -19,6 +19,24 @@ type StreamMessage struct {
 
 func (StreamMessage) isStreamEvent() {}
 
+// StreamTextDelta carries a fragment of assistant prose as it arrives.
+// It is transient: the complete message still arrives as a StreamMessage
+// and is what the caller persists.
+type StreamTextDelta struct {
+	Text string
+}
+
+func (StreamTextDelta) isStreamEvent() {}
+
+// StreamToolUse carries a tool call as soon as its input is complete,
+// before any prose that follows it. The final StreamMessage still carries
+// the same call for persistence and for callers that ignore this event.
+type StreamToolUse struct {
+	Block ToolUseBlock
+}
+
+func (StreamToolUse) isStreamEvent() {}
+
 // StreamThinking carries the live reasoning preview for the wait state.
 // The text is transient: it renders under the thinking badge and is
 // never persisted.

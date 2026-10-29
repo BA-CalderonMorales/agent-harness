@@ -14,9 +14,9 @@ func TestWorkingLineShowsTheDelegation(t *testing.T) {
 	m.thinking = true
 	m.currentTool = &ToolUseBlock{ID: "t1", Name: "agent"}
 
-	line := m.workingStatusLine(0)
+	line := m.liveHeaderStatus(0)
 	if !strings.Contains(line, "✈") || !strings.Contains(line, "delegating") {
-		t.Fatalf("working line = %q, want the delegation marker", line)
+		t.Fatalf("live header = %q, want the delegation marker", line)
 	}
 }
 
@@ -26,8 +26,8 @@ func TestWorkingLineHasNoDelegationMarkerForOtherTools(t *testing.T) {
 	m.thinking = true
 	m.currentTool = &ToolUseBlock{ID: "t1", Name: "bash"}
 
-	line := m.workingStatusLine(0)
+	line := m.liveHeaderStatus(0)
 	if strings.Contains(line, "✈") {
-		t.Fatalf("working line = %q, want no delegation marker for a shell call", line)
+		t.Fatalf("live header = %q, want no delegation marker for a shell call", line)
 	}
 }

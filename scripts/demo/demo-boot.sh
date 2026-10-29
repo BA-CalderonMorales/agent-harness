@@ -20,4 +20,6 @@ export AH_API_KEY=local
 # execute for the collapse to have anything to collapse.
 export AH_PERMISSION_MODE=workspace-write
 export AH_PERM_EXECUTE=true
+# The demo shows the beat track; the default is off (feature flagged).
+export AH_LOOP_TRACK=1
 exec ./build/agent-harness "$@"

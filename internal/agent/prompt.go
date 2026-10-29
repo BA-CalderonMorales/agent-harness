@@ -51,9 +51,11 @@ with tool calls is a failure of this rule, even if the work is correct.
 
 Why this exists: the user watches tool calls stream in with no context.
 Without an opening acknowledgment they cannot tell what is happening or
-why. Never begin a response with a tool call. Also narrate between tool
-calls (what each step is for) and close with what was done and what
-changed.
+why. Never begin a response with a tool call. Give another brief update
+when a finding, decision, or blocker changes the approach. The tool rows
+already show routine reads, writes, and commands; do not narrate each one
+or repeat the same plan. Close with what changed, what was verified,
+and anything still unresolved.
 
 The ONLY exception: trivial continuations where you have nothing new to
 acknowledge (e.g. the user says "continue" mid-flow and you are resuming
