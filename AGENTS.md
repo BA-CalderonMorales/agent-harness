@@ -25,6 +25,7 @@
 |---|---|
 | The agent loop, buckets, and naming pattern | `docs/loop-architecture.md` |
 | Composer / chat behavior and conversation flow | `internal/interface/tui/`, `docs/conversation_flow.md` |
+| Desktop interaction quality, recovery, and reference workflows | `docs/desktop-interaction.md` |
 | Command approval and permissions stacking | `docs/command-approval.md` |
 | Branch protection and release flow | `docs/branch-protection.md`, Makefile release targets |
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
@@ -54,6 +55,17 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   Golden files regenerate with `go test ./... -update`.
 - `/persona <name>` switches behavior mode; `/audit` shows tool activity;
   `/commit <message>` stages and commits; `h`/`c` jump between Home and Chat.
+
+## Android and Termux
+
+- The Android goal is a dedicated app; see `docs/android.md`. No app or APK
+  ships yet. Do not describe narrow-terminal tests as Android validation.
+- From 0.4.0, native Termux builds are best-effort, not a release gate.
+  Installations below the selected release's `go.mod` requirement are
+  unsupported. Do not lower the Go baseline for Termux package availability.
+- Keep useful portability fixes and narrow-pane tests. Historical Termux
+  notes and helper scripts do not certify current device compatibility.
+- The authoritative policy is `docs/install.md#termux-android`.
 
 ## CI
 

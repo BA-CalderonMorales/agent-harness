@@ -1,5 +1,29 @@
 # Changelog
 
+## [Unreleased]
+
+### Fixed
+
+- File writes now reject missing, null, or non-string `content` instead of
+  implicitly truncating the destination. Edits reject missing or wrongly
+  typed `new_string`. Both validation and execution enforce the check;
+  explicit empty strings still support intentional empty files/deletions.
+- Directory-listing failures now propagate as tool errors, with guidance
+  about literal paths and shell syntax. Directory rows use List Files
+  rather than Shell.
+- An identical failed read-only call gets one correction opportunity
+  without re-executing the duplicate. Persistent repetition still stops,
+  with rejected tool results recorded so the conversation can continue.
+  Agent work-limit feedback no longer suggests a provider/model switch.
+
+### Changed
+
+- From 0.4.0, native Termux builds are best-effort and no longer a release
+  gate. Installations below the selected release's Go requirement are
+  unsupported. The Android goal is a dedicated app, currently planned
+  with no APK or committed date. Installation docs, contributor guidance,
+  and historical portability notes now distinguish these paths.
+
 ## [0.3.42] - 2026-10-24
 
 ### Added

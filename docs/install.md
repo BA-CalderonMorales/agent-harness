@@ -27,11 +27,8 @@ Complete installation instructions for agent-harness on all supported platforms.
 curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install.sh | bash
 ```
 
-### Termux (Android)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install-termux.sh | bash
-```
+Android: read the [Termux policy](#termux-android) and
+[dedicated app direction](android.md) before attempting a native build.
 
 ---
 
@@ -47,7 +44,8 @@ agent-harness --version
 ```
 
 Keep `~/.local/bin` on your `PATH`. For the default `/usr/local/bin` install,
-rerun the Quick Install command. Termux users can rerun the Termux installer.
+rerun the Quick Install command. Native Termux builds follow the
+[Termux policy](#termux-android).
 Close Agent-Harness before updating and reopen it afterward.
 
 The binary installer leaves settings, credentials, and sessions in place. You
@@ -165,61 +163,36 @@ Expand-Archive -Path "agent-harness.zip" -DestinationPath "$env:USERPROFILE\bin"
 
 ## Termux (Android)
 
-Termux requires special handling due to the Android environment.
+Starting with Agent-Harness 0.4.0, native Termux builds are best-effort,
+not a first-class release target. A Termux installation that cannot provide
+the Go version required by the selected release's `go.mod` is unsupported
+for that release. The current requirement is Go 1.26.9 or newer. Do not
+lower it to accommodate a delayed Termux package.
 
-### Using the Termux Installer
+This policy follows the release's toolchain requirement rather than a
+Termux app version: the app version alone does not establish which Go
+compiler is installed. No specific Termux version is certified here.
+Earlier Agent-Harness releases retain their historical validation status;
+this policy does not promise continued maintenance or security backports
+for them. Downgrading is not the recommended workaround.
 
-```bash
-curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install-termux.sh | bash
-```
+The Android product goal is a [dedicated app](android.md), with no APK or
+release date available yet. Native Termux compatibility does not block
+0.4.0 releases. Existing portability code and helper scripts remain for
+contributors, without a device-compatibility guarantee.
 
-### Manual Install
+### Experimental source builds
 
-```bash
-# Update packages
-pkg update
+Check `go version` against the selected release's `go.mod` before using
+`scripts/install-termux.sh` or building manually. Those helpers are not a
+supported update channel. Build from a chosen release tag with a compatible
+Android Go toolchain; desktop Linux release binaries are not an Android
+installation path.
 
-# Install required packages
-pkg install curl git
+Using a phone terminal to SSH into a supported development host is a
+separate workflow: Agent-Harness runs on that host. It does not establish
+native Android support or provide the planned Android app.
 
-# Detect architecture
-ARCH=$(uname -m)
-case "$ARCH" in
-    aarch64) SUFFIX="linux-arm64" ;;
-    armv7l|armv8l) SUFFIX="linux-arm64" ;;
-    x86_64) SUFFIX="linux-amd64" ;;
-    *) echo "Unsupported architecture: $ARCH"; exit 1 ;;
-esac
-
-# Download and install
-curl -L -o agent-harness.tar.gz \
-  "https://github.com/BA-CalderonMorales/agent-harness/releases/latest/download/agent-harness-${SUFFIX}.tar.gz"
-tar -xzf agent-harness.tar.gz
-mv "agent-harness-${SUFFIX}" $PREFIX/bin/agent-harness
-chmod +x $PREFIX/bin/agent-harness
-```
-
-### Setting Up the `ah` Alias
-
-Add to `~/.bashrc` or `~/.zshrc`:
-
-```bash
-# Agent Harness workspace shortcut
-ah() {
-    if [ $# -eq 0 ]; then
-        agent-harness
-    else
-        agent-harness "$@"
-    fi
-}
-```
-
-Then reload your shell:
-```bash
-source ~/.bashrc  # or source ~/.zshrc
-```
-
----
 
 ## Docker
 

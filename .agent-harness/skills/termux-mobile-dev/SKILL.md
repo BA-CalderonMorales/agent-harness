@@ -1,5 +1,15 @@
 # Termux Mobile Development Environment
 
+## Current policy (0.4.0 onward)
+
+The Android goal is a dedicated app, currently planned, not shipped. Read
+`docs/android.md` and `docs/install.md#termux-android` before using the
+historical notes below. Native Termux builds are best-effort, not a release
+gate. Installations below the selected release's `go.mod` requirement are
+unsupported; do not lower that requirement for Termux packages. The current
+minimum is Go 1.26.9. Device claims and CLI flags below are historical,
+not current certification.
+
 > Domain-specific guidance for running agent-harness on Termux (Android/Linux sandbox).
 
 ---
@@ -7,7 +17,7 @@
 ## Environment Characteristics
 
 - **Platform**: Android (Samsung S26 Ultra) via Termux
-- **Go Version**: 1.26.8+ (android/arm64); 1.26.1 predates the
+- **Go Version**: 1.26.9+ (android/arm64); 1.26.1 predates the
   standard-library fixes this build depends on
 - **Shell**: `/data/data/com.termux/files/usr/bin/bash`
 - **Home**: `/data/data/com.termux/files/home`
@@ -74,7 +84,7 @@ Android power management:
 
 ### 7. Build Environment
 
-- Native compilation works (build on Go 1.26.8+, the advisory-free line)
+- Native compilation works (build on Go 1.26.9+, the advisory-free line)
 - CGO enabled by default for Android
 - Cross-compilation FROM Termux TO desktop may be limited
 

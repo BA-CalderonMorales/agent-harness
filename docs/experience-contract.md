@@ -71,6 +71,9 @@ failure never silently becomes a blank screen.
 Each fix is demonstrated on the desktop and phone walkthroughs
 (multiline draft, tool approval, result inspection; read-back during a
 stream, cancel, reopen). Color, contrast, and motion claims need terminal
-captures or recordings — plain text cannot establish them. Native Termux
-and Windows validation is recorded per fix as done or pending; simulation
-is labeled as simulation.
+captures or recordings — plain text cannot establish them. Windows
+validation is recorded per fix as done or pending; simulation is labeled
+as simulation. From 0.4.0, native Termux validation is best-effort and is
+not a release gate; see the [support policy](install.md#termux-android).
+Phone-sized terminal fixtures remain layout checks. The planned
+[Android app](android.md) will require separate device validation.

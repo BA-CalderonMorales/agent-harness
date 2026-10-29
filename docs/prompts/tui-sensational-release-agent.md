@@ -1,8 +1,10 @@
 # Agent-Harness TUI Sensational Release Mission
 
 Your mission is to make the next release of agent-harness an exceptional,
-dependable terminal toolbox for engineers, with Linux and Android/Termux
-as first-class experiences.
+dependable terminal toolbox for engineers on supported desktop platforms.
+The Android goal is a dedicated app; see `docs/android.md`. From 0.4.0,
+native Termux builds are best-effort, and installations below the release
+Go requirement are unsupported. See `docs/install.md#termux-android`.
 
 Work in this repository. Inspect, reproduce, implement, test, and prepare
 reviewable changes. A design proposal or an audit alone does not complete
@@ -212,7 +214,7 @@ extension points as applicable. Persist choices consistently and document how
 another engineer can make the toolbox their own using current APIs. Do not
 create a new plugin framework just for this release.
 
-## 4. Make Linux and Termux first-class
+## 4. Make desktop terminals and narrow panes dependable
 
 Use a practical terminal matrix:
 
@@ -239,30 +241,17 @@ Check Linux behavior with ordinary keyboard input and available mouse,
 selection, and clipboard paths. Check reduced color and missing clipboard
 support; meaning must remain understandable without color alone.
 
-For Termux, distinguish:
+Native Termux builds are best-effort, not a release gate. Do not lower the
+Go baseline to accommodate Termux package delays. Keep portable shell and
+temporary-path handling, and preserve existing regression tests.
 
-- running natively on Android
-- using Termux to SSH into a Linux host
-- using either through tmux
+Distinguish native Android execution from SSH into a supported host. A
+narrow Linux pane, a `TERMUX_VERSION` override, and a cross-build do not
+prove native Android support. Record any native device checks as optional
+evidence with their toolchain and Android versions.
 
-Check soft-keyboard opening/closing, portrait/landscape changes, paste,
-touch/scroll behavior, limited modifier access, background/resume, and network
-interruption. Prefer capability and viewport handling over scattered
-platform-name conditionals.
-
-Inspect shell resolution, writable temporary directories, PATH, executable
-locations, config/state storage, and available external commands. Do not
-assume `/tmp`, `/bin/bash`, `sudo`, `systemd`, or desktop clipboard utilities.
-
-Use environment-appropriate temporary paths. Do not change HOME globally or
-modify real user configuration to make a demo pass.
-
-A narrow Linux pane or `TERMUX_VERSION` override is simulation evidence.
-Neither proves native Termux support. A cross-build is not a device test.
-
-If no Android device is available, finish all independent work and provide a
-short exact device-validation procedure, expected results, and remaining
-uncertainties. Mark native validation pending; do not claim full acceptance.
+The dedicated Android app is planned work with a separate device acceptance
+process. Do not claim it ships as part of this terminal release.
 
 “Take it anywhere” means portable setup and reliable local continuity. Do not
 invent cloud sync or promise seamless cross-device sessions that the
@@ -352,14 +341,15 @@ Before declaring the release ready:
   do not silently downgrade them to finish.
 - Relevant historical regressions remain covered.
 - The terminal matrix has recorded outcomes and honest coverage gaps.
-- Actual Termux testing is completed or clearly remains a release gate.
+- Native Termux results, if collected, are labeled best-effort and do not
+  block a desktop release.
 - Changed behavior has live before/after evidence.
 - The experience contract is supported by the repeated desktop and phone
   workflows, with concrete evidence of resolved friction and coherent design.
   Record maintainer feedback and any subjective review still pending.
 - Long-session behavior has measured results.
-- Documentation matches current behavior and includes concise Linux, Termux,
-  recovery, and customization instructions.
+- Documentation matches current behavior and includes concise desktop, recovery,
+  and customization instructions, the Termux policy, and the Android app goal.
 - Run appropriate targeted tests, then `go test ./...`, `go test -race ./...`,
   `go vet ./...`, `make build`, `make verify`, and other applicable CI checks.
 - Attribute pre-existing failures against a baseline; do not call a failing

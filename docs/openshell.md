@@ -117,8 +117,8 @@ the sandbox's credential file. The provider profile is the better path.
   0.1.x. Upload before the session and download after it; long sessions
   can use `sandbox upload` again while running.
 - **Platform coverage.** OpenShell requires Docker/Podman/VM and does not
-  cover Termux or native Windows without WSL 2. Those users keep the
-  direct binary path.
+  cover Termux or native Windows without WSL 2. Native Windows keeps the
+  direct binary path; Termux follows the [best-effort policy](install.md#termux-android).
 - **Two policy systems.** The harness's permission modes decide which
   tools may run; OpenShell decides what the operating system and network
   permit. They compose, but neither replaces the other.

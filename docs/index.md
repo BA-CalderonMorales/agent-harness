@@ -11,7 +11,9 @@ surface in one take.
 | [Install](install.md) | Platforms, prerequisites, manual paths |
 | [Usage](usage.md) | Tabs, controls, compose mode, slash commands |
 | [Local models](local-models.md) | llama.cpp, GGUF download, overrides |
+| [Lemonade evaluation](lemonade.md) | ZBook setup, multimodal candidates, caching, validation gaps |
 | [Environment variables](environment-variables.md) | Every override, one table |
+| [Android direction](android.md) | Planned dedicated app and implementation decisions |
 | [Supported models](supported_models.md) | Provider/model matrix |
 
 ## How it works
@@ -28,6 +30,7 @@ surface in one take.
 | [TUI design patterns](tui-design-patterns.md) | The screen patterns the UI reuses |
 | [Terminal testing](tui-testing.md) | Rendering the real model in tests, golden frames |
 | [The journey](journey.md) | The 0.4.0 spec: loop track, human-in-the-loop, sketch, plane |
+| [Desktop interaction](desktop-interaction.md) | Reference behaviors, recovery contracts, and model comparisons |
 | [Sub-agents](subagents.md) | Definition files, named delegation, tool and model bounds |
 | [Services and features](services-features.md) | The runtime services surface |
 
@@ -39,7 +42,7 @@ surface in one take.
 | [Changelog](changelog.md) | What changed between releases |
 | [Edge cases](edgecases.md) | Non-obvious behaviors |
 | [Parity](parity.md) | Feature parity edges |
-| [Termux edge cases](termux_edge_cases.md) | Android-specific behavior |
+| [Termux edge cases](termux_edge_cases.md) | Historical portability notes; see current Termux policy |
 | [DX improvements](dx-improvements.md) | Recent developer-experience work |
 
 ## Building it
