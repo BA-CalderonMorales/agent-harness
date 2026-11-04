@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -21,6 +22,9 @@ func TestLocalOpenRouterRoundTrip(t *testing.T) {
 	original := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = original })
 	const hostedModel = "test/switch-contract:free"
+	// Hosted discovery is cached by endpoint across clients. Give this
+	// in-memory server its own identity, including across -count runs.
+	hostedEndpoint := "https://openrouter.ai/" + filepath.Base(t.TempDir())
 	calls := 0
 	http.DefaultTransport = lemonadeTransport(func(r *http.Request) (*http.Response, error) {
 		local := r.URL.Host == "127.0.0.1:13305"
@@ -35,14 +39,14 @@ func TestLocalOpenRouterRoundTrip(t *testing.T) {
 			t.Errorf("%s auth=%q, want %q", r.URL, got, wantAuth)
 		}
 		body := ""
-		switch r.URL.Path {
-		case "/v1/models", "/api/v1/models":
+		switch {
+		case strings.HasSuffix(r.URL.Path, "/models"):
 			model, window := hostedModel, 65536
 			if local {
 				model, window = config.DefaultLemonadeModel, 8192
 			}
 			body = fmt.Sprintf(`{"data":[{"id":%q,"context_length":%d}]}`, model, window)
-		case "/v1/chat/completions", "/api/v1/chat/completions":
+		case strings.HasSuffix(r.URL.Path, "/chat/completions"):
 			calls++
 			body = "data: {\"choices\":[{\"delta\":{\"content\":\"ready\"}}]}\n\ndata: {\"choices\":[{\"delta\":{},\"finish_reason\":\"stop\"}]}\n\ndata: [DONE]\n\n"
 		default:
@@ -60,6 +64,11 @@ func TestLocalOpenRouterRoundTrip(t *testing.T) {
 		{"openrouter", "test-router-key", hostedModel, 65536},
 		{"lemonade", "", config.DefaultLemonadeModel, 8192},
 	} {
+		app.config.EndpointPinned = true
+		app.config.EndpointURL = config.DefaultLemonadeEndpoint
+		if step.provider == "openrouter" {
+			app.config.EndpointURL = hostedEndpoint
+		}
 		app.completeLogin(step.provider, step.key, step.model, app.tuiApp)
 		if app.config.Provider != step.provider || app.session.Model != step.model {
 			t.Fatalf("login did not commit selected provider/model")
