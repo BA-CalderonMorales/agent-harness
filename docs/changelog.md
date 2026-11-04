@@ -2,7 +2,25 @@
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-11-04
+
 ### Added
+
+- Resource-aware terminal campaigns with configurable CPU affinity, CPU
+  limits, sampled process-tree memory thresholds, and per-case resource
+  records. The separately running model server remains outside those limits.
+- Varied text, record-counting and path-handling tasks with fresh filenames
+  and host-owned private checks. Automatic canary screening requires multiple
+  task families, preserved prior outcomes, and acceptable measured cost.
+
+- Unattended Linux terminal journeys for the existing everyday evals. The
+  helper operates the real TUI, handles bounded fixture approvals, exercises
+  cancellation and follow-up, and saves actual output, tool evidence, and
+  independent checks for the existing human review workflow. Application and
+  verification subprocesses run inside a Bubblewrap filesystem boundary.
+- Opt-in private TUI event logs for terminal journey observation. Approval
+  records carry the exact proposed input rather than inferring it from a
+  preceding tool announcement.
 
 - A small `evals/` pack for five everyday scenarios, isolated fixtures,
   independent file/test checks, saved session evidence, and explicit human review.
@@ -16,6 +34,20 @@
   Local runtimes and hosted inference services are grouped separately.
 
 ### Fixed
+
+- Unattended verification bounds subprocess output and workspace snapshots,
+  rejects special files, validates observation records, and disables verifier
+  network access. Linux terminal and security regressions now run in CI.
+- MCP lifecycle tests retain race detection without the test peer's artificial
+  exit delay colliding with the transport shutdown deadline.
+- Optional GitNexus development dependencies clear high and critical audit
+  findings; three moderate findings remain documented pending upstream fixes.
+
+- Failed shell commands, startup errors and timeouts now carry a tool-error
+  result. Their output already included the exit status, but the tool row and
+  model-visible error flag previously reported success even when tests failed.
+- The local/hosted round-trip contract test uses a distinct in-memory hosted
+  endpoint so another test's cached model catalog cannot change its result.
 
 - The Go toolchain moves to 1.26.10 in the module, CI, release, Windows,
   and Docker declarations, and `x/net` moves to v0.62.0. `govulncheck`
