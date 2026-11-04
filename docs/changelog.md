@@ -2,6 +2,13 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- Branch-pruning previews now display branch names, exclude symbolic and other
+  remote references, and retain valid merged branches containing `HEAD` as
+  candidates. Regression checks exercise dry-run and real pruning in isolated
+  local repositories while preserving protected and unmerged branches.
+
 ### Changed
 
 - Generated evidence is now local ignored output with a tracked retention

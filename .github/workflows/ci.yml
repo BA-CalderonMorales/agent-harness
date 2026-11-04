@@ -168,6 +168,9 @@ jobs:
       - name: Run version-gate unit tests
         run: sh scripts/test-check-version-matches.sh
 
+      - name: Verify branch-pruning safety in temporary repositories
+        run: python3 scripts/verify/test-prune-branches.py
+
       - name: Run test-shard coverage unit tests
         run: |
           bash scripts/test-test-shards.sh
