@@ -10,6 +10,10 @@
 - Removed obsolete direct-push release scripts and the version-bump workflow.
   The protected two-PR runbook and pure remote-version calculator remain.
 - Docker build context excludes local evidence, evaluation runs and caches.
+- Retired the unwired modular session loop, alternate executor/filesystem/
+  permission buckets, and unused environment/task/service scaffolding. Live
+  implementations, every existing test, public helpers and planning contracts
+  are retained. Architecture docs now describe the actual application path.
 
 ## [0.4.0] - 2026-11-04
 

@@ -5,6 +5,33 @@ than guessed. The numbers are reproducible with `make complexity`; see
 [the report tool](../scripts/verify/complexity-report/README.md) for the
 definitions and flags.
 
+## Cleanup baseline: 0.4.1 preparation
+
+Measured after retiring the unwired implementation islands, with the same
+report tool and every existing test preserved:
+
+| Metric | Value |
+|---|---:|
+| Source files | 268 |
+| Source lines | 43,151 |
+| Functions | 1,662 |
+| Test lines | 38,723 |
+| Source files over the 400-line goal | 10 |
+
+Root `go list ./...` now lists 36 packages; 26 are application dependencies.
+The report also walks nested tooling modules, so its package grouping differs.
+This is source maintenance reduction, not a runtime speed claim. The highest
+complexity remains in the live TUI, stream parser and agent lifecycle code;
+those implementations and their tests were not refactored during cleanup.
+
+## Historical baseline: 0.3.42
+
+The tables below are a historical snapshot taken before the 0.3.42 release
+commit, not the current package inventory. The 0.4.1 cleanup retires the
+unwired session loop and related alternate buckets; those rows remain here
+only to explain the original maintenance decision. Use `make complexity` for
+current measurements and [architecture](architecture.md) for current paths.
+
 Snapshot taken at 0.3.42, before the release commit:
 
 | Metric | Value |
@@ -122,7 +149,7 @@ domains:
 
 Packages with no tests are not automatically a problem: `internal/session`
 is not on the live path, and `pkg/sandbox` may be a thin wrapper. The
-combination that matters is reachability plus low coverage. Today that is
+combination that matters is reachability plus low coverage. At that snapshot this was
 `builtin` (all process and network I/O), `internal/ui` (terminal input),
 and `pkg/git` (subprocess construction).
 
@@ -138,10 +165,9 @@ and `pkg/git` (subprocess construction).
    `read`/`write`/`edit`, and the truncation boundaries in `bash_exec`.
    These are cheap tests for behavior that is currently asserted only by
    comments.
-3. **Resolve `internal/session` one way or the other.** Either delete it
-   before the rewrite ships or add tests as it is wired in. A 6.3k-line
-   untested package that looks like the agent loop is the single largest
-   source of false confidence for a new contributor or agent.
+3. **Keep one live path.** The 0.4.1 cleanup retires the unwired
+   `internal/session` rewrite instead of presenting untested alternatives as
+   working capabilities. Future extensions need tests on the live app path.
 4. **Extract export redaction into one package.** The rule list now
    exists twice (`internal/core/state/session_export.go` and
    `internal/runtime/tools/builtin/export_redact.go`) and must be edited

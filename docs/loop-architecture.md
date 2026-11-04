@@ -1,162 +1,68 @@
-# Loop Architecture
+# Loop architecture
 
-The agent loop is decomposed into focused interfaces that can be implemented
-independently by "buckets" - domain-specific loop implementations. The
-standard agent control flow (`internal/agent/loop.go:queryLoop()`):
+The live agent loop is `internal/agent/loop.go`. App wiring constructs it in
+`cmd/agent-harness/agent_turn.go`; provider and tool integrations stay behind
+the existing runtime descriptors and callbacks.
 
-```
-while not done:
-    1. Call LLM with current message context
-    2. If text-only response -> done
-    3. If tool calls -> execute, add results, continue
-    4. If max turns exceeded -> error
-```
+## Control flow
 
-Max turns: 10 (configurable). Tool execution supports batching by
-concurrency safety.
+A turn calls the LLM with the current context, consumes streamed text/tool
+calls, executes accepted tools, adds results, and continues until completion,
+cancellation, a configured limit or an unrecoverable error. Recovery and
+continuation are bounded by the live configuration and state; consult the
+contracts next to the code rather than assuming a fixed number of turns.
 
-## Core Interfaces (`internal/loop/`)
+| Concern | Live location |
+|---|---|
+| Request loop and state | `internal/agent/loop.go` |
+| Stream consumption | `internal/agent/loop_stream.go` |
+| Failed-read recovery | `internal/agent/loop_recovery.go` |
+| Repetition guard | `internal/agent/loop_repetition.go` |
+| Context/token budget and compaction | `internal/agent/loop_compaction.go`, `prompt_tokens.go` |
+| Streaming executor lifecycle | `internal/agent/executor.go`, `executor_tools.go` |
+| Tool validation, permissions and execution | `internal/agent/executor_run.go` |
+| Durable tool outcomes | `internal/agent/tool_result_receipt.go` |
+| Tool descriptor/registry | `internal/runtime/tools/tool.go` |
+| Built-in assembly and MCP tools | `cmd/agent-harness/tools_init.go` |
+| Live approval policy | `cmd/agent-harness/tool_permissions.go`, `request_approval.go` |
+| Session compaction/persistence | `internal/core/state/session.go`, `session_persistence.go` |
 
-| Interface | Purpose | File |
-|-----------|---------|------|
-| `LoopBase` | Fundamental contract for all buckets | `base.go` |
-| `LoopConfig` | Unified configuration | `config.go` |
-| `LoopError` | Structured error handling | `error.go` |
-| `LoopResults` | Result aggregation | `results.go` |
-| `LoopSystemPrompts` | Prompt composition | `prompts.go` |
-| `LoopExecute` | Execution strategies | `execute.go` |
-| `LoopTool` | Tool management | `tool.go` |
+Concurrency-safe tools can run together; non-concurrent tools require exclusive
+execution. Results retain their call identity and outcome. The executor's
+lifecycle, ordering, cancellation and permission tests must keep passing when
+its queue or progress behavior changes.
 
-## Bucket Implementations (`internal/loop/buckets/`)
+## Extending the loop
 
-| Type | Constructor | Handles | Capabilities |
-|------|-------------|---------|--------------|
-| `FileSystemBucket` | `FileSystem(basePath)` | read, write, glob, edit | Concurrency-safe, destructive |
-| `ShellBucket` | `Shell(basePath)` | bash, execute_command | Serial, destructive |
-| `SearchBucket` | `Search(basePath)` | grep, search, find | Concurrency-safe, read-only |
-| `GitBucket` | `Git(basePath)` | git_status, git_diff, git_commit | Serial, destructive |
-| `PlanBucket` | `Plan()` | enter_plan_mode, exit_plan_mode | - |
-| `TranscriptBucket` | `Transcript()` | search_transcript | Read-only |
-| `UIBucket` | `UI(exportDir, notebookDir)` | ask, todo, export | Interactive |
-| `WebBucket` | `Web()` | webfetch, web_search | Network, read-only |
-| `CodeBucket` | `Code(basePath)` | lint, format, analyze | Read-only |
-| `TestBucket` | `Test(basePath)` | run_tests | Destructive |
-| `AgentBucket` | `Agent(basePath, client)` | spawn sub-agents | Recursive |
+Add behavior where the live application constructs or calls it. A new built-in
+uses the existing `tools.Tool` descriptor and assembly path, with validation,
+permission classification, execution and result mapping tested together.
+MCP adapters use the same tool pipeline; they are not a parallel approval path.
 
-## Defaults System (`internal/loop/buckets/defaults/`)
+Shared interfaces such as `ToolBase` and the agent core types remain available
+where already defined. Retaining an interface does not establish a runtime
+implementation or justify adding a second executor with different semantics.
+The Bucket suffix convention still applies to new domain implementations when
+appropriate; it is not a requirement to rebuild retired factory scaffolding.
 
-All hardcoded configuration centralized:
+## Retired modular rewrite
 
-```go
-// defaults/shell.go
-const ShellDefaultTimeout = 60 * time.Second
-var ShellBlockedCommands = []string{"rm -rf /", ":(){ :|:& };:"}
-```
+The alternate `internal/session/loop/` and `internal/session/contextmgr/`
+implementation was not wired into the application. The 0.4.1 cleanup removes
+it together with its private bucket/default/factory graph. Old documentation
+called this `internal/loop/`; that path is not a current entry point either.
+The design is available in the
+[v0.4.0 source](https://github.com/BA-CalderonMorales/agent-harness/tree/v0.4.0/internal/session).
 
-Buckets import and use - no magic numbers in implementations.
+The live `internal/agent/` loop, public helpers, parent tool/permission
+interfaces and every existing regression test remain. Future orchestration,
+background tasks and long-horizon capabilities need their own integration and
+behavior evidence; the retired types were not proof of those capabilities.
 
-## Creating an Orchestrator
+## Verification
 
-```go
-// Using factory presets
-orch := loop.CreateFromPreset(loop.PresetStandard, basePath, llmClient)
-orth := loop.CreateFromPreset(loop.PresetFast, basePath, llmClient)
-orth := loop.CreateFromPreset(loop.PresetSafe, basePath, llmClient)
-
-// Using factory with config
-factory := loop.NewFactory(basePath, llmClient).
-    WithConfig(loop.FastConfig())
-orth := factory.CreateStandard()
-
-// Using builder for custom setup
-orch := factory.NewBuilder().
-    WithFileSystem(func(fs *buckets.FileSystemBucket) {
-        fs.WithBlockedPaths("/etc", "/usr")
-    }).
-    WithShell(func(sh *buckets.ShellBucket) {
-        sh.WithTimeout(30).WithoutApproval()
-    }).
-    WithSearch().
-    Build()
-
-// Direct construction
-orch := loop.Orchestration(config, client,
-    buckets.FileSystem(basePath),
-    buckets.Shell(basePath),
-    buckets.Search(basePath),
-)
-```
-
-## Implementing a Custom Bucket
-
-```go
-type MyBucket struct{}
-
-func (b *MyBucket) Name() string { return "mybucket" }
-
-func (b *MyBucket) CanHandle(toolName string, input map[string]any) bool {
-    return toolName == "mytool"
-}
-
-func (b *MyBucket) Execute(ctx loop.ExecutionContext) loop.LoopResult {
-    return loop.LoopResult{Success: true, Data: "result"}
-}
-
-func (b *MyBucket) Capabilities() loop.BucketCapabilities {
-    return loop.BucketCapabilities{
-        Category: "custom",
-        ToolNames: []string{"mytool"},
-        IsConcurrencySafe: true,
-    }
-}
-
-// Compile-time check
-var _ loop.LoopBase = (*MyBucket)(nil)
-```
-
-Then register:
-
-```go
-orch.RegisterBucket(&MyBucket{})
-```
-
-## Naming Conventions
-
-### Go Restriction: No Type/Function Name Collision
-
-Go does not allow a type and function to share the same name in one package:
-
-```go
-type Orchestrator struct {}  // Type declaration
-func Orchestrator() {}       // ERROR: redeclared (same name)
-func NewOrchestrator() {}    // OK: different name
-```
-
-### Bucket Suffix Pattern
-
-To achieve readable constructors without `New*` prefixes, we use:
-
-- **Type name**: `<Domain>Bucket` (e.g., `FileSystemBucket`)
-- **Constructor**: `<Domain>()` (e.g., `FileSystem()`)
-
-```go
-// Type declaration
-type FileSystemBucket struct { ... }
-
-// Constructor - readable, no "New" prefix
-func FileSystem(basePath string) *FileSystemBucket {
-    return &FileSystemBucket{...}
-}
-
-// Usage
-fs := buckets.FileSystem("/path")
-```
-
-This pattern applies to all buckets:
-
-| Type | Constructor |
-|------|-------------|
-| `OrchestrationBucket` | `loop.Orchestration(...)` |
-| `FileSystemBucket` | `buckets.FileSystem(...)` |
-| `ShellBucket` | `buckets.Shell(...)` |
-| `SearchBucket` | `buckets.Search(...)` |
+Run `go test -race ./...`, build/vet/static analysis, script contract checks,
+and the real-terminal eval/security suite. Preserve tests for continuation,
+compaction and resume, failed tool outcomes, approvals and cancellation.
+Independent host checks establish objective eval outcomes; observation records
+alone do not prove task completion. See [evals](../evals/README.md).

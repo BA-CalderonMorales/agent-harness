@@ -12,8 +12,9 @@
   reason to keep writing.
 - `internal/agent/` is the core agent loop; `internal/interface/tui/` the
   terminal UI; `internal/runtime/{llm,tools}/` providers and tools;
-  `internal/core/{config,state,persona,audit}/` cross-cutting state;
-  `internal/loop/` the modular bucket rewrite (not yet the live path).
+  `internal/core/{config,state,persona,audit}/` cross-cutting state.
+  The dormant modular loop and alternate buckets were retired in the 0.4.1
+  cleanup; use Git history for those designs, not as a runtime entry point.
 - `pkg/` shared types, messages, git, bash, sandbox helpers.
 - `scripts/` local automation; `docs/` the reference reading for every
   section below.
@@ -137,8 +138,8 @@ improvising; this section records the invariants it rests on.
 - **SRP** - one concept per file; a domain's facade is its public face.
 - **OCP** - extend by adding a file or bucket, not by widening an existing
   one; defaults live in `defaults` files, never inline.
-- **ISP/DIP** - buckets implement `LoopBase`; orchestrators depend on
-  bucket faces, never internals (see `docs/loop-architecture.md`).
+- **ISP/DIP** - depend on the existing tool descriptors and domain interfaces;
+  extend the live path with contract tests (see `docs/loop-architecture.md`).
 - **DRY** - one authoritative home per piece of knowledge: one defaults
   store, one model per concept, tests mirror sources.
 - **KISS** - boring beats novel; delete before adding.
@@ -187,11 +188,11 @@ This project is indexed by GitNexus as **agent-harness** (6639 symbols, 24060 re
 
 | Task | Read this skill file |
 | --- | --- |
-| Understand architecture / "How does X work?" | `.claude/skills/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.claude/skills/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.claude/skills/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.claude/skills/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.claude/skills/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.claude/skills/gitnexus-cli/SKILL.md` |
+| Understand architecture / "How does X work?" | `.agents/skills/gitnexus/gitnexus-exploring/SKILL.md` |
+| Blast radius / "What breaks if I change X?" | `.agents/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
+| Trace bugs / "Why is X failing?" | `.agents/skills/gitnexus/gitnexus-debugging/SKILL.md` |
+| Rename / extract / split / refactor | `.agents/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
+| Tools, resources, schema reference | `.agents/skills/gitnexus/gitnexus-guide/SKILL.md` |
+| Index, status, clean, wiki CLI commands | `.agents/skills/gitnexus/gitnexus-cli/SKILL.md` |
 
 <!-- gitnexus:end -->
