@@ -35,12 +35,10 @@ func (m ChatModel) renderModeLine() string {
 	}
 
 	fields := []string{ModePromptStyle.Render(mode)}
-	for _, field := range []string{
+	fields = append(fields, []string{
 		ShortenModelName(m.model), connectionSummary(m.provider),
 		approvalModeLabel(m.agentMode), m.persona, effortChip(effort),
-	} {
-		fields = append(fields, field)
-	}
+	}...)
 	width := m.composerWidth()
 	if width <= 0 {
 		width = 80

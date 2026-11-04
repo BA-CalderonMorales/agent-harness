@@ -172,15 +172,6 @@ func applyEnvInt(value string, target *int) {
 	}
 }
 
-func applyEnvFloat(value string, target *float64) {
-	if value == "" {
-		return
-	}
-	if parsed, err := strconv.ParseFloat(value, 64); err == nil {
-		*target = parsed
-	}
-}
-
 func applyEnvBool(value string, target *bool, explicit *bool) {
 	if value == "" {
 		return

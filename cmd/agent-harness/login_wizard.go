@@ -35,13 +35,13 @@ func (app *App) wizardModels(provider, apiKey string) ([]tui.ModelItem, error) {
 	ids, err := client.ListModels()
 	if err != nil {
 		if provider == "lemonade" {
-			return nil, fmt.Errorf("Lemonade at %s is unavailable: %w", app.wizardEndpoint(provider), err)
+			return nil, fmt.Errorf("local Lemonade at %s is unavailable: %w", app.wizardEndpoint(provider), err)
 		}
 		return getModelsForProvider(provider, getDefaultModel(provider)), err
 	}
 	if len(ids) == 0 {
 		if provider == "lemonade" {
-			return nil, fmt.Errorf("Lemonade has no available models; pull a model, then refresh")
+			return nil, fmt.Errorf("local Lemonade has no available models; pull a model, then refresh")
 		}
 		return getModelsForProvider(provider, getDefaultModel(provider)), nil
 	}
