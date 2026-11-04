@@ -39,3 +39,38 @@ with no model verdict. Run the five cases on the host before promoting this
 starting evidence into a current-build baseline. No claim of general coding,
 current-information, cancellation, or child-process reliability follows from the
 single successful coding task.
+
+## Automated terminal development trials, 2026-11-04
+
+The release/0.4.0 working tree now supports unattended **real-TUI** runs with
+`python evals/run.py run --all --unattended`. The connection to local Lemonade
+was accessible for these trials. All inference used `qwen3.5-4b-FLM`; no hosted
+fallback was used. Runtime version and loaded context were not independently
+re-recorded. Runs used the eval profile and retain binary hashes in their
+batch summaries. These development trials span multiple dirty builds and
+driver corrections; they are not a controlled before/after benchmark.
+
+- A greeting completed without tools, with its actual reply retained.
+- A coding trial read both files, wrote only `names.py`, ran the four tests,
+  and passed independent verification. Earlier coding failures are also
+  retained; one success does not establish reliable coding capability.
+- Recovery trials exposed repeated ineffective changes and a deadline. An
+  earlier driver incorrectly rejected qualified unittest selections; that
+  policy issue was corrected rather than attributed to model ability.
+- A real Esc cancellation followed by `READY_TO_CONTINUE` completed. This is
+  evidence for that interaction, not restart or compaction acceptance.
+- An initial weather trial had a driver-created certificate-store failure.
+  The isolated runtime now includes the system certificate targets, with a
+  deterministic check that roots remain available. Earlier weather failures
+  must not be treated as clean model comparisons.
+
+The traces also exposed a product bug: nonzero Bash exits were delivered as
+successful tool results even when the output showed failing tests. Shell
+startup errors, nonzero exits and timeouts now carry `IsError`; a real-terminal
+scripted-provider check asserts the visible tool-error result.
+
+Actual replies, proposed tool inputs, results, approval decisions, raw terminal
+recordings and independent checks remain under ignored `evals/results/`.
+Every live report's human-review fields remain unreviewed. Review the output
+before assigning a task, honesty, or interaction verdict. These trials do not
+establish long-horizon reliability or parity with another coding agent.

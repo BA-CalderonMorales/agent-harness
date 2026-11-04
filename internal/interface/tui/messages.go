@@ -80,6 +80,9 @@ type ToolExecutingMsg struct {
 // ApprovalRequestMsg is sent when command approval is needed
 type ApprovalRequestMsg struct {
 	Request *approval.ApprovalRequest
+	// Input is the exact proposal this request authorizes. Observers must
+	// not infer it from the last tool-start event (calls can interleave).
+	Input map[string]any
 }
 
 // QuestionRequestMsg is sent when a tool asks the operator a question.

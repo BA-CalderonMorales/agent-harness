@@ -97,10 +97,27 @@ def select(names, run_all=False):
 
 
 def snapshot(workspace):
-    return {str(p.relative_to(workspace)): hashlib.sha256(p.read_bytes()).hexdigest()
-            for p in workspace.rglob("*") if p.is_file()
-            and ".git" not in p.relative_to(workspace).parts
-            and "__pycache__" not in p.relative_to(workspace).parts}
+    import stat
+    result, total = {}, 0
+    for path in workspace.rglob("*"):
+        if any(part in {".git", "__pycache__"} for part in path.relative_to(workspace).parts):
+            continue
+        if path.is_symlink():
+            raise ValueError("fixture snapshot refuses symlinks")
+        if path.is_dir():
+            continue
+        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0))
+        with os.fdopen(fd, "rb") as source:
+            info = os.fstat(source.fileno())
+            total += info.st_size
+            if (not stat.S_ISREG(info.st_mode) or info.st_size > 4 * 1024 * 1024
+                    or total > 16 * 1024 * 1024 or len(result) >= 128):
+                raise ValueError("fixture snapshot exceeds regular-file budget")
+            data = source.read(4 * 1024 * 1024 + 1)
+            if len(data) > 4 * 1024 * 1024:
+                raise ValueError("fixture file exceeds snapshot budget")
+            result[str(path.relative_to(workspace))] = hashlib.sha256(data).hexdigest()
+    return result
 
 
 def prepare(workspace, case):
@@ -111,7 +128,7 @@ def prepare(workspace, case):
     return snapshot(workspace)
 
 
-def verify(workspace, case, before):
+def verify(workspace, case, before, command_prefix=None):
     checks = {}
     test_run = None
     if case.get("fixture") == "names":
@@ -120,12 +137,19 @@ def verify(workspace, case, before):
         # Never execute a modified test suite as evidence of success.
         if pristine:
             try:
-                proc = subprocess.run([sys.executable, "-m", "unittest", "-v"],
+                command = ([*command_prefix, "/usr/bin/python3"] if command_prefix is not None
+                           else [sys.executable])
+                if command_prefix is not None:
+                    from capture import bounded_capture
+                    proc = bounded_capture([*command, "-m", "unittest", "-v"], cwd=workspace,
+                                           env=sanitized_env(), timeout=10)
+                else:
+                    proc = subprocess.run([*command, "-m", "unittest", "-v"],
                                       cwd=workspace, env=sanitized_env(),
                                       capture_output=True, text=True, timeout=10)
                 test_run = {"exit_code": proc.returncode, "output": proc.stdout + proc.stderr}
                 checks["independent_tests_pass"] = proc.returncode == 0
-            except subprocess.TimeoutExpired:
+            except (subprocess.TimeoutExpired, RuntimeError):
                 checks["independent_tests_pass"] = False
                 test_run = {"error": "verification timed out after 10 seconds"}
         else:
@@ -258,7 +282,7 @@ def run_case(name, case, model, batch_dir, binary, source, prepare_only):
         raise
     try:
         report["verification"] = verify(workspace, case, before)
-    except (OSError, UnicodeError) as error:
+    except (OSError, UnicodeError, ValueError) as error:
         report["verification"] = {"checks": {"verification_completed": False},
                                   "error": type(error).__name__}
     checks = report["verification"]["checks"]
@@ -437,18 +461,20 @@ def save_atomic(path, payload):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="python evals/run.py",
-        description="Interactive capability checks against the real Agent-Harness TUI.",
+        description="Capability checks against the real Agent-Harness TUI, with saved output for human review.",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=("cases: " + ", ".join(CASES) + "\n\nexamples:\n"
                 "  python evals/run.py list\n"
                 "  python evals/run.py run coding\n"
                 "  python evals/run.py run coding recovery\n"
                 "  python evals/run.py run --all\n"
+                "  python evals/run.py run --all --unattended\n"
                 "  python evals/run.py review evals/results/<batch>/<case>/report.json\n"
                 "  python evals/run.py coding          # same as: run coding\n\n"
                 "Each case gets a fresh fixture, settings, home and session directory.\n"
-                "You paste the prompt, approve the expected work, and quit the app.\n"
-                "--all only queues the cases; it does not automate the TUI or the model."))
+                "By default you paste the prompt, approve work, and quit the app.\n"
+                "--all alone only queues cases; it does not automate the TUI or model.\n"
+                "--unattended drives the TUI on Linux and saves actual output for review."))
     sub = parser.add_subparsers(dest="command", metavar="{list,run,review}")
     sub.add_parser("list", help="show cases and resolved prompts")
     review = sub.add_parser("review", help="record human feedback on a saved report")
@@ -459,6 +485,10 @@ def build_parser():
     run.add_argument("--model", default=DEFAULT_MODEL, help=f"model id (default: {DEFAULT_MODEL})")
     run.add_argument("--prepare-only", action="store_true",
                      help="write fixtures and prompts without inference or launching the app")
+    run.add_argument("--unattended", action="store_true",
+                     help="drive the real TUI in an isolated Linux terminal; save output for review")
+    run.add_argument("--timeout", type=int, default=240,
+                     help="unattended deadline per case in seconds (default: 240)")
     return parser
 
 
@@ -495,7 +525,13 @@ def main(argv=None):
     except ValueError as error:
         print(f"error: {error}\ncase names: {', '.join(CASES)}", file=sys.stderr)
         return 2
-    summary = run_batch(selection, args.model, args.prepare_only)
+    if args.timeout <= 0:
+        parser.error("--timeout must be positive")
+    if args.unattended:
+        from unattended import run_batch as run_unattended
+        summary = run_unattended(selection, args.model, args.prepare_only, args.timeout)
+    else:
+        summary = run_batch(selection, args.model, args.prepare_only)
     print_summary(summary)
     return exit_code(summary)
 

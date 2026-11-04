@@ -57,7 +57,7 @@ func (app *App) requestCommandApproval(toolName, command string, toolInput map[s
 		Timestamp:     time.Now(),
 	}, approvalTurnContext(app))
 
-	app.tuiApp.Send(tui.ApprovalRequestMsg{Request: req})
+	app.tuiApp.Send(tui.ApprovalRequestMsg{Request: req, Input: toolInput})
 
 	select {
 	case decision := <-req.Response:

@@ -5,6 +5,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strconv"
 	"strings"
@@ -446,10 +447,31 @@ type StatusMsg struct {
 
 // Run starts the TUI application and returns when it exits.
 func Run(app *App) error {
+	path, pipe := os.Getenv("AGENT_HARNESS_EVENT_LOG"), os.Getenv("AGENT_HARNESS_EVENT_PIPE")
+	if path != "" && pipe != "" {
+		return fmt.Errorf("choose an event log or pipe, not both")
+	}
+	var log *eventLog
+	var err error
+	if pipe != "" {
+		log, err = openEventPipe(pipe)
+	} else {
+		log, err = openEventLog(path)
+	}
+	if err != nil {
+		return err
+	}
+	options := []tea.ProgramOption{tea.WithAltScreen(), tea.WithMouseCellMotion(),
+		tea.WithInput(newOSCStrippingReader(os.Stdin))}
+	if log != nil {
+		defer log.file.Close()
+		options = append(options, tea.WithFilter(log.filter))
+	}
 	// Use AltScreen for proper TUI experience (like lumina-bot)
-	p := tea.NewProgram(app, tea.WithAltScreen(),
-		tea.WithMouseCellMotion(),
-		tea.WithInput(newOSCStrippingReader(os.Stdin)))
-	_, err := p.Run()
+	p := tea.NewProgram(app, options...)
+	_, err = p.Run()
+	if log != nil && log.err != nil {
+		return log.err
+	}
 	return err
 }

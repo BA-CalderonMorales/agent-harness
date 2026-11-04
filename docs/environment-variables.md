@@ -29,6 +29,10 @@ override every config file layer.
   above the composer; `loop_track: true` in settings does the same. Off by
   default — the live turn phase rides on the Agent header
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
+- `AGENT_HARNESS_EVENT_LOG`: opt-in JSONL observation log for real TUI
+  journeys. Requires a new destination; creates it with mode 0600. Includes
+  conversation/tool text. Used by `evals/run.py run --unattended`; see
+  `evals/README.md`. No `AH_*` alias for this observation-only setting
 
 Advanced settings (e.g. `AGENT_HARNESS_CONFIG_HOME`) are read by
 `internal/core/config/`. The config home holds `settings.json`, the

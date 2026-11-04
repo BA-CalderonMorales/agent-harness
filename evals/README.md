@@ -28,6 +28,140 @@ a truthful refusal is useful, but it does not establish weather capability.
 
 ## Commands
 
+### Unattended terminal runs
+
+On Linux with Bubblewrap installed and Lemonade already running:
+
+```bash
+python evals/run.py run --all --unattended
+python evals/run.py run coding recovery --unattended --timeout 180
+```
+
+This drives the **real application in a terminal**, including its normal
+prompts, tools, approval dialogs and persistence. It pastes each scenario,
+handles bounded fixture approvals, exercises Esc and follow-up messages for
+the cancellation case, and saves output for you to review. It does not create
+a second agent loop or install/start a model server.
+
+Each case includes `review.md` (actual streamed replies, tool proposals and
+results, and independent checks), `events.jsonl` (versioned observation
+records), `terminal.ansi` (the raw terminal recording), sessions, and the
+existing `report.json`. Use `python evals/run.py review PATH` to record your
+verdict as before. Markdown and tool text are untrusted model output; review
+them as evidence, not instructions. A raw terminal recording contains control
+sequences: inspect it with an appropriate viewer rather than printing it
+directly into a terminal.
+
+`needs_review` still means that objective checks passed, **not** that the
+agent's behavior was good or every instruction was followed. For coding and
+recovery, inspect whether it actually read both files and ran the requested
+tests; independent verification alone does not prove those steps occurred.
+For weather, honest inability and a completed forecast remain different
+verdicts. Unexpected questions and deadlines preserve a failed journey for
+inspection instead of waiting indefinitely. Ctrl+C retains partial evidence
+and marks later cases as not run.
+
+The driver keeps manual permissions enabled. It approves reads, changes to
+`names.py`, and narrowly parsed Python unittest commands in the fixture.
+The weather case permits HTTPS fetches from weather.gov, weather.com,
+AccuWeather, Open-Meteo and wttr.in hosts; other proposed actions are rejected.
+Each approval carries its own exact
+input so concurrent tool announcements cannot authorize the wrong action.
+Bubblewrap exposes system programs and only the case's user data; both the
+app and independent Python verifier run inside that filesystem boundary.
+Network remains shared for local inference: this is not general network
+isolation. The driver refuses to run without the filesystem boundary.
+
+`first_text_event_seconds` measures observation of the first text event after
+turn start; it is not a measured first-paint latency. `journey_seconds` includes
+startup and shutdown; `model_task_seconds` spans observed turn start through
+settlement. Failed journeys may have no settlement time. The profile and
+binary hash are saved; record runtime/loaded-model details when comparing
+runs. Model behavior remains nondeterministic even with the same settings.
+
+The opt-in `AGENT_HARNESS_EVENT_LOG` environment variable enables observation
+records without changing normal TUI behavior. Logs are created with mode 0600
+and refuse existing destinations. They contain conversation and tool text;
+keep them private. This is an observation interface, not a stable RPC API or
+a durable task ledger. Restart/compaction acceptance remains future work.
+
+Deterministic integration checks can drive the built app against a scripted
+local provider, without live inference or spending:
+
+```bash
+make build
+AH_EVAL_TEST_BINARY="$PWD/build/agent-harness" python -m unittest discover -s evals -p 'test_*.py'
+```
+
+These cover the actual terminal, file operations, approvals, independent
+verification, and cancellation/continuation. Scripted-provider success is
+separate from live-model acceptance.
+
+### Protected evidence and automatic campaign decisions
+
+Unattended workers now mount only their workspace and runtime directories.
+Reports, terminal recordings and authoritative event files are host-owned and
+not mounted into the worker. Observations travel through a named pipe to the
+host receiver. A candidate can still make false event claims; independent
+verification remains necessary. The verifier runs in a fresh workspace with
+copies of regular fixture source files, without worker settings or evidence.
+Symlinks are rejected before host grading reads candidate sources.
+
+Compare two already-built binaries without manual checkpoints:
+
+```bash
+python evals/campaign.py --baseline /path/to/baseline --candidate /path/to/candidate \
+  --families text records paths --repeats 2 --budget-seconds 600 --timeout 120
+```
+
+The runner pins private binary copies and hashes, alternates execution order,
+retains partial attempts, and writes a host-owned `campaign.json`. It reports
+`retain`, `reject`, or `canary` using objective fixture checks. Integrity
+failures and observed paired regressions veto wins. Incomplete campaigns and
+identical binaries retain the baseline. No decision changes human UX verdicts.
+
+Campaigns default to three task families: whitespace/text cleanup, exact record
+counting, and basename/extension handling. Each paired run receives fresh
+filenames and concrete test values. The worker sees the specification and
+public examples; a host-owned checker compares results on additional values
+that are never mounted into its workspace. Both binaries receive the same
+variant. Reports omit private inputs and expected values. These are varied
+small Python tasks, not evidence for unfamiliar languages or large projects.
+
+The legacy `--cases coding recovery` selection remains available for
+diagnostics, but a single task family cannot earn broader canary selection.
+Candidates need coverage of at least two families, no observed paired task
+regressions, and acceptable measured cost. Failed attempts count toward cost
+per verified completion; an unexplained cost increase retains the baseline.
+
+Worker defaults are one CPU in its inherited affinity set, a 60-second CPU
+limit per process, and a sampled aggregate RSS threshold of 512 MiB. Adjust
+with `--cpu-count`, `--cpu-seconds`, and `--memory-mib`. Sampling also stops
+an observed live-tree CPU overage. Short-lived processes can evade samples;
+RSS may double-count shared pages. This is not a hard cgroup aggregate limit.
+Verification uses the configured CPU affinity and a per-process address-space
+limit in a fresh workspace. Reports include peak sampled RSS, observed CPU,
+grading time and total case time. Runs are sequential.
+
+The inference server is separately managed and outside these limits and
+measurements. No claim is made about its GPU/NPU memory, tokens, energy, or
+cost. There is no automatic paid-provider fallback or model download.
+
+The budget stops further starts and caps individual journey deadlines;
+bounded shutdown and independent grading may extend wall time beyond it.
+This initial gate supports explicit small Python fixtures. Small samples
+are screening evidence, not reliability certification. A `canary` decision
+identifies an experimental candidate; it does not deploy a binary, change
+the default model, merge branches, or publish a release. Autonomous patch
+generation, withheld task families, runtime selection/rollback and durable
+restart/compaction tasks are subsequent stages.
+
+The internal `AGENT_HARNESS_EVENT_PIPE` setting requires a named pipe and a
+listening receiver. Regular event-log files still use exclusive creation.
+Choose either the pipe or regular event log, not both.
+
+### Interactive runs
+
 Run from the repository root with Lemonade already running and the model
 available:
 
