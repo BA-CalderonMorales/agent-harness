@@ -80,7 +80,7 @@ binary hash are saved; record runtime/loaded-model details when comparing
 runs. Model behavior remains nondeterministic even with the same settings.
 
 The opt-in `AGENT_HARNESS_EVENT_LOG` environment variable enables observation
-records without changing normal TUI behavior. Logs are created with mode 0600
+records without changing normal TUI behavior. Logs are created with mode 0600 on Unix (Windows uses directory ACLs)
 and refuse existing destinations. They contain conversation and tool text;
 keep them private. This is an observation interface, not a stable RPC API or
 a durable task ledger. Restart/compaction acceptance remains future work.

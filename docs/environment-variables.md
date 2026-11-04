@@ -30,7 +30,7 @@ override every config file layer.
   default — the live turn phase rides on the Agent header
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 - `AGENT_HARNESS_EVENT_LOG`: opt-in JSONL observation log for real TUI
-  journeys. Requires a new destination; creates it with mode 0600. Includes
+  journeys. Requires a new destination; creates it with mode 0600 on Unix (Windows uses directory ACLs). Includes
   conversation/tool text. Used by `evals/run.py run --unattended`; see
   `evals/README.md`. No `AH_*` alias for this observation-only setting
 

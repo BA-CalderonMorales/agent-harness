@@ -49,7 +49,10 @@ func assertViewPanicFrame(t *testing.T) {
 			t.Fatalf("failure frame missing %q:\n%s", want, text)
 		}
 	}
-	if !strings.Contains(text, diag.Dir()) {
+	// Long Windows temp paths wrap at the frame width. Compare visible
+	// characters across wrapping, rather than requiring a single line.
+	compact := strings.Join(strings.Fields(text), "")
+	if !strings.Contains(compact, strings.Join(strings.Fields(diag.Dir()), "")) {
 		t.Fatalf("failure frame does not point at the log directory %q:\n%s", diag.Dir(), text)
 	}
 }

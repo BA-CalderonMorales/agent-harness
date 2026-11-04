@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/approval"
@@ -39,7 +40,7 @@ func TestEventLogObservesWithoutReplacingMessages(t *testing.T) {
 		}
 	}
 	info, _ := f.Stat()
-	if info.Mode().Perm() != 0600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0600 {
 		t.Fatalf("permissions: %v", info.Mode())
 	}
 	if _, err := openEventLog(path); err == nil {
