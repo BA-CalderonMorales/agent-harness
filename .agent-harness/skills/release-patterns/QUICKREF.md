@@ -71,6 +71,6 @@ follow the traps section of the runbook.
 | Branch naming gate | `scripts/check-branch-name.sh` |
 | Prune merged branches | `scripts/prune-branches.sh --dry-run` first |
 
-`scripts/release.sh` and `scripts/release/publish.sh` are superseded. They push
-straight to `develop` and `main`, bypassing the release branch, its naming
-gate, PR review and CI. Do not run them.
+The old direct-push release scripts and version-bump workflow were removed
+in the 0.4.1 cleanup. Use the two-PR ship sequence; keep the pure calculator
+at `scripts/release/bump-version.sh` for remote version checks.

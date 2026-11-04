@@ -2,6 +2,28 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-04
+
+### Fixed
+
+- Branch-pruning previews now display branch names, exclude symbolic and other
+  remote references, and retain valid merged branches containing `HEAD` as
+  candidates. Regression checks exercise dry-run and real pruning in isolated
+  local repositories while preserving protected and unmerged branches.
+
+### Changed
+
+- Generated evidence is now local ignored output with a tracked retention
+  policy. Historical observations and an old recording leave source checkouts;
+  the README demo, regression tests and independent evaluation receipts remain.
+- Removed obsolete direct-push release scripts and the version-bump workflow.
+  The protected two-PR runbook and pure remote-version calculator remain.
+- Docker build context excludes local evidence, evaluation runs and caches.
+- Retired the unwired modular session loop, alternate executor/filesystem/
+  permission buckets, and unused environment/task/service scaffolding. Live
+  implementations, every existing test, public helpers and planning contracts
+  are retained. Architecture docs now describe the actual application path.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

@@ -30,8 +30,8 @@ export GOGC ?= 100
 MEMGUARD_MB ?= 8192
 MAIN_PKG := ./cmd/agent-harness
 
-# VERSION comes from the Version constant in main.go — the same line
-# bump-version.yml rewrites — so a build always reports the release line
+# VERSION comes from the Version constant in main.go — the release bump commit
+# updates this line — so a build always reports the release line
 # it belongs to. git describe cannot do this job: tags live on main, so
 # develop and release/* builds describe against an older tag and lie
 # about what is running.

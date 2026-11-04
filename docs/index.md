@@ -22,7 +22,7 @@ surface in one take.
 |---|---|
 | [Architecture](architecture.md) | Why the harness is shaped this way |
 | [Conversation flow](conversation_flow.md) | How a turn moves through the app |
-| [Loop architecture](loop-architecture.md) | The agent loop, buckets, naming pattern |
+| [Loop architecture](loop-architecture.md) | The live agent loop, execution boundaries and retired rewrite |
 | [Loop ledger](loop.md) | The validated-experiment ledger behind the features |
 | [Command approval](command-approval.md) | How commands get approved, permissions stacking |
 | [OpenShell](openshell.md) | Optional kernel-enforced sandbox runtime and policy examples |
@@ -32,7 +32,7 @@ surface in one take.
 | [The journey](journey.md) | The 0.4.0 spec: loop track, human-in-the-loop, sketch, plane |
 | [Desktop interaction](desktop-interaction.md) | Reference behaviors, recovery contracts, and model comparisons |
 | [Sub-agents](subagents.md) | Definition files, named delegation, tool and model bounds |
-| [Services and features](services-features.md) | The runtime services surface |
+| [Services and features](services-features.md) | Current integrations and future capability boundaries |
 
 ## Operating it
 

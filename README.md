@@ -108,8 +108,8 @@ agent-harness --version
 
 ## Layout
 
-The repository is a few small planes, and every Go domain is bucketed the same
-way — once you can read one, you can read them all.
+The repository separates the live agent loop, application wiring, runtime
+services and terminal interface.
 
 ```text
 cmd/agent-harness/           # the app: boot, command wiring, TUI delegates
@@ -119,7 +119,7 @@ internal/
 │   ├── audit/               # tool-activity ledger
 │   ├── config/              # layered YAML + env + user settings
 │   ├── persona/             # behavior modes
-│   ├── planning/            # task planning
+│   ├── planning/            # tested workflow utility; not wired into the app
 │   └── state/               # session model and persistence
 ├── interface/               # the public surfaces
 │   ├── approval/            # command approval system
@@ -129,8 +129,7 @@ internal/
 │   ├── llm/                 # OpenAI-compatible client, SSE, probing
 │   ├── permissions/         # permission stacking
 │   ├── services/            # provider services
-│   └── tools/               # tool registry and buckets
-├── session/                 # session ledger + the modular loop buckets
+│   └── tools/               # tool descriptors, registry and built-ins
 └── ui/                      # line editor, stream rendering, screens
 pkg/                         # shared types, messages, git, bash, sandbox
 ```
