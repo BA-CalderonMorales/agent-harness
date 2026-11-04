@@ -1,5 +1,6 @@
 """Exercise approval boundaries and OS isolation, without inference."""
 from pathlib import Path
+import os
 import subprocess
 import tempfile
 import unittest
@@ -69,7 +70,8 @@ class ApprovalTests(unittest.TestCase):
         case = self.workspace / "cert-case"
         (case / "workspace").mkdir(parents=True)
         result = subprocess.run(sandbox(case, ["/usr/bin/python", "-c",
-                                "import ssl; assert ssl.create_default_context().get_ca_certs()"]),
+                                "import ssl; assert ssl.create_default_context().get_ca_certs(), ssl.get_default_verify_paths()"]),
+                                env={**os.environ, "SSL_CERT_FILE": "/unmounted/cert.pem"},
                                 capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr.decode())
 

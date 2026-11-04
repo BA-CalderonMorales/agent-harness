@@ -48,6 +48,12 @@ def sandbox(case_dir, command, network=True):
     for path in ("/etc/ssl", "/etc/ca-certificates", "/etc/pki"):
         if Path(path).exists():
             args += ["--ro-bind", path, path]
+    # Python/OpenSSL builds may default to an unmounted /usr/local/ssl path.
+    # Pin a known mounted system bundle rather than inheriting host overrides.
+    for bundle in ("/etc/ssl/certs/ca-certificates.crt", "/etc/pki/tls/certs/ca-bundle.crt", "/etc/ssl/cert.pem"):
+        if Path(bundle).is_file():
+            args += ["--setenv", "SSL_CERT_FILE", bundle]
+            break
     # Mount only mutable application data, never host-owned reports or graders.
     for name in ("workspace", "home", "config", "data", "sessions"):
         path = case_dir / name

@@ -194,8 +194,11 @@ class EvalCliTests(unittest.TestCase):
         self.assertIn(dt.date.today().isoformat(), report["scenario"]["prompt"])
         self.assertNotIn("{today}", report["scenario"]["prompt"])
 
-        code, _, _ = self.invoke(infra, "run", "coding", "--prepare-only")
-        workspace = self.batch_dir(infra) / "coding" / "workspace"
+        # A second batch shares the results root; directory iteration order
+        # is filesystem-dependent and must not choose the earlier weather run.
+        code, out, _ = self.invoke(infra, "run", "coding", "--prepare-only")
+        batch = next(line.removeprefix("Batch: ") for line in out.splitlines() if line.startswith("Batch: "))
+        workspace = Path(batch) / "coding" / "workspace"
         self.assertTrue((workspace / "names.py").exists())
         self.assertTrue((workspace / "test_names.py").exists())
         self.assertEqual(code, 0)
