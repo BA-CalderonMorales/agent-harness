@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-11-04
+
 ### Fixed
 
 - Branch-pruning previews now display branch names, exclude symbolic and other
