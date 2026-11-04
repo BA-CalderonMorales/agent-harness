@@ -40,5 +40,5 @@ fi
 echo "[!] ERROR: version mismatch" >&2
 echo "    expected (branch/tag): $EXPECTED" >&2
 echo "    main.go Version:       $CODE_VERSION" >&2
-echo "    Bump the version before releasing (scripts/release/bump-version.sh)." >&2
+echo "    Update main.go and the changelog on release/X.Y.Z; follow .agent-harness/skills/release-workflow/SKILL.md." >&2
 exit 1

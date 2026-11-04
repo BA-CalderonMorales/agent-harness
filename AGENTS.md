@@ -77,10 +77,9 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 - `release.yml` runs on a tag push and builds and publishes the release
   artifacts; it refuses to build unless the tag equals `main.go`'s version,
   which is what `scripts/check-version-matches.sh` exists to catch early.
-- `bump-version.yml` exists but is superseded and must not be dispatched: it
-  commits a version bump to whatever ref it is run from and pushes a
-  lightweight tag, with no PR, review or CI gate on that commit. See the traps
-  in `.agent-harness/skills/release-workflow/SKILL.md`.
+- Version bumps belong in a dedicated commit on `release/X.Y.Z`, with the
+  changelog. The old direct-push bump workflow and publish scripts were
+  removed; use the two-PR release-workflow skill below.
 - Docs-only changes skip CI automatically where configured; trigger
   `workflow_dispatch` when needed.
 

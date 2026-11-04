@@ -50,3 +50,7 @@ scripts/demo/__pycache__/
 /node_modules/
 package.json
 package-lock.json
+
+# Generated recordings and run evidence; keep only the retention policy.
+/evidence/*
+!/evidence/README.md

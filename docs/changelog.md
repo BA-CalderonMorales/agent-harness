@@ -2,6 +2,15 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Generated evidence is now local ignored output with a tracked retention
+  policy. Historical observations and an old recording leave source checkouts;
+  the README demo, regression tests and independent evaluation receipts remain.
+- Removed obsolete direct-push release scripts and the version-bump workflow.
+  The protected two-PR runbook and pure remote-version calculator remain.
+- Docker build context excludes local evidence, evaluation runs and caches.
+
 ## [0.4.0] - 2026-11-04
 
 ### Added

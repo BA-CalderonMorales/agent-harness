@@ -55,3 +55,14 @@ The tape is plain text; copy `scripts/demo/tui.tape` and adjust:
   every prior run (the live boot wrapper wipes its scratch store for you).
 - The demo uses the real binary, so keep the chat welcome path-free: the git
   root renders as its basename by design (see `cmd/agent-harness/project.go`).
+
+## Local evidence retention
+
+The tracked `evidence/README.md` keeps the recording output directory available
+on a fresh clone. Generated evidence is ignored and excluded from Docker
+build context. Keep useful recording recipes in source, and attach sanitized
+recordings to a dated release or CI artifact when sharing them. Historical
+recordings remain in Git history; observer notes are not current test proof.
+
+The task evaluation runner uses its own ignored `evals/results/` directory.
+Keep its independent graders and host-owned receipts intact.
