@@ -16,7 +16,7 @@ func TestLoginDialogStoredKeysPerProvider(t *testing.T) {
 	// No stored keys: picking a hosted provider (openai) lands on the
 	// key step, and an empty submit is rejected.
 	d.Open(80, 24, NewStoredCredentials(nil, ""))
-	d.Update(tea.KeyMsg{Type: tea.KeyDown}) // local -> openai
+	d.providerIdx = loginProviderIndex("openai")
 	done, cancelled, _, apiKey, _ := d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	if done || cancelled || apiKey != "" {
 		t.Fatalf("no-key empty submit: done=%v cancelled=%v apiKey=%q, want the key step", done, cancelled, apiKey)
@@ -26,9 +26,7 @@ func TestLoginDialogStoredKeysPerProvider(t *testing.T) {
 	// completes with the stored key.
 	d = NewLoginDialog()
 	d.Open(80, 24, NewStoredCredentials(map[string]string{"openrouter": "sk-or-real"}, "sk-or-real"))
-	for i := 0; i < 3; i++ { // local -> openai -> anthropic -> openrouter
-		d.Update(tea.KeyMsg{Type: tea.KeyDown})
-	}
+	d.providerIdx = loginProviderIndex("openrouter")
 	d.Update(tea.KeyMsg{Type: tea.KeyEnter})
 	done, cancelled, _, apiKey, _ = d.Update(tea.KeyMsg{Type: tea.KeyEnter}) // complete
 	if !done || cancelled {

@@ -1,5 +1,183 @@
 # Changelog
 
+## [Unreleased]
+
+## [0.4.0] - 2026-11-04
+
+### Added
+
+- Resource-aware terminal campaigns with configurable CPU affinity, CPU
+  limits, sampled process-tree memory thresholds, and per-case resource
+  records. The separately running model server remains outside those limits.
+- Varied text, record-counting and path-handling tasks with fresh filenames
+  and host-owned private checks. Automatic canary screening requires multiple
+  task families, preserved prior outcomes, and acceptable measured cost.
+
+- Unattended Linux terminal journeys for the existing everyday evals. The
+  helper operates the real TUI, handles bounded fixture approvals, exercises
+  cancellation and follow-up, and saves actual output, tool evidence, and
+  independent checks for the existing human review workflow. Application and
+  verification subprocesses run inside a Bubblewrap filesystem boundary.
+- Opt-in private TUI event logs for terminal journey observation. Approval
+  records carry the exact proposed input rather than inferring it from a
+  preceding tool announcement.
+
+- A small `evals/` pack for five everyday scenarios, isolated fixtures,
+  independent file/test checks, saved session evidence, and explicit human review.
+  Its helper now supports `list`, `run <case...>`, and `run --all`: selections
+  are validated first, the app builds once per batch, each case gets isolated
+  state, and blocked, failed, interrupted, and review-needed results stay
+  distinct in one batch summary. The earlier single-case form still works.
+
+- Lemonade as a local connection in `/login`, with live model discovery,
+  remembered selection, refresh/back actions, and unavailable-server guidance.
+  Local runtimes and hosted inference services are grouped separately.
+
+### Fixed
+
+- Unattended verification bounds subprocess output and workspace snapshots,
+  rejects special files, validates observation records, and disables verifier
+  network access. Linux terminal and security regressions now run in CI.
+- MCP lifecycle tests retain race detection without the test peer's artificial
+  exit delay colliding with the transport shutdown deadline.
+- Optional GitNexus development dependencies clear high and critical audit
+  findings; three moderate findings remain documented pending upstream fixes.
+
+- Failed shell commands, startup errors and timeouts now carry a tool-error
+  result. Their output already included the exit status, but the tool row and
+  model-visible error flag previously reported success even when tests failed.
+- The local/hosted round-trip contract test uses a distinct in-memory hosted
+  endpoint so another test's cached model catalog cannot change its result.
+
+- The Go toolchain moves to 1.26.10 in the module, CI, release, Windows,
+  and Docker declarations, and `x/net` moves to v0.62.0. `govulncheck`
+  reported GO-2026-6809 (crypto/x509 intermediate-certificate handling)
+  as reachable on the 1.26.9 line; the 1.26.10 scan reports zero reachable
+  vulnerabilities, and the two newer `x/net` advisories are cleared as
+  well.
+- The live tool-start row and status flashes now strip terminal control
+  sequences. A model-authored tool argument could paint an OSC 52 or
+  cursor sequence into the pane before the tool completed, and a status
+  flash carrying a typed value could do the same.
+- The new eval helper removes host provider and cloud credentials from
+  the app it launches and from the independent test subprocess. A case
+  needs the local Lemonade endpoint, not an inherited hosted key.
+- OpenRouter reasoning models now stream their thinking into the wait
+  state. The SSE reader understood only `reasoning_content`; OpenRouter
+  sends `reasoning`, so a free model's 45-second thinking phase looked
+  dead and the answer appeared all at once. Effort is sent as
+  `reasoning.effort`, the field OpenRouter documents, instead of the
+  silently dropped `reasoning_effort`.
+- Free `:free` models no longer accrue a fabricated cost in the footer.
+  Unknown model ids fell through to Claude Sonnet rates, so the first
+  Nemotron free turn displayed `$0.04`.
+- Hosted turns retry a bounded 502/503/504, and a 429 that carries a
+  short `Retry-After` (capped at 3s). A 429 without a retry window is a
+  free-tier cap, not a momentary spike, so it surfaces immediately
+  instead of spending more requests against the same limit. Local
+  providers still fail fast.
+- Provider errors keep OpenRouter's metadata and `X-RateLimit-*`
+  headers. "Rate limit exceeded" alone could not distinguish a
+  free-model daily cap, an upstream provider at capacity, and a credit
+  rejection; the pane now shows `type=`, `provider=`, `remaining=`, and
+  `reset=`, and a 402 is labeled as credits/budget instead of a rate
+  limit. The Logs tab keeps the full sentence.
+- A mid-stream rate limit (`error` object plus `finish_reason: error`)
+  now fails the turn with the provider's reason. It previously looked
+  like a normal, empty response.
+- Live reasoning is forwarded as a bounded tail (4 KB), so a long hosted
+  thinking phase no longer copies an ever-growing string on every delta.
+- Boot-time model validation uses the bounded discovery client, so a
+  quiet endpoint cannot freeze startup behind the multi-minute inference
+  timeout.
+- `temperature: 0` now reaches the provider. Zero is a legal deterministic
+  setting, but the request builder only sent positive values, so choosing it
+  silently fell back to the provider default (often 1.0) and made free-model
+  prose unstable. Settings marks a live change explicit immediately.
+- Hosted model context windows are discovered from the provider's own
+  `/models` response at login, model switch, and boot. A 1M-window OpenRouter
+  model no longer inherits the local 8k default, and the discovered value is
+  persisted so the next boot stays honest.
+- Context accounting includes the system prompt and tool schemas. A live
+  OpenRouter turn previously read "2k / 8k" while the provider counted
+  ~10k prompt tokens; compaction and the footer now budget the fixed prompt.
+  Reply budgets shrink to the remaining window on small local models.
+- Esc now backs out of a delete confirmation, a settings editor, or a logs
+  detail before it can stop a running turn. A local layer owns the key it
+  opened; stopping the agent is never a side effect of backing out.
+- Cancelling a turn with Esc no longer also prints a red
+  `[!] Error: context canceled` with model-switch advice. The cancellation
+  notice is the only outcome, and late provider events stay ignored.
+- A render panic now paints a visible failure frame with the diagnostics
+  path and the redraw/quit keys instead of returning an empty screen.
+
+- The live turn spinner and clock now ride on the Agent header, where the
+  response bubble appears, and the header materializes the moment the turn
+  starts. The chrome band above the composer carries only the
+  Ask/Plan/Review/Try track, so the loading animation is no longer parked
+  after the track.
+- Collapsed tool runs render one compact row per call. The blank spacer
+  between calls doubled the height of a burst, so a 15-call run pushed the
+  answer off screen.
+- Permission preset changes now refresh the visible Settings switches from
+  runtime state. Disabled Bash feedback identifies Allow Execute and its
+  approval path instead of implying a system restriction.
+- Unimplemented web search is no longer advertised to the model. Stale calls
+  return an explicit unavailable error instead of successful placeholder results.
+
+- Letters filter the model picker; arrows or Ctrl+N/P navigate and Esc
+  closes it. Searching Qwen, Gemma, and other names no longer invokes
+  conflicting letter shortcuts. Pending tool rows no longer display success marks.
+  Cancellation settles the actual tool row and ignores late error messages.
+
+- File writes now reject missing, null, or non-string `content` instead of
+  implicitly truncating the destination. Edits reject missing or wrongly
+  typed `new_string`. Both validation and execution enforce the check;
+  explicit empty strings still support intentional empty files/deletions.
+- Directory-listing failures now propagate as tool errors, with guidance
+  about literal paths and shell syntax. Directory rows use List Files
+  rather than Shell.
+- An identical failed read-only call gets one correction opportunity
+  without re-executing the duplicate. Persistent repetition still stops,
+  with rejected tool results recorded so the conversation can continue.
+  Agent work-limit feedback no longer suggests a provider/model switch.
+
+### Changed
+
+- The composer names local and hosted connections, explains approval modes,
+  and shows send/newline hints when space permits. Esc-to-stop stays visible
+  during a turn, including when the composer is unfocused. Tool summaries
+  fit narrow panes and keep multiline commands on one row; expanded records
+  retain the original input. Connection dialogs use consistent labels.
+
+- The tab bar and composer close with full-width accent rules, and the
+  status footer sits in the same inset text column with no rule above it.
+  Top and bottom chrome now read as desktop bands instead of floating bars
+  with gaps at the frame edges.
+
+- Assistant prose now renders as it streams instead of appearing only when
+  the turn settles. The live turn line names the current phase (Thinking,
+  Writing, Running <tool>, Waiting for approval) beside the existing beat
+  track, the answer carries a writing caret, and the composer shows
+  Esc-to-stop while a turn runs. Tool calls announce at their position in
+  the stream, so prose and calls interleave correctly.
+
+- Standalone greetings use a small model request without coding prompts,
+  skill bodies, or tool schemas. Work requests retain the full coding path.
+  Request-size and first-text timing diagnostics support latency comparisons.
+- Skill bodies are budgeted to one fifth of the model's context window.
+  When all bodies fit they ship verbatim; otherwise the prompt carries each
+  skill's name, summary, and SKILL.md path, and the agent reads the body on
+  demand. The four project skills previously added ~25k characters to every
+  request, which dominated small local windows.
+- The optional Lemonade launcher now defaults to the tested Qwen3.5-4B model.
+
+- From 0.4.0, native Termux builds are best-effort and no longer a release
+  gate. Installations below the selected release's Go requirement are
+  unsupported. The Android goal is a dedicated app, currently planned
+  with no APK or committed date. Installation docs, contributor guidance,
+  and historical portability notes now distinguish these paths.
+
 ## [0.3.42] - 2026-10-24
 
 ### Added

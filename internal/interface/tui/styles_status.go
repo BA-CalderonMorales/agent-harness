@@ -17,8 +17,10 @@ var (
 )
 
 func applyStatusStyles() {
-	// Flush left/right (no interior padding) so the footer's text edges
-	// align exactly with the composer block above it.
+	// The footer is the quiet tail of the bottom band: the composer's
+	// full-width rule already marks where the content ends, so the
+	// footer carries no rule of its own. The horizontal inset is applied
+	// at render time so it matches the composer.
 	StatusBarStyle = lipgloss.NewStyle().
 		Foreground(ColorTextDim).
 		Padding(0, 0)

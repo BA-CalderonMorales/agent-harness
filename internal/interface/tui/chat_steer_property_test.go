@@ -41,9 +41,16 @@ func TestSubmitWhileTurnInFlightQueues(t *testing.T) {
 	if got := h.model.GetSteerQueue(); len(got) != 1 || got[0] != "ask about the tests" {
 		t.Fatalf("mid-turn submit not queued: %v", got)
 	}
-	// The user bubble is on screen now, and only once.
-	if n := len(h.model.messages); n != 1 || h.model.messages[0].Content != "ask about the tests" {
-		t.Fatalf("transcript = %+v", h.model.messages)
+	// The user bubble is on screen now, and only once. The live turn's
+	// empty Agent placeholder may sit beside it.
+	users := 0
+	for _, msg := range h.model.messages {
+		if msg.Role == "user" && msg.Content == "ask about the tests" {
+			users++
+		}
+	}
+	if users != 1 {
+		t.Fatalf("user bubble count = %d, want 1: %+v", users, h.model.messages)
 	}
 	// The user is told their message was queued.
 	if cmd == nil {
@@ -60,8 +67,14 @@ func TestSubmitWhileTurnInFlightQueues(t *testing.T) {
 	if len(h.subs) != 1 || h.subs[0] != "ask about the tests" {
 		t.Fatalf("auto-submit = %v, want exactly one submit", h.subs)
 	}
-	if n := len(h.model.messages); n != 1 {
-		t.Fatalf("queued submit duplicated the user bubble: %d messages", n)
+	users = 0
+	for _, msg := range h.model.messages {
+		if msg.Role == "user" && msg.Content == "ask about the tests" {
+			users++
+		}
+	}
+	if users != 1 {
+		t.Fatalf("queued submit duplicated the user bubble: %d copies", users)
 	}
 	if len(h.model.GetSteerQueue()) != 0 {
 		t.Fatalf("queue not drained: %v", h.model.GetSteerQueue())

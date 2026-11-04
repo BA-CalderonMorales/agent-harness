@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
 
 // requireGitRepo returns an error if the app is not inside a git repository.
@@ -79,8 +78,12 @@ func (app *App) pickProvider(provider string, tuiApp *tui.App) {
 		return
 	}
 	if provider != app.config.Provider {
+		endpoint := app.wizardEndpoint(provider)
 		app.config.Provider = provider
-		app.config.EndpointURL = app.wizardEndpoint(provider)
+		app.config.EndpointURL = endpoint
+		if provider == "lemonade" || provider == "flm" || provider == "ollama" {
+			app.config.Runtime = provider
+		}
 		if config.IsLocalProvider(provider) {
 			app.config.APIKey = provider
 		}
@@ -110,13 +113,13 @@ func (app *App) startModelPicker() error {
 }
 
 // modelsForProvider returns the full model list for the current client,
-// falling back to the static catalog when the provider has no dynamic
-// listing (local/ollama) or the API call fails. Live entries carry the
+// falling back to the static catalog when the API call fails.
+// Discovery has its own short timeout. Live entries carry the
 // provider-advertised context length; models the endpoint does not
 // describe inherit the catalog value so the budget bar stays honest.
 func (app *App) modelsForProvider(provider string) []tui.ModelItem {
-	if c, ok := app.client.(*llm.HTTPClient); ok && c != nil {
-		if infos, err := c.ListModelsDetailed(); err == nil && len(infos) > 0 {
+	if discovery, ok := app.discoveryClient(); ok {
+		if infos, err := discovery.ListModelsDetailed(); err == nil && len(infos) > 0 {
 			catalog := getModelsForProvider(provider, app.session.Model)
 			catalogCtx := make(map[string]int, len(catalog))
 			for _, item := range catalog {

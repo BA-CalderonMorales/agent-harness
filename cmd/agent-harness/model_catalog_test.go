@@ -6,7 +6,9 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
 
@@ -64,6 +66,67 @@ func TestApplyModelContextPrefersLive(t *testing.T) {
 	app.applyModelContext("accounts/fireworks/models/glm-5p3")
 	if app.config.ContextLength != 1048576 {
 		t.Fatalf("catalog fallback not applied: %d", app.config.ContextLength)
+	}
+}
+
+// TestSettingsModelChangeAppliesLiveContext pins the picker path: a
+// hosted model chosen from the live list is not in the static catalog,
+// so without the discovery lookup it inherited the local 8k default.
+// The context bar, the loop's blocking limit, and compaction all then
+// operated on a window the model did not have.
+func TestSettingsModelChangeAppliesLiveContext(t *testing.T) {
+	const chosen = "nvidia/nemotron-3.5-lightning:free"
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"data": []map[string]any{
+				{"id": chosen, "context_length": 1000000},
+			},
+		})
+	}))
+	defer srv.Close()
+
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "openrouter", ContextLength: 8192, MaxTokens: 4096}, "old-model")
+	app.client = llm.NewHTTPClientWithBaseURL("openrouter", "key", srv.URL)
+	app.loop = agent.NewLoop(app.client)
+	app.loop.Config.BlockingTokenLimit = 8192
+	app.tuiApp = tui.NewApp()
+
+	delegate := &tuiSettingsDelegate{app: app, tuiApp: app.tuiApp}
+	delegate.handleModelChange(chosen)
+
+	if app.config.ContextLength != 1000000 {
+		t.Fatalf("context = %d, want the provider's 1000000", app.config.ContextLength)
+	}
+	if app.loop.Config.BlockingTokenLimit != 1000000 {
+		t.Fatalf("loop blocking limit = %d, want 1000000", app.loop.Config.BlockingTokenLimit)
+	}
+	if app.session.Model != chosen {
+		t.Fatalf("session model = %q, want %q", app.session.Model, chosen)
+	}
+}
+
+// TestApplyDiscoveredModelContextPersistsAndRejectsStale pins the boot
+// refresh: the bar and compaction budget must move to the provider's
+// real window, and a result for a model the user already switched away
+// from must not. Persisting is what makes the next boot honest.
+func TestApplyDiscoveredModelContextPersistsAndRejectsStale(t *testing.T) {
+	const chosen = "nvidia/nemotron-3.5-lightning:free"
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "openrouter", Model: chosen, ContextLength: 8192}, chosen)
+	app.loop = agent.NewLoop(nil)
+	app.loop.Config.BlockingTokenLimit = 8192
+	app.tuiApp = tui.NewApp()
+
+	app.applyDiscoveredModelContext(app.tuiApp, "openrouter", chosen, 1000000)
+	if app.config.ContextLength != 1000000 {
+		t.Fatalf("context = %d, want 1000000", app.config.ContextLength)
+	}
+	if app.loop.Config.BlockingTokenLimit != 1000000 {
+		t.Fatalf("loop blocking limit = %d, want 1000000", app.loop.Config.BlockingTokenLimit)
+	}
+
+	app.applyDiscoveredModelContext(app.tuiApp, "openrouter", "some-other-model", 4096)
+	if app.config.ContextLength != 1000000 {
+		t.Fatalf("stale discovery changed the window to %d", app.config.ContextLength)
 	}
 }
 

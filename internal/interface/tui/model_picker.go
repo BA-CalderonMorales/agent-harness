@@ -70,7 +70,7 @@ func (m ModelPickerModel) modalSpec() modalSpec {
 	return modalSpec{
 		title:          title,
 		hint:           hint,
-		footer:         "Type to filter  j/k: navigate  Enter: select  Esc: cancel",
+		footer:         "Type to filter  ↑/↓: navigate  Enter: select  Esc: cancel",
 		preferredWidth: modalMaxWidth,
 	}
 }
@@ -130,7 +130,7 @@ func (m *ModelPickerModel) Update(msg tea.Msg) (closed bool, cmd tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
-		case "esc", "q":
+		case "esc":
 			m.Close()
 			return true, nil
 		case "enter":
@@ -139,13 +139,13 @@ func (m *ModelPickerModel) Update(msg tea.Msg) (closed bool, cmd tea.Cmd) {
 				m.Close()
 				return true, nil
 			}
-		case "up", "k":
+		case "up", "ctrl+p":
 			if m.cursor > 0 {
 				m.cursor--
 				m.updateContent()
 			}
 			return false, nil
-		case "down", "j":
+		case "down", "ctrl+n":
 			if m.cursor < len(m.filtered)-1 {
 				m.cursor++
 				m.updateContent()
@@ -168,11 +168,11 @@ func (m *ModelPickerModel) Update(msg tea.Msg) (closed bool, cmd tea.Cmd) {
 			}
 			m.updateContent()
 			return false, nil
-		case "home", "g":
+		case "home":
 			m.cursor = 0
 			m.updateContent()
 			return false, nil
-		case "end", "G":
+		case "end":
 			m.cursor = len(m.filtered) - 1
 			if m.cursor < 0 {
 				m.cursor = 0

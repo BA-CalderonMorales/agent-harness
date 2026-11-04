@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -39,6 +40,13 @@ func (app *App) refreshTelemetry(tuiApp *tui.App) {
 	est := 0
 	if app.session != nil {
 		est = app.session.EstimateTokens()
+	}
+	// The bar is context usage, not transcript usage: the system prompt
+	// and tool schemas are sent on every request and dominated the
+	// count on hosted turns (the pane read 2k while the provider billed
+	// ~10k). Count the fixed prompt before painting the bar.
+	if app.toolRegistry != nil && app.session != nil {
+		est += agent.EstimatePromptTokens(app.buildSystemPrompt(), app.enabledToolsForMode())
 	}
 	cost := 0.0
 	if app.costTracker != nil {

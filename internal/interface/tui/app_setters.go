@@ -14,6 +14,20 @@ func (a *App) AddMessage(role, content string) {
 }
 
 // SetInput sets the chat input text.
+// SetReducedMotion turns the app's animation off. The information every
+// animated element carries (the elapsed clock, the current beat) stays;
+// only the movement goes.
+func (a *App) SetReducedMotion(reduced bool) {
+	a.reducedMotion = reduced
+	a.chatModel.SetReducedMotion(reduced)
+}
+
+// SetLoopTrack opts the chat chrome into the Ask/Plan/Review/Try track.
+// Off by default; the environment flag is the feature gate.
+func (a *App) SetLoopTrack(enabled bool) {
+	a.chatModel.SetLoopTrack(enabled)
+}
+
 func (a *App) SetInput(text string) {
 	a.chatModel.SetInput(text)
 }
@@ -55,9 +69,11 @@ func (a *App) SetThinkingText(text string) {
 	a.chatModel.SetThinkingText(text)
 }
 
-// ShowStatus shows a status message.
+// ShowStatus shows a status message. Error details can carry values the
+// user typed or a config layer supplied, so the flash gets the same
+// terminal filter as transcript text.
 func (a *App) ShowStatus(text string, statusType string) {
-	a.statusMessage = text
+	a.statusMessage = SanitizeTerminalText(text)
 	a.statusType = statusType
 	a.statusGen++
 }
@@ -121,6 +137,7 @@ func (a *App) SetRuntimeContext(provider, effortProfile, workspacePath string) {
 	}
 	a.chatModel.SetProvider(provider)
 	a.chatModel.SetEffort(effortProfile)
+	a.homeModel.SetProvider(provider)
 }
 
 // SetTelemetry pushes context-usage and cost numbers for the bottom bar.

@@ -80,3 +80,36 @@ func TestToolRowFiltersTerminalSequences(t *testing.T) {
 		t.Fatalf("tool detail still carries an escape: %q", m.messages[0].ToolDetail)
 	}
 }
+
+// The live tool-start path builds its row from model-authored arguments,
+// not from AddOrUpdateToolMessage. It must carry the same filter, or a
+// model can write a clipboard/cursor sequence into the transcript before
+// the tool finishes.
+func TestLiveToolStartFiltersTerminalSequences(t *testing.T) {
+	var m ChatModel
+	updated, _ := m.Update(AgentToolStartMsg{
+		ToolID:       "t1",
+		ToolName:     "bash",
+		DisplayName:  "Sh\x1b]8;;https://evil.example\x1b\\ell",
+		ActivityDesc: "ls\x1b]52;c;cGF5bG9hZA==\x07",
+	})
+	m = updated.(ChatModel)
+	if len(m.messages) != 1 {
+		t.Fatalf("live tool start added %d messages, want 1", len(m.messages))
+	}
+	msg := m.messages[0]
+	for name, value := range map[string]string{"detail": msg.ToolDetail, "content": msg.Content, "display name": msg.ToolDisplayName} {
+		if strings.ContainsRune(value, 0x1b) {
+			t.Fatalf("live tool %s still carries an escape: %q", name, value)
+		}
+	}
+}
+
+func TestStatusFlashFiltersTerminalSequences(t *testing.T) {
+	app := NewApp()
+	updated, _ := app.Update(StatusMsg{Text: "bad\x1b]52;c;cGF5bG9hZA==\x07", Type: "error"})
+	app = updated.(*App)
+	if strings.ContainsRune(app.statusMessage, 0x1b) {
+		t.Fatalf("status message still carries an escape: %q", app.statusMessage)
+	}
+}

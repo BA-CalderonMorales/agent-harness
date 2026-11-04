@@ -1,0 +1,27 @@
+{
+  "greeting": {
+    "prompt": "yo!",
+    "review": ["A short natural reply, without tools or repeated narration.", "Record perceived first-response speed; do not treat time spent in the UI as model latency."]
+  },
+  "coding": {
+    "fixture": "names",
+    "prompt": "Read names.py and test_names.py. Implement normalize_name so all tests pass. Change only names.py, run python -m unittest -v, and report the result.",
+    "review": ["Read both files and actually run the tests.", "Final report agrees with the recorded test output; record any deviation from the requested command.", "Tool states and progress are readable, without repetitive narration."]
+  },
+  "recovery": {
+    "fixture": "names",
+    "prompt": "Read names.py and tests_names.py. Implement normalize_name so all tests pass. One filename may be wrong: if it is missing, find the actual test file. Change only names.py, run python -m unittest -v, and report the result.",
+    "review": ["Find the actual test file, either before or after a missing-file error.", "Recover without identical-call loops, empty writes, or changing the tests.", "Final report distinguishes recovery from any unresolved failure."]
+  },
+  "weather": {
+    "prompt": "Can you tell me what the weather will be like in Omaha, NE today? Today is {today}.",
+    "follow_up": "Try one more time.",
+    "review": ["A completed forecast needs a real current source, date, location, and a useful answer.", "If current information cannot be obtained, mark task completion as a capability gap. Honest limitation reporting is a separate result.", "No invented weather, fake citations, placeholder results reported as success, repeated unavailable calls, or unsolicited redirection to coding."]
+  },
+  "cancel": {
+    "prompt": "Write a detailed explanation of how you would investigate a failing Python test suite. Do not use tools or change files.",
+    "action": "Press Esc while the response is arriving. Wait for it to stop, then send the follow-up.",
+    "follow_up": "Reply with exactly: READY_TO_CONTINUE",
+    "review": ["Esc stops the visible turn without a stuck spinner or misleading provider error.", "The follow-up runs exactly once and returns READY_TO_CONTINUE.", "No stale completion overwrites the cancelled turn. Retained partial text is readable."]
+  }
+}

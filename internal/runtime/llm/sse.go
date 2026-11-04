@@ -35,7 +35,13 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 	}
 	type streamChoice struct {
 		Delta struct {
-			Content          string          `json:"content"`
+			Content string `json:"content"`
+			// OpenRouter normalizes reasoning to "reasoning"; vLLM and
+			// other OpenAI-compatible servers use "reasoning_content".
+			// Supporting only the latter left OpenRouter thinking models
+			// silent for the whole reasoning phase, then dumping the
+			// answer at once when content began.
+			Reasoning        string          `json:"reasoning"`
 			ReasoningContent string          `json:"reasoning_content"`
 			ToolCalls        []toolCallDelta `json:"tool_calls"`
 		} `json:"delta"`
@@ -53,6 +59,10 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 		Model   string         `json:"model"`
 		Choices []streamChoice `json:"choices"`
 		Usage   *streamUsage   `json:"usage"`
+		// OpenRouter reports a mid-stream rate limit as an error object
+		// plus finish_reason "error", after the HTTP 200 was already
+		// sent. Ignoring it turned a rate limit into an empty response.
+		Error json.RawMessage `json:"error"`
 	}
 	type accumulatedToolCall struct {
 		id        string
@@ -203,8 +213,14 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 
 				if len(chunk.Choices) > 0 {
 					choice := chunk.Choices[0]
-					if choice.Delta.ReasoningContent != "" {
-						if !emit(types.LLMReasoningDelta{Delta: choice.Delta.ReasoningContent}) {
+					reasoning := choice.Delta.Reasoning
+					if reasoning == "" {
+						reasoning = choice.Delta.ReasoningContent
+					}
+					if reasoning != "" {
+						// One reasoning event per chunk: a provider that echoes
+						// both field names must not double the preview.
+						if !emit(types.LLMReasoningDelta{Delta: reasoning}) {
 							emitContextError()
 							return
 						}
@@ -262,6 +278,18 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 						}
 						finishReason = *choice.FinishReason
 					}
+				}
+
+				// A mid-stream provider error arrives after any content in
+				// the same chunk; emit that content, then fail with the
+				// provider's own classification.
+				if streamErr := parseStreamError(chunk.Error); streamErr != nil {
+					fail(streamErr)
+					return
+				}
+				if finishReason == "error" {
+					fail(fmt.Errorf("provider reported an error mid-stream (finish_reason=error)"))
+					return
 				}
 			}
 		}

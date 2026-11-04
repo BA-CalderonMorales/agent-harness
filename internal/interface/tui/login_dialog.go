@@ -25,17 +25,18 @@ const (
 )
 
 // loginProviders are the selectable providers in the modal.
-var loginProviders = []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "fireworks", "nvidia", "omniroute"}
+var loginProviders = []string{"lemonade", "ollama", "flm", "local", "openai", "anthropic", "openrouter", "fireworks", "nvidia", "omniroute"}
 
 // providerBlurbs give each provider a one-line "what is this / pick when"
 // so the first-run user never faces a bare list (requirement #3).
 var providerBlurbs = map[string]string{
-	"local":      "A local OpenAI-compatible server (llama.cpp/ollama)",
+	"lemonade":   "Local model manager with GPU, CPU and NPU backends. No API key.",
+	"local":      "Your own OpenAI-compatible endpoint (default port 8080).",
 	"openai":     "OpenAI hosted models (GPT-4o family) - needs an API key",
 	"anthropic":  "Anthropic Claude models - needs an API key",
 	"openrouter": "One key for many models across vendors",
 	"ollama":     "Ollama on this machine - no API key needed",
-	"flm":        "FastFlowLM on AMD Ryzen AI NPUs - no API key needed",
+	"flm":        "Direct flm serve (port 52625). For Lemonade choose Lemonade.",
 	"fireworks":  "Fireworks fast hosted inference - needs an API key",
 	"nvidia":     "NVIDIA NIM hosted models (nemotron family)",
 	"omniroute":  "Omniroute: needs API key",
@@ -79,7 +80,6 @@ func NewLoginDialog() LoginDialogModel {
 }
 
 // SetModelsProvider wires the live model probe into the wizard's model
-// step (the app feeds it at boot, mirroring SetLoginHandler).
 // StoredCredentials is the encrypted store's per-provider key set,
 // snapshotted for the wizard. In-memory only — it never persists to the
 // transcript. primaryKey is the most recently used provider's key, for
@@ -179,6 +179,7 @@ func (m *LoginDialogModel) loadModels() {
 		return
 	}
 	models, err := m.modelsProvider(m.provider(), m.probeKey())
+	m.picker.SetModels(nil)
 	if err != nil {
 		m.probeErr = err.Error()
 	}
@@ -197,8 +198,15 @@ func (m *LoginDialogModel) loadModels() {
 			vpH = 12
 		}
 		m.picker.viewport = newViewport(vpW, vpH)
-		m.picker.SetTitle("Models - " + m.provider())
+		m.picker.SetTitle("Models - " + connectionLabel(m.provider()))
 		m.picker.SetModels(models)
+		for i, model := range m.picker.filtered {
+			if model.IsDefault {
+				m.picker.cursor = i
+				m.picker.updateContent()
+				break
+			}
+		}
 	}
 }
 
@@ -272,12 +280,20 @@ func (m *LoginDialogModel) Update(msg tea.KeyMsg) (completed, cancelled bool, pr
 		}
 
 	case LoginStepModel:
-		// The model step is the live-probed picker: type to filter,
-		// j/k to navigate, Enter to finish, Esc to cancel. Enter with
-		// no selection keeps completeLogin's empty->default fallback
-		// (the picker itself needs a selection to close, so an empty
-		// list is completed here).
+		if msg.String() == "ctrl+r" {
+			m.loadModels()
+			return false, false, "", "", ""
+		}
+		if msg.String() == "ctrl+b" {
+			m.step = LoginStepProvider
+			return false, false, "", "", ""
+		}
+		// Lemonade requires a live selection; older providers retain their
+		// catalog/default fallback when no model list is available.
 		if msg.String() == "enter" && len(m.picker.filtered) == 0 {
+			if m.provider() == "lemonade" {
+				return false, false, "", "", ""
+			}
 			return true, false, m.provider(), m.finishKey(), ""
 		}
 		closed, _ := m.picker.Update(msg)
@@ -305,44 +321,35 @@ func (m LoginDialogModel) View() string {
 	spec := modalSpec{preferredWidth: modalMaxWidth}
 	switch m.step {
 	case LoginStepProvider:
-		spec.title = "Login - choose provider"
-		spec.hint = "Pick where your models live. Keys are remembered per provider."
+		spec.title = "Connect a model"
+		spec.hint = "Choose models on this computer or a hosted inference service."
 		spec.items = m.providerItems()
 		spec.cursor = m.providerIdx
 		spec.footer = "j/k: navigate  Enter: select  Esc: cancel"
 
 	case LoginStepAPIKey:
-		spec.title = "Login - API key"
+		spec.title = "Connect · API key"
 		spec.items = []modalItem{modalTextItem(m.apiKeyBody())}
 		spec.cursor = -1
 		spec.footer = "Enter: continue  Esc: cancel"
 
 	case LoginStepModel:
-		spec.title = "Login - model"
-		spec.hint = "Provider: " + m.provider() + "  ·  the list below is live from the endpoint"
+		spec.title = "Connect · Choose model"
+		spec.hint = "Connection: " + connectionLabel(m.provider())
+		if m.probeErr == "" {
+			spec.hint += " · available models"
+		}
 		spec.items = []modalItem{modalTextItem(m.modelBody())}
 		spec.cursor = -1
-		spec.footer = "Type to filter  j/k: navigate  Enter: finish  Esc: cancel"
+		spec.footer = "Type: filter  ↑/↓: select  Enter: use  Ctrl+R: refresh  Ctrl+B: back  Esc: cancel"
 	}
 
 	return renderModal(m.width, m.height, spec)
 }
 
-// providerItems builds the provider step's rows: each provider is one
-// item of two lines, so a name and its blurb scroll together.
+// providerItems keeps each connection and its description together.
 func (m LoginDialogModel) providerItems() []modalItem {
-	items := make([]modalItem, 0, len(loginProviders))
-	for i, p := range loginProviders {
-		marker, style := IndicatorUnselected, HelpDimStyle
-		if i == m.providerIdx {
-			marker, style = IndicatorSelected, InfoStyle
-		}
-		items = append(items, modalItem{lines: []string{
-			style.Render(marker + p),
-			HelpDimStyle.Render("    " + providerBlurbs[p]),
-		}})
-	}
-	return items
+	return connectionItems(m.providerIdx, true)
 }
 
 // apiKeyBody is the key step: where a key comes from for this provider,
@@ -350,7 +357,7 @@ func (m LoginDialogModel) providerItems() []modalItem {
 // to "how do I get one?" at the moment the wizard asks.
 func (m LoginDialogModel) apiKeyBody() string {
 	var b strings.Builder
-	b.WriteString(HelpDimStyle.Render("Provider: "+m.provider()) + "\n")
+	b.WriteString(HelpDimStyle.Render("Connection: "+connectionLabel(m.provider())) + "\n")
 	if steps, ok := keyStepsFor(m.provider()); ok {
 		b.WriteString("\n" + HelpDimStyle.Render("How to get a key:") + "\n")
 		for i, s := range steps.Steps {
@@ -376,7 +383,11 @@ func (m LoginDialogModel) modelBody() string {
 	var b strings.Builder
 	if m.probeErr != "" {
 		b.WriteString(ErrorStyle.Render("[!] Could not reach endpoint: "+m.probeErr) + "\n")
-		b.WriteString(HelpDimStyle.Render("Showing the static catalog; Enter still finishes.") + "\n\n")
+		if m.provider() == "lemonade" {
+			b.WriteString(HelpDimStyle.Render("Check lemonade status, then Ctrl+R to retry. Ctrl+B changes connection.") + "\n\n")
+		} else {
+			b.WriteString(HelpDimStyle.Render("Showing the static catalog; these models are not verified.") + "\n\n")
+		}
 	}
 	b.WriteString(m.picker.viewport.View())
 	return b.String()

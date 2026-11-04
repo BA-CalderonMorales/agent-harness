@@ -83,12 +83,13 @@ func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopSt
 	}
 
 	req := llm.Request{
-		Messages:     state.messages,
-		SystemPrompt: sysPrompt,
-		Tools:        params.ToolUseContext.Options.Tools,
-		Model:        model,
-		MaxTokens:    8192,
-		Temperature:  params.Temperature,
+		Messages:       state.messages,
+		SystemPrompt:   sysPrompt,
+		Tools:          params.ToolUseContext.Options.Tools,
+		Model:          model,
+		MaxTokens:      8192,
+		Temperature:    params.Temperature,
+		TemperatureSet: params.TemperatureSet,
 	}
 
 	if state.maxOutputTokensOverride > 0 {

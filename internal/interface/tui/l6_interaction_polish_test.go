@@ -84,14 +84,19 @@ func TestR6WorkingStatusReservesComposerSpace(t *testing.T) {
 		model := NewChatModel()
 		model.width = width
 		model.height = 20
+		model.AddMessage("user", "hi")
 		model.SetInput("ready")
-		model.SetThinking(true, "Thinking...")
+		model.loopBeat = beatAsk
+		// Starting a turn materializes the live Agent header; the phase
+		// rides on it while the band carries only the beat track.
+		updated, _ := model.Update(AgentStartMsg{Timestamp: time.Now()})
+		model = updated.(ChatModel)
 		view := model.View()
 		lines := strings.Split(strings.TrimRight(view, "\n"), "\n")
 		if len(lines) > model.height {
 			t.Fatalf("width %d: active view has %d rows, want <= %d", width, len(lines), model.height)
 		}
-		if !strings.Contains(view, "Working") || !strings.Contains(view, "ready") || !strings.Contains(view, "effort") {
+		if !strings.Contains(view, "Thinking") || !strings.Contains(view, "ready") || !strings.Contains(view, `"Esc" to stop`) {
 			t.Fatalf("width %d: working/status/composer hierarchy missing:\n%s", width, view)
 		}
 	}

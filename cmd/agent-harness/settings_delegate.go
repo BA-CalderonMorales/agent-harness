@@ -56,6 +56,9 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "temperature":
 		if n, err := strconv.ParseFloat(value, 64); err == nil && n >= 0 && n <= 2 {
 			d.app.config.Temperature = n
+			// 0.0 is a legal deterministic choice; mark it explicit so
+			// the next request sends it instead of the provider default.
+			d.app.config.TemperatureSet = true
 			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Temperature updated to: %.2f", n), Type: "success"})
 		} else {
@@ -114,6 +117,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	d.tuiApp.Send(tui.SessionsRefreshedMsg{
 		Sessions: d.app.getSessionInfos(),
 	})
+	d.tuiApp.Send(tui.SettingsUpdatedMsg{Settings: d.app.getSettings()})
 }
 
 func (d *tuiSettingsDelegate) rebuildLLMClient() {
@@ -147,8 +151,16 @@ func (d *tuiSettingsDelegate) handlePersonaChange(value string) {
 func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	d.app.session.Model = value
 	d.app.config.Model = value
+	// The picker lists live models the static catalog does not know;
+	// without this lookup a 1M-window hosted model kept the previous
+	// context budget, and both compaction and the context bar lied.
+	d.app.applyModelContext(value)
+	if d.app.loop != nil && d.app.config.ContextLength > 0 {
+		d.app.loop.Config.BlockingTokenLimit = d.app.config.ContextLength
+	}
 	d.app.costTracker.SetModel(value)
 	d.tuiApp.Send(tui.ModelChangedMsg{Model: value})
+	d.app.refreshTelemetry(d.tuiApp)
 	d.app.commitConfigChange()
 
 	// Keep the encrypted store in sync only when it exists; model now
@@ -213,7 +225,7 @@ func (d *tuiSettingsDelegate) OnSettingReset() {
 
 // OnSettingReload handles reload request.
 func (d *tuiSettingsDelegate) OnSettingReload() {
-	d.tuiApp.SetSettings(d.app.getSettings())
+	d.tuiApp.Send(tui.SettingsUpdatedMsg{Settings: d.app.getSettings()})
 }
 
 // boolToEnabled converts bool to enabled/disabled string.

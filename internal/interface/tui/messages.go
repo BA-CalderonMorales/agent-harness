@@ -80,6 +80,9 @@ type ToolExecutingMsg struct {
 // ApprovalRequestMsg is sent when command approval is needed
 type ApprovalRequestMsg struct {
 	Request *approval.ApprovalRequest
+	// Input is the exact proposal this request authorizes. Observers must
+	// not infer it from the last tool-start event (calls can interleave).
+	Input map[string]any
 }
 
 // QuestionRequestMsg is sent when a tool asks the operator a question.
@@ -131,4 +134,13 @@ type SwitchViewMsg struct {
 // TUI start.
 type GitContextMsg struct {
 	Context *git.Context
+}
+
+// ModelContextMsg delivers the provider-advertised context window for
+// the active model after a background discovery pass. Provider and model
+// guard the result: a switch that lands first makes the result stale.
+type ModelContextMsg struct {
+	Provider      string
+	Model         string
+	ContextLength int
 }

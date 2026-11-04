@@ -11,11 +11,12 @@ import (
 )
 
 // wizardEndpoint returns the endpoint the wizard commits for a provider:
-// an env-pinned AH_ENDPOINT_URL survives the login, anything else follows
-// the provider default. The wizard's live model probe must test exactly
+// an env-pinned AH_ENDPOINT_URL survives login, as does the saved endpoint
+// when reconnecting to the same provider. A switch uses the provider default.
+// The wizard's live model probe must test exactly
 // this endpoint or its green check would lie about the app's state.
 func (app *App) wizardEndpoint(provider string) string {
-	if app.config.EndpointPinned {
+	if app.config.EndpointPinned || (app.config.Provider == provider && app.config.EndpointURL != "") {
 		return app.config.EndpointURL
 	}
 	return config.DefaultEndpointForProvider(provider)
@@ -33,9 +34,15 @@ func (app *App) wizardModels(provider, apiKey string) ([]tui.ModelItem, error) {
 
 	ids, err := client.ListModels()
 	if err != nil {
+		if provider == "lemonade" {
+			return nil, fmt.Errorf("local Lemonade at %s is unavailable: %w", app.wizardEndpoint(provider), err)
+		}
 		return getModelsForProvider(provider, getDefaultModel(provider)), err
 	}
 	if len(ids) == 0 {
+		if provider == "lemonade" {
+			return nil, fmt.Errorf("local Lemonade has no available models; pull a model, then refresh")
+		}
 		return getModelsForProvider(provider, getDefaultModel(provider)), nil
 	}
 	// The model the user last ran with this provider outranks the
@@ -107,21 +114,39 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	if provider == "" {
 		return
 	}
+	endpoint := app.wizardEndpoint(provider)
 	app.config.Provider = provider
-	app.config.EndpointURL = app.wizardEndpoint(provider)
+	app.config.EndpointURL = endpoint
+	if provider == "lemonade" || provider == "flm" || provider == "ollama" {
+		app.config.Runtime = provider
+	}
+	app.config.ApplyTimeoutDefaults()
 	authMsg := app.applyLoginCredentials(provider, apiKey, model)
 
 	if model == "" {
 		model = getDefaultModel(provider)
 	}
 	app.config.Model = model
-	applyCatalogContext(app.config, model)
 	if app.session != nil {
 		app.session.Model = model
 	}
 	if app.costTracker != nil {
 		app.costTracker.SetModel(model)
 	}
+
+	// Rebuild the client before the context lookup so discovery talks to
+	// the provider being committed with the key just entered. The wizard
+	// already fetched this endpoint's model list, so the lookup is a
+	// cache hit in the common path. This is what keeps a 1M-window hosted
+	// model from inheriting the local 8k default (and compacting at it).
+	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
+	app.applyModelContext(model)
+	app.loop = agent.NewLoop(app.client)
+	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
+	if app.config.ContextLength > 0 {
+		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
+	}
+
 	app.commitConfigChange()
 	app.storeProviderModel(provider, model)
 
@@ -138,9 +163,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	}
 	notice += "\nType /help for a guided tour of commands, keys, and navigation."
 
-	// Recreate the LLM client and refresh the TUI state.
-	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
-	app.loop = agent.NewLoop(app.client)
+	// Refresh the TUI state with the client and context already committed.
 	tuiApp.SetChatModel(model)
 	tuiApp.SetSettings(app.getSettings())
 	tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)

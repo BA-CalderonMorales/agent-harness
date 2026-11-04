@@ -20,6 +20,23 @@ func (terminalErrorClient) Stream(context.Context, llm.Request) (<-chan types.LL
 	return nil, errors.New("provider disconnected")
 }
 
+// cancellableClient holds the request open until the turn context is
+// canceled, then reports context.Canceled exactly as the SSE reader does.
+type cancellableClient struct {
+	started chan struct{}
+}
+
+func (c *cancellableClient) Stream(ctx context.Context, _ llm.Request) (<-chan types.LLMEvent, error) {
+	events := make(chan types.LLMEvent, 1)
+	close(c.started)
+	go func() {
+		<-ctx.Done()
+		events <- types.LLMError{Error: ctx.Err()}
+		close(events)
+	}()
+	return events, nil
+}
+
 func TestRequestCommandApprovalFollowsTurnCancellation(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	app.tuiApp = tui.NewApp()
@@ -75,5 +92,49 @@ func TestRunAgentTurnDoesNotCompleteAfterProviderError(t *testing.T) {
 settled:
 	if doneSeen != 0 {
 		t.Fatalf("AgentDone count = %d after provider error", doneSeen)
+	}
+}
+
+// TestRunAgentTurnSuppressesCancelAsProviderError pins the Esc UX: the
+// TUI prints "cancelled by user", and the turn's context.Canceled must
+// not also surface as a red provider error with model-switching advice.
+func TestRunAgentTurnSuppressesCancelAsProviderError(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", ContextLength: 8192}, "test-model")
+	app.tuiApp = tui.NewApp()
+	client := &cancellableClient{started: make(chan struct{})}
+	app.client = client
+	app.loop = agent.NewLoop(client)
+	app.toolRegistry = tools.NewRegistry()
+
+	done := make(chan struct{})
+	go func() {
+		app.runAgentTurn("cancel me", app.tuiApp)
+		close(done)
+	}()
+	select {
+	case <-client.started:
+	case <-time.After(time.Second):
+		t.Fatal("turn never reached the provider")
+	}
+	app.tuiApp.CancelAgent()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("cancelled turn did not settle")
+	}
+
+	errorsSeen := 0
+	for {
+		msg, ok := tryReceiveTUIMessage(t, app.tuiApp, 20*time.Millisecond)
+		if !ok {
+			break
+		}
+		if _, ok := msg.(tui.AgentErrorMsg); ok {
+			errorsSeen++
+		}
+	}
+	if errorsSeen > 0 {
+		t.Fatalf("cancellation surfaced %d AgentErrorMsg(s)", errorsSeen)
 	}
 }

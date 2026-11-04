@@ -76,18 +76,11 @@ func (m ProviderPickerModel) View() string {
 		return ""
 	}
 
-	items := make([]modalItem, 0, len(loginProviders))
-	for i, p := range loginProviders {
-		marker, style := IndicatorUnselected, HelpDimStyle
-		if i == m.providerIdx {
-			marker, style = IndicatorSelected, InfoStyle
-		}
-		items = append(items, modalItem{lines: []string{style.Render(marker + p)}})
-	}
+	items := connectionItems(m.providerIdx, false)
 
 	return renderModal(m.width, m.height, modalSpec{
 		title:          "Switch provider",
-		hint:           "Keys are remembered per provider, so switching never asks you to paste one again.",
+		hint:           "On this computer or hosted inference. Saved credentials are retained.",
 		items:          items,
 		footer:         "j/k: navigate  Enter: pick + models  Esc: cancel",
 		preferredWidth: modalMaxWidth,

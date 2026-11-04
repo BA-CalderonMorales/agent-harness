@@ -219,7 +219,11 @@ func (app *App) granularPermission(toolName string) (enabled, mapped bool) {
 func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecision {
 	enabled, mapped := app.granularPermission(toolName)
 	if mapped && !enabled {
-		return tools.PermissionDecision{Behavior: tools.Deny, Message: sprintf("%s permission disabled", strings.ToUpper(toolName))}
+		message := sprintf("%s permission disabled", strings.ToUpper(toolName))
+		if toolName == "bash" || toolName == "shell" || toolName == "execute_command" {
+			message += ": Settings > Workspace & Permissions > Allow Execute is off. Enable it to permit shell commands; choose manual mode to approve each command. No command was executed. This is an application permission, not evidence of an OS restriction"
+		}
+		return tools.PermissionDecision{Behavior: tools.Deny, Message: message}
 	}
 	return tools.PermissionDecision{Behavior: tools.Allow}
 }

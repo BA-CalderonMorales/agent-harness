@@ -14,3 +14,13 @@ func TestProductionRegistryIncludesAgentTool(t *testing.T) {
 		t.Fatalf("production registry does not contain %q", builtin.AgentTool.Name)
 	}
 }
+
+func TestProductionRegistryOmitsUnavailableSearch(t *testing.T) {
+	app := &App{config: &config.LayeredConfig{}}
+	app.initTools()
+	for _, tool := range app.toolRegistry.FilterEnabled() {
+		if tool.Name == builtin.WebSearchTool.Name {
+			t.Fatal("production model request advertises placeholder search")
+		}
+	}
+}

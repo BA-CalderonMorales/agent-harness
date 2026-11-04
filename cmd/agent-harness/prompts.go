@@ -23,7 +23,11 @@ func (app *App) buildSystemPrompt() string {
 		}
 	}
 
-	skillPrompts := app.loadSkillPrompts()
+	contextTokens := 0
+	if app.config != nil {
+		contextTokens = app.config.ContextLength
+	}
+	skillPrompts := app.loadSkillPromptsForContext(contextTokens)
 
 	var recentCommits, statusFiles, topFiles []string
 	if app.gitContext != nil && app.gitContext.IsRepo {

@@ -3,6 +3,7 @@ package tui
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/charmbracelet/bubbles/textarea"
 	tea "github.com/charmbracelet/bubbletea"
 	"strings"
@@ -186,6 +187,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.thinkingText = "Thinking..."
 		m.thinkingIsStatus = true
 		m.streaming = true
+		m.writing = false
 		m.turnInterrupted = false
 		m.streamBuffer = ""
 		m.currentStreamingAssistantIdx = -1
@@ -197,10 +199,13 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		// one agent turn and never merge across turns.
 		m.turnCounter++
 		m.turnTools = nil
-		// Defer the assistant section: it materializes after
-		// PlaceholderDelay with whatever has buffered, so the thinking
-		// header lags the question a little instead of popping instantly.
+		// Defer the prose: chunks buffer for PlaceholderDelay so text
+		// does not pop instantly. The Agent header (with the live turn
+		// indicator) still appears now — the user watches the response
+		// being cooked where the bubble will land, not in the chrome.
+		m.currentStreamingAssistantID = ""
 		m.placeholderPending = true
+		m.updateOrCreateStreamingMessage("")
 		m.refreshViewport() // Ensure viewport scrolls to bottom after input height change
 		return m, m.startTimer()
 
@@ -209,11 +214,13 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.thinking = true
 		m.thinkingText = fmt.Sprintf("Connecting to %s...", msg.Endpoint)
 		m.thinkingIsStatus = true
+		m.writing = false
 		return m, nil
 
 	case AgentThinkingMsg:
 		// Reasoning preview from the agent goroutine: update the badge
 		// text without touching the thinking timer.
+		m.writing = false
 		m.SetThinkingText(msg.Text)
 		return m, nil
 
@@ -234,6 +241,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if m.streaming && !m.turnInterrupted {
 			m.streamBuffer += msg.Text
 			m.chunkCount++
+			m.writing = true
 			// During the placeholder delay, chunks buffer quietly; the
 			// assistant section materializes on the next tick.
 			if !m.placeholderPending {
@@ -247,6 +255,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if m.turnInterrupted {
 			return m, nil
 		}
+		m.writing = false
 
 		// Materialize the streaming assistant before the tool lands:
 		// a tool that starts inside the placeholder window (fast
@@ -292,12 +301,17 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if displayName == "" {
 			displayName = msg.ToolName
 		}
+		// The display name and detail are model- or tool-authored text.
+		// This live path renders before AgentToolDoneMsg, so it needs the
+		// same terminal filter as AddOrUpdateToolMessage.
+		displayName = SanitizeTerminalText(displayName)
 
 		// Use rich activity description from tool if available, otherwise extract from input
 		command := msg.ActivityDesc
 		if command == "" {
 			command = m.extractCommandFromToolInput(msg.ToolName, msg.Input)
 		}
+		command = SanitizeTerminalText(command)
 
 		// Set up tool animation state for yolo-style display
 		m.toolAnimation = &ToolAnimationState{
@@ -350,6 +364,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		if m.turnInterrupted {
 			return m, nil
 		}
+		m.writing = false
 
 		// Finalize the tool message in the transcript by ID: tools from
 		// earlier in the turn are still in m.messages, and a stale
@@ -408,6 +423,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 
 		m.thinking = false
 		m.streaming = false
+		m.writing = false
 		m.timerRunning = false
 		m.placeholderPending = false
 		// Finalize the streaming message
@@ -418,7 +434,8 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		// Tool-only turns stream no text: the placeholder already holds the
 		// tool display, so settle it in place instead of leaving a stuck
-		// assistant bubble behind.
+		// assistant bubble behind. A placeholder that never carried text
+		// or a tool part is dropped: an empty live header is not a turn.
 		if finalContent == "" {
 			if msg := m.streamingAssistant(); msg != nil {
 				finalContent = msg.Content
@@ -426,6 +443,12 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		if finalContent != "" {
 			m.finalizeStreamingMessage(finalContent)
+		} else if msg := m.streamingAssistant(); msg != nil {
+			if len(msg.Parts) == 0 {
+				m.dropPlaceholderIfEmpty()
+			} else {
+				m.finalizeStreamingMessage("")
+			}
 		}
 		m.streamBuffer = ""
 		m.currentToolMsg = nil
@@ -451,22 +474,10 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case AgentCancelMsg:
-		if m.currentToolMsg != nil {
-			command := m.extractCommandFromToolInput(m.currentToolMsg.ToolName, nil)
-			if command == "" && m.toolAnimation != nil {
-				command = m.toolAnimation.Command
-			}
-			started := m.currentToolMsg.ToolStartedAt
-			if started.IsZero() {
-				started = m.currentToolMsg.Timestamp
-			}
-			m.currentToolMsg.ToolElapsed = time.Since(started)
-			m.currentToolMsg.Content = m.formatToolContent(m.currentToolMsg.ToolDisplayName, command, ToolStatusError, started, m.currentToolMsg.ToolElapsed)
-			m.currentToolMsg.bumpRev()
-			m.currentToolMsg.ToolStatus = ToolStatusError
-		}
+		m.settleCurrentTool(ToolStatusError)
 		m.thinking = false
 		m.streaming = false
+		m.writing = false
 		m.timerRunning = false
 		m.turnInterrupted = true
 		m.streamBuffer = ""
@@ -499,6 +510,9 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		return m, nil
 
 	case AgentErrorMsg:
+		if m.turnInterrupted {
+			return m, nil
+		}
 		// A provider error can arrive without a ToolDone event. Settle
 		// the active row first so the transcript never claims that a
 		// command is still running after the turn has stopped.
@@ -509,6 +523,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.turnInterrupted = true
 		m.thinking = false
 		m.streaming = false
+		m.writing = false
 		m.timerRunning = false
 		m.placeholderPending = false
 		// Finalize the in-progress message so the thinking spinner does not
@@ -519,10 +534,23 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 			m.finalizeStreamingMessage(m.streamBuffer)
 		}
 
-		// Build informative error message with action hints.
+		// Build informative error message with action hints. The provider's
+		// own sentence rides along: "Rate limit exceeded" alone cannot
+		// distinguish a free-tier cap from an upstream provider at
+		// capacity or a credit rejection.
 		errStr := fmt.Sprintf("%v", msg.Error)
-		isLocal := m.provider == "local" || m.provider == "ollama"
-		feedback := ProviderErrorFeedback(ClassifyProviderError(errStr), errStr, isLocal)
+		isLocal := config.IsLocalProvider(m.provider)
+		category := ClassifyProviderError(errStr)
+		feedback := ProviderErrorFeedback(category, errStr, isLocal)
+		if m.provider == "openrouter" {
+			switch category {
+			case ProviderErrRateLimit:
+				feedback += "\n[>] OpenRouter free variants: 20 requests/min and 50/day (1000/day after buying credits)" +
+					"\n[>] Check remaining free requests and credits: https://openrouter.ai/settings/credits"
+			case ProviderErrCredits:
+				feedback += "\n[>] Add credits: https://openrouter.ai/settings/credits"
+			}
+		}
 		m.AddMessage("system", feedback)
 		// A queued follow-up survives the failed turn: say so instead of
 		// leaving it silently pending until some later turn succeeds.
@@ -537,6 +565,7 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		m.streamBuffer = ""
 		m.thinking = false
 		m.streaming = false
+		m.writing = false
 		m.timerRunning = false
 		m.placeholderPending = false
 		m.currentToolMsg = nil

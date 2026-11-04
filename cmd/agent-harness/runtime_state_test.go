@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
 
 // TestPersistUserSettingsNeverBlankProvider pins the writer's half of the
@@ -73,4 +75,22 @@ func readSettingsFile(t *testing.T, path string) map[string]interface{} {
 		t.Fatalf("Unmarshal(%s): %v", path, err)
 	}
 	return values
+}
+
+// TestTelemetryCountsFixedPrompt pins the context-bar honesty fix: the
+// pane used to report only conversation messages, so a hosted turn read
+// "2k / 8k" while the provider billed ~10k prompt tokens. The system
+// prompt and tool schemas are part of usage and must move the bar.
+func TestTelemetryCountsFixedPrompt(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", Model: "test-model", ContextLength: 8192}, "test-model")
+	app.cwd = t.TempDir()
+	app.initTools()
+	app.tuiApp = tui.NewApp()
+
+	app.refreshTelemetry(app.tuiApp)
+
+	est := exportedField(reflect.ValueOf(app.tuiApp).Elem().FieldByName("estTokens")).Int()
+	if est <= int64(app.session.EstimateTokens()) {
+		t.Fatalf("telemetry = %d, want the fixed prompt included on top of %d message tokens", est, app.session.EstimateTokens())
+	}
 }

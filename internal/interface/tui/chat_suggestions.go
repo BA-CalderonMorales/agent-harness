@@ -74,7 +74,7 @@ func (m *ChatModel) syncSuggestionOffset() {
 // suggestion line (prefix + two separator columns + description) stays
 // inside the terminal width; an overflowing description is noise.
 func (m ChatModel) truncateSuggestionDescription(prefix, description string) string {
-	max := m.width - lipgloss.Width(prefix) - 2
+	max := m.composerWidth() - lipgloss.Width(prefix) - 2
 	if max < 10 {
 		max = 10
 	}

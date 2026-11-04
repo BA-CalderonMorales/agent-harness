@@ -11,7 +11,7 @@ func TestLoginKeyRemovesClipboardControls(t *testing.T) {
 		t.Run(map[bool]string{false: "pasted", true: "stored"}[stored], func(t *testing.T) {
 			d := NewLoginDialog()
 			d.Open(120, 40, NewStoredCredentials(map[string]string{"openai": " \x00test-key\r\n"}, ""))
-			d.providerIdx = 1
+			d.providerIdx = loginProviderIndex("openai")
 			if !stored {
 				d.stored = StoredCredentials{}
 				d.step = LoginStepAPIKey

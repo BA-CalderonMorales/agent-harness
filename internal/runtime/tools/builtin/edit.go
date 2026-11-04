@@ -39,6 +39,9 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		if path == "" || oldStr == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path and old_string are required"}
 		}
+		if _, err := requiredStringArgument(input, "new_string", "edit"); err != nil {
+			return tools.ValidationResult{Valid: false, Message: err.Error() + "; supply the replacement text, or an explicit empty string for intentional deletion"}
+		}
 		// UNC path security
 		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
 			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
@@ -51,7 +54,13 @@ var FileEditTool = tools.NewTool(tools.Tool{
 	Call: func(input map[string]any, ctx tools.Context, canUse tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		path := getString(input, "file_path")
 		oldStr := getString(input, "old_string")
-		newStr := getString(input, "new_string")
+		newStr, inputErr := requiredStringArgument(input, "new_string", "edit")
+		if inputErr != nil {
+			return tools.ToolResult{}, inputErr
+		}
+		if path == "" || oldStr == "" {
+			return tools.ToolResult{}, fmt.Errorf("file_path and old_string are required and must be nonempty strings")
+		}
 		replaceAll := false
 		if v, ok := input["replace_all"].(bool); ok {
 			replaceAll = v

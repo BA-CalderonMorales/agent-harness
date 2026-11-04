@@ -1,6 +1,6 @@
 # Security review
 
-A review of the shipping code as of 0.3.39, with the fixes that came out
+A review of the shipping code as of 0.4.0, with the fixes that came out
 of it and the risks that remain by design. Read this with
 [credentials](credentials.md) and [command approval](command-approval.md):
 those describe intended behavior, this describes where it can fail.
@@ -36,6 +36,59 @@ endpoint, and its `.mcp.json` names commands the harness starts. Treat
 opening an untrusted repository the same way you would treat running
 its test suite. This is recorded as an accepted risk below rather than
 silently assumed.
+
+## 0.4.0 follow-up
+
+The release-branch review re-ran the toolchain scan and the terminal
+filter checks against the 0.4.0 changes:
+
+- GO-2026-6809 (distrust compromised intermediate certificates in
+  `crypto/x509`) was reachable on the 1.26.9 line. The module, CI,
+  release, Windows, Docker, and install requirements now say Go 1.26.10,
+  and `x/net` moves to v0.62.0 for GO-2026-6860 and GO-2026-6866.
+- The live tool-start path built its row from model-authored arguments
+  without the S-4 filter, and status flashes stored their text before
+  filtering. Both now go through `SanitizeTerminalText`; regression tests
+  cover the OSC 52 payloads.
+- The new `evals/` helper launches the app and the independent test
+  subprocess with a scrubbed environment. Host provider and cloud
+  credentials are not part of a local-model case.
+
+## November 4 release audit
+
+The final review includes the uncommitted terminal evaluation/campaign changes,
+not only the earlier provider and TUI commits. Regression checks now cover:
+
+- Host verification copies only bounded regular files, rejects symlinks,
+  FIFOs and oversized snapshots, and runs candidate code with no network.
+- Verification stdout/stderr share a 1 MiB capture budget and a deadline;
+  process groups are killed and reaped on failure or excessive output.
+- Observation records have a validated schema, a 1 MiB per-record limit and
+  a 32 MiB stream limit. Records remain untrusted claims, never proof that a
+  task succeeded. Independent host checks decide objective outcomes.
+- Worker mounts exclude host evidence and grading answers; private grading
+  uses a fresh filesystem view. Scripted-provider tests exercise the real TUI,
+  cancellation, follow-up, approval handling, and attempts to alter evidence.
+- Shell failures propagate the tool-error flag instead of masquerading as
+  successful test runs. CI now runs the Linux terminal/security regressions.
+
+The full Go suite passes with the race detector. The MCP test peer disables
+only the race runtime's artificial exit delay, which otherwise collided with
+its transport shutdown deadline; race detection remains enabled.
+
+The Go vulnerability scan reports no reachable findings. GO-2026-5932 is
+module-only in `x/crypto` v0.58.0; the database names a prerelease fix, while
+v0.58.0 remains the latest stable version checked on November 4. Optional
+GitNexus tooling has zero high/critical and three moderate npm audit findings,
+with no compatible fix offered. That JavaScript tooling is not shipped in
+the Go executable. Recheck both exceptions on the next dependency update.
+
+These checks do not establish general task reliability. Campaigns screen
+bounded fixtures, retain inconclusive results, and do not deploy changes.
+Sampled process-tree limits exclude the separate model server and are not
+hard container-wide memory guarantees. The worker retains provider network
+access; this is not an adversarial egress boundary. Existing workspace-trust
+and command-approval limitations below still apply.
 
 ## Findings
 
@@ -84,11 +137,15 @@ go1.26.9 (HTTP/2 framing and flow control, HTTP/1 CONNECT
 desynchronization, TLS ECH handling, MIME header parsing), five of which
 also affected `golang.org/x/net` v0.57.0 and are fixed in v0.60.0.
 
-The toolchain directive, CI, release, and Windows workflows, and the
-install docs now say 1.26.9, and the `x/*` modules are current. A rerun
-of `govulncheck ./...` reports zero reachable vulnerabilities. CI still
-tolerates exit status 3 (findings in unreachable code only), which is
-what keeps unrelated advisories from failing a release.
+The 0.4.0 re-run found one newer advisory on that line: GO-2026-6809,
+reachable through `crypto/x509` certificate verification and fixed in
+go1.26.10. The module, CI, release, Windows, and Docker declarations and
+the install docs now say 1.26.10; `x/net` is v0.62.0, which also clears
+GO-2026-6860 and GO-2026-6866. A rerun of `govulncheck ./...` reports
+zero reachable vulnerabilities. CI still tolerates exit status 3
+(findings in unreachable code only, such as the unfixed `x/crypto`
+openpgp advisory), which is what keeps unrelated advisories from failing
+a release.
 
 ### S-3: project configuration is executable content
 
@@ -135,7 +192,8 @@ approval dialog, and the question modal. It keeps SGR so colored `git`
 and test output still look colored, and drops OSC, DCS, PM, APC, SOS,
 non-SGR CSI, stray C0 controls, and the C1 range. The question and its
 options are filtered before the user sees them, so the answer the model
-receives is the answer that was shown.
+receives is the answer that was shown. The 0.4.0 review closed the
+live tool-start row and status flashes, which had bypassed that filter.
 
 ### S-5: destructive-command detection is advisory
 

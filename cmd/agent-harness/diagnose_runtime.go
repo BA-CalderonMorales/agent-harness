@@ -30,6 +30,8 @@ func localRuntimeChecks(ctx context.Context, cwd string, cfg *config.LayeredConf
 			checkModelPath(cwd, cfg.ModelPath),
 			checkOpenAIEndpoint(ctx, cfg.EndpointURL),
 		}
+	case "lemonade":
+		return []runtimeCheck{checkOpenAIEndpoint(ctx, cfg.EndpointURL)}
 	case "ollama":
 		return []runtimeCheck{checkOllamaEndpoint(ctx)}
 	case "flm":

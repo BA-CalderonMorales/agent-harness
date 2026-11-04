@@ -110,19 +110,28 @@ func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *A
 func receiveTUIMessage(t *testing.T, app *tui.App) tea.Msg {
 	t.Helper()
 
+	msg, ok := tryReceiveTUIMessage(t, app, 250*time.Millisecond)
+	if !ok {
+		t.Fatal("timed out waiting for TUI message")
+	}
+	return msg
+}
+
+// tryReceiveTUIMessage drains the TUI channel without failing the test on
+// an empty buffer; tests that wait for a goroutine to settle use it.
+func tryReceiveTUIMessage(t *testing.T, app *tui.App, timeout time.Duration) (tea.Msg, bool) {
+	t.Helper()
+
 	msgChan := exportedField(reflect.ValueOf(app).Elem().FieldByName("msgChan"))
 	cases := []reflect.SelectCase{
 		{Dir: reflect.SelectRecv, Chan: msgChan},
-		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(time.After(250 * time.Millisecond))},
+		{Dir: reflect.SelectRecv, Chan: reflect.ValueOf(time.After(timeout))},
 	}
 	chosen, msg, ok := reflect.Select(cases)
-	if chosen == 1 {
-		t.Fatal("timed out waiting for TUI message")
+	if chosen == 1 || !ok {
+		return nil, false
 	}
-	if !ok {
-		t.Fatal("TUI message channel closed")
-	}
-	return msg.Interface().(tea.Msg)
+	return msg.Interface().(tea.Msg), true
 }
 
 func chatMessages(t *testing.T, app *tui.App) []struct {

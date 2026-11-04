@@ -542,9 +542,9 @@ var _ = Describe("App", func() {
 			It("should reserve space for tab and status bars", func() {
 				model, _ := app.Update(tea.WindowSizeMsg{Width: 80, Height: 24})
 				updated := model.(*App)
-				// Sub-models get height minus the chrome (6: tab bar 3
-				// + status bar 3) and the frame's border rows.
-				Expect(updated.homeModel.height).To(Equal(24 - 6 - FrameRows))
+				// Sub-models get height minus the chrome (tab bar 3 +
+				// footer 2) and the frame's border rows.
+				Expect(updated.homeModel.height).To(Equal(24 - ChromeRows - FrameRows))
 			})
 		})
 	})
@@ -692,10 +692,10 @@ var _ = Describe("App", func() {
 				// The frame insets the pane by one border cell per side;
 				// the chat model renders inside that inner width. The
 				// real resize path hands sub-models the content height
-				// (terminal minus the 6-row chrome and the frame's two
+				// (terminal minus the fixed chrome and the frame's two
 				// border rows); MaxHeight clips stale fixtures.
 				app.chatModel.width = 180 - FrameCols
-				app.chatModel.height = 24 - 6 - FrameRows
+				app.chatModel.height = 24 - ChromeRows - FrameRows
 				app.chatModel.SetInput("ready")
 				testHome := GinkgoT().TempDir()
 				testenv.SetHome(GinkgoT(), testHome)
@@ -708,9 +708,9 @@ var _ = Describe("App", func() {
 				view := app.View()
 
 				Expect(view).To(ContainSubstring("[ready]"))
-				Expect(view).To(ContainSubstring("gpt-5.5"))        // mode line
-				Expect(view).To(ContainSubstring("sample-project")) // bottom bar path
-				Expect(view).To(ContainSubstring("openrouter"))     // mode line provider
+				Expect(view).To(ContainSubstring("gpt-5.5"))            // mode line
+				Expect(view).To(ContainSubstring("sample-project"))     // bottom bar path
+				Expect(view).To(ContainSubstring("hosted: OpenRouter")) // mode line connection
 				Expect(view).To(ContainSubstring("[effort: medium]"))
 				Expect(view).To(ContainSubstring(`"?" help`))
 				Expect(view).To(ContainSubstring("$0.12"))
@@ -1188,8 +1188,8 @@ var _ = Describe("getToolDisplayName", func() {
 			Expect(getToolDisplayName("edit")).To(Equal("Update"))
 		})
 
-		It("should classify ls under the Shell class", func() {
-			Expect(getToolDisplayName("ls")).To(Equal("Shell"))
+		It("should distinguish directory listing from shell execution", func() {
+			Expect(getToolDisplayName("ls")).To(Equal("List Files"))
 		})
 
 		It("should return Find Files for glob", func() {

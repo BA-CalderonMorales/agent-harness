@@ -94,8 +94,8 @@ func TestReasoningParamsProviderMatrix(t *testing.T) {
 		wantKeys   []string
 		absentKeys []string
 	}{
-		{"openai", "test-model", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
-		{"openrouter", "test-model", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs"}},
+		{"openai", "test-model", []string{"reasoning_effort"}, []string{"thinking", "reasoning_budget", "chat_template_kwargs", "reasoning"}},
+		{"openrouter", "test-model", []string{"reasoning"}, []string{"reasoning_effort", "thinking", "reasoning_budget", "chat_template_kwargs"}},
 		{"nvidia", "nvidia/nemotron-3-super", []string{"reasoning_budget", "chat_template_kwargs"}, []string{"reasoning_effort", "thinking"}},
 		{"nvidia", "deepseek-ai/deepseek-v4-flash", []string{"chat_template_kwargs"}, []string{"reasoning_effort", "reasoning_budget"}},
 		{"anthropic", "test-model", []string{"thinking"}, []string{"reasoning_effort", "reasoning_budget"}},
@@ -119,6 +119,57 @@ func TestReasoningParamsProviderMatrix(t *testing.T) {
 				t.Fatalf("%s payload must not carry %q: %v", tc.provider, key, result)
 			}
 		}
+	}
+}
+
+// TestOpenRouterPayloadUsesReasoningObject pins the hosted latency fix:
+// OpenRouter exposes effort as reasoning.effort, and reasoning_effort is
+// not in a free model's supported_parameters, so the old field was dropped
+// and the model kept its default (long) reasoning budget.
+func TestOpenRouterPayloadUsesReasoningObject(t *testing.T) {
+	result := decodePayloadWithModel(t, "openrouter", "low", "nvidia/nemotron-3.5-lightning:free")
+
+	reasoning, ok := result["reasoning"].(map[string]any)
+	if !ok {
+		t.Fatalf("openrouter payload missing reasoning object: %v", result)
+	}
+	if reasoning["effort"] != "low" {
+		t.Fatalf("reasoning.effort = %v, want low: %v", reasoning["effort"], result)
+	}
+	if _, ok := result["reasoning_effort"]; ok {
+		t.Fatalf("openrouter payload must not carry reasoning_effort: %v", result)
+	}
+}
+
+// TestTemperatureZeroIsSentWhenChosen pins the trust bug: 0.0 is a
+// legal deterministic setting, but the old "only send > 0" rule made it
+// silently fall back to the provider default (often 1.0) - the exact
+// condition behind unstable free-model prose.
+func TestTemperatureZeroIsSentWhenChosen(t *testing.T) {
+	client := NewHTTPClientWithBaseURL("openrouter", "test-key", "https://example.test/v1")
+
+	payload, err := client.buildPayload(Request{Model: "test-model", Temperature: 0, TemperatureSet: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var chosen map[string]any
+	if err := json.Unmarshal(payload, &chosen); err != nil {
+		t.Fatal(err)
+	}
+	if got, ok := chosen["temperature"]; !ok || got != float64(0) {
+		t.Fatalf("explicit temperature 0 was dropped: %v", chosen)
+	}
+
+	payload, err = client.buildPayload(Request{Model: "test-model"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var unset map[string]any
+	if err := json.Unmarshal(payload, &unset); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := unset["temperature"]; ok {
+		t.Fatalf("unset temperature must stay absent: %v", unset)
 	}
 }
 

@@ -20,7 +20,12 @@ func peerConfig(t *testing.T, mode string) McpServerConfig {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return McpServerConfig{Command: command, Args: args, Env: map[string]string{"AH_MCP_TEST_PEER": mode}}
+	// The race runtime otherwise sleeps one second at child exit, racing
+	// the production transport's one-second termination grace. Disable only
+	// that artificial sleep; race detection and its failure exit code remain.
+	return McpServerConfig{Command: command, Args: args, Env: map[string]string{
+		"AH_MCP_TEST_PEER": mode, "GORACE": "atexit_sleep_ms=0",
+	}}
 }
 
 func TestManagerFailureCleansUpProcessAndAllowsRetry(t *testing.T) {

@@ -60,7 +60,7 @@ func TestConsumeStreamPreservesValidFragmentedToolInput(t *testing.T) {
 	events <- types.LLMMessageStop{StopReason: "tool_use"}
 	close(events)
 
-	_, toolUses, err := loop.consumeStream(context.Background(), events, make(chan types.StreamEvent, 1))
+	_, toolUses, err := loop.consumeStream(context.Background(), events, make(chan types.StreamEvent, 8))
 	if err != nil {
 		t.Fatalf("consumeStream() error = %v", err)
 	}
@@ -155,7 +155,7 @@ func TestConsumeStreamPreservesProseAroundToolCalls(t *testing.T) {
 		events <- event
 	}
 	close(events)
-	out := make(chan types.StreamEvent, 1)
+	out := make(chan types.StreamEvent, len(input)+2)
 	msg, calls, err := (&Loop{}).consumeStream(context.Background(), events, out)
 	if err != nil {
 		t.Fatal(err)
@@ -175,8 +175,147 @@ func TestConsumeStreamPreservesProseAroundToolCalls(t *testing.T) {
 			t.Fatalf("block %d = %#v, want tool %q", i*2+1, msg.Content[i*2+1], want)
 		}
 	}
-	emitted := (<-out).(types.StreamMessage)
+	var streamed strings.Builder
+	var emitted *types.StreamMessage
+	for len(out) > 0 {
+		switch event := (<-out).(type) {
+		case types.StreamTextDelta:
+			streamed.WriteString(event.Text)
+		case types.StreamMessage:
+			message := event
+			emitted = &message
+		}
+	}
+	if emitted == nil {
+		t.Fatal("no final StreamMessage emitted")
+	}
 	if len(emitted.Message.Content) != len(msg.Content) {
 		t.Fatal("streamed content differs from durable message")
+	}
+	want := "I will inspect the workspace.Next, read the configuration.Then I will summarize."
+	if streamed.String() != want {
+		t.Fatalf("streamed prose = %q, want %q", streamed.String(), want)
+	}
+}
+
+func TestConsumeStreamEmitsToolUseAtItsStreamPosition(t *testing.T) {
+	input := []types.LLMEvent{
+		types.LLMMessageStart{ID: "message-1"},
+		types.LLMTextDelta{Delta: "before "},
+		types.LLMToolUseDelta{ID: "call-1", Name: "bash", Delta: `{"command":"pwd"}`},
+		types.LLMTextDelta{Delta: "after"},
+		types.LLMMessageStop{StopReason: "tool_use"},
+	}
+	events := make(chan types.LLMEvent, len(input))
+	for _, event := range input {
+		events <- event
+	}
+	close(events)
+	out := make(chan types.StreamEvent, len(input)+2)
+
+	if _, _, err := (&Loop{}).consumeStream(context.Background(), events, out); err != nil {
+		t.Fatal(err)
+	}
+	var kinds []string
+	for len(out) > 0 {
+		switch event := (<-out).(type) {
+		case types.StreamTextDelta:
+			kinds = append(kinds, "text:"+event.Text)
+		case types.StreamToolUse:
+			kinds = append(kinds, "tool:"+event.Block.ID)
+		case types.StreamMessage:
+			kinds = append(kinds, "message")
+		}
+	}
+	want := []string{"text:before ", "tool:call-1", "text:after", "message"}
+	if strings.Join(kinds, "|") != strings.Join(want, "|") {
+		t.Fatalf("event order = %v, want %v", kinds, want)
+	}
+}
+
+// TestConsumeStreamBoundsLiveReasoningPreview: a hosted reasoning model
+// can stream for a minute. The preview only shows the tail, so forwarding
+// the whole accumulated trace on every delta was quadratic copying.
+func TestConsumeStreamBoundsLiveReasoningPreview(t *testing.T) {
+	chunk := strings.Repeat("r", 1024)
+	input := make([]types.LLMEvent, 0, 12)
+	for i := 0; i < 10; i++ {
+		input = append(input, types.LLMReasoningDelta{Delta: chunk})
+	}
+	input = append(input,
+		types.LLMTextDelta{Delta: "answer"},
+		types.LLMMessageStop{StopReason: "stop"},
+	)
+	events := make(chan types.LLMEvent, len(input))
+	for _, event := range input {
+		events <- event
+	}
+	close(events)
+	out := make(chan types.StreamEvent, 32)
+
+	if _, _, err := (&Loop{}).consumeStream(context.Background(), events, out); err != nil {
+		t.Fatal(err)
+	}
+
+	var last string
+	previews := 0
+	for len(out) > 0 {
+		switch event := (<-out).(type) {
+		case types.StreamThinking:
+			previews++
+			if len(event.Text) > maxLiveReasoning {
+				t.Fatalf("thinking preview = %d bytes, want at most %d", len(event.Text), maxLiveReasoning)
+			}
+			last = event.Text
+		}
+	}
+	if previews == 0 {
+		t.Fatal("no thinking previews emitted")
+	}
+	if want := strings.Repeat("r", maxLiveReasoning); last != want {
+		t.Fatalf("final preview length = %d, want the bounded tail of length %d", len(last), len(want))
+	}
+}
+
+func TestConsumeStreamEmitsTextDeltasBeforeTheFinalMessage(t *testing.T) {
+	input := []types.LLMEvent{
+		types.LLMMessageStart{ID: "message-1"},
+		types.LLMTextDelta{Delta: "Hel"},
+		types.LLMTextDelta{Delta: "lo"},
+		types.LLMMessageStop{StopReason: "stop"},
+	}
+	events := make(chan types.LLMEvent, len(input))
+	for _, event := range input {
+		events <- event
+	}
+	close(events)
+	out := make(chan types.StreamEvent, len(input))
+
+	msg, _, err := (&Loop{}).consumeStream(context.Background(), events, out)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var emitted []types.StreamEvent
+	for len(out) > 0 {
+		emitted = append(emitted, <-out)
+	}
+	if len(emitted) != 3 {
+		t.Fatalf("got %d events, want two deltas and the final message", len(emitted))
+	}
+	for i, want := range []string{"Hel", "lo"} {
+		delta, ok := emitted[i].(types.StreamTextDelta)
+		if !ok || delta.Text != want {
+			t.Fatalf("event %d = %#v, want delta %q", i, emitted[i], want)
+		}
+	}
+	final, ok := emitted[2].(types.StreamMessage)
+	if !ok {
+		t.Fatalf("last event = %T, want StreamMessage", emitted[2])
+	}
+	if got := final.Message.Content[0].(types.TextBlock).Text; got != "Hello" {
+		t.Fatalf("final message text = %q, want the assembled prose", got)
+	}
+	if got := msg.Content[0].(types.TextBlock).Text; got != "Hello" {
+		t.Fatalf("durable message text = %q, want the assembled prose", got)
 	}
 }

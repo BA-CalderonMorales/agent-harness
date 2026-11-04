@@ -1,5 +1,11 @@
 # Termux Edge Cases for agent-harness
 
+Historical portability notes, not current support certification. From 0.4.0,
+native Termux builds are best-effort; installations below the release Go
+requirement are unsupported. See the [current policy](install.md#termux-android).
+The Android goal is a dedicated app. Instructions and validation claims
+below describe earlier work and may reference retired flags or interfaces.
+
 > Documenting Android/Termux-specific behaviors discovered during portability testing.
 
 ---
