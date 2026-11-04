@@ -51,7 +51,7 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
 	if err := cmd.Start(); err != nil {
-		return tools.ToolResult{Data: "[error starting command: " + err.Error() + "]"}, nil
+		return tools.ToolResult{Data: "[error starting command: " + err.Error() + "]", IsError: true}, nil
 	}
 
 	// Report start
@@ -80,7 +80,7 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 
 	result = truncateBashOutput(result)
 
-	return tools.ToolResult{Data: result}, nil
+	return tools.ToolResult{Data: result, IsError: err != nil}, nil
 }
 
 type bashOutputWriter struct {
