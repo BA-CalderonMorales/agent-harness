@@ -7,7 +7,7 @@
 # needs (bash, git, CA certificates). Everything the harness itself does
 # is compiled in; there is no Node or Python toolchain by design.
 
-FROM golang:1.26.9-bookworm AS build
+FROM golang:1.26.10-bookworm AS build
 
 WORKDIR /src
 

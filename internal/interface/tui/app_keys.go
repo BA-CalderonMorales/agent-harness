@@ -189,11 +189,17 @@ func (a App) handleKeys(msg tea.KeyMsg) (App, tea.Cmd, bool) {
 		if a.activeView == viewChat && a.chatModel.CollapseRecordExpansion() {
 			return a, nil, true
 		}
-		// If agent is running, cancel it first — and land in normal
-		// mode: Esc signaled "stop, let me look", so the next j/k must
-		// scroll instead of typing into a composer the user believes
-		// they left.
-		if a.agentCancelFunc != nil {
+		// A local confirmation or editor owns Esc before the global
+		// "stop the turn" action. Backing out of a delete confirmation
+		// or cancelling a settings edit must never kill a running turn
+		// as a side effect; the view handles the key below.
+		if a.activeView != viewChat && a.activeViewConsumesEsc() {
+			break
+		}
+		// If agent is running, cancel it — and land in normal mode:
+		// Esc signaled "stop, let me look", so the next j/k must scroll
+		// instead of typing into a composer the user believes they left.
+		if a.AgentRunning() {
 			a.CancelAgent()
 			a.enterNavigationMode()
 			return a, func() tea.Msg {
@@ -257,13 +263,11 @@ func (a App) resize(width, height int) (App, tea.Cmd) {
 	a.width = width
 	a.height = height
 
-	// Reserve space for the fixed chrome: tab bar (3: padding top +
-	// content + border bottom) + status bar (3: content + top and
-	// bottom padding) = 6 total, plus the app frame's top and bottom
-	// border rows. The reserve must match the chrome's real height —
-	// one row short and the pane scrolls the tab bar's padding row off
-	// the top.
-	reserved := 6 + FrameRows
+	// Reserve space for the fixed chrome, plus the app frame's top and
+	// bottom border rows. The reserve must match the chrome's real
+	// height — one row short and the pane scrolls the tab bar's padding
+	// row off the top.
+	reserved := ChromeRows + FrameRows
 
 	// The frame insets the content: sub-models render inside the
 	// border on every side, so their width shrinks by one column per

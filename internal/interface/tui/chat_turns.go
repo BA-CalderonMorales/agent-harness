@@ -212,11 +212,31 @@ func (m ChatModel) groupSignature(msgs []ChatMessage, i, j int) string {
 		for k := i; k < j; k++ {
 			if msgs[k].ID == m.currentStreamingAssistantID {
 				b.WriteString("live")
-				b.WriteString(strconv.FormatInt(int64(m.elapsed.Seconds()), 10))
+				// The header spinner advances once per 250ms tick, so the
+				// live block invalidates on the tick, not the second.
+				b.WriteString(strconv.FormatInt(m.elapsed.Milliseconds()/250, 10))
 				b.WriteString(strconv.Itoa(len(m.streamBuffer)))
 				b.WriteString(strconv.Itoa(len(m.thinkingText)))
 				b.WriteString(strconv.FormatBool(m.thinkingIsStatus))
 				b.WriteString(strconv.FormatBool(m.expandedMessageID == m.currentStreamingAssistantID))
+				// The header also renders the live phase: beat, prose flow,
+				// and the running/delegated call. Those live on the model,
+				// not on a message field, so the signature must carry them
+				// or the cached block keeps the previous phase.
+				b.WriteString("|")
+				b.WriteString(m.loopBeat)
+				b.WriteByte('|')
+				b.WriteString(strconv.FormatBool(m.writing))
+				b.WriteByte('|')
+				b.WriteString(strconv.FormatBool(m.placeholderPending))
+				b.WriteByte('|')
+				b.WriteString(strconv.FormatBool(strings.HasPrefix(m.thinkingText, "Connecting")))
+				if m.currentTool != nil {
+					b.WriteString("|tool=")
+					b.WriteString(m.currentTool.ID)
+					b.WriteByte(':')
+					b.WriteString(m.currentTool.Name)
+				}
 				break
 			}
 		}
@@ -401,8 +421,10 @@ func (m ChatModel) renderTurnBlock(msgs []ChatMessage, i, j int, collapsed bool)
 	}
 
 	inner, refs := m.assistantInnerContent(assistant, parts, toolRow)
-	bubbles := MessageBubbleAssistant.Width(m.bubbleWidth()).Render(inner)
-	b.WriteString(bubbles)
+	if strings.TrimSpace(inner) != "" {
+		bubbles := MessageBubbleAssistant.Width(m.bubbleWidth()).Render(inner)
+		b.WriteString(bubbles)
+	}
 
 	// The inner content is pre-wrapped to the bubble's inner width and
 	// the bubble is left-border only: inner rows are bubble rows, and

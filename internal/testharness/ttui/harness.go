@@ -181,6 +181,8 @@ func namedKey(name string) (tea.KeyMsg, bool) {
 		return tea.KeyMsg{Type: tea.KeyCtrlU}, true
 	case "ctrl+w":
 		return tea.KeyMsg{Type: tea.KeyCtrlW}, true
+	case "1", "2", "3", "4", "5":
+		return tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune(name)}, true
 	default:
 		return tea.KeyMsg{}, false
 	}

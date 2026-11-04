@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
@@ -20,6 +21,12 @@ import (
 // overrides this per loop (local providers need multi-minute first-token
 // windows; the package default stays tight for hosted APIs).
 var maxStreamIdle = 90 * time.Second
+
+// maxLiveReasoning bounds the reasoning tail forwarded to the TUI. The
+// preview renders the last ~100 characters; sending the whole accumulated
+// trace on every delta made a long hosted thinking phase quadratic in
+// string copying (and re-wrapped a huge string on every frame).
+const maxLiveReasoning = 4 << 10
 
 // idleWindow returns the configured idle watchdog for the loop, falling
 // back to the package default when the loop carries no override.
@@ -92,6 +99,18 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 	var currentReasoning strings.Builder
 	sawStop := false
 
+	// Announce a completed call at its position in the stream: prose
+	// deltas are already live, so waiting for the final message would
+	// place the call after text that actually followed it.
+	emitTool := func(block types.ToolUseBlock) error {
+		select {
+		case out <- types.StreamToolUse{Block: block}:
+			return nil
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+	}
+
 	idle := time.NewTimer(l.idleWindow())
 	defer idle.Stop()
 
@@ -159,9 +178,21 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				msg.UUID = e.ID
 			case types.LLMReasoningDelta:
 				// Reasoning is wait-state color, not transcript material:
-				// forward the live text for the thinking badge and keep
-				// it out of the durable message.
+				// forward the live tail for the thinking badge and keep
+				// it out of the durable message. Only the tail matters:
+				// the preview shows its end, and a bounded buffer keeps
+				// a long hosted thinking phase from copying a growing
+				// string on every delta.
 				currentReasoning.WriteString(e.Delta)
+				if currentReasoning.Len() > maxLiveReasoning {
+					text := currentReasoning.String()
+					tail := text[len(text)-maxLiveReasoning:]
+					for len(tail) > 0 && !utf8.RuneStart(tail[0]) {
+						tail = tail[1:]
+					}
+					currentReasoning.Reset()
+					currentReasoning.WriteString(tail)
+				}
 				select {
 				case out <- types.StreamThinking{Text: currentReasoning.String()}:
 				case <-ctx.Done():
@@ -172,11 +203,24 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
 						return nil, nil, err
 					}
+					if err := emitTool(*pendingToolUse); err != nil {
+						return nil, nil, err
+					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 					pendingToolUse = nil
 				}
 				currentText += e.Delta
+				// Forward the fragment for live rendering. The final
+				// StreamMessage still carries the assembled prose for
+				// persistence and for callers that ignore deltas.
+				if e.Delta != "" {
+					select {
+					case out <- types.StreamTextDelta{Text: e.Delta}:
+					case <-ctx.Done():
+						return nil, nil, ctx.Err()
+					}
+				}
 			case types.LLMToolUseDelta:
 				// Keep narration ahead of the call it introduces in both
 				// the live transcript and the persisted provider history.
@@ -191,6 +235,9 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
 						return nil, nil, err
 					}
+					if err := emitTool(*pendingToolUse); err != nil {
+						return nil, nil, err
+					}
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 
@@ -199,11 +246,20 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				toolInputBuffer += e.Delta
 			case types.LLMMessageStop:
+				// OpenRouter reports a mid-stream rate limit with
+				// finish_reason "error". It is a failed turn, not a
+				// successful empty answer.
+				if strings.EqualFold(e.StopReason, "error") {
+					return nil, nil, fmt.Errorf("provider reported an error mid-stream (finish_reason=error)")
+				}
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
 				l.LastUsage = e.Usage
 				if pendingToolUse != nil {
 					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+						return nil, nil, err
+					}
+					if err := emitTool(*pendingToolUse); err != nil {
 						return nil, nil, err
 					}
 					msg.Content = append(msg.Content, *pendingToolUse)

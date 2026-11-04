@@ -107,8 +107,8 @@ var _ = Describe("ModelPickerModel", func() {
 				Expect(picker.cursor).To(Equal(1))
 			})
 
-			It("should move cursor down with 'j'", func() {
-				closed, _ := picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("j")})
+			It("should move cursor down with Ctrl+N", func() {
+				closed, _ := picker.Update(tea.KeyMsg{Type: tea.KeyCtrlN})
 				Expect(closed).To(BeFalse())
 				Expect(picker.cursor).To(Equal(1))
 			})
@@ -123,11 +123,11 @@ var _ = Describe("ModelPickerModel", func() {
 				Expect(picker.cursor).To(Equal(1))
 			})
 
-			It("should move cursor up with 'k'", func() {
+			It("should move cursor up with Ctrl+P", func() {
 				picker.Update(tea.KeyMsg{Type: tea.KeyDown})
 				Expect(picker.cursor).To(Equal(1))
 
-				closed, _ := picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("k")})
+				closed, _ := picker.Update(tea.KeyMsg{Type: tea.KeyCtrlP})
 				Expect(closed).To(BeFalse())
 				Expect(picker.cursor).To(Equal(0))
 			})
@@ -292,11 +292,11 @@ var _ = Describe("ModelPickerModel", func() {
 			})
 		})
 
-		Context("Given 'q' is pressed", func() {
-			It("should close the picker without selecting", func() {
+		Context("Given 'q' is typed", func() {
+			It("should filter models without closing", func() {
 				closed, _ := picker.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("q")})
-				Expect(closed).To(BeTrue())
-				Expect(picker.IsShowing()).To(BeFalse())
+				Expect(closed).To(BeFalse())
+				Expect(picker.IsShowing()).To(BeTrue())
 				Expect(picker.SelectedModel()).To(BeNil())
 			})
 		})

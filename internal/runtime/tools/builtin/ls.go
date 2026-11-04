@@ -14,7 +14,7 @@ import (
 var ListDirectoryTool = tools.NewTool(tools.Tool{
 	Name:        "ls",
 	Aliases:     []string{"list_directory"},
-	Description: "List the contents of a single directory with file types and sizes.",
+	Description: "List one directory using a literal directory path, e.g. the current directory (.). Does not run shell commands, pipes, redirects, or globs.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
@@ -49,7 +49,7 @@ var ListDirectoryTool = tools.NewTool(tools.Tool{
 
 		entries, err := os.ReadDir(root)
 		if err != nil {
-			return tools.ToolResult{Data: "error: " + err.Error()}, nil
+			return tools.ToolResult{}, directoryListError(root, err)
 		}
 
 		var lines []string
@@ -86,7 +86,7 @@ var ListDirectoryTool = tools.NewTool(tools.Tool{
 		content, _ := result.(string)
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: content}
 	},
-	UserFacingName: func(map[string]any) string { return "ls" },
+	UserFacingName: func(map[string]any) string { return "List Files" },
 	GetActivityDescription: func(input map[string]any) string {
 		p, _ := input["path"].(string)
 		return fmt.Sprintf("Listing directory %s", p)

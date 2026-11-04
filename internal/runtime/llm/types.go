@@ -21,6 +21,10 @@ type Request struct {
 	Model        string
 	MaxTokens    int
 	Temperature  float64
+	// TemperatureSet distinguishes an explicit 0.0 (deterministic)
+	// from "caller left it unset". Zero is a legal sampling choice and
+	// providers must receive it when the user selected it.
+	TemperatureSet bool
 	// ReasoningEffort controls the provider's reasoning effort
 	// (low, medium, high, or "" to leave unset). Each provider expresses
 	// it in its own documented vocabulary (see applyReasoningParams).

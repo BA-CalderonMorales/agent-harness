@@ -73,8 +73,8 @@ func TestLoop_RepeatingIdenticalToolCallAbortsTurn(t *testing.T) {
 	if !strings.Contains(loopMsg, "branch was called 3 times") {
 		t.Fatalf("expected a tool-loop message, got %q", loopMsg)
 	}
-	if executions != 2 {
-		t.Fatalf("expected exactly 2 identical executions before abort (two-strike config), got %d", executions)
+	if executions != 3 {
+		t.Fatalf("expected 2 failed attempts plus a rejected duplicate result, got %d", executions)
 	}
 	if aborted != 3 {
 		t.Fatalf("expected 3 identical tool-use messages (2 executed, 1 aborted), got %d", aborted)
@@ -116,8 +116,8 @@ func TestLoop_DefaultAbortsOnFirstIdenticalRepeat(t *testing.T) {
 			}
 		}
 	}
-	if executions != 1 {
-		t.Fatalf("expected exactly 1 execution before the default abort, got %d", executions)
+	if executions != 2 {
+		t.Fatalf("expected 1 failed attempt plus a rejected duplicate result, got %d", executions)
 	}
 	if !strings.Contains(loopMsg, "called 2 times") {
 		t.Fatalf("expected the abort message at the second call, got %q", loopMsg)

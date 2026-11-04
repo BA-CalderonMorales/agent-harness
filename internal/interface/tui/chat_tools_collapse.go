@@ -64,7 +64,7 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		// Normalize through the display-name mapping so every entry
 		// path (registry UserFacingName like "ls", ToolExecutingMsg,
 		// session reload) classifies under the same group header —
-		// `ls` belongs to "Shell" wherever it came from.
+		// directory reads stay distinct from shell execution.
 		name := getToolDisplayName(msg.ToolName)
 		if current == nil || current.name != name {
 			current = &group{name: name, start: msg.ToolStartedAt}
@@ -103,6 +103,9 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 
 	var b strings.Builder
 	for gi, g := range groups {
+		if gi > 0 {
+			b.WriteString("\n")
+		}
 		dur := ""
 		if gi == len(groups)-1 {
 			dur = ToolTimeStyle.Render(formatElapsed(span))
@@ -126,15 +129,12 @@ func (m ChatModel) renderToolRunAt(run []ChatMessage, width int) string {
 		} else {
 			b.WriteString(left)
 		}
-		// Indented sub-list of each call beneath the group header, with
-		// a blank line between calls: horizontal breathing room keeps
-		// consecutive calls visually separate instead of a dense wall
-		// (goal 0.3.29 live feedback on grouping).
-		for ri, row := range g.rows {
+		// Indented sub-list of each call beneath the group header. Rows
+		// stay compact: the status glyph already separates calls, and a
+		// blank row between them doubles the block, so a 15-call burst
+		// eats half the pane and pushes the answer out of view.
+		for _, row := range g.rows {
 			b.WriteString("\n")
-			if ri > 0 {
-				b.WriteString("\n")
-			}
 			b.WriteString(" " + indentBlock(row))
 		}
 	}

@@ -90,7 +90,7 @@ func TestAutomaticCompactionPersistsTheContextUsedByTheModel(t *testing.T) {
 	client := &durableCompactionClient{}
 	app.client = client
 	app.loop = agent.NewLoop(client)
-	app.loop.Config.BlockingTokenLimit = 100
+	forceCompactionBudget(app)
 	app.loop.Config.DefaultMaxTurns = 1
 
 	app.handleAgentLoopAsync("continue", tui.NewApp())
@@ -149,7 +149,7 @@ func TestReactiveCompactionPersistsTheRetryContext(t *testing.T) {
 	app.client = client
 	app.loop = agent.NewLoop(client)
 	app.loop.Config.AutoCompactEnabled = false
-	app.loop.Config.BlockingTokenLimit = 100
+	forceCompactionBudget(app)
 	app.loop.Config.DefaultMaxTurns = 1
 
 	app.handleAgentLoopAsync("continue", tui.NewApp())
@@ -192,7 +192,7 @@ func TestCompactionPersistenceFailureDoesNotReportSuccess(t *testing.T) {
 	client := &durableCompactionClient{}
 	app.client = client
 	app.loop = agent.NewLoop(client)
-	app.loop.Config.BlockingTokenLimit = 100
+	forceCompactionBudget(app)
 	app.loop.Config.DefaultMaxTurns = 1
 
 	// Block persistence at the project directory level: replace it with
@@ -297,6 +297,13 @@ func durableCompactionMessages(count int) []types.Message {
 		messages = append(messages, message)
 	}
 	return messages
+}
+
+// forceCompactionBudget leaves a small history budget after the fixed
+// prompt and tool schemas, which is what the loop now accounts for.
+func forceCompactionBudget(app *App) {
+	overhead := agent.EstimatePromptTokens(app.buildSystemPrompt(), app.enabledToolsForMode())
+	app.loop.Config.BlockingTokenLimit = overhead + 300
 }
 
 func durableMessagesContain(messages []types.Message, want string) bool {

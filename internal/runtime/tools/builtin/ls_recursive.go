@@ -13,7 +13,7 @@ import (
 // LsRecursiveTool lists files recursively in a directory.
 var LsRecursiveTool = tools.NewTool(tools.Tool{
 	Name:        "ls_recursive",
-	Description: "List files and directories recursively in a specified path.",
+	Description: "List files recursively using a literal directory path, e.g. the current directory (.). Does not run shell commands, pipes, redirects, or globs.",
 	InputSchema: func() map[string]any {
 		return map[string]any{
 			"type": "object",
@@ -44,6 +44,13 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 	},
 	Call: func(input map[string]any, ctx tools.Context, canUseTool tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
 		root := input["path"].(string)
+		info, err := os.Stat(root)
+		if err != nil {
+			return tools.ToolResult{}, directoryListError(root, err)
+		}
+		if !info.IsDir() {
+			return tools.ToolResult{}, directoryListError(root, fmt.Errorf("path is a file, not a directory"))
+		}
 		maxDepth := 2
 		if d, ok := getNumber(input, "depth"); ok {
 			maxDepth = int(d)
@@ -53,7 +60,7 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 		const maxResults = 200
 		var results []string
 		var dirs, files int
-		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return err
 			}
@@ -95,7 +102,7 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 		})
 
 		if err != nil {
-			return tools.ToolResult{Data: "error: " + err.Error()}, nil
+			return tools.ToolResult{}, directoryListError(root, err)
 		}
 
 		var b strings.Builder
@@ -121,7 +128,7 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 		content, _ := result.(string)
 		return types.ToolResultBlock{ToolUseID: toolUseID, Content: content}
 	},
-	UserFacingName: func(map[string]any) string { return "ls_recursive" },
+	UserFacingName: func(map[string]any) string { return "List Files" },
 	GetActivityDescription: func(input map[string]any) string {
 		p, _ := input["path"].(string)
 		return fmt.Sprintf("Listing %s recursively", p)

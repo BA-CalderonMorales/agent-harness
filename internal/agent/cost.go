@@ -23,6 +23,14 @@ func (u TokenUsage) TotalTokens() int {
 
 // CostUSD estimates the cost in USD (rough estimates)
 func (u TokenUsage) CostUSD(model string) float64 {
+	// A free tier is exactly zero. Unknown models used to fall through
+	// to Claude Sonnet pricing, so an OpenRouter :free model showed a
+	// fabricated charge in the footer after its first turn.
+	lowerModel := strings.ToLower(model)
+	if lowerModel == "" || strings.Contains(lowerModel, ":free") {
+		return 0
+	}
+
 	// Very rough pricing estimates per 1M tokens
 	var inputPrice, outputPrice float64
 

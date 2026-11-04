@@ -140,7 +140,7 @@ func (m ChatModel) doSubmit() (model ChatModel, cmd tea.Cmd) {
 		if m.turnInFlight() {
 			m.QueueUserSubmit(input)
 			return m, func() tea.Msg {
-				return StatusMsg{Text: "Agent is working — your message is queued and sends when this turn finishes (Esc stops the turn).", Type: "info"}
+				return StatusMsg{Text: "Agent is working — your message is queued and sends when this turn finishes (Esc stops the turn, /steer redirects it now).", Type: "info"}
 			}
 		}
 		if m.delegate != nil {

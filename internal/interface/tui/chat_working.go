@@ -1,93 +1,104 @@
 package tui
 
 import (
-	"fmt"
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
 )
 
-// The agent working indicator: a status line above the composer rule
-// that states what the agent is doing while a turn runs — Codex-parity
-// for the "is it doing anything?" confusion (0.3.28 dogfood finding).
-// Renders in the chat chrome, never in the transcript: the transcript
-// is the record, this is the live weather report.
+// The agent working indicator: a status line that states what the agent
+// is doing while a turn runs — Codex-parity for the "is it doing
+// anything?" confusion (0.3.28 dogfood finding). The live phase rides
+// on the Agent header, at the bubble the user is waiting for; the chrome
+// band above the composer carries only the turn's beat track.
 //
 // States:
-//   thinking — turn in flight, no tool running (animated word + elapsed)
-//   working  — tool call(s) in flight (class, count, elapsed)
-//   idle     — nothing; the line is hidden entirely
+//   thinking  — turn in flight, no prose yet (animated spinner + elapsed)
+//   writing   — assistant prose is arriving (the bubble grows above)
+//   running   — a tool call is in flight (the row shows the detail)
+//   review    — an approval is open and the turn waits for the human
+//   idle      — nothing; the line is hidden entirely
 
-// workingVerbs is the word the status line animates in place. The word
-// never changes — letters shimmer under it instead — so the line reads
-// as one stable state, not a ticker (live feedback on 0.3.29 develop:
-// the rotating quips read as content, not progress).
-var workingVerbs = []string{"Working"}
+// workingFrames is the live turn's spinner. It exists to prove the
+// frame is moving while the elapsed clock proves the turn is
+// progressing. Eight frames at the 250ms tick is a calm two-second
+// wheel, the same glyph family the rest of the TUI uses.
+var workingFrames = []string{"⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"}
 
-// workingWord returns the (single) verb for the status line.
-func workingWord() string { return workingVerbs[0] }
-
-// workingBrightIndex returns which letter of the word is highlighted on
-// the given tick — the sweep position of the in-place shimmer. Exposed
-// for tests: rendered color is a TTY concern (lipgloss strips ANSI in
-// non-TTY contexts), the sweep order is the behavior.
-func workingBrightIndex(tick, wordLen int) int {
-	if wordLen <= 0 {
-		return 0
+// workingSpinner renders the wheel. Reduced motion keeps the state but
+// parks the wheel on one frame.
+func workingSpinner(tick int, reducedMotion bool) string {
+	if reducedMotion {
+		return InfoStyle.Render("•")
 	}
-	return tick % wordLen
+	return InfoStyle.Render(workingFrames[tick%len(workingFrames)])
 }
 
-// workingAnim renders the in-place shimmer for the word: one letter at
-// a time brightens, sweeping through the word on the tick clock. The
-// elapsed clock is the real progress signal; the shimmer just proves
-// the frame is live.
-func workingAnim(word string, tick int) string {
-	bright := workingBrightIndex(tick, len([]rune(word)))
-	var b strings.Builder
-	for i, r := range word {
-		if i == bright {
-			b.WriteString(InfoStyle.Render(string(r)))
-		} else {
-			b.WriteString(HelpDimStyle.Render(string(r)))
-		}
-	}
-	return b.String()
-}
-
-// workingStatusLine renders the agent status for the current model
-// state. Empty string means idle — the line is hidden and takes no
-// vertical space (the caller collapses it, so composer geometry is
-// unchanged when nothing runs).
+// workingPhaseLabel names what the turn is doing right now. The
+// transcript carries the detail (the command, the file, the answer
+// arriving); this line only has to say which phase the agent is in.
 //
-// Derived from existing state only: thinking/streaming (turn in
-// flight), currentToolMsg (a tool is executing), completedToolMsgs +
-// turnTools (how many calls this turn has made). No new fields, no new
-// refreshViewport path — the line animates on the existing timer tick
-// because View reads it fresh each frame.
-func (m ChatModel) workingStatusLine(tick int) string {
-	if !m.thinking && !m.streaming {
+// Derived from existing state only: the running tool row, whether text
+// deltas are flowing, the reasoning preview, and the approval beat the
+// app already computes. No second model of the turn.
+func (m ChatModel) workingPhaseLabel() string {
+	switch {
+	case m.loopBeat == beatReview:
+		return "Waiting for approval"
+	case m.currentToolMsg != nil && m.currentToolMsg.ToolStatus == ToolStatusRunning:
+		if name := strings.TrimSpace(m.currentToolMsg.ToolDisplayName); name != "" {
+			return "Running " + name
+		}
+		return "Running tool"
+	case m.writing && !m.placeholderPending:
+		// Buffered deltas are not visible prose yet: the header still
+		// says Thinking until the bubble actually shows the text.
+		return "Writing"
+	case strings.HasPrefix(m.thinkingText, "Connecting"):
+		return "Connecting"
+	default:
+		return "Thinking"
+	}
+}
+
+// liveHeaderStatus renders the live turn's phase for the Agent header:
+// the spinner, what the turn is doing, and how long it has run. Waiting
+// for the human is not work — the review beat says so without a wheel.
+func (m ChatModel) liveHeaderStatus(tick int) string {
+	label := HelpDimStyle.Render(m.workingPhaseLabel())
+	if m.loopBeat == beatReview {
+		return label
+	}
+	phase := workingSpinner(tick, m.reducedMotion) + " " + label
+	// A delegation is a flight between places: the sub-agent left, and
+	// the user should see that rather than guess from a spinner.
+	if m.delegationInFlight() {
+		phase += HelpDimStyle.Render(" · ") + ModePromptStyle.Render("✈ delegating")
+	}
+	return phase + HelpDimStyle.Render(" · ") + ToolTimeStyle.Render(formatElapsed(m.elapsed))
+}
+
+// workingStatusLine renders the chrome band above the composer. It
+// carries only the turn's beat track: the live spinner and the clock
+// moved to the Agent header, where the response is being cooked.
+// Empty string means idle — the band is hidden and takes no vertical
+// space (the caller collapses it, so composer geometry is unchanged
+// when nothing runs).
+func (m ChatModel) workingStatusLine(_ int) string {
+	if !m.loopTrack || (!m.thinking && !m.streaming) {
 		return ""
 	}
-	// The animated word + elapsed clock, whether or not a tool is
-	// running. Live feedback: the "Shell ×2" class-and-count read as
-	// content, not status — the user watches the transcript for WHAT
-	// is running; the indicator only needs to say work is happening
-	// and for how long.
-	return fmt.Sprintf("%s · %s",
-		workingAnim(workingWord(), tick),
-		formatElapsed(m.elapsed))
+	return loopTrackLine(m.loopBeat, m.width)
 }
 
-// workingStatusHeight reports how many rows the status block occupies in
+// workingStatusHeight reports how many rows the beat band occupies in
 // the current state (0 when idle) so View can budget vertical space
-// without a hidden-but-reserved row. Live, it is three rows: the status
-// line with a blank spacer above and below it.
+// without a hidden-but-reserved row. Live, it is a single track row.
 func (m ChatModel) workingStatusHeight() int {
 	if m.workingStatusLine(0) == "" {
 		return 0
 	}
-	return 3
+	return 1
 }
 
 // renderWorkingStatus renders the status line pinned to the pane width

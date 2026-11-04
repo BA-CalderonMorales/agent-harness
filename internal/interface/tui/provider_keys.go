@@ -9,7 +9,10 @@
 
 package tui
 
-import "fmt"
+import (
+	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+)
 
 // providerKeyStep is one hosted provider's key-acquisition journey: the
 // page it starts from and the ordered steps to a usable key.
@@ -71,17 +74,10 @@ var providerKeySteps = map[string]providerKeyStep{
 	},
 }
 
-// localProviderIDs are the runtimes that answer on this machine and
-// authenticate with nothing. Mirrors config.IsLocalProvider; kept here
-// so the wizard's key step and its "no key needed" blurbs cannot
-// disagree — the wizard used to ask ollama and flm for a key the
-// moment after promising they needed none.
-var localProviderIDs = map[string]bool{"local": true, "ollama": true, "flm": true}
-
 // providerNeedsKey reports whether a provider authenticates with an API
 // key.
 func providerNeedsKey(provider string) bool {
-	return !localProviderIDs[provider]
+	return !config.IsLocalProvider(provider)
 }
 
 // keyStepsFor returns a provider's key journey. ok is false for the

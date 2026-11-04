@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agents"
@@ -52,7 +53,10 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	// Show connecting state so user knows something is happening
 	tuiApp.Send(tui.AgentConnectingMsg{Endpoint: app.config.Provider})
 
-	sysPrompt := app.buildSystemPrompt()
+	sysPrompt, turnTools, maxOutput := app.turnProfile(input)
+	promptTokens := agent.EstimatePromptTokens(sysPrompt, turnTools)
+	maxOutput = fitOutputBudget(app.config.ContextLength, promptTokens, app.session.EstimateTokens(), maxOutput)
+	diag.Infof("agent.turn.request", "provider=%s model=%s system_chars=%d tools=%d prompt_tokens=%d max_output=%d", app.config.Provider, app.session.Model, len(sysPrompt), len(turnTools), promptTokens, maxOutput)
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	beginApprovalTurn(app, ctx)
@@ -65,7 +69,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	toolCtx := tools.Context{
 		Options: tools.Options{
 			MainLoopModel: app.session.Model,
-			Tools:         app.enabledToolsForMode(),
+			Tools:         turnTools,
 			Debug:         false,
 		},
 		AbortController:   ctx,
@@ -83,11 +87,13 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		SystemPrompt:    sysPrompt,
 		CanUseTool:      canUseTool,
 		ToolUseContext:  toolCtx,
-		MaxOutputTokens: app.config.MaxTokens,
+		MaxOutputTokens: maxOutput,
 		Temperature:     app.config.Temperature,
+		TemperatureSet:  app.config.TemperatureSet,
 		ReasoningEffort: app.config.Effort,
 		// The session-scoped /limit knob overrides the loop default.
 		MaxToolCalls: app.session.ToolLimit,
+		PromptTokens: promptTokens,
 	}
 
 	stream, err := app.loop.Query(ctx, params)
@@ -97,10 +103,21 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	}
 
 	var responseText strings.Builder
+	// requestText is the prose streamed for the current provider
+	// request. The final StreamMessage repeats that prose; comparing
+	// the two lets the TUI render deltas without duplicating the
+	// assembled message, while still falling back for providers that
+	// never emit deltas.
+	var requestText strings.Builder
+	// announcedTools carries calls already reported by the transient
+	// StreamToolUse event, so the final message does not open a second
+	// row for the same call.
+	announcedTools := map[string]bool{}
 	toolCallCount := 0
 	var persistenceErr error
 	var terminal *types.StreamTerminal
 	settlementSent := false
+	firstOutput := false
 
 	for event := range stream {
 		// Keep draining after a persistence failure so the producer can close
@@ -110,6 +127,24 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		}
 
 		switch e := event.(type) {
+		case types.StreamRequestStart:
+			requestText.Reset()
+		case types.StreamTextDelta:
+			if e.Text == "" {
+				break
+			}
+			if !firstOutput && strings.TrimSpace(e.Text) != "" {
+				firstOutput = true
+				diag.Infof("agent.turn.first_output", "first text after %s", time.Since(turnStarted).Round(time.Millisecond))
+			}
+			tuiApp.Send(tui.AgentChunkMsg{Text: e.Text, Timestamp: time.Now()})
+			responseText.WriteString(e.Text)
+			requestText.WriteString(e.Text)
+		case types.StreamToolUse:
+			if !announcedTools[e.Block.ID] {
+				app.handleToolUseStart(e.Block, tuiApp)
+				announcedTools[e.Block.ID] = true
+			}
 		case types.ProgressMessage:
 			// Progress is temporary tool activity, never model speech or
 			// session evidence. Strip terminal controls from server messages.
@@ -151,9 +186,17 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 				}
 				break
 			}
+			alreadyStreamed := streamedTextMatches(e.Message, requestText.String())
 			for _, block := range e.Message.Content {
 				switch b := block.(type) {
 				case types.TextBlock:
+					if alreadyStreamed {
+						break
+					}
+					if !firstOutput && strings.TrimSpace(b.Text) != "" {
+						firstOutput = true
+						diag.Infof("agent.turn.first_output", "first text after %s", time.Since(turnStarted).Round(time.Millisecond))
+					}
 					tuiApp.Send(tui.AgentChunkMsg{
 						Text:      b.Text,
 						Timestamp: time.Now(),
@@ -161,7 +204,10 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 					responseText.WriteString(b.Text)
 				case types.ToolUseBlock:
 					toolCallCount++
-					app.handleToolUseStart(b, tuiApp)
+					if !announcedTools[b.ID] {
+						app.handleToolUseStart(b, tuiApp)
+						announcedTools[b.ID] = true
+					}
 				case types.ToolResultBlock:
 					tuiApp.Send(tui.AgentToolDoneMsg{
 						ToolID:  b.ToolUseID,
@@ -176,6 +222,16 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 				diag.Error("session.save.turn", err)
 			}
 		case types.StreamError:
+			// Esc cancels the turn context; the loop reports that as a
+			// provider error. The TUI already owns the cancellation notice,
+			// so rendering "Error: context canceled" on top of it reads as a
+			// second, contradictory failure.
+			if userCancelled(ctx) {
+				break
+			}
+			// The pane shows the actionable summary; the Logs tab keeps
+			// the full provider sentence and limit metadata for diagnosis.
+			diag.Errorf("provider.stream", "%v", e.Error)
 			if !settlementSent {
 				tuiApp.Send(tui.AgentErrorMsg{Error: e.Error, Timestamp: time.Now()})
 				settlementSent = true
@@ -188,6 +244,10 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 	if persistenceErr != nil {
 		return
 	}
+	if userCancelled(ctx) {
+		diag.Infof("agent.turn.cancelled", "cancelled by user after %s", time.Since(turnStarted).Round(100*time.Millisecond))
+		return
+	}
 	if terminal == nil {
 		terminal = &types.StreamTerminal{Reason: string(agent.TerminalReasonError), Error: fmt.Errorf("agent stream ended without a terminal event")}
 	}
@@ -197,6 +257,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 			if err == nil {
 				err = fmt.Errorf("agent turn ended: %s", terminal.Reason)
 			}
+			diag.Errorf("provider.turn", "%v", err)
 			tuiApp.Send(tui.AgentErrorMsg{Error: err, Timestamp: time.Now()})
 		}
 		return
@@ -237,6 +298,12 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 			})
 		}
 	}
+}
+
+// userCancelled reports the Esc path: the turn context was canceled by
+// the user, not by a provider deadline or an internal failure.
+func userCancelled(ctx context.Context) bool {
+	return errors.Is(ctx.Err(), context.Canceled)
 }
 
 // runDelegatedAgent executes a child with fresh messages and bounded runtime.
@@ -304,15 +371,18 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	childLoop.Config.DefaultMaxTurns = delegatedAgentMaxTurns
 	childLoop.Config.MaxToolCalls = delegatedAgentMaxTools
 	childLoop.Config.StreamingToolExecution = false
+	childSystemPrompt := delegatedSystemPrompt(app.buildSystemPrompt(), definition, hasDefinition)
 	stream, err := childLoop.Query(subCtx, agent.QueryParams{
 		Messages:        []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
-		SystemPrompt:    delegatedSystemPrompt(app.buildSystemPrompt(), definition, hasDefinition),
+		SystemPrompt:    childSystemPrompt,
 		CanUseTool:      canUseTool,
 		ToolUseContext:  childCtx,
 		MaxOutputTokens: app.config.MaxTokens,
 		Temperature:     app.config.Temperature,
+		TemperatureSet:  app.config.TemperatureSet,
 		MaxTurns:        delegatedAgentMaxTurns,
 		MaxToolCalls:    delegatedAgentMaxTools,
+		PromptTokens:    agent.EstimatePromptTokens(childSystemPrompt, childTools),
 	})
 	if err != nil {
 		return "", fmt.Errorf("delegated worker failed: %w", err)

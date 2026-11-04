@@ -66,9 +66,20 @@ func (m ChatModel) View() string {
 		vpHeight = 1
 	}
 
-	// Ensure viewport has correct dimensions
+	// The live working band changes the viewport height between frames.
+	// The stored offset was computed for the previous height, so keeping
+	// it can hide the newest rows under the chrome — the streamed answer
+	// would be clipped exactly while it is arriving. Follow the bottom
+	// when the reader was there; otherwise clamp an offset that no longer
+	// fits.
+	atBottom := m.viewport.AtBottom()
 	m.viewport.Width = m.width
 	m.viewport.Height = vpHeight
+	if atBottom {
+		m.viewport.GotoBottom()
+	} else {
+		m.viewport.SetYOffset(m.viewport.YOffset)
+	}
 	// Composer top row in pane coordinates: the click mapper turns a
 	// tap on the composer into a focus request (tap-to-type). The live
 	// working block sits between the viewport and the composer.
@@ -126,25 +137,28 @@ func (m ChatModel) View() string {
 	// transcript; hidden entirely when idle so geometry is unchanged.
 	tick := int(time.Since(m.startTime).Milliseconds() / 250)
 	if showStatus {
-		if status := m.renderWorkingStatus(tick, m.width); status != "" {
-			// Blank · status · blank: the line breathes between the
-			// transcript and the composer rule. workingStatusHeight
-			// reserves all three rows, so the composer stays on the pane
-			// and the padded band never collapses into the transcript.
-			sections = append(sections, "", status, "")
+		if status := m.renderWorkingStatus(tick, m.composerWidth()); status != "" {
+			// One row, directly above the composer rule: the beat track
+			// is a reading, not a conversation turn. The live spinner and
+			// clock ride on the Agent header now, so the band no longer
+			// needs padding — and the reclaimed rows go to the transcript.
+			status = lipgloss.NewStyle().Width(m.width).Padding(0, chromeInset(m.width)).Render(status)
+			sections = append(sections, status)
 		}
 	}
 
-	// Composer: centered column with padding above and below the input text,
-	// a mode line (mode · model · provider · reasoning effort) under it, and
-	// optional inline suggestions between the editor and the mode line.
+	// Composer: a full-width rule closes the transcript, then the input
+	// and mode line sit in an inset column under it — the desktop-app
+	// shape of a bottom toolbar rather than a floating box.
 	columnWidth := m.width
+	composerWidth := m.composerWidth()
+	inset := chromeInset(m.width)
 
 	// No prompt glyph: the composer is the affordance, and the mode
 	// line below states the mode. A prefix symbol is noise.
-	editorWidth := columnWidth - 4
+	editorWidth := composerWidth - 4
 	if editorWidth < 20 {
-		editorWidth = columnWidth
+		editorWidth = composerWidth
 	}
 	editorContent := m.textarea.View()
 
@@ -163,22 +177,15 @@ func (m ChatModel) View() string {
 		blockParts = append(blockParts, m.renderSuggestions())
 	}
 
-	// The composer's top border is the mode affordance: bright while
-	// you can type (insert), dim while you read (navigate) — the
-	// boundary is visible where the eyes already are, on the terminal's
-	// own background. When the draft overflows the window, the tail
-	// marker keeps the hidden lines discoverable instead of silently
-	// gone; the first line stays pinned at the top.
-	composerBorder := ColorBorder
-	if m.modeLabel == "typing" || m.focused {
-		composerBorder = ColorPrimary
-	}
-	if m.hiddenRowsBelow() > 0 {
-		composerBorder = ColorPrimary
-	}
+	// The composer's top border is the footer band's rule: full width,
+	// in the same accent as the tab bar's rule, so the top and bottom
+	// chrome read as one frame around the content. The typing affordance
+	// lives in the mode line below; the rule never changes color and
+	// leaves no floating gap at either edge.
 	borderStyle := InputContainerStyle.
 		Width(columnWidth).
-		BorderForeground(composerBorder).
+		BorderForeground(ColorPrimary).
+		Padding(0, inset).
 		PaddingTop(ComposerTopPadding).
 		PaddingBottom(ComposerBottomPadding)
 
@@ -196,8 +203,13 @@ func (m ChatModel) View() string {
 		Render(lipgloss.JoinVertical(lipgloss.Left, block...))
 
 	// The mode line renders below the block, on the terminal background.
-	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, m.renderModeLine())
-
+	// It takes the composer's inset without taking the rule's: the text
+	// keeps its breathing room while the rule spans the footer's edges.
+	modeLine := lipgloss.NewStyle().
+		Width(columnWidth).
+		Padding(0, inset).
+		Render(m.renderModeLine())
+	composerPanel := lipgloss.JoinVertical(lipgloss.Left, blockPanel, modeLine)
 	sections = append(sections, composerPanel)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)
@@ -209,142 +221,6 @@ func plural(n int) string {
 		return ""
 	}
 	return "s"
-}
-
-// effortChip renders the reasoning effort as a self-describing chip: the
-// axis the user can act on and the level it is set to, named together.
-//
-// The level also carries its own emphasis — quiet at low, the rail's own
-// weight at medium, accented at high — so the ramp from reserved to
-// generous reads at a glance instead of only through the word. That is
-// what the bare "effort medium" form failed to do: it named the axis but
-// looked like two more values, so the line read as noise.
-func effortChip(effort string) string {
-	label := "[effort: " + effort + "]"
-	switch effort {
-	case "low":
-		return HelpDimStyle.Render(label)
-	case "high":
-		return InfoStyle.Render(label)
-	default:
-		return label
-	}
-}
-
-// renderModeLine renders the mode · model · provider · reasoning-effort line
-// shown under the input, mirroring modern composer status rows.
-func (m ChatModel) renderModeLine() string {
-	// The mode is always the first beat of the line: vim-style users read
-	// navigate/typing instantly, and the persona never hides it.
-	mode := m.modeLabel
-	if mode == "" {
-		mode = "navigate"
-	}
-	modeBit := ModePromptStyle.Render(mode)
-
-	// Segment priority when the pane narrows: the mode leads, the
-	// model identifies what is answering; persona, effort, and provider
-	// yield in that order. A clipped mid-word line helps nobody.
-	type segment struct {
-		width int
-		text  string
-		style bool
-	}
-	segments := []segment{}
-	if m.persona != "" {
-		segments = append(segments, segment{lipgloss.Width(m.persona), m.persona, false})
-	}
-	if m.model != "" {
-		name := ShortenModelName(m.model)
-		segments = append(segments, segment{lipgloss.Width(name), name, false})
-	}
-	if m.provider != "" {
-		segments = append(segments, segment{lipgloss.Width(m.provider), m.provider, false})
-	}
-	if m.agentMode != "" {
-		segments = append(segments, segment{lipgloss.Width(m.agentMode), m.agentMode, true})
-	}
-	// Reasoning effort is the one segment that cannot read as a bare
-	// value: "medium" alone names no axis, and gluing the label onto it
-	// left a two-word fragment — "effort medium" — sitting in a rail of
-	// single values. The setting was on screen and unreadable. It renders
-	// as a self-describing chip instead, in the same bracket language the
-	// rest of the app uses for state ([ready], [running], [on]), so the
-	// label reads as part of the chip rather than as a stray word.
-	effort := m.effort
-	if effort == "" {
-		effort = "medium"
-	}
-	chip := effortChip(effort)
-	// lipgloss.Width measures the visible text, so the styled chip still
-	// reports the width the budget math must reserve for it.
-	segments = append(segments, segment{lipgloss.Width(chip), chip, false})
-
-	budget := m.width - lipgloss.Width(mode)
-	keep := make([]bool, len(segments))
-	for i := range segments {
-		keep[i] = true
-		budget -= 3 + segments[i].width // separator + segment
-	}
-	// Keep the mode and effort signal useful on a narrow pane. Drop
-	// optional context first: provider, persona, then model. Effort is
-	// the last metadata field to disappear because it describes the
-	// active behavior rather than the selected implementation.
-	for _, i := range []int{2, 0, 1, 3} {
-		if budget >= 0 {
-			break
-		}
-		if i >= len(segments) {
-			continue
-		}
-		if keep[i] {
-			keep[i] = false
-			budget += segments[i].width + 3
-		}
-	}
-	parts := []string{modeBit}
-	for i := range segments {
-		if !keep[i] {
-			continue
-		}
-		text := segments[i].text
-		switch {
-		case segments[i].style && text == "auto":
-			// Yolo wears a warning: tools run without asking, and the
-			// chip should read as a state, not a decoration.
-			text = WarningStyle.Render(text)
-		case segments[i].style:
-			text = ModePromptStyle.Render(text)
-		}
-		parts = append(parts, text)
-	}
-	line := InputMetaStyle.Render(strings.Join(parts, " · "))
-
-	// Symmetric hints on the same row, right-aligned. While typing,
-	// "Esc" is the exit hatch; while navigating, "i" (or a tap on
-	// mobile panes, which have no `i` affordance) re-enters typing.
-	if m.focused {
-		hint := HelpDimStyle.Render(`"Esc" to navigate`)
-		pad := m.width - lipgloss.Width(line) - lipgloss.Width(hint)
-		if pad > 0 {
-			line += strings.Repeat(" ", pad) + hint
-		}
-	} else {
-		word := `"i" to type`
-		if isMobilePane(m.width) {
-			// Mobile panes enter the composer by tap-to-type
-			// (chat_update.go mouse handling), not via `i`.
-			word = `tap to type`
-		}
-		hint := HelpDimStyle.Render(word)
-		pad := m.width - lipgloss.Width(line) - lipgloss.Width(hint)
-		if pad > 0 {
-			line += strings.Repeat(" ", pad) + hint
-		}
-	}
-	// A wrapped row is unbudgeted height: truncation keeps the frame
-	// inside the terminal on narrow screens.
-	return lipgloss.NewStyle().MaxWidth(m.width).Render(line)
 }
 
 // syncSuggestionOffset keeps cursor inside visible window.
@@ -376,9 +252,11 @@ func (m ChatModel) renderUserMessage(msg ChatMessage) string {
 	b.WriteString(header)
 	b.WriteString("\n")
 
-	// Content - render markdown for rich formatting
+	// Content - render markdown for rich formatting. Trim the renderer's
+	// outer newlines: they painted a blank gutter row above and below
+	// every bubble, so a one-line message carried two empty border rows.
 	width := m.bubbleWidth()
-	renderedContent := renderMarkdown(msg.Content, width)
+	renderedContent := strings.Trim(renderMarkdown(msg.Content, width), "\n")
 	content := MessageBubbleUser.Width(width).Render(renderedContent)
 	b.WriteString(content)
 
@@ -424,16 +302,23 @@ func (m ChatModel) renderAssistantTracked(msg ChatMessage, width int) (string, [
 		return "", false
 	}
 	inner, refs := m.assistantInnerContent(msg, msg.Parts, toolRow)
+	header := m.renderAssistantHeader(msg)
+	if strings.TrimSpace(inner) == "" {
+		// A live placeholder before the first token is only its header:
+		// an empty bubble would paint a lone gutter row and push the
+		// question it answers out of the viewport.
+		return header, nil
+	}
 	bubbles := MessageBubbleAssistant.Width(m.bubbleWidth()).Render(inner)
-	return m.renderAssistantHeader(msg) + "\n" + bubbles, offsetClickRefs(refs, 1)
+	return header + "\n" + bubbles, offsetClickRefs(refs, 1)
 }
 
 // renderAssistantHeader is the "Agent 22:24" line — split from the
 // content so a turn block can nest its tool calls between the two.
-// Live turn state (elapsed clock, thinking badge) moved to the working
-// indicator above the composer: the header is the record ("this reply
-// landed at 22:24"), the status line is the live signal. On finalize,
-// the settled ResponseTime renders again.
+// A live turn carries its spinner and phase here, at the bubble that is
+// being cooked: the eye is already where the response will land, and
+// the chrome band is left to the loop track. On finalize, the settled
+// ResponseTime replaces the live phase.
 func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	var b strings.Builder
 
@@ -441,10 +326,10 @@ func (m ChatModel) renderAssistantHeader(msg ChatMessage) string {
 	if !msg.Timestamp.IsZero() {
 		header += TimestampStyle.Render(" " + chatStamp(msg.Timestamp))
 	}
-	// Live turns render a bare header; the elapsed clock and activity
-	// live in the working indicator above the composer (chat_working.go).
-	// Settled turns show how long the response took.
-	if !msg.Thinking && msg.ResponseTime > 0 {
+	if msg.Thinking {
+		tick := int(m.elapsed.Milliseconds() / 250)
+		header += HelpDimStyle.Render(" · ") + m.liveHeaderStatus(tick)
+	} else if msg.ResponseTime > 0 {
 		header += SuccessStyle.Render(fmt.Sprintf(" (%s)", formatElapsed(msg.ResponseTime)))
 	}
 	b.WriteString(header)
@@ -542,14 +427,22 @@ func (m ChatModel) assistantInnerContent(msg ChatMessage, parts []TurnPart, tool
 			if strings.TrimSpace(part.Text) == "" {
 				continue
 			}
-			rendered := renderMarkdown(part.Text, width-2)
+			rendered := strings.Trim(renderMarkdown(part.Text, width-2), "\n")
 			b.WriteString(rendered)
 			b.WriteString("\n")
 			rows += strings.Count(rendered, "\n") + 1
 		}
 		return strings.TrimRight(b.String(), "\n"), refs
 	}
-	renderedContent := renderMarkdown(msg.Content, width-2)
+	// The caret marks the live writing edge: the answer is arriving,
+	// not waiting. It is part of the markdown source so it sits at the
+	// actual text edge; appending it to the rendered, width-padded line
+	// would park it at the far right of the bubble.
+	content := msg.Content
+	if msg.Thinking && m.writing {
+		content += "▍"
+	}
+	renderedContent := strings.Trim(renderMarkdown(content, width-2), "\n")
 	b.WriteString(renderedContent)
 
 	return strings.TrimRight(b.String(), "\n"), refs

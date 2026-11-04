@@ -250,6 +250,23 @@ func TestZeroNumericSettingsDoNotClobberProject(t *testing.T) {
 	if cfg.Temperature != 0.0 {
 		t.Errorf("temperature = %v, want 0.0 (a legal choice)", cfg.Temperature)
 	}
+	if !cfg.TemperatureSet {
+		t.Error("temperature 0.0 must be marked as an explicit choice so the provider receives it")
+	}
+}
+
+func TestEnvTemperatureZeroIsMarkedExplicit(t *testing.T) {
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	clearConfigEnv(t)
+	t.Setenv("AH_TEMPERATURE", "0")
+
+	cfg, err := NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	if cfg.Temperature != 0.0 || !cfg.TemperatureSet {
+		t.Fatalf("AH_TEMPERATURE=0 => value %v set=%t, want 0 and explicit", cfg.Temperature, cfg.TemperatureSet)
+	}
 }
 
 func TestSaveSettings_FileModeIs0600(t *testing.T) {

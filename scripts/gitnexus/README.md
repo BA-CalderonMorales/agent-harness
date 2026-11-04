@@ -16,11 +16,16 @@ or a package-manager cache, which does not use this project's overrides.
 
 The overrides patch dependencies pulled in by optional local embeddings:
 
-- `adm-zip` 0.6.0 fixes [GHSA-xcpc-8h2w-3j85](https://github.com/advisories/GHSA-xcpc-8h2w-3j85).
-- `sharp` 0.35.4 includes the fixes for [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj).
+- `adm-zip` 0.6.1 fixes [GHSA-xcpc-8h2w-3j85](https://github.com/advisories/GHSA-xcpc-8h2w-3j85).
+- `sharp` 0.35.5 includes the fixes for [GHSA-f88m-g3jw-g9cj](https://github.com/advisories/GHSA-f88m-g3jw-g9cj).
 
 To update, check `npm view gitnexus version`, install that stable release
 with `npm install --prefix scripts/gitnexus --save-exact gitnexus@VERSION`,
 then audit and rebuild the index. Keep overrides until upstream dependency
 ranges resolve patched versions without them. Verify CLI indexing and query
 behavior after each update; a clean audit alone does not prove compatibility.
+
+The November 4 release audit leaves three moderate findings in development-only
+GitNexus/glob/minimatch dependencies, with no compatible fix offered by npm.
+No high or critical findings remain. These packages are not linked into the
+shipping Go executable. Recheck this exception when updating GitNexus.

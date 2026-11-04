@@ -98,8 +98,8 @@ func TestTurnTextSegmentsGetBeats(t *testing.T) {
 		"Let me peek further.",
 		"Here is the tour.",
 	} {
-		if !strings.Contains(content, want) {
-			t.Fatalf("segment text missing %q:\n%q", want, content)
+		if got := strings.Count(content, want); got != 1 {
+			t.Fatalf("segment %q appears %d times, want once:\n%q", want, got, content)
 		}
 	}
 

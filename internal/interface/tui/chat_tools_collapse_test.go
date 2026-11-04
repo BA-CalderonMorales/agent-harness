@@ -60,13 +60,27 @@ func TestToolRunCollapseThreeBashCallsToOneLine(t *testing.T) {
 	})
 	lines := renderedLines(content)
 	// Codex-style grouping (Task 4): one "Shell" header with each call
-	// as an indented sub-list row beneath it (blank separators between
-	// sub-rows are bubble-bordered, so they count as lines). The
-	// live-visibility fix materializes the turn bubble on tool start,
-	// so the block carries the Agent header first: Agent + header +
-	// 3 sub-rows + 2 separators = 7.
-	if len(lines) != 7 {
-		t.Fatalf("3 bash calls rendered %d lines, want Agent + header + 3 sub-rows + 2 separators:\n%s", len(lines), content)
+	// as a compact indented sub-list row beneath it. The live-visibility
+	// fix materializes the turn bubble on tool start, so the block
+	// carries the Agent header first: Agent + header + 3 sub-rows = 5.
+	if len(lines) != 5 {
+		t.Fatalf("3 bash calls rendered %d lines, want Agent + header + 3 sub-rows:\n%s", len(lines), content)
+	}
+	// No blank rows between sub-rows: a blank row per call doubles the
+	// block, and a 15-call burst then eats half the pane.
+	first := -1
+	for i, line := range lines {
+		if !strings.Contains(line, "$ echo") {
+			continue
+		}
+		if first < 0 {
+			first = i
+			continue
+		}
+		if i != first+1 {
+			t.Fatalf("sub-rows are not compact (rows at %d and %d):\n%s", first, i, content)
+		}
+		first = i
 	}
 	if !strings.Contains(lines[1], "Shell") {
 		t.Fatalf("group header missing display name: %q", lines[1])
@@ -108,10 +122,11 @@ func TestToolRunMixedBurstCollapsesRuns(t *testing.T) {
 		{"grep", ToolStatusSuccess, false},
 	})
 	lines := renderedLines(content)
-	// bash(2) + read(3) + grep(1): Agent + 2 group headers + 5 sub-rows
-	// + 4 sub-row separators + the single grep row — 15 non-blank lines.
-	if len(lines) != 15 {
-		t.Fatalf("mixed burst rendered %d lines, want Agent + 2 headers + 5 sub-rows + 4 separators + grep row:\n%s", len(lines), content)
+	// bash(2) + read(3) + grep(1): Agent + 2 group headers + 5 compact
+	// sub-rows + the single grep row, plus the blank bubble rows that
+	// separate one group from the next — 12 counted lines.
+	if len(lines) != 12 {
+		t.Fatalf("mixed burst rendered %d lines, want Agent + 2 headers + 5 sub-rows + grep row + 3 group gaps:\n%s", len(lines), content)
 	}
 	joined := strings.Join(lines, "\n")
 	// Group headers carry display names for multi-call runs; the
@@ -135,8 +150,8 @@ func TestToolRunErrorForcesExpandedLine(t *testing.T) {
 		{"bash", ToolStatusSuccess, false},
 	})
 	lines := renderedLines(content)
-	if len(lines) != 7 {
-		t.Fatalf("error in the middle rendered %d lines, want Agent + header + 3 expanded + 2 separators:\n%s", len(lines), content)
+	if len(lines) != 5 {
+		t.Fatalf("error in the middle rendered %d lines, want Agent + header + 3 rows:\n%s", len(lines), content)
 	}
 }
 
@@ -173,12 +188,11 @@ func TestToolRunRunningNeverFoldedIntoFinalCount(t *testing.T) {
 	// 2 done render as one collapsed group (header + 2 sub-rows); the
 	// running call stays on its own line — never folded into the
 	// group. With the live-visibility fix the block carries the Agent
-	// header first: Agent + group header + 2 sub-rows + 1 separator +
-	// running = 7.
-	if len(lines) != 7 {
-		t.Fatalf("2 done + 1 running rendered %d lines, want Agent + header + 2 sub-rows + sep + running:\n%s", len(lines), content)
+	// header first: Agent + group header + 2 sub-rows + running = 5.
+	if len(lines) != 5 {
+		t.Fatalf("2 done + 1 running rendered %d lines, want Agent + header + 2 sub-rows + running:\n%s", len(lines), content)
 	}
-	if !strings.Contains(lines[6], "→") {
+	if !strings.Contains(lines[4], "→") {
 		t.Fatalf("running tool line missing running glyph:\n%s", content)
 	}
 	if strings.Contains(lines[1], "(3)") {
@@ -246,23 +260,22 @@ func TestToolRunCollapseToggles(t *testing.T) {
 	if !m.ToolsCollapsed() {
 		t.Fatal("collapse should default to on (the wall is the pain)")
 	}
-	// Collapsed: Agent header + one Shell header + 3 indented sub-list
-	// rows + 2 sub-row separators (blank bubble-bordered lines count).
-	if n := len(renderedLines(m.viewport.View())); n != 7 {
-		t.Fatalf("collapsed render = %d lines, want Agent + header + 3 sub-rows + 2 separators", n)
+	// Collapsed: Agent header + one Shell header + 3 compact sub-rows.
+	if n := len(renderedLines(m.viewport.View())); n != 5 {
+		t.Fatalf("collapsed render = %d lines, want Agent + header + 3 sub-rows", n)
 	}
 
 	m.ToggleToolsCollapsed()
 	if m.ToolsCollapsed() {
 		t.Fatal("toggle did not expand")
 	}
-	if n := len(renderedLines(m.viewport.View())); n != 7 {
-		t.Fatalf("expanded render = %d lines, want Agent + header + 3 sub-rows + 2 separators", n)
+	if n := len(renderedLines(m.viewport.View())); n != 5 {
+		t.Fatalf("expanded render = %d lines, want Agent + header + 3 sub-rows", n)
 	}
 
 	m.ToggleToolsCollapsed()
-	if n := len(renderedLines(m.viewport.View())); n != 7 {
-		t.Fatalf("re-collapsed render = %d lines, want Agent + header + 3 sub-rows + 2 separators", n)
+	if n := len(renderedLines(m.viewport.View())); n != 5 {
+		t.Fatalf("re-collapsed render = %d lines, want Agent + header + 3 sub-rows", n)
 	}
 }
 

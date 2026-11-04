@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"io"
 	"net/http"
 	"strings"
@@ -87,7 +88,7 @@ func (p *HTTPProber) probeOpenAICompatible(ctx context.Context) (ProviderReadine
 		return ProviderMisconfigured, fmt.Sprintf("invalid request: %v", sanitizeError(err, p.APIKey))
 	}
 
-	if p.APIKey != "" {
+	if p.APIKey != "" && !config.IsLocalProvider(p.Provider) {
 		req.Header.Set("Authorization", "Bearer "+p.APIKey)
 	}
 	if p.Provider == "openrouter" {
@@ -182,8 +183,12 @@ func sanitizeError(err error, apiKey string) string {
 	if apiKey != "" {
 		msg = strings.ReplaceAll(msg, apiKey, "***")
 	}
-	if len(msg) > 100 {
-		msg = msg[:100] + "..."
+	// Provider metadata (error type, provider code, limit headers) sits
+	// after the message; 100 bytes cut off the part that explains which
+	// limit was hit. 800 keeps a full envelope useful without letting a
+	// pathological body flood the transcript.
+	if len(msg) > 800 {
+		msg = msg[:800] + "..."
 	}
 	return msg
 }

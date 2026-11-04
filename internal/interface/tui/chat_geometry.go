@@ -32,6 +32,31 @@ func (m ChatModel) bubbleWidth() int {
 	return m.width - 1
 }
 
+// chromeInset is the horizontal breathing room around the composer and
+// footer. Desktop gets the full inset; narrow panes step down so the
+// status metrics and the mode hint still fit instead of being dropped.
+func chromeInset(width int) int {
+	switch {
+	case width >= 80:
+		return ComposerInset
+	case width >= 50:
+		return 1
+	default:
+		return 0
+	}
+}
+
+// composerWidth is the content width inside the composer inset. The
+// block, its rule and the mode line all render to this budget, then the
+// inset pads them back out to the frame's inner width.
+func (m ChatModel) composerWidth() int {
+	w := m.width - 2*chromeInset(m.width)
+	if w < 1 {
+		return m.width
+	}
+	return w
+}
+
 // toolRowWidth is the budget for a tool row, given how many columns its
 // container spends before the row itself begins (0 for a row drawn
 // straight into the pane).

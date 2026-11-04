@@ -8,6 +8,27 @@ import (
 	"strings"
 )
 
+// renderStatusRow applies the footer's width, inset and breathing room in
+// one place: both the status message and the telemetry bar read as the
+// same band. The inset tracks the composer's, so the footer text lines up
+// with the typing surface on every pane width instead of crowding out the
+// metrics on a narrow one. No rule here — the composer's full-width rule
+// is the only separator above the band.
+func (a App) renderStatusRow(content string) string {
+	width := frameWidth(a.width)
+	inset := chromeInset(a.width)
+	contentWidth := width - 2*inset
+	if contentWidth < 1 {
+		contentWidth = 1
+	}
+	content = lipgloss.NewStyle().MaxWidth(contentWidth).Render(content)
+	return StatusBarStyle.
+		Width(width).
+		Padding(0, inset).
+		PaddingTop(1).
+		Render(content)
+}
+
 func (a App) renderStatusBar() string {
 	if a.statusMessage != "" {
 		var style lipgloss.Style
@@ -21,15 +42,17 @@ func (a App) renderStatusBar() string {
 		default:
 			style = InfoStyle
 		}
-		content := " " + style.Render(a.statusMessage)
-		content = lipgloss.NewStyle().MaxWidth(frameWidth(a.width)).Render(content)
-		return StatusBarStyle.Width(frameWidth(a.width)).PaddingTop(1).PaddingBottom(1).Render(content)
+		content := style.Render(a.statusMessage)
+		return a.renderStatusRow(content)
 	}
 
 	// The footer spans the full terminal width, keeping flush edges with
-	// the composer block above it; a spacer row separates the bar from the
-	// mode line.
-	columnWidth := frameWidth(a.width)
+	// the frame, while its text shares the composer's inset; a spacer row
+	// separates the bar from the mode line.
+	columnWidth := frameWidth(a.width) - 2*chromeInset(a.width)
+	if columnWidth < 1 {
+		columnWidth = 1
+	}
 
 	// Left: health + workspace-relative path. The badge reflects the
 	// provider probe (checking/ready/warning/unavailable/misconfigured),
@@ -120,9 +143,7 @@ func (a App) renderStatusBar() string {
 		gap = gapMin
 	}
 	content := left + strings.Repeat(" ", gap) + right
-	content = lipgloss.NewStyle().MaxWidth(frameWidth(a.width)).Render(content)
-
-	return StatusBarStyle.Width(frameWidth(a.width)).PaddingTop(1).PaddingBottom(1).Render(content)
+	return a.renderStatusRow(content)
 }
 
 // fitPath renders a path within a width budget, keeping the first segment

@@ -33,12 +33,14 @@ installation directory; your settings and sessions stay in place. See
 # Any Linux or macOS shell
 curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install.sh | bash
 
-# Termux (Android)
-curl -fsSL https://raw.githubusercontent.com/BA-CalderonMorales/agent-harness/main/scripts/install-termux.sh | bash
-
 # Or build from source (this repository)
 go build -o build/agent-harness ./cmd/agent-harness
 ```
+
+Android development targets a dedicated app, which is not yet available. From
+0.4.0, native Termux builds are best-effort and installations below the release
+Go requirement are unsupported. See [Android direction](docs/android.md) and
+[Termux policy](docs/install.md#termux-android).
 
 ## Quick Start
 

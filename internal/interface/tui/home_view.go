@@ -10,7 +10,9 @@ import (
 
 // homeChromeRows is the pane height the home view spends on pinned chrome:
 // the header (title + tagline) and the footer (blank spacer + hints), two
-// rows each. Everything else — the banners, the Project card, Quick
+// rows each. The home base strip is pinned too, but it is measured
+// separately (homeStripRows) because a short pane drops it rather than
+// the things the user can act on. Everything else — the banners, the Project card, Quick
 // Actions, and Recent Sessions — scrolls as one surface.
 //
 // The dashboard used to render as a single block constrained only by
@@ -36,6 +38,15 @@ func (m *HomeModel) View() string {
 		Subtitle: m.tagline,
 		Count:    -1, // no count: the zero value would render a meaningless "(0)"
 	}))
+
+	// The home base is pinned above the body: the workspace, the branch,
+	// and where you have been are the constant things, and the cards
+	// below them scroll.
+	if homeStripRows(m.height) > 0 {
+		if strip := m.homeBaseStrip(m.width); strip != "" {
+			b.WriteString(strip + "\n\n")
+		}
+	}
 
 	// The body scrolls as one surface. Landing the focused row exactly in
 	// view needs that row's rendered line, which only the pass that
