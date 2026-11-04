@@ -14,3 +14,11 @@ Dockerfile*
 .idea
 **/*_test.go
 .agent-harness/
+
+# Local observations and generated caches are not build inputs.
+evidence/
+evals/results/
+.workspace/
+.gitnexus/
+**/node_modules/
+tmp/

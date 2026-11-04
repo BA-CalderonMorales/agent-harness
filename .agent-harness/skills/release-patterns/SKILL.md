@@ -58,8 +58,8 @@ wraps this check.
 
 Each repository runs the `../release-workflow/SKILL.md` sequence independently —
 its own release branch, its own PRs, its own tag and CD run. There is no
-cross-repo batch command; `scripts/release.sh` is superseded and must not be
-used (see the traps in the runbook).
+cross-repo batch command; the old direct-push release scripts were removed
+in the 0.4.1 cleanup (see the traps in the runbook).
 
 Release in dependency order — `agent-harness` first, then anything that depends on
 it — and do not start the next repo until the previous one's CD has published,

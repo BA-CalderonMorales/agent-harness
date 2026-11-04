@@ -47,7 +47,8 @@ FOUND_BRANCHES=false
 print_status() {
     local color="$1"
     local msg="$2"
-    printf "    %b%s%b %s\n" "$color" "$msg" "$NC"
+    local branch="$3"
+    printf "    %b%s%b %s\n" "$color" "$msg" "$NC" "$branch"
 }
 
 # Check local branches merged into main
@@ -79,10 +80,12 @@ for branch in $(git branch --merged develop --format='%(refname:short)' 2>/dev/n
     fi
 done
 
+# Only direct refs under origin are candidates; skip symbolic origin/HEAD
+# and other remotes. Real branch names containing HEAD remain eligible.
 # Check remote branches (that don't exist locally) merged into origin/main
 echo ""
 echo "  Remote branches merged into origin/main:"
-for branch in $(git branch -r --merged origin/main --format='%(refname:short)' 2>/dev/null | grep -v 'HEAD' | sed 's|origin/||' || true); do
+for branch in $(git for-each-ref --merged=origin/main --format='%(refname:strip=3) %(symref)' refs/remotes/origin/ 2>/dev/null | awk 'NF == 1 {print $1}' || true); do
     if ! is_protected "$branch"; then
         # Skip if local branch exists (already handled above)
         if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
@@ -101,7 +104,7 @@ done
 # Check remote branches merged into origin/develop
 echo ""
 echo "  Remote branches merged into origin/develop:"
-for branch in $(git branch -r --merged origin/develop --format='%(refname:short)' 2>/dev/null | grep -v 'HEAD' | sed 's|origin/||' || true); do
+for branch in $(git for-each-ref --merged=origin/develop --format='%(refname:strip=3) %(symref)' refs/remotes/origin/ 2>/dev/null | awk 'NF == 1 {print $1}' || true); do
     if ! is_protected "$branch"; then
         # Skip if local branch exists
         if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then

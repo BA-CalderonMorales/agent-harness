@@ -49,7 +49,8 @@ Use the existing architecture:
 - `internal/agent`: live agent loop
 - `internal/runtime`: providers and tools
 - `internal/core`: shared configuration and state
-- `internal/loop`: modular rewrite, not automatically the live path
+- The dormant modular loop was retired in the 0.4.1 cleanup; extend the live
+  `internal/agent` path and its existing contract tests
 
 Keep one concept per file, target the 400-line limit, and keep pure moves
 separate from behavioral changes. Prefer existing extension points. Explain
