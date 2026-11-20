@@ -11,8 +11,10 @@
 #                                                  merge can use as the subject
 #
 # The hook accepts fixup!, squash!, and amend! subjects so local autosquash
-# works. Range and title modes reject them: once one reaches main, its real
-# type is hidden behind the prefix and the release bump would miss it.
+# works, and "Merge ..." subjects so git's own merge commits pass. Range and
+# title modes reject both: range mode already skips real merge commits, so a
+# "Merge ..." subject there or in a PR title is a hand-written subject that
+# hides its real type, and the release bump would miss it.
 
 set -eu
 
@@ -24,10 +26,18 @@ hint() {
     echo "    Types: $(printf '%s' "$TYPES" | sed 's/|/, /g')" >&2
 }
 
-# check_subject <subject> <label> <allow-autosquash: yes|no>
+# check_subject <subject> <label> <local: yes|no>
+# local=yes is the commit-msg hook; local=no is range and title mode.
 check_subject() {
     case "$1" in
-        "Merge "*|'Revert "'*) return 0 ;;
+        'Revert "'*) return 0 ;;
+        "Merge "*)
+            if [ "$3" = yes ]; then
+                return 0
+            fi
+            echo "[!] 'Merge ...' is not a conventional subject${2:+ ($2)}: $1" >&2
+            return 1
+            ;;
         "fixup! "*|"squash! "*|"amend! "*)
             if [ "$3" = yes ]; then
                 return 0

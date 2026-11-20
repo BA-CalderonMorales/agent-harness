@@ -71,6 +71,22 @@ else
     echo "  ok      range with an unsquashed fixup is rejected"
 fi
 git -C "$repo" reset -q --hard HEAD~1
+git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "Merge export"
+if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
+    echo "  FAIL    a non-merge commit titled Merge passed"; FAIL=1
+else
+    echo "  ok      a non-merge commit titled Merge is rejected"
+fi
+git -C "$repo" reset -q --hard HEAD~1
+git -C "$repo" checkout -q -b side
+git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "fix(y): on a branch"
+git -C "$repo" checkout -q main
+git -C "$repo" -c user.name=t -c user.email=t@example.invalid merge -q --no-ff --no-edit side
+if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
+    echo "  ok      a real merge commit is skipped"
+else
+    echo "  FAIL    a real merge commit was rejected"; FAIL=1
+fi
 git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "wip stuff"
 if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
     echo "  FAIL    range with a bad commit passed"; FAIL=1
@@ -86,7 +102,7 @@ for title in "feat(tui): add a Labs section" 'Revert "feat(tui): add a Labs sect
         echo "  FAIL    rejected title: $title"; FAIL=1
     fi
 done
-for title in "Add export" "fixup! feat: x" "squash! fix: y"; do
+for title in "Add export" "Merge export" "fixup! feat: x" "squash! fix: y"; do
     if sh "$SCRIPT" --title "$title" >/dev/null 2>&1; then
         echo "  FAIL    accepted title: $title"; FAIL=1
     else
