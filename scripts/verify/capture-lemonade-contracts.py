@@ -2,8 +2,9 @@
 """Capture Lemonade wire-format fixtures for the provider contract tests.
 
 Opt-in and never run in CI: it talks to a real local Lemonade server
-(default http://127.0.0.1:13305/v1) and rewrites the files under
-internal/runtime/llm/testdata/contracts/lemonade/.
+(default http://127.0.0.1:13305/v1) and writes fixtures into the
+directory given by the required --out. Writing into the committed
+internal/runtime/llm/testdata/contracts/ tree needs --overwrite-committed.
 
 Each fixture is a raw HTTP response (status line, a few stable headers,
 blank line, body) that Go's http.ReadResponse can parse, so the contract
@@ -11,9 +12,9 @@ tests replay exactly what the server sent through the real HTTPClient.
 
 Every prompt is synthetic. Usage:
 
-    python3 scripts/verify/capture-lemonade-contracts.py
+    python3 scripts/verify/capture-lemonade-contracts.py --out "$(mktemp -d)"
     LEMONADE_BASE_URL=http://127.0.0.1:13305/v1 \
-    LEMONADE_MODEL=qwen3.5-4b-FLM python3 scripts/verify/capture-lemonade-contracts.py
+    LEMONADE_MODEL=qwen3.5-4b-FLM python3 scripts/verify/capture-lemonade-contracts.py --out DIR
 
 LEMONADE_MODEL defaults to the model the server has loaded with a window
 smaller than its maximum (the one an oversized request can overflow), so
@@ -23,16 +24,18 @@ capturing does not force the server to swap models.
 import json
 import os
 import sys
+import argparse
 import urllib.parse
 import http.client
 
 BASE_URL = os.environ.get("LEMONADE_BASE_URL", "http://127.0.0.1:13305/v1").rstrip("/")
 TIMEOUT = float(os.environ.get("LEMONADE_TIMEOUT", "300"))
 FALLBACK_MODEL = "qwen3.5-4b-FLM"
-OUT_DIR = os.path.join(
+COMMITTED_DIR = os.path.realpath(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
-    "..", "..", "internal", "runtime", "llm", "testdata", "contracts", "lemonade",
-)
+    "..", "..", "internal", "runtime", "llm", "testdata", "contracts",
+))
+OUT_DIR = None  # set from --out in main()
 
 # Headers that the client reads or that describe the body. Everything
 # else (dates, keep-alive, CORS) is volatile noise.
@@ -73,7 +76,7 @@ def write_fixture(name, resp, data):
     path = os.path.join(OUT_DIR, name)
     with open(path, "wb") as handle:
         handle.write(head.encode() + data)
-    print("wrote %s (%d %s, %d body bytes)" % (os.path.relpath(path), resp.status, resp.reason, len(data)))
+    print("wrote %s (%d %s, %d body bytes)" % (path, resp.status, resp.reason, len(data)))
 
 
 def pick_model(models):
@@ -87,7 +90,23 @@ def pick_model(models):
     return FALLBACK_MODEL
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Capture Lemonade wire-format fixtures from a running local server.")
+    parser.add_argument("--out", required=True, metavar="DIR",
+                        help="directory to write the .http fixtures into")
+    parser.add_argument("--overwrite-committed", action="store_true",
+                        help="allow --out inside the committed testdata/contracts tree")
+    return parser.parse_args()
+
+
 def main():
+    global OUT_DIR
+    args = parse_args()
+    OUT_DIR = os.path.realpath(args.out)
+    inside = OUT_DIR == COMMITTED_DIR or OUT_DIR.startswith(COMMITTED_DIR + os.sep)
+    if inside and not args.overwrite_committed:
+        sys.exit("refusing to write into committed fixtures %s; pass --overwrite-committed" % COMMITTED_DIR)
     os.makedirs(OUT_DIR, exist_ok=True)
 
     resp, data = request("GET", "/models")
@@ -128,6 +147,7 @@ def main():
         "messages": [{"role": "user", "content": filler}],
     })
     write_fixture("overflow.http", resp, data)
+    print("fixtures written to %s" % OUT_DIR)
 
 
 if __name__ == "__main__":

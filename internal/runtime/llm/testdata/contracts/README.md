@@ -23,8 +23,10 @@ real `HTTPClient` against it. No test touches the network.
 The Lemonade fixtures were recorded by
 `scripts/verify/capture-lemonade-contracts.py` from a local Lemonade
 2026.42.1 server with `qwen3.5-9b-FLM` loaded at a 4096-token window.
-Every prompt was synthetic. Re-run the script to refresh them when
-Lemonade changes, then run `go test ./internal/runtime/llm/ ./internal/agent/`.
+Every prompt was synthetic. To refresh them when Lemonade changes, run the
+script with `--out DIR` (it refuses to write into this tree unless
+`--overwrite-committed` is passed), review the diff, copy over what changed,
+then run `go test ./internal/runtime/llm/ ./internal/agent/`.
 
 Lemonade facts these fixtures pin:
 
