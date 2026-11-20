@@ -91,6 +91,22 @@ func newHandlerTestApp(t *testing.T, cfg *config.LayeredConfig, model string) *A
 		t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
 	}
 
+	// A sparse config persists nothing for its blank guarded fields and
+	// warns about each; fill the ones the write path validates so the
+	// warning does not race the message a test is waiting for.
+	if cfg.ContextLength == 0 {
+		cfg.ContextLength = config.DefaultContextLength
+	}
+	if cfg.MaxTokens == 0 {
+		cfg.MaxTokens = config.DefaultMaxTokens
+	}
+	if cfg.EndpointURL == "" {
+		cfg.EndpointURL = config.DefaultEndpointForProvider(cfg.Provider)
+	}
+	if cfg.Model == "" {
+		cfg.Model = model
+	}
+
 	t.Setenv("AGENT_HARNESS_SESSION_DIR", t.TempDir())
 	sm, err := state.NewSessionManager()
 	if err != nil {

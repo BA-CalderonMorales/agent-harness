@@ -1,68 +1,99 @@
 package main
 
 import (
+	"strings"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
 
+// userSettingsValues builds the delta persistUserSettings writes to the
+// user layer, and the names of the guarded values it refused to include.
+// It is pure: no I/O, no notices.
+//
+// The user layer is a delta over the tracked project config, so a value
+// that carries no information must not be written. Persisting a zero or
+// empty froze it as an override: context_length 0 clobbered the project's
+// context window, and an empty endpoint/model clobbered the project's
+// provider wiring.
+//
+// The provider carries the same rule and it is the costly one to miss:
+// an empty string is dropped on read, so a blank write erased the user's
+// provider and sent the next boot to the default - `local` and the login
+// wall the dead local probe raises behind it. It could not even be
+// repaired from the app, because the blank write repeated.
+//
+// An environment pin is a per-session override, not a preference:
+// provider, model and endpoint it pinned stay out of the user layer so
+// they do not outlive the environment variable. A pinned value is skipped,
+// not rejected.
+//
+// Blank runtime, effort and theme are skipped silently: unset is their
+// normal state, so they are not worth a notice.
+func userSettingsValues(cfg *config.LayeredConfig) (map[string]interface{}, []string) {
+	values := map[string]interface{}{
+		"temperature":     cfg.Temperature, // 0.0 is a valid choice
+		"permission_mode": cfg.PermissionMode.String(),
+		"perm_read":       cfg.PermRead,
+		"perm_write":      cfg.PermWrite,
+		"perm_delete":     cfg.PermDelete,
+		"perm_execute":    cfg.PermExecute,
+		"tagline":         cfg.Tagline, // blank is meaningful: hide the tagline
+	}
+	var rejected []string
+	text := func(key, value string, pinned bool) {
+		switch {
+		case pinned:
+		case value == "":
+			rejected = append(rejected, key)
+		default:
+			values[key] = value
+		}
+	}
+	number := func(key string, value int) {
+		if value > 0 {
+			values[key] = value
+		} else {
+			rejected = append(rejected, key)
+		}
+	}
+	text("provider", cfg.Provider, cfg.ProviderPinned)
+	text("endpoint_url", cfg.EndpointURL, cfg.EndpointPinned)
+	text("model", cfg.Model, cfg.ModelPinned)
+	number("context_length", cfg.ContextLength)
+	number("max_tokens", cfg.MaxTokens)
+	if cfg.Runtime != "" {
+		values["runtime"] = cfg.Runtime
+	}
+	if cfg.Effort != "" {
+		values["reasoning_effort"] = cfg.Effort
+	}
+	if cfg.Theme != "" {
+		values["theme"] = cfg.Theme
+	}
+	return values, rejected
+}
+
 // persistUserSettings writes the user's runtime preferences to the user
 // config layer (~/.agent-harness/settings.json). API keys stay out: they
-// belong to the encrypted credential store.
+// belong to the encrypted credential store. A guarded value that is blank
+// or non-positive is left out of the write and reported as a warning; the
+// write itself touches no network.
 func (app *App) persistUserSettings() {
-	values := map[string]interface{}{
-		"temperature":     app.config.Temperature, // 0.0 is a valid choice
-		"permission_mode": app.config.PermissionMode.String(),
-		"perm_read":       app.config.PermRead,
-		"perm_write":      app.config.PermWrite,
-		"perm_delete":     app.config.PermDelete,
-		"perm_execute":    app.config.PermExecute,
-		"tagline":         app.config.Tagline, // blank is meaningful: hide the tagline
-	}
-	// The user layer is a delta over the tracked project config, so a
-	// value that carries no information must not be written. Persisting a
-	// zero or empty froze it as an override: context_length 0 clobbered
-	// the project's context window, and an empty endpoint/model clobbered
-	// the project's provider wiring.
-	//
-	// The provider carries the same rule and it is the costly one to miss:
-	// an empty string is dropped on read, so a blank write erased the
-	// user's provider and sent the next boot to the default — `local` and
-	// the login wall the dead local probe raises behind it. It could not
-	// even be repaired from the app, because the blank write repeated.
-	//
-	// An environment pin is a per-session override, not a preference:
-	// provider, model and endpoint it pinned stay out of the user layer so
-	// they do not outlive the environment variable.
-	if app.config.Provider != "" && !app.config.ProviderPinned {
-		values["provider"] = app.config.Provider
-	}
-	if app.config.Runtime != "" {
-		values["runtime"] = app.config.Runtime
-	}
-	if app.config.Effort != "" {
-		values["reasoning_effort"] = app.config.Effort
-	}
-	if app.config.EndpointURL != "" && !app.config.EndpointPinned {
-		values["endpoint_url"] = app.config.EndpointURL
-	}
-	if app.config.Model != "" && !app.config.ModelPinned {
-		values["model"] = app.config.Model
-	}
-	if app.config.Theme != "" {
-		values["theme"] = app.config.Theme
-	}
-	if app.config.ContextLength > 0 {
-		values["context_length"] = app.config.ContextLength
-	}
-	if app.config.MaxTokens > 0 {
-		values["max_tokens"] = app.config.MaxTokens
+	values, rejected := userSettingsValues(app.config)
+	if len(rejected) > 0 {
+		app.warnSettings(sprintf("Warning: not saving blank settings: %s", strings.Join(rejected, ", ")))
 	}
 	loader := config.NewLayeredLoader(app.cwd)
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {
-		msg := sprintf("Warning: failed to save settings: %v", err)
-		if app.tuiApp != nil {
-			app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
-		}
+		app.warnSettings(sprintf("Warning: failed to save settings: %v", err))
+	}
+}
+
+// warnSettings reports a settings-write problem through the status line.
+func (app *App) warnSettings(msg string) {
+	if app.tuiApp != nil {
+		app.tuiApp.Send(tui.StatusMsg{Text: msg, Type: "warning"})
 	}
 }
 

@@ -4,9 +4,12 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 )
 
 // readUserSettings returns the keys of the user layer's settings.json.
@@ -64,5 +67,73 @@ func TestCommitConfigChangePersistsUnpinnedChoices(t *testing.T) {
 	saved := readUserSettings(t)
 	if saved["provider"] != "openrouter" || saved["model"] != "chosen/model" || saved["endpoint_url"] != "https://chosen.example/v1" {
 		t.Fatalf("unpinned choices not persisted: %v", saved)
+	}
+}
+
+func TestUserSettingsValuesRejectsBlankGuardedFields(t *testing.T) {
+	cfg := &config.LayeredConfig{Theme: "nord", Tagline: ""}
+	values, rejected := userSettingsValues(cfg)
+
+	want := []string{"provider", "endpoint_url", "model", "context_length", "max_tokens"}
+	if !reflect.DeepEqual(rejected, want) {
+		t.Fatalf("rejected = %v, want %v", rejected, want)
+	}
+	for _, key := range want {
+		if _, ok := values[key]; ok {
+			t.Errorf("blank %s was kept in the write", key)
+		}
+	}
+	for _, key := range []string{"temperature", "permission_mode", "tagline", "theme"} {
+		if _, ok := values[key]; !ok {
+			t.Errorf("%s missing from the write", key)
+		}
+	}
+}
+
+func TestUserSettingsValuesRejectsNonPositiveNumbers(t *testing.T) {
+	cfg := &config.LayeredConfig{Provider: "local", Model: "m", EndpointURL: "http://x/v1", ContextLength: -1, MaxTokens: 0}
+	values, rejected := userSettingsValues(cfg)
+	if !reflect.DeepEqual(rejected, []string{"context_length", "max_tokens"}) {
+		t.Fatalf("rejected = %v", rejected)
+	}
+	if _, ok := values["context_length"]; ok {
+		t.Error("non-positive context_length kept")
+	}
+}
+
+func TestUserSettingsValuesKeepsValidAndSkipsPinnedSilently(t *testing.T) {
+	cfg := &config.LayeredConfig{
+		Provider: "openrouter", Model: "m", EndpointURL: "http://x/v1",
+		ContextLength: 8192, MaxTokens: 512,
+		ProviderPinned: true, ModelPinned: true, EndpointPinned: true,
+	}
+	values, rejected := userSettingsValues(cfg)
+	if len(rejected) != 0 {
+		t.Fatalf("pinned fields reported as rejected: %v", rejected)
+	}
+	for _, key := range []string{"provider", "model", "endpoint_url"} {
+		if _, ok := values[key]; ok {
+			t.Errorf("pinned %s kept", key)
+		}
+	}
+	if values["context_length"] != 8192 || values["max_tokens"] != 512 {
+		t.Fatalf("valid numbers lost: %v", values)
+	}
+}
+
+func TestPersistUserSettingsWarnsOnRejectedWrite(t *testing.T) {
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", Model: "m", EndpointURL: "http://x/v1", ContextLength: 4096, MaxTokens: 128}, "m")
+	app.cwd = t.TempDir()
+	app.tuiApp = tui.NewApp()
+	app.config.Model = ""
+	app.persistUserSettings()
+
+	msg := receiveTUIMessage(t, app.tuiApp)
+	status, ok := msg.(tui.StatusMsg)
+	if !ok || status.Type != "warning" || !strings.Contains(status.Text, "model") {
+		t.Fatalf("message = %#v, want a warning naming model", msg)
+	}
+	if _, ok := readUserSettings(t)["model"]; ok {
+		t.Fatal("blank model was written")
 	}
 }
