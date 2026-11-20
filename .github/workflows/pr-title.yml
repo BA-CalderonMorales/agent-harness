@@ -1,0 +1,26 @@
+# A squash merge can use the PR title as the commit subject on main, and
+# make release picks the next version from those subjects, so the title
+# must be a conventional commit too. Runs on title edits without re-running
+# the rest of CI.
+
+name: PR title
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: The PR title is a conventional commit
+        env:
+          PR_TITLE: ${{ github.event.pull_request.title }}
+        run: sh scripts/check-commit-msg.sh --title "$PR_TITLE"

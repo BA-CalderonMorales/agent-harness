@@ -35,7 +35,8 @@ git config core.hooksPath .githooks
 - `pre-commit` blocks session artifacts and unformatted Go files.
 - `commit-msg` rejects subjects that are not conventional commits, which
   `make release` relies on to pick the next version. CI's `commits` job
-  checks every commit in a PR the same way.
+  checks every commit in a PR the same way, and the `pr-title` workflow
+  checks the PR title, which a squash merge can use as the subject.
 - `pre-push` rejects version tags that are not semver.
 
 ## Pruning merged branches
