@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -20,11 +22,14 @@ import (
 // time so a plain `ls` reads like a history.
 
 // storeEvent is one JSONL line. Kind discriminates: "header" opens a
-// session, "message" appends a message, "meta" updates rolling fields.
+// session, "message" appends a message, "meta" updates rolling fields,
+// "record" snapshots the structured session record (the last one wins).
+// A loader that does not know a kind ignores the line.
 type storeEvent struct {
 	Kind    string           `json:"type"`
 	Message *json.RawMessage `json:"message,omitempty"`
 	Meta    *storeMeta       `json:"meta,omitempty"`
+	Record  *record.Record   `json:"record,omitempty"`
 
 	// Header fields.
 	ID        string    `json:"id,omitempty"`
@@ -100,6 +105,10 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		}
 		events = append(events, storeEvent{Kind: "message", Message: rawPtr(raw)})
 	}
+	if !s.Record.IsZero() {
+		rec := s.Record
+		events = append(events, storeEvent{Kind: "record", Record: &rec})
+	}
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
@@ -114,6 +123,7 @@ func (sm *SessionManager) createSessionFile(path string) error {
 	if err := f.Sync(); err != nil {
 		return fmt.Errorf("failed to sync session file: %w", err)
 	}
+	sm.recordOnDisk = s.Record
 	return nil
 }
 
@@ -154,6 +164,15 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 		}
 	}
 
+	// The record is written only when it changed since the last write, so
+	// an unchanged record never costs a second line.
+	if !s.Record.IsZero() && !reflect.DeepEqual(s.Record, sm.recordOnDisk) {
+		rec := s.Record
+		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec}); err != nil {
+			return err
+		}
+	}
+
 	// Rolling meta rides along on every save: one short line, and the
 	// loader folds the latest over.
 	meta := storeMeta{Model: s.Model, Persona: s.Persona, Turns: s.Turns, PlanMode: s.PlanMode, ToolLimit: s.ToolLimit}
@@ -163,6 +182,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	if err := f.Sync(); err != nil {
 		return fmt.Errorf("failed to sync session file: %w", err)
 	}
+	sm.recordOnDisk = s.Record
 	return nil
 }
 
@@ -216,6 +236,11 @@ func loadSessionFile(path string) (*Session, error) {
 			s.Turns = event.Meta.Turns
 			s.PlanMode = event.Meta.PlanMode
 			s.ToolLimit = event.Meta.ToolLimit
+		case "record":
+			if event.Record == nil {
+				return nil, fmt.Errorf("session file %s has an empty record at line %d", filepath.Base(path), lineNumber+1)
+			}
+			s.Record = *event.Record
 		case "message":
 			if event.Message == nil {
 				return nil, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)

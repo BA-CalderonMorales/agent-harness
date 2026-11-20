@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
 )
 
 // SessionManager handles session lifecycle. Sessions are stored
@@ -25,6 +26,9 @@ type SessionManager struct {
 	// unchanged files.
 	appendOffset int
 	journalID    string
+	// recordOnDisk is the last record line written (or adopted) for the
+	// journalled session; an equal record is not written twice.
+	recordOnDisk record.Record
 	sessionMetas map[string]metaStamp
 }
 
@@ -81,6 +85,7 @@ func (sm *SessionManager) CreateSession(model string) *Session {
 	sm.current = NewSession(model)
 	sm.appendOffset = 0
 	sm.journalID = ""
+	sm.recordOnDisk = record.Record{}
 	return sm.current
 }
 
@@ -94,6 +99,7 @@ func (sm *SessionManager) SetCurrent(session *Session) {
 	sm.current = session
 	sm.appendOffset = 0
 	sm.journalID = ""
+	sm.recordOnDisk = record.Record{}
 }
 
 // SaveCurrent persists the current session by appending whatever is new
@@ -124,6 +130,7 @@ func (sm *SessionManager) SaveCurrent() (string, error) {
 	// state (one read), then append deltas.
 	if sm.journalID != sm.current.ID {
 		sm.appendOffset = countMessageEvents(path)
+		sm.recordOnDisk = lastRecordEvent(path)
 		sm.journalID = sm.current.ID
 	}
 

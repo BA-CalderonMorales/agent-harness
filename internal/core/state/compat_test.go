@@ -39,6 +39,9 @@ var compatFixtures = []compatFixture{
 	{name: "v2-turns-orphan", version: 2, messages: 14, toolUses: 6, toolResults: 7, toolErrors: 1},
 	// Text messages and meta updates from the current build.
 	{name: "v1-text-latest", version: 1, messages: 4},
+	// The first build that writes record lines: tool calls, two error
+	// results, a call still open, and eleven record snapshots.
+	{name: "v3-record", version: 1, messages: 12, toolUses: 6, toolResults: 5, toolErrors: 2},
 }
 
 func compatFixturePath(name string) string {
