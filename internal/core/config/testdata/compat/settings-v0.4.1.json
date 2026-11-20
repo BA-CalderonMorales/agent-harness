@@ -1,0 +1,16 @@
+{
+  "context_length": 4096,
+  "endpoint_url": "http://127.0.0.1:13305/v1",
+  "model": "qwen3.5-4b-FLM",
+  "perm_delete": true,
+  "perm_execute": true,
+  "perm_read": true,
+  "perm_write": true,
+  "permission_mode": "danger-full-access",
+  "provider": "lemonade",
+  "reasoning_effort": "medium",
+  "runtime": "lemonade",
+  "tagline": "Your workspace. Your models. Your way.",
+  "temperature": 0,
+  "theme": "ember"
+}
