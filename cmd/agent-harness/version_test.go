@@ -43,6 +43,10 @@ func TestBuildType(t *testing.T) {
 		"v0.4.1-dirty":                         "dev",
 		"v0.4.2-0.20261119000000-f282c9cc48de": "dev",
 		"f282c9c":                              "dev",
+		"v1.0.0-rc":                            "release",
+		"v1.0.0-rc..1":                         "dev",
+		"v1.0.0-rc.":                           "dev",
+		"v1.0.0-rc.1.":                         "dev",
 	}
 	for version, want := range cases {
 		if got := buildType(version); got != want {

@@ -10,9 +10,10 @@ import (
 const devVersion = "dev"
 
 // releaseVersion matches a clean release tag: v1.2.3, optionally with an
-// alpha, beta, or rc suffix. Anything else (git describe distance, a
-// pseudo-version, a dirty tree) is a development build.
-var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-(alpha|beta|rc)[0-9A-Za-z.]*)?$`)
+// alpha, beta, or rc suffix whose dot-separated identifiers are never
+// empty (rc, rc2, rc.1, never rc..1). Anything else (git describe
+// distance, a pseudo-version, a dirty tree) is a development build.
+var releaseVersion = regexp.MustCompile(`^v?\d+\.\d+\.\d+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$`)
 
 func init() {
 	info, ok := debug.ReadBuildInfo()

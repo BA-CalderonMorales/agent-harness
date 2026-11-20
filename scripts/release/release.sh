@@ -63,7 +63,7 @@ if [ "$count" -eq 0 ]; then
 fi
 
 if [ -n "$version" ]; then
-    printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9A-Za-z.]*)?$' \
+    printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$' \
         || die "--version must look like v1.2.3 or v1.2.3-rc.1, got '$version'"
     next="$version"
 else

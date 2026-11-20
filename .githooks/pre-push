@@ -30,7 +30,7 @@ do
             echo "You're pushing: $TAG"
             
             # Check if tag follows semver
-            if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9A-Za-z.]*)?$'; then
+            if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$'; then
                 echo "[!] ERROR: Tag $TAG doesn't follow semver (vX.Y.Z or vX.Y.Z-rc.N)"
                 exit 1
             fi
