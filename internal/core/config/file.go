@@ -2,7 +2,6 @@ package config
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 )
@@ -43,24 +42,6 @@ func LoadFile(path string) (*FileConfig, error) {
 		return nil, err
 	}
 	return &cfg, nil
-}
-
-// Save writes configuration to a JSON file.
-func (c *FileConfig) Save(path string) error {
-	if c.APIKey != "" {
-		// API keys never belong in a plaintext config writer; the
-		// encrypted credential store (/login) is the only home for them.
-		return fmt.Errorf("refusing to write an API key to a plaintext config file; use the encrypted credential store")
-	}
-	if err := os.MkdirAll(filepath.Dir(path), 0700); err != nil {
-		return err
-	}
-	data, err := json.MarshalIndent(c, "", "  ")
-	if err != nil {
-		return err
-	}
-	// Use secure permissions (0600) even for legacy config to limit exposure
-	return os.WriteFile(path, append(data, '\n'), 0600)
 }
 
 // DefaultConfigPath returns the default configuration file path.

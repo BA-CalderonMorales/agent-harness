@@ -202,8 +202,3 @@ func parseMcpServerConfig(data map[string]interface{}) mcp.McpServerConfig {
 	}
 	return config
 }
-
-// SaveSettings writes an explicit set of values to a configuration layer,
-// deep-merging with any existing file so unrelated keys survive. Unlike Save,
-// it persists only the keys the caller passes, keeping user settings a delta
-// over the tracked project defaults instead of a frozen snapshot.
