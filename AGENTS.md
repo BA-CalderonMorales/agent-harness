@@ -122,8 +122,10 @@ records the invariants it rests on.
   tests mirror sources. Stay inside the package boundary; split files
   before splitting packages.
 - No root-level helper scripts; scripts are bucketed under `scripts/`.
-- Conventional commits: `type(scope): description`. One change per commit;
-  stop and explain before major architectural changes.
+- Conventional commits: `type(scope): description`, enforced by the
+  `commit-msg` hook and CI's `commits` job because `make release` picks the
+  version from them. One change per commit; stop and explain before major
+  architectural changes.
 - Zero emojis in root-level .md files; lowercase filenames (except
   README.md, AGENTS.md); no horizontal rules as section separators.
 - Tool calling must work flawlessly - no regressions.

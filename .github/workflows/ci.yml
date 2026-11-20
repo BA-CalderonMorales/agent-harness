@@ -149,12 +149,29 @@ jobs:
           version: "latest"
           install-go: false
 
+  # make release picks the next version from commit messages, so every
+  # commit a PR brings to main must be a conventional commit.
+  commits:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Every commit in the PR is a conventional commit
+        run: sh scripts/check-commit-msg.sh --range "${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+
   # Unit tests for the repository's own shell and Python tooling.
   scripts:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Run commit-message gate unit tests
+        run: sh scripts/test-check-commit-msg.sh
 
       - name: Run next-version unit tests
         run: sh scripts/test-next-version.sh
