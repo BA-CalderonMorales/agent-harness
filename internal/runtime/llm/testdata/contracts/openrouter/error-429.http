@@ -1,0 +1,7 @@
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+X-RateLimit-Limit: 50
+X-RateLimit-Remaining: 0
+X-RateLimit-Reset: 1795190400000
+
+{"error":{"message":"Rate limit exceeded: free-models-per-day","code":429,"metadata":{"error_type":"rate_limit_exceeded","limit_source":"platform","remedy_hint":"Free model daily limit reached."}}}

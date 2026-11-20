@@ -1,4 +1,4 @@
-.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity
+.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity smoke-lemonade
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
@@ -55,6 +55,7 @@ help:
 	@printf '  make release-dry-run  Show the next version and its commits, change nothing\n'
 	@printf '  make verify         Run structure check and the full Go test suite\n'
 	@printf '  make complexity     Report function and package complexity hot spots\n'
+	@printf '  make smoke-lemonade Run one live turn against local Lemonade (opt-in, never CI)\n'
 
 build:
 	@printf '==> Building %s\n' "$(BINARY_NAME)"
@@ -154,6 +155,11 @@ lint:
 verify-structure:
 	@printf '==> Checking file structure (<= 400 lines per source file)\n'
 	@bash scripts/verify-structure.sh
+
+# Opt-in live check of the real client against a local Lemonade server.
+# Needs the server running; never wired into CI.
+smoke-lemonade:
+	@AH_LIVE_LEMONADE=1 go test ./internal/runtime/llm/ -run TestLiveLemonadeSmoke -count=1 -v -timeout 10m
 
 verify: verify-structure
 	@printf '==> Running tests\n'

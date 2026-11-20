@@ -1,0 +1,9 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+data: {"id":"gen-contract-mid","model":"openai/gpt-oss-120b:free","choices":[{"delta":{"content":"partial "},"finish_reason":null}]}
+
+data: {"id":"gen-contract-mid","error":{"code":429,"message":"Rate limit exceeded","metadata":{"error_type":"rate_limit_exceeded","provider_code":"upstream-a"}},"choices":[{"delta":{},"finish_reason":"error"}]}
+
+data: [DONE]
+
