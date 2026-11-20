@@ -57,12 +57,18 @@ func userSettingsValues(cfg *config.LayeredConfig) (map[string]interface{}, []st
 			rejected = append(rejected, key)
 		}
 	}
+	// A pinned provider also pins what boot derived from it (its default
+	// endpoint, model, context and token budget): persisted beside the
+	// user's own provider they form a mismatched pair.
+	derived := cfg.ProviderPinned
 	text("provider", cfg.Provider, cfg.ProviderPinned)
-	text("endpoint_url", cfg.EndpointURL, cfg.EndpointPinned)
-	text("model", cfg.Model, cfg.ModelPinned)
-	number("context_length", cfg.ContextLength)
-	number("max_tokens", cfg.MaxTokens)
-	if cfg.Runtime != "" {
+	text("endpoint_url", cfg.EndpointURL, cfg.EndpointPinned || derived)
+	text("model", cfg.Model, cfg.ModelPinned || derived)
+	if !derived {
+		number("context_length", cfg.ContextLength)
+		number("max_tokens", cfg.MaxTokens)
+	}
+	if cfg.Runtime != "" && !cfg.RuntimePinned {
 		values["runtime"] = cfg.Runtime
 	}
 	if cfg.Effort != "" {

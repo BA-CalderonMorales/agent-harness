@@ -56,6 +56,8 @@ type LayeredConfig struct {
 	ModelPinned bool
 	// ProviderPinned is true when AH_PROVIDER pinned the provider.
 	ProviderPinned bool
+	// RuntimePinned is true when AH_RUNTIME pinned the runtime.
+	RuntimePinned  bool
 	EndpointPinned bool // endpoint came from AH_ENDPOINT_URL; survives provider switches
 	Runtime        string
 	ModelPath      string

@@ -106,13 +106,13 @@ func TestUserSettingsValuesKeepsValidAndSkipsPinnedSilently(t *testing.T) {
 	cfg := &config.LayeredConfig{
 		Provider: "openrouter", Model: "m", EndpointURL: "http://x/v1",
 		ContextLength: 8192, MaxTokens: 512,
-		ProviderPinned: true, ModelPinned: true, EndpointPinned: true,
+		ModelPinned: true, EndpointPinned: true,
 	}
 	values, rejected := userSettingsValues(cfg)
 	if len(rejected) != 0 {
 		t.Fatalf("pinned fields reported as rejected: %v", rejected)
 	}
-	for _, key := range []string{"provider", "model", "endpoint_url"} {
+	for _, key := range []string{"model", "endpoint_url"} {
 		if _, ok := values[key]; ok {
 			t.Errorf("pinned %s kept", key)
 		}
@@ -166,5 +166,23 @@ func TestHandlerTestAppNeverWritesIntoHome(t *testing.T) {
 	}
 	if got := config.ConfigHome(); strings.HasPrefix(got, sentinel) {
 		t.Fatalf("config home %q resolves inside HOME", got)
+	}
+}
+
+// A pinned provider pins everything boot derived from it, and a pinned
+// runtime stays out of the user layer too.
+func TestUserSettingsValuesPinnedProviderSkipsDerivedValues(t *testing.T) {
+	cfg := &config.LayeredConfig{
+		Provider: "openrouter", Model: "m", EndpointURL: "http://x/v1", Runtime: "llama.cpp",
+		ContextLength: 8192, MaxTokens: 512, ProviderPinned: true, RuntimePinned: true,
+	}
+	values, rejected := userSettingsValues(cfg)
+	if len(rejected) != 0 {
+		t.Fatalf("pinned values reported as rejected: %v", rejected)
+	}
+	for _, key := range []string{"provider", "model", "endpoint_url", "context_length", "max_tokens", "runtime"} {
+		if _, ok := values[key]; ok {
+			t.Errorf("%s kept under a provider/runtime pin", key)
+		}
 	}
 }
