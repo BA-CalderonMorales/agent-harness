@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -32,6 +34,7 @@ type replayedRequest struct {
 	Method string
 	Path   string
 	Header http.Header
+	Body   []byte
 }
 
 // contractServer serves one recorded response for every request and
@@ -73,9 +76,9 @@ func newContractServer(t *testing.T, provider, name string) *contractServer {
 	status, header, body := loadContractFixture(t, provider, name)
 	srv := &contractServer{}
 	srv.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		_, _ = io.Copy(io.Discard, r.Body)
+		reqBody, _ := io.ReadAll(r.Body)
 		srv.mu.Lock()
-		srv.requests = append(srv.requests, replayedRequest{Method: r.Method, Path: r.URL.Path, Header: r.Header.Clone()})
+		srv.requests = append(srv.requests, replayedRequest{Method: r.Method, Path: r.URL.Path, Header: r.Header.Clone(), Body: reqBody})
 		srv.mu.Unlock()
 		for key, values := range header {
 			for _, value := range values {
@@ -97,14 +100,94 @@ func streamContract(t *testing.T, provider, name string) (sseObservation, *contr
 	client := NewHTTPClientWithBaseURL(provider, contractKey, srv.URL+"/v1")
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	events, err := client.Stream(ctx, Request{
-		Model:    "contract-model",
-		Messages: []types.Message{},
-	})
-	if err != nil {
-		return sseObservation{}, srv, err
+	events, err := client.Stream(ctx, contractRequest())
+	var got sseObservation
+	if err == nil {
+		got = observeSSEEvents(drainSSEEvents(events))
 	}
-	return observeSSEEvents(drainSSEEvents(events)), srv, nil
+	// Every case asserts the wire request too: a client that dropped the
+	// tools or sent the wrong model must not pass just because the
+	// fixture replays regardless.
+	assertWireRequests(t, srv)
+	return got, srv, err
+}
+
+const (
+	contractModel   = "contract-model"
+	contractMessage = "List the files in the repo."
+	contractTool    = "file_read"
+)
+
+// contractSchema is the tool parameter schema every replay sends.
+func contractSchema() map[string]any {
+	return map[string]any{
+		"type":       "object",
+		"properties": map[string]any{"path": map[string]any{"type": "string"}},
+		"required":   []any{"path"},
+	}
+}
+
+func contractRequest() Request {
+	return Request{
+		Model:        contractModel,
+		SystemPrompt: "You are a contract test.",
+		Messages: []types.Message{{
+			Role:    types.RoleUser,
+			Content: []types.ContentBlock{types.TextBlock{Text: contractMessage}},
+		}},
+		Tools: []tools.Tool{{
+			Name:        contractTool,
+			Description: "Read a file",
+			InputSchema: contractSchema,
+		}},
+	}
+}
+
+// assertWireRequests checks every chat request the client sent: model,
+// stream:true, the messages, and the tool definitions (name and
+// parameters schema) present in the body.
+func assertWireRequests(t *testing.T, srv *contractServer) {
+	t.Helper()
+	for _, req := range srv.seen() {
+		if req.Path != "/v1/chat/completions" {
+			continue
+		}
+		var body struct {
+			Model    string `json:"model"`
+			Stream   bool   `json:"stream"`
+			Messages []struct {
+				Role    string `json:"role"`
+				Content string `json:"content"`
+			} `json:"messages"`
+			Tools []struct {
+				Type     string `json:"type"`
+				Function struct {
+					Name       string         `json:"name"`
+					Parameters map[string]any `json:"parameters"`
+				} `json:"function"`
+			} `json:"tools"`
+		}
+		if err := json.Unmarshal(req.Body, &body); err != nil {
+			t.Fatalf("request body is not JSON: %v\n%s", err, req.Body)
+		}
+		if body.Model != contractModel {
+			t.Errorf("wire model = %q, want %q", body.Model, contractModel)
+		}
+		if !body.Stream {
+			t.Error("wire request is missing stream:true")
+		}
+		if len(body.Messages) != 2 ||
+			body.Messages[0].Role != "system" ||
+			body.Messages[1].Role != "user" || body.Messages[1].Content != contractMessage {
+			t.Errorf("wire messages = %+v, want system then the user message", body.Messages)
+		}
+		if len(body.Tools) != 1 || body.Tools[0].Type != "function" || body.Tools[0].Function.Name != contractTool {
+			t.Fatalf("wire tools = %+v, want one function tool %q", body.Tools, contractTool)
+		}
+		if !reflect.DeepEqual(body.Tools[0].Function.Parameters, contractSchema()) {
+			t.Errorf("wire tool parameters = %#v, want %#v", body.Tools[0].Function.Parameters, contractSchema())
+		}
+	}
 }
 
 // streamExpectation is what a chat fixture must produce.
