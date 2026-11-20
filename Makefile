@@ -1,10 +1,11 @@
-.PHONY: help build test mutation-test run clean install fmt lint verify-structure verify complexity
+.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
 RUN_ARGS ?=
 MUTATION_TARGETS ?=
 COMPLEXITY_ARGS ?=
+RELEASE_ARGS ?=
 
 ifeq ($(OS),Windows_NT)
 # PowerShell can invoke native GNU Make without adding Git's Unix tools to
@@ -50,6 +51,8 @@ help:
 	@printf '  make fmt            Format all Go packages\n'
 	@printf '  make install        Install %s and the ah shortcut into GOPATH/GOBIN\n' "$(BINARY_NAME)"
 	@printf '  make clean          Remove build artifacts\n'
+	@printf '  make release        Tag origin/main as the next version and push it\n'
+	@printf '  make release-dry-run  Show the next version and its commits, change nothing\n'
 	@printf '  make verify         Run structure check and the full Go test suite\n'
 	@printf '  make complexity     Report function and package complexity hot spots\n'
 
@@ -66,6 +69,14 @@ build:
 		exit $$status; \
 	}
 	@printf '[ok] Binary ready: %s\n' "$(BUILD_DIR)/$(BINARY_NAME)"
+
+# A release is a tag on origin/main; release.yml builds and publishes it.
+# RELEASE_ARGS passes options, e.g. RELEASE_ARGS="--bump minor".
+release:
+	@sh scripts/release/release.sh $(RELEASE_ARGS)
+
+release-dry-run:
+	@sh scripts/release/release.sh --dry-run $(RELEASE_ARGS)
 
 test:
 	@printf '==> Running Go tests\n'
