@@ -63,6 +63,10 @@ jobs:
 
       - name: Tag origin/main
         id: tag
+        # An explicit bash shell runs with -o pipefail; the implicit default
+        # does not, and a refused release piped through tee would then look
+        # successful while nothing was tagged or published.
+        shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
           BUMP: ${{ inputs.bump }}
