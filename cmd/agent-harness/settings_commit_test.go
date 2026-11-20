@@ -10,6 +10,7 @@ import (
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/testharness/testenv"
 )
 
 // readUserSettings returns the keys of the user layer's settings.json.
@@ -135,5 +136,35 @@ func TestPersistUserSettingsWarnsOnRejectedWrite(t *testing.T) {
 	}
 	if _, ok := readUserSettings(t)["model"]; ok {
 		t.Fatal("blank model was written")
+	}
+}
+
+// The handler-test constructor is the guard that keeps App tests off the
+// developer's real config home: persistUserSettings and the credential
+// store both resolve through config.ConfigHome, so an unisolated test
+// rewrote ~/.config/agent-harness/settings.json. Simulate a shell that
+// exports no override, point HOME at a sentinel, and require that a
+// commit through the constructor leaves the sentinel untouched.
+//
+// This covers apps built through newHandlerTestApp. A test that builds
+// &App{} by hand and commits without setting a config home is not caught.
+func TestHandlerTestAppNeverWritesIntoHome(t *testing.T) {
+	sentinel := t.TempDir()
+	testenv.SetHome(t, sentinel)
+
+	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local", Model: "m", Theme: "nord"}, "m")
+	app.cwd = t.TempDir()
+	app.commitConfigChange()
+	app.storeProviderModel("openrouter", "some/model")
+
+	entries, err := os.ReadDir(sentinel)
+	if err != nil {
+		t.Fatalf("read sentinel home: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("test app wrote into the home directory: %v", entries)
+	}
+	if got := config.ConfigHome(); strings.HasPrefix(got, sentinel) {
+		t.Fatalf("config home %q resolves inside HOME", got)
 	}
 }
