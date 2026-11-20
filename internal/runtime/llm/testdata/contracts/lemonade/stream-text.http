@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+: ping
+
+data: {"id":"chatcmpl-826938352bf73d38174a3351","object":"chat.completion.chunk","created":1795187301,"model":"qwen3.5:9b","choices":[{"index":0,"delta":{"role":"assistant","content":"ready"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-826938352bf73d38174a3351","object":"chat.completion.chunk","created":1795187301,"model":"qwen3.5:9b","system_fingerprint":"fp_1d9a682a83ad0bd2","choices":[{"index":0,"delta":{"content":null},"finish_reason":"stop"}],"usage":{"prompt_tokens":13,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens":2,"total_tokens":15,"active_kv_tokens":15,"max_kv_token_capacity":4096,"kv_token_occupancy_rate_percentage":0.3662109375,"load_duration":4.198e-06,"prefill_duration_ttft":1.214327808,"decoding_duration":0.36162300000000003,"prefill_speed_tps":10.705511241985821,"decoding_speed_tps":5.530621669528763}}
+
+data: [DONE]
+

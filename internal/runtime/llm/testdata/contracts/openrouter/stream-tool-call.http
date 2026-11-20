@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+data: {"id":"gen-contract-tool","model":"z-ai/glm-4.6","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"","name":"file_read"},"id":"call_or_1"}]},"finish_reason":null}]}
+
+data: {"id":"gen-contract-tool","model":"z-ai/glm-4.6","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"pa"}}]},"finish_reason":null}]}
+
+data: {"id":"gen-contract-tool","model":"z-ai/glm-4.6","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"th\":\"READ"}}]},"finish_reason":null}]}
+
+data: {"id":"gen-contract-tool","model":"z-ai/glm-4.6","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"ME.md\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"gen-contract-tool","model":"z-ai/glm-4.6","choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":310,"completion_tokens":21}}
+
+data: [DONE]
+

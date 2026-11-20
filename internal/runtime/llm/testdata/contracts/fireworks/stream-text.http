@@ -1,0 +1,11 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+data: {"id":"fw-contract-text","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"reasoning_content":"Count the words."},"finish_reason":null}]}
+
+data: {"id":"fw-contract-text","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"content":"One two"},"finish_reason":null}]}
+
+data: {"id":"fw-contract-text","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"content":" three"},"finish_reason":"length"}],"usage":{"prompt_tokens":18,"completion_tokens":4}}
+
+data: [DONE]
+
