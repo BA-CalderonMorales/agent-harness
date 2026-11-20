@@ -41,11 +41,25 @@ canon() {
 
 # shell_quote prints its argument as literal shell text: wrapped in single
 # quotes, with any embedded single quote written as '\''. A directory name
-# containing $, `, ", \\, or a space therefore pastes back unchanged.
+# containing $, `, ", \, or a space therefore pastes back unchanged. It uses
+# only parameter expansion, so it still works when PATH is empty and no
+# external command can be found.
 shell_quote() {
-    printf "'"
-    printf '%s' "$1" | sed "s/'/'\\\\''/g"
-    printf "'"
+    rest=$1
+    quoted=
+    while :; do
+        case $rest in
+            *\'*)
+                quoted="$quoted${rest%%\'*}'\\''"
+                rest=${rest#*\'}
+                ;;
+            *)
+                quoted="$quoted$rest"
+                break
+                ;;
+        esac
+    done
+    printf "'%s'" "$quoted"
 }
 
 want=$(canon "$bindir")

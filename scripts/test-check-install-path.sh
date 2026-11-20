@@ -137,6 +137,19 @@ for name in 'plain' 'with$USER' 'with"quote' "with'single" 'with space' 'with`ti
     if [ "$got" = "$dir" ]; then pass "export adds the exact directory: $name"; else fail "export adds the exact directory: $name (got '$got')"; fi
 done
 
+echo "install-path: the export line is right with no external commands (empty PATH)"
+# With PATH empty, sed and every other external command are unavailable.
+# The suggested command must still carry the exact directory.
+for name in 'plain' "with'single" 'with$USER' 'with space'; do
+    dir="$WORK/nopath/$name/bin"
+    mkdir -p "$dir"
+    fake_bin "$dir"
+    OUT=$(PATH= /bin/sh "$SCRIPT" "$dir" "$NAME" 2>&1)
+    line=$(printf '%s\n' "$OUT" | grep 'export PATH=' | head -n 1 | sed 's/^ *//')
+    got=$(PATH=/usr/bin:/bin USER=expanded /bin/sh -c "$line"'; printf "%s" "$PATH"' 2>/dev/null | sed 's/:.*//')
+    if [ "$got" = "$dir" ]; then pass "empty PATH, exact directory: $name"; else fail "empty PATH, exact directory: $name (got '$got')"; fi
+done
+
 if [ "$FAIL" -ne 0 ]; then
     echo "install-path tests FAILED"
     exit 1
