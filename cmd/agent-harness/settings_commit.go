@@ -29,7 +29,11 @@ func (app *App) persistUserSettings() {
 	// user's provider and sent the next boot to the default — `local` and
 	// the login wall the dead local probe raises behind it. It could not
 	// even be repaired from the app, because the blank write repeated.
-	if app.config.Provider != "" {
+	//
+	// An environment pin is a per-session override, not a preference:
+	// provider, model and endpoint it pinned stay out of the user layer so
+	// they do not outlive the environment variable.
+	if app.config.Provider != "" && !app.config.ProviderPinned {
 		values["provider"] = app.config.Provider
 	}
 	if app.config.Runtime != "" {
@@ -38,10 +42,10 @@ func (app *App) persistUserSettings() {
 	if app.config.Effort != "" {
 		values["reasoning_effort"] = app.config.Effort
 	}
-	if app.config.EndpointURL != "" {
+	if app.config.EndpointURL != "" && !app.config.EndpointPinned {
 		values["endpoint_url"] = app.config.EndpointURL
 	}
-	if app.config.Model != "" {
+	if app.config.Model != "" && !app.config.ModelPinned {
 		values["model"] = app.config.Model
 	}
 	if app.config.Theme != "" {

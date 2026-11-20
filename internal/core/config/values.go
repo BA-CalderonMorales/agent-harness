@@ -18,7 +18,10 @@ func (ll *LayeredLoader) extractPermissionToggles(config *LayeredConfig, values 
 }
 
 func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
-	applyEnvString(firstEnv("AH_PROVIDER", "AGENT_HARNESS_PROVIDER"), &config.Provider)
+	if firstEnv("AH_PROVIDER", "AGENT_HARNESS_PROVIDER") != "" {
+		applyEnvString(firstEnv("AH_PROVIDER", "AGENT_HARNESS_PROVIDER"), &config.Provider)
+		config.ProviderPinned = true
+	}
 	applyEnvString(firstEnv("AH_RUNTIME", "AGENT_HARNESS_RUNTIME"), &config.Runtime)
 	if firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL") != "" {
 		applyEnvString(firstEnv("AH_MODEL", "AGENT_HARNESS_MODEL"), &config.Model)
