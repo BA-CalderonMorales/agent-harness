@@ -39,14 +39,73 @@ func (m *ChatModel) PrependSystemNote(content string) {
 // messages, preserving only user, assistant, system, and tool-result text.
 func (m *ChatModel) SetMessages(messages []types.Message) {
 	m.messages = make([]ChatMessage, 0, len(messages))
-	for _, msg := range messages {
-		chatMsg, ok := m.chatMessageFromSessionMessage(msg)
-		if ok {
-			m.messages = append(m.messages, chatMsg)
+	for _, persisted := range messages {
+		for _, msg := range splitParallelToolCalls(persisted) {
+			chatMsg, ok := m.chatMessageFromSessionMessage(msg)
+			if ok {
+				m.messages = append(m.messages, chatMsg)
+			}
 		}
 	}
 	carryReloadedToolRuns(m.messages)
 	m.refreshViewportFollow()
+}
+
+// splitParallelToolCalls returns one message per tool call when a
+// persisted message holds several: a chat row carries one tool name and
+// one input, so merging them kept only the last name (paired with the
+// first input). Each call keeps its own ID, so the answer's Parts can
+// name it, and any result in the same message that answers it. Leftover
+// blocks (prose, unmatched results) stay in a message of their own,
+// ahead of the calls. A message with at most one call is returned as is.
+func splitParallelToolCalls(msg types.Message) []types.Message {
+	uses := 0
+	for _, block := range msg.Content {
+		if _, ok := block.(types.ToolUseBlock); ok {
+			uses++
+		}
+	}
+	if uses < 2 {
+		return []types.Message{msg}
+	}
+	answered := map[string]bool{}
+	for _, block := range msg.Content {
+		if b, ok := block.(types.ToolUseBlock); ok {
+			answered[b.ID] = true
+		}
+	}
+	var rest []types.ContentBlock
+	var calls []types.Message
+	for i, block := range msg.Content {
+		switch b := block.(type) {
+		case types.ToolUseBlock:
+			call := msg
+			call.UUID = b.ID
+			if call.UUID == "" {
+				call.UUID = fmt.Sprintf("%s-call-%d", msg.UUID, i)
+			}
+			call.Content = []types.ContentBlock{b}
+			for _, other := range msg.Content {
+				if r, ok := other.(types.ToolResultBlock); ok && r.ToolUseID == b.ID && b.ID != "" {
+					call.Content = append(call.Content, r)
+				}
+			}
+			calls = append(calls, call)
+		case types.ToolResultBlock:
+			if !answered[b.ToolUseID] || b.ToolUseID == "" {
+				rest = append(rest, b)
+			}
+		default:
+			rest = append(rest, block)
+		}
+	}
+	var out []types.Message
+	if len(rest) > 0 {
+		lead := msg
+		lead.Content = rest
+		out = append(out, lead)
+	}
+	return append(out, calls...)
 }
 
 // carryReloadedToolRuns nests a reloaded turn's tool calls in the answer
