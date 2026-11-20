@@ -129,8 +129,8 @@ records the invariants it rests on.
 - No root-level helper scripts; scripts are bucketed under `scripts/`.
 - Conventional commits: `type(scope): description`, enforced by the
   `commit-msg` hook, CI's `commits` job, and the `pr-title` workflow
-  because `make release` picks the version from them. One change per commit; stop and explain before major
-  architectural changes.
+  because the release picks the version from them. One change per commit;
+  stop and explain before major architectural changes.
 - Zero emojis in root-level .md files; lowercase filenames (except
   README.md, AGENTS.md); no horizontal rules as section separators.
 - Tool calling must work flawlessly - no regressions.
