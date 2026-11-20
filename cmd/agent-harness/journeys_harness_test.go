@@ -23,17 +23,36 @@ import (
 // terminal receives. run() is not called: it probes the network and
 // owns the terminal. wireJourneyTUI mirrors its wiring instead.
 
-// journeyEnvNames are the variables that pin config from the
-// environment. A developer's shell must not leak into a journey.
-var journeyEnvNames = []string{
-	"AH_PROVIDER", "AGENT_HARNESS_PROVIDER", "AH_MODEL", "AGENT_HARNESS_MODEL",
-	"AH_API_KEY", "AH_ENDPOINT_URL", "AGENT_HARNESS_ENDPOINT_URL",
-	"AH_CONTEXT_LENGTH", "AH_MAX_TOKENS", "AH_RUNTIME", "AH_PERSONA",
-	"AH_PERMISSION_MODE", "AH_EXECUTION_MODE", "AH_WORKSPACE_PATH",
-	"AH_SESSION_DIR", "AH_PERM_READ", "AH_PERM_WRITE", "AH_PERM_DELETE",
-	"AH_PERM_EXECUTE", "AH_HTTP_TIMEOUT", "AH_STREAM_IDLE_TIMEOUT",
-	"AH_TEMPERATURE", "AH_LOOP_TRACK", "AH_REDUCED_MOTION",
+// journeyEnvSettings are the config settings the environment can pin.
+// Each is read as AH_<name> and as AGENT_HARNESS_<name> (see the
+// firstEnv calls in internal/core/config), so journeyEnvNames clears both.
+var journeyEnvSettings = []string{
+	"PROVIDER", "RUNTIME", "MODEL", "MODEL_PATH", "ENDPOINT_URL", "API_KEY",
+	"CONTEXT_LENGTH", "TEMPERATURE", "MAX_TOKENS", "WORKSPACE_PATH",
+	"LOCAL_SERVER_COMMAND", "PERSONA", "PERMISSION_MODE", "EXECUTION_MODE",
+	"PERM_READ", "PERM_WRITE", "PERM_DELETE", "PERM_EXECUTE",
+	"HTTP_TIMEOUT", "STREAM_IDLE_TIMEOUT", "LOOP_TRACK", "REDUCED_MOTION",
+	"SESSION_DIR",
 }
+
+// journeyExtraEnv are variables read outside the AH_/AGENT_HARNESS_
+// pairs: provider key fallbacks the credential flow consults, and the
+// local-server host.
+var journeyExtraEnv = []string{
+	"OPENROUTER_API_KEY", "NVIDIA_API_KEY", "OMNITROUTE_API_KEY",
+	"OPENAI_API_KEY", "ANTHROPIC_API_KEY", "FIREWORKS_API_KEY",
+	"OLLAMA_HOST",
+}
+
+// journeyEnvNames are the variables that pin config or credentials from
+// the environment. A developer's shell must not leak into a journey.
+var journeyEnvNames = func() []string {
+	names := append([]string{}, journeyExtraEnv...)
+	for _, setting := range journeyEnvSettings {
+		names = append(names, "AH_"+setting, "AGENT_HARNESS_"+setting)
+	}
+	return names
+}()
 
 // journeyHome isolates a journey: a temp workspace as the working
 // directory, a temp home, and no inherited config pins. It returns the
