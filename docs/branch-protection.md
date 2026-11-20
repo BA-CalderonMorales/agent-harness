@@ -10,11 +10,18 @@ release runbook in `.agent-harness/skills/release-workflow/SKILL.md`).
   secrets, SBOM, script, and sharded test jobs. A red PR does not merge.
 - **The release gate.** `make release` refuses to tag unless the latest CI
   run on `origin/main` passed, so a broken `main` cannot ship.
-- **GitHub branch protection is currently off.** Turn it on in
-  Settings → Branches if you want GitHub to enforce the PR and CI rules.
-  A solo maintainer cannot approve their own PR, so do not require an
-  approving review; require the `build`, `test`, and `quality` checks
-  instead, and restrict deletion of `main`.
+- **GitHub branch protection on `main`** (Settings → Branches):
+
+  | Setting | Value |
+  |---|---|
+  | Require a pull request | on, with **0** required approvals |
+  | Required status checks | `build`, `test`, `quality`, branch up to date |
+  | Conversation resolution | required, so review threads get answered |
+  | Force pushes and deletion | blocked |
+  | Admin bypass | allowed, for emergencies only |
+
+  A solo maintainer cannot approve their own PR, so a required approval
+  only forces an admin bypass on every merge. CI is the gate instead.
 
 ## Local hooks
 
