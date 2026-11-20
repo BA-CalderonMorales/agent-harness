@@ -123,7 +123,7 @@ install:
 	}
 	@printf '[ok] Installed %s %s\n' "$(BINARY_NAME)" "$(VERSION)"
 ifneq ($(OS),Windows_NT)
-	@bindir="$$(go env GOBIN)"; [ -n "$$bindir" ] || bindir="$$(go env GOPATH)/bin"; \
+	@bindir="$$(go env GOBIN)"; [ -n "$$bindir" ] || bindir="$$(go env GOPATH | cut -d: -f1)/bin"; \
 	link="$$bindir/ah"; \
 	if { [ ! -e "$$link" ] && [ ! -L "$$link" ]; } || [ "$$(readlink "$$link")" = "$(BINARY_NAME)" ]; then \
 		ln -sfn "$(BINARY_NAME)" "$$link" && printf '[ok] Linked %s -> %s\n' "$$link" "$(BINARY_NAME)"; \
