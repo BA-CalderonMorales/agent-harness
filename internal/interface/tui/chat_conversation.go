@@ -45,7 +45,37 @@ func (m *ChatModel) SetMessages(messages []types.Message) {
 			m.messages = append(m.messages, chatMsg)
 		}
 	}
+	carryReloadedToolRuns(m.messages)
 	m.refreshViewportFollow()
+}
+
+// carryReloadedToolRuns nests a reloaded turn's tool calls in the answer
+// that follows them. A turn block renders the tool rows its assistant's
+// Parts name, and a persisted answer carries only its own text: the
+// tool_use lives in an earlier message. Without this, a resumed session
+// showed the answer with every tool row of the turn missing.
+func carryReloadedToolRuns(msgs []ChatMessage) {
+	runStart := -1
+	for i := range msgs {
+		if msgs[i].Role == "tool" {
+			if runStart < 0 {
+				runStart = i
+			}
+			continue
+		}
+		if msgs[i].Role == "assistant" && runStart >= 0 && len(msgs[i].Parts) > 0 {
+			var carried []TurnPart
+			for k := runStart; k < i; k++ {
+				if msgs[k].ToolName != "" && !toolPartCarried(msgs[i], msgs[k].ID) {
+					carried = append(carried, TurnPart{ToolID: msgs[k].ID})
+				}
+			}
+			if len(carried) > 0 {
+				msgs[i].Parts = append(carried, msgs[i].Parts...)
+			}
+		}
+		runStart = -1
+	}
 }
 
 // chatMessageFromSessionMessage maps one persisted message onto its

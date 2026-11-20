@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -136,4 +138,31 @@ func indexTool(messages []ChatMessage) int {
 		}
 	}
 	return 0
+}
+
+// TestSessionReloadRendersToolRowsOfTurn: a persisted turn stores the
+// tool call, its result, and the answer as separate messages. The
+// resumed frame must show the tool row inside the answer's turn block,
+// as the live turn did, not the answer alone.
+func TestSessionReloadRendersToolRowsOfTurn(t *testing.T) {
+	m := NewChatModel()
+	m.resize(80, 24)
+	now := time.Now()
+	m.SetMessages([]types.Message{
+		{UUID: "u1", Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "say hi"}}, Timestamp: now},
+		{UUID: "a1", Role: types.RoleAssistant, Content: []types.ContentBlock{
+			types.ToolUseBlock{ID: "call-1", Name: "bash", Input: map[string]any{"command": "echo hi"}},
+		}, Timestamp: now},
+		{UUID: "r1", Role: types.RoleUser, Content: []types.ContentBlock{
+			types.ToolResultBlock{ToolUseID: "call-1", Content: "hi"},
+		}, Timestamp: now},
+		{UUID: "a2", Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "It said hi."}}, Timestamp: now},
+	})
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"Shell", "echo hi", "It said hi."} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("resumed frame is missing %q:\n%s", want, view)
+		}
+	}
 }
