@@ -18,15 +18,30 @@ def main():
                 del env[key]
         work, remote = root / "work", root / "remote.git"
 
-        def run(*args, check=True):
-            result = subprocess.run(args, cwd=work, env=env, stdin=subprocess.DEVNULL,
-                                    stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        def run(*args, check=True, extra_env=None):
+            result = subprocess.run(args, cwd=work, env={**env, **(extra_env or {})},
+                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                    stderr=subprocess.STDOUT, text=True)
             if check and result.returncode != 0:
                 raise AssertionError(f"{args} failed ({result.returncode}):\n{result.stdout}")
             return result
 
         def release(*args, check=True):
             return run("sh", str(SCRIPT), "--skip-ci-check", *args, check=check)
+
+        # A fixture gh that answers the CI query with a chosen state and
+        # records the arguments it was called with.
+        fake_bin, gh_log = root / "bin", root / "gh-args"
+        fake_bin.mkdir()
+        fake_gh = fake_bin / "gh"
+        fake_gh.write_text('#!/bin/sh\nprintf \'%s\\n\' "$*" >> "$FAKE_GH_LOG"\n'
+                           'printf \'%s\\n\' "$FAKE_GH_STATE"\n')
+        fake_gh.chmod(0o755)
+
+        def release_with_ci(state, *args):
+            return run("sh", str(SCRIPT), *args, check=False, extra_env={
+                "PATH": f"{fake_bin}{os.pathsep}{env['PATH']}",
+                "FAKE_GH_STATE": state, "FAKE_GH_LOG": str(gh_log)})
 
         def remote_tag(tag):
             out = run("git", "ls-remote", "--tags", "origin", f"refs/tags/{tag}^{{}}").stdout
@@ -62,6 +77,20 @@ def main():
         assert "Dry run" in preview, preview
         after = run("git", "for-each-ref", "--format=%(refname) %(objectname)").stdout
         assert before == after, "dry run changed refs"
+
+        # The default CI gate: only a completed, successful run on the
+        # origin/main commit lets a release through.
+        local_head = run("git", "rev-parse", "HEAD").stdout.strip()
+        for state, reason in (("completed failure", "did not pass"),
+                              ("in_progress ", "still running"),
+                              ("null null", "no CI run found"),
+                              ("", "no CI run found")):
+            gated = release_with_ci(state, "--dry-run")
+            assert gated.returncode != 0 and reason in gated.stdout, (state, gated.stdout)
+        passed = release_with_ci("completed success", "--dry-run")
+        assert passed.returncode == 0 and "Release v0.4.2" in passed.stdout, passed.stdout
+        queried = gh_log.read_text()
+        assert f"--commit {released_sha}" in queried and local_head not in queried, queried
 
         refused = release(check=False)
         assert refused.returncode != 0 and "pass --yes" in refused.stdout, refused.stdout
