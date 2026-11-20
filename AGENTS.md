@@ -51,6 +51,10 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   tests; `./scripts/ah-local.sh` for the local server flow.
 - Release: `gh workflow run cut-release.yml -f dry_run=true`, then
   `gh workflow run cut-release.yml` (see Branch Strategy).
+- Upgrade compatibility: `internal/core/{state,config}/testdata/compat` hold
+  session and settings files that real builds wrote; every build must load,
+  resume, and save them. A new on-disk format gets a fixture captured with
+  `scripts/verify/sanitize-session.py`, never a hand-written one.
 - Structure check: `make verify` reports files over the line budget.
 - Complexity snapshot: `make complexity` ranks functions and packages; see
   `docs/complexity-analysis.md` before choosing a file to refactor.
