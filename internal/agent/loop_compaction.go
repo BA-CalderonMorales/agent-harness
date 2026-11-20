@@ -2,7 +2,6 @@ package agent
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
@@ -14,8 +13,23 @@ import (
 	"time"
 )
 
-func (l *Loop) isAtBlockingLimit(msgs []types.Message, promptTokens int) bool {
-	return estimateTokens(msgs)+promptTokens > l.Config.BlockingTokenLimit
+// defaultContextLimit applies when the loop has no configured window.
+const defaultContextLimit = 180000
+
+// contextLimit is the window the loop works within: the limit recovery
+// learned from a provider refusal, else the configured one.
+func (l *Loop) contextLimit(state *loopState) int {
+	if state.contextLimit > 0 {
+		return state.contextLimit
+	}
+	if l.Config.BlockingTokenLimit > 0 {
+		return l.Config.BlockingTokenLimit
+	}
+	return defaultContextLimit
+}
+
+func (l *Loop) isAtBlockingLimit(state *loopState) bool {
+	return estimateTokens(state.messages)+state.promptTokens > l.contextLimit(state)
 }
 
 // estimateTokens provides a rough character-based token estimate.
@@ -48,10 +62,7 @@ func (l *Loop) autoCompactMessages(state *loopState) string {
 // compactMessages summarizes the exact removed prefix, then atomically swaps
 // the loop state to a bounded summary plus a token-budgeted recent suffix.
 func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool) (compactionOutcome, error) {
-	limit := l.Config.BlockingTokenLimit
-	if limit <= 0 {
-		limit = 180000
-	}
+	limit := l.contextLimit(state)
 	// The fixed prompt and tool schemas ride every request; history can
 	// only use what those leave behind. Ignoring them let a request
 	// exceed the window while the loop believed it was comfortably under.
@@ -103,7 +114,7 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 	if model == "" {
 		model = config.DefaultModel
 	}
-	summarized, err := l.summarizeMessages(ctx, removedPrefix, model)
+	summarized, err := l.summarizeMessages(ctx, removedPrefix, model, limit)
 	if err != nil {
 		return compactionOutcome{}, err
 	}
@@ -159,6 +170,44 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 	}, nil
 }
 
+const (
+	// maxReactiveCompactions bounds the compaction rounds one query may run
+	// after provider refusals.
+	maxReactiveCompactions = 3
+
+	// maxSummaryShrinks bounds how often one round halves the working
+	// window when the summarizer's own requests are refused.
+	maxSummaryShrinks = 3
+)
+
+// compactAfterRefusal compacts after the provider refused a request as too
+// long. The refusal proves the real window is smaller than the request the
+// loop sent, whatever the configured window says, so the working limit is
+// capped at that request's size for the rest of the query. If the
+// summarizer's own requests are refused too, the limit halves and the
+// round tries again, a bounded number of times.
+func (l *Loop) compactAfterRefusal(ctx context.Context, state *loopState) (compactionOutcome, error) {
+	refused := estimateTokens(state.messages) + state.promptTokens
+	limit := l.contextLimit(state)
+	if refused < limit {
+		limit = refused
+	}
+	for shrink := 0; ; shrink++ {
+		state.contextLimit = limit
+		outcome, err := l.compactMessages(ctx, state, true)
+		if err == nil {
+			diag.Info("context.limit.learned", fmt.Sprintf(
+				"provider refused %d estimated tokens · working window now %d", refused, limit,
+			))
+			return outcome, nil
+		}
+		if !isPromptTooLongError(err) || shrink >= maxSummaryShrinks {
+			return compactionOutcome{}, err
+		}
+		limit /= 2
+	}
+}
+
 func emitCompaction(ctx context.Context, out chan<- types.StreamEvent, outcome compactionOutcome) error {
 	if !outcome.changed() {
 		return nil
@@ -175,41 +224,61 @@ func emitCompaction(ctx context.Context, out chan<- types.StreamEvent, outcome c
 	}
 }
 
-// summarizeMessages sends old messages to the LLM for summarization.
-func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, model string) (string, error) {
+// summarizeMessages summarizes old messages within the context window.
+// A prefix that fits goes to the model in one request. A larger one is
+// split into window-sized parts, and each request carries the running
+// summary of the parts before it, so no request can exceed the window
+// the history overflowed.
+func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, model string, window int) (string, error) {
 	if l.Client == nil {
 		return "", fmt.Errorf("no LLM client available")
 	}
-
-	var b strings.Builder
-	b.WriteString("Create a durable handoff from the conversation prefix below.\n")
-	b.WriteString("Preserve the original user goal, constraints, decisions and approvals, pending work, plans, files changed, tool findings or receipts, errors, and verification status.\n")
-	b.WriteString("State uncertainty explicitly. Put the original goal and unresolved work first.\n\n")
-	for _, msg := range msgs {
-		fmt.Fprintf(&b, "%s: ", msg.Role)
-		for _, block := range msg.Content {
-			switch blk := block.(type) {
-			case types.TextBlock:
-				b.WriteString(blk.Text)
-			case types.ThinkingBlock:
-				b.WriteString("[reasoning omitted from durable summary input]")
-			case types.ToolUseBlock:
-				input, _ := json.Marshal(blk.Input)
-				fmt.Fprintf(&b, "[tool id=%s name=%s input=%s]", blk.ID, blk.Name, input)
-			case types.ToolResultBlock:
-				fmt.Fprintf(&b, "[tool result id=%s error=%t: %s]", blk.ToolUseID, blk.IsError, blk.Content)
-			}
-		}
-		b.WriteString("\n")
+	lines := renderTranscriptLines(msgs)
+	var chunks []string
+	if budget := summaryChunkBudget(window); budget >= minSummaryChunkTokens {
+		chunks = chunkTranscript(lines, budget)
+	} else {
+		// A window this small cannot hold the summarizer's own prompt
+		// with room to spare, so splitting cannot make a request fit.
+		// Send the prefix whole and let the provider decide.
+		chunks = []string{strings.Join(lines, "\n") + "\n"}
 	}
+	summary := ""
+	for i, chunk := range chunks {
+		var b strings.Builder
+		b.WriteString(summaryInstructions)
+		if summary != "" {
+			fmt.Fprintf(&b, summaryCarryForward, summary)
+		}
+		b.WriteString(chunk)
 
+		part, err := l.requestSummary(ctx, b.String(), model)
+		if err != nil {
+			if len(chunks) > 1 {
+				return "", fmt.Errorf("summarizing part %d of %d: %w", i+1, len(chunks), err)
+			}
+			return "", err
+		}
+		part = strings.TrimSpace(part)
+		if part == "" {
+			return "", fmt.Errorf("context summarizer returned an empty summary")
+		}
+		// A provider may ignore MaxTokens; the running summary must still
+		// leave the next part its room.
+		summary = truncateMiddle(part, summaryOutputTokens*4)
+	}
+	return summary, nil
+}
+
+// requestSummary sends one summarizer request and returns its text.
+func (l *Loop) requestSummary(ctx context.Context, prompt, model string) (string, error) {
 	req := llm.Request{
 		Messages: []types.Message{
-			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: b.String()}}, Timestamp: time.Now()},
+			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()},
 		},
-		SystemPrompt: "You are a context summarizer producing a durable continuation record. Be concise, structured, and loss-averse. Preserve the original goal, constraints, decisions, approvals, pending tasks, plans, changed files, tool outcomes or receipts, errors, and verification state.",
+		SystemPrompt: summarySystemPrompt,
 		Model:        model,
-		MaxTokens:    512,
+		MaxTokens:    summaryOutputTokens,
 	}
 
 	stream, err := l.Client.Stream(ctx, req)

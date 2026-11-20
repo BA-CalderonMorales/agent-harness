@@ -44,12 +44,12 @@ func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *l
 		return l.retryQuery(ctx, params, state, out)
 
 	case "prompt_too_long":
-		if state.hasAttemptedReactiveCompact {
-			return false, nil, nil, fmt.Errorf("already attempted compaction")
+		if state.reactiveCompactions >= maxReactiveCompactions {
+			return false, nil, nil, fmt.Errorf("already attempted compaction %d times", state.reactiveCompactions)
 		}
-		state.hasAttemptedReactiveCompact = true
+		state.reactiveCompactions++
 
-		compaction, err := l.compactMessages(ctx, state, true)
+		compaction, err := l.compactAfterRefusal(ctx, state)
 		if err != nil {
 			return false, nil, nil, fmt.Errorf("reactive context compaction failed: %w", err)
 		}
@@ -98,6 +98,11 @@ func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopSt
 
 	llmEvents, err := l.Client.Stream(ctx, req)
 	if err != nil {
+		// A retry the provider still refuses as too long starts another
+		// compaction round, which caps the window at what was refused.
+		if isPromptTooLongError(err) {
+			return l.attemptRecovery(ctx, params, state, &recoverableError{err: err, reason: "prompt_too_long"}, out)
+		}
 		return false, nil, nil, err
 	}
 
