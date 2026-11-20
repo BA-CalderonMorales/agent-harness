@@ -1,6 +1,11 @@
 # Multi-OS CD Workflow for agent-harness
 # Builds and releases binaries for Linux, macOS, and Windows
 # Supports both AMD64 and ARM64 architectures
+#
+# Runs on a pushed v* tag, or by workflow_dispatch. The Cut release workflow
+# dispatches it on the tag it just pushed (a tag pushed with the workflow
+# token triggers nothing by itself). A dispatch on a tag builds that tag; a
+# dispatch on a branch needs the version input.
 
 name: Release
 
@@ -11,9 +16,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version to release (e.g., v0.1.0)'
-        required: true
-        default: 'v0.0.0-test'
+        description: 'Version to release, e.g. v0.1.0 (leave empty when running on a tag)'
+        required: false
+        default: ''
 
 permissions:
   contents: write
@@ -68,11 +73,16 @@ jobs:
       - name: Get version
         id: version
         shell: bash
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "VERSION=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "::error::Run on a tag, or pass the version input."
+            exit 1
           fi
 
       - name: Build binary
@@ -119,11 +129,16 @@ jobs:
 
       - name: Get version
         id: version
+        env:
+          INPUT_VERSION: ${{ github.event.inputs.version }}
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "VERSION=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+          if [ -n "$INPUT_VERSION" ]; then
+            echo "VERSION=$INPUT_VERSION" >> "$GITHUB_OUTPUT"
+          elif [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            echo "VERSION=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
-            echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+            echo "::error::Run on a tag, or pass the version input."
+            exit 1
           fi
 
       - name: Download all artifacts

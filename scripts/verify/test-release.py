@@ -102,12 +102,19 @@ def main():
         existing = release("--version", "v0.4.1", check=False)
         assert existing.returncode != 0 and "already exists" in existing.stdout, existing.stdout
 
-        bumped = release("--dry-run", "--bump", "minor").stdout
+        # Inside GitHub Actions the tagged version goes to $GITHUB_OUTPUT for
+        # the publish step, and only when a tag was actually pushed.
+        actions_output = root / "github-output"
+        actions_env = {"GITHUB_OUTPUT": str(actions_output)}
+        bumped = run("sh", str(SCRIPT), "--skip-ci-check", "--dry-run", "--bump", "minor",
+                     extra_env=actions_env).stdout
         assert "Release v0.5.0" in bumped, bumped
+        assert not actions_output.exists(), "a dry run wrote a version for the publish step"
 
-        done = release("--yes").stdout
+        done = run("sh", str(SCRIPT), "--skip-ci-check", "--yes", extra_env=actions_env).stdout
         assert "Pushed v0.4.2" in done, done
         assert remote_tag("v0.4.2") == released_sha, "tag does not point at origin/main"
+        assert actions_output.read_text() == "version=v0.4.2\n", actions_output.read_text()
 
         again = release("--yes").stdout
         assert "Nothing to release" in again, again
