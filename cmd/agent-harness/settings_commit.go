@@ -67,3 +67,85 @@ func (app *App) persistUserSettings() {
 func (app *App) commitConfigChange() {
 	app.persistUserSettings()
 }
+
+// storedModelForProvider reads the last model used with a provider
+// from the encrypted store. Empty when the store holds none.
+func (app *App) storedModelForProvider(provider string) string {
+	credManager := config.NewCredentialManager()
+	if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg != nil {
+		if m, ok := secureCfg.ProviderModels[provider]; ok {
+			return m
+		}
+	}
+	return ""
+}
+
+// storeProviderModel persists the last model used with a provider —
+// the retention half of the per-provider credential set: logging back
+// into this provider pre-selects this model.
+func (app *App) storeProviderModel(provider, model string) {
+	if provider == "" || model == "" {
+		return
+	}
+	credManager := config.NewCredentialManager()
+	existing, err := credManager.LoadSecure()
+	if err != nil || existing == nil {
+		existing = &config.SecureConfig{Provider: provider, APIKey: provider}
+		if config.IsLocalProvider(provider) {
+			existing.APIKey = provider
+		}
+	}
+	if existing.ProviderModels == nil {
+		existing.ProviderModels = map[string]string{}
+	}
+	existing.ProviderModels[provider] = model
+	existing.Provider = provider
+	existing.Model = model
+	_ = credManager.SaveSecure(existing)
+}
+
+// saveTypedCredentials stores a freshly typed key in the encrypted
+// credential store, MERGING into the per-provider key set: saving the
+// nvidia key must not clobber the openrouter key (the single-slot
+// store used to lose them on every provider switch). The narration is
+// returned, not sent.
+func (app *App) saveTypedCredentials(provider, apiKey, model string) string {
+	credManager := config.NewCredentialManager()
+	keys := map[string]string{}
+	models := map[string]string{}
+	var existing *config.SecureConfig
+	if cfg, err := credManager.LoadSecure(); err == nil && cfg != nil {
+		existing = cfg
+		for p, k := range existing.ProviderKeys {
+			keys[p] = k
+		}
+		for p, m := range existing.ProviderModels {
+			models[p] = m
+		}
+	}
+	keys[provider] = apiKey
+	models[provider] = model
+
+	secureCfg := &config.SecureConfig{
+		Provider:       provider,
+		APIKey:         apiKey,
+		Model:          model,
+		ProviderKeys:   keys,
+		ProviderModels: models,
+	}
+	if err := credManager.SaveSecure(secureCfg); err != nil {
+		return sprintf("[!] Failed to save credentials: %v", err)
+	}
+	return sprintf("Credentials saved (encrypted at rest, file mode 0600; machine-local key at %s). Store: %s. To source the key from a secrets manager instead, set api_key to a secret://env|file|cmd reference in agent-harness.yml.", config.MachineKeyPath(), config.SecureConfigPath())
+}
+
+// refreshStoredModel updates the stored model for an unchanged stored
+// provider key so a provider switch survives restarts without
+// re-authenticating.
+func (app *App) refreshStoredModel(provider, model string) {
+	credManager := config.NewCredentialManager()
+	if secureCfg, err := credManager.LoadSecure(); err == nil && secureCfg.Provider == provider {
+		secureCfg.Model = model
+		_ = credManager.SaveSecure(secureCfg)
+	}
+}
