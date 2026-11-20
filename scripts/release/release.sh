@@ -9,7 +9,8 @@
 # the last release tag reachable from origin/main, computes the next version
 # from the conventional commits since then (scripts/release/next-version.sh),
 # requires the CI run for that commit to have passed, and pushes the tag.
-# release.yml then builds and publishes the binaries.
+# The Cut release workflow (.github/workflows/cut-release.yml) runs it in
+# GitHub Actions and then starts release.yml and container.yml on the tag.
 
 set -eu
 
@@ -130,4 +131,8 @@ git push --quiet origin "refs/tags/$next" || {
     git tag -d "$next" >/dev/null
     die "pushing $next failed; the local tag was removed"
 }
-echo "Pushed $next. release.yml now builds and publishes it."
+echo "Pushed $next."
+# Inside GitHub Actions, hand the tag to the steps that publish it.
+if [ -n "${GITHUB_OUTPUT:-}" ]; then
+    echo "version=$next" >> "$GITHUB_OUTPUT"
+fi

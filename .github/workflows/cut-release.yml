@@ -1,0 +1,90 @@
+# Cut a release from GitHub Actions: tag origin/main and publish it.
+#
+# Start it from the Actions tab (Cut release → Run workflow, on main) or with
+#   gh workflow run cut-release.yml
+#   gh workflow run cut-release.yml -f dry_run=true
+#   gh workflow run cut-release.yml -f bump=minor
+#   gh workflow run cut-release.yml -f version=v1.0.0-rc.1
+#
+# scripts/release/release.sh does the work and keeps its gates: the latest CI
+# run on origin/main must have passed, and an automatic bump needs every commit
+# since the last tag to be a conventional commit. A tag pushed with the
+# workflow token does not trigger other workflows, so this workflow starts
+# release.yml (binaries) and container.yml (image) on the new tag itself.
+
+name: Cut release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump (auto reads the conventional commits)'
+        type: choice
+        options: [auto, patch, minor, major]
+        default: auto
+      version:
+        description: 'Exact version instead of a bump, e.g. v1.0.0-rc.1 (optional)'
+        type: string
+        required: false
+        default: ''
+      dry_run:
+        description: 'Show the version and commits without tagging'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write  # push the tag
+  actions: write   # read CI runs, start release.yml and container.yml
+
+concurrency:
+  group: cut-release
+  cancel-in-progress: false
+
+jobs:
+  cut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Releases come from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Start Cut release on main, not ${GITHUB_REF_NAME}."
+          exit 1
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Tag identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Tag origin/main
+        id: tag
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BUMP: ${{ inputs.bump }}
+          VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: |
+          set -- --yes
+          if [ "$BUMP" != auto ]; then set -- "$@" --bump "$BUMP"; fi
+          if [ -n "$VERSION" ]; then set -- "$@" --version "$VERSION"; fi
+          if [ "$DRY_RUN" = true ]; then set -- "$@" --dry-run; fi
+          sh scripts/release/release.sh "$@" | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Publish the tag
+        if: steps.tag.outputs.version != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.tag.outputs.version }}
+        run: |
+          gh workflow run release.yml --ref "$TAG"
+          gh workflow run container.yml --ref "$TAG"
+          {
+            echo ""
+            echo "Started release.yml and container.yml on $TAG."
+            echo "Release page: https://github.com/${GITHUB_REPOSITORY}/releases/tag/$TAG"
+          } >> "$GITHUB_STEP_SUMMARY"
