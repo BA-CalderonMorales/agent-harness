@@ -343,3 +343,11 @@ func manyTodos(n int) [][2]string {
 	}
 	return out
 }
+
+func TestLongPathsKeepTheirTail(t *testing.T) {
+	path := strings.Repeat("d/", 200) + "target.go"
+	r := fold(fileCall("1", "read", path), fileCall("2", "read", path))
+	if len(r.Files) != 1 || r.Files[0].N != 2 || !strings.HasSuffix(r.Files[0].Path, "d/target.go") || len([]rune(r.Files[0].Path)) > MaxPathLen {
+		t.Fatalf("files = %+v", r.Files)
+	}
+}

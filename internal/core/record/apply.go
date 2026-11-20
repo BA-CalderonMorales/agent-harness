@@ -98,7 +98,7 @@ func (r *Record) applyUse(use types.ToolUseBlock) {
 	case toolRead, toolWrite, toolEdit:
 		path, _ := use.Input["file_path"].(string)
 		if strings.TrimSpace(path) != "" {
-			r.open(use.ID, use.Name, clip(path, maxOpenCallArgLen))
+			r.open(use.ID, use.Name, clipTail(path, maxOpenCallArgLen))
 		}
 	case toolBash:
 		cmd, _ := use.Input["command"].(string)
@@ -150,7 +150,7 @@ func (r *Record) applyResult(res types.ToolResultBlock) {
 }
 
 func (r *Record) touch(path, op string) {
-	path = clip(path, MaxPathLen)
+	path = clipTail(path, MaxPathLen)
 	touch := FileTouch{Path: path, Op: op, N: 1}
 	kept := make([]FileTouch, 0, len(r.Files)+1)
 	for _, f := range r.Files {

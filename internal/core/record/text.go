@@ -19,6 +19,20 @@ func clip(s string, n int) string {
 	return strings.TrimRight(string(r[:n-1]), " ") + "…"
 }
 
+// clipTail is clip for paths: when it must cut, it keeps the end, because the
+// file name is what identifies a path.
+func clipTail(s string, n int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	if n <= 1 {
+		return string(r[len(r)-max(n, 0):])
+	}
+	return "…" + string(r[len(r)-(n-1):])
+}
+
 // pushNewest appends v and keeps only the newest max items.
 func pushNewest[T any](list []T, v T, max int) []T {
 	list = append(list, v)
