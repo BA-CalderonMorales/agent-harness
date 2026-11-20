@@ -14,7 +14,12 @@ reviewed before it can reach a fixture. Tool input is the one free-form
 object; every string inside it is replaced, however deeply nested.
 """
 import json
+import re
 import sys
+
+# A tool parameter name: a short identifier, like file_path or command.
+# Anything else used as a key is treated as data.
+PARAMETER_NAME = re.compile(r"[a-z][a-z0-9_]{0,39}")
 
 
 class Unreviewed(Exception):
@@ -60,11 +65,20 @@ class Sanitizer:
         return (unit * (length // len(unit) + 1))[:length]
 
     def scrub(self, value, where, key="input"):
-        """Free-form tool input: keep its shape, replace every string."""
+        """Free-form tool input: keep its shape, replace every string.
+
+        Parameter names such as file_path are structure and stay. Any other
+        key may itself be data (a file name used as a key, say), so it is
+        replaced, and no placeholder ever repeats a replaced key.
+        """
         if isinstance(value, str):
-            return f"sanitized-{key}"
+            return f"sanitized-{key}" if PARAMETER_NAME.fullmatch(key) else "sanitized-input"
         if isinstance(value, dict):
-            return {k: self.scrub(v, f"{where}.{k}", k) for k, v in value.items()}
+            out = {}
+            for k, v in value.items():
+                name = k if PARAMETER_NAME.fullmatch(k) else self.fake_id(("key", k), "key")
+                out[name] = self.scrub(v, f"{where}.{name}", name)
+            return out
         if isinstance(value, list):
             return [self.scrub(v, f"{where}[]", key) for v in value]
         if value is None or isinstance(value, (bool, int, float)):

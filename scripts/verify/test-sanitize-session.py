@@ -71,7 +71,21 @@ def main():
     expect_refused("wrong type", [HEADER, {**META, "meta": {**META["meta"], "turns": SECRET}}],
                    "line 2.meta.turns")
 
-    print("sanitize-session: placeholders, structure, call links, and refusal of unknown fields at every level passed")
+    # A key inside tool input can itself be data, such as a file name. It
+    # is replaced, never repeated in a placeholder; parameter names stay.
+    private_key = "/private/customer-plan-7731.txt"
+    keyed = {**CALL, "message": {**CALL["message"], "content": [
+        {"id": "real-call-9", "name": "write",
+         "input": {"file_path": SECRET, "files": {private_key: SECRET, "Notes For Q3": [SECRET]}}}]}}
+    result = sanitize([HEADER, keyed])
+    assert result.returncode == 0, result.stderr
+    assert "customer-plan" not in result.stdout and "Notes For Q3" not in result.stdout, result.stdout
+    assert SECRET not in result.stdout, result.stdout
+    block = json.loads(result.stdout.splitlines()[1])["message"]["content"][0]["input"]
+    assert block["file_path"] == "sanitized-file_path", block
+    assert all(k.startswith("key-") for k in block["files"]), block
+
+    print("sanitize-session: placeholders, structure, call links, data-bearing keys, and refusal of unknown fields at every level passed")
 
 
 if __name__ == "__main__":
