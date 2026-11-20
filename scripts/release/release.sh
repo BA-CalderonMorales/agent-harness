@@ -33,7 +33,11 @@ while [ $# -gt 0 ]; do
         --dry-run) dry_run=true ;;
         --yes) assume_yes=true ;;
         --bump) shift; bump="${1:-}" ;;
-        --version) shift; version="${1:-}" ;;
+        --version)
+            shift
+            version="${1:-}"
+            [ -n "$version" ] || die "--version needs a value, such as v1.2.3"
+            ;;
         --skip-ci-check) check_ci=false ;;
         -h|--help) usage; exit 0 ;;
         *) usage >&2; die "unknown argument '$1'" ;;

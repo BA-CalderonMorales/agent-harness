@@ -115,6 +115,9 @@ def main():
         # An explicit --version is validated even when there is nothing new.
         invalid = release("--version", "v0.5.0-rc..1", check=False)
         assert invalid.returncode != 0 and "--version must look like" in invalid.stdout, invalid.stdout
+        for empty in (("--version", ""), ("--version",)):
+            missing = release(*empty, check=False)
+            assert missing.returncode != 0 and "--version needs a value" in missing.stdout, missing.stdout
 
         # With no new commits, an explicit --version promotes the same commit.
         promoted = release("--yes", "--version", "v0.5.0-rc.1").stdout
