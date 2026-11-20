@@ -25,15 +25,30 @@ type settingsGeneration struct {
 	permission    PermissionMode
 	theme         string
 	effort        string
+	// runtime and persona are checked only where the fixture writes a
+	// non-empty value; an empty or absent key makes no claim to check.
+	runtime   string
+	persona   string
+	maxTokens int
+	// Every generation writes all four permission switches, which makes
+	// them an explicit choice that overrides the permission mode.
+	permRead, permWrite, permDelete, permExecute bool
 }
 
 var settingsGenerations = []settingsGeneration{
 	{file: "settings-v0.3.5.json", provider: "local", model: "ornith-q4", endpoint: "http://127.0.0.1:8080/v1",
-		contextLength: 32768, temperature: 0.2, permission: PermissionWorkspaceWrite},
+		contextLength: 32768, temperature: 0.2, permission: PermissionWorkspaceWrite,
+		runtime: "llamacpp", persona: "developer", maxTokens: 4096,
+		permRead: true, permWrite: true, permExecute: true},
 	{file: "settings-v0.3.38.json", provider: "openrouter", model: "nvidia/nemotron-3.5-lightning:free",
-		endpoint: "https://openrouter.ai/api/v1", contextLength: 131072, temperature: 0.7, permission: PermissionWorkspaceWrite},
+		endpoint: "https://openrouter.ai/api/v1", contextLength: 131072, temperature: 0.7, permission: PermissionWorkspaceWrite,
+		persona: "developer", maxTokens: 8192,
+		permRead: true, permWrite: true, permExecute: true},
+	// v0.4.1 wrote no max_tokens, so the documented default applies.
 	{file: "settings-v0.4.1.json", provider: "lemonade", model: "qwen3.5-4b-FLM", endpoint: "http://127.0.0.1:13305/v1",
-		contextLength: 4096, temperature: 0, permission: PermissionDangerFullAccess, theme: "ember", effort: "medium"},
+		contextLength: 4096, temperature: 0, permission: PermissionDangerFullAccess, theme: "ember", effort: "medium",
+		runtime: "lemonade", maxTokens: DefaultMaxTokens,
+		permRead: true, permWrite: true, permDelete: true, permExecute: true},
 }
 
 func readSettingsFixture(t *testing.T, name string) []byte {
@@ -60,6 +75,19 @@ func assertGeneration(t *testing.T, cfg *LayeredConfig, want settingsGeneration)
 	}
 	if cfg.Theme != want.theme || cfg.Effort != want.effort {
 		t.Errorf("theme/effort = %q/%q, want %q/%q", cfg.Theme, cfg.Effort, want.theme, want.effort)
+	}
+	if want.runtime != "" && cfg.Runtime != want.runtime {
+		t.Errorf("runtime = %q, want %q", cfg.Runtime, want.runtime)
+	}
+	if want.persona != "" && cfg.Persona != want.persona {
+		t.Errorf("persona = %q, want %q", cfg.Persona, want.persona)
+	}
+	if cfg.MaxTokens != want.maxTokens {
+		t.Errorf("max tokens = %d, want %d", cfg.MaxTokens, want.maxTokens)
+	}
+	got := [4]bool{cfg.PermRead, cfg.PermWrite, cfg.PermDelete, cfg.PermExecute}
+	if wantPerms := [4]bool{want.permRead, want.permWrite, want.permDelete, want.permExecute}; got != wantPerms || !cfg.PermExplicit {
+		t.Errorf("read/write/delete/execute = %v (explicit %v), want %v (explicit)", got, cfg.PermExplicit, wantPerms)
 	}
 }
 
@@ -92,7 +120,17 @@ func TestSavingAChangeKeepsEveryGenerationsOtherValues(t *testing.T) {
 			t.Setenv("AGENT_HARNESS_CONFIG_HOME", configHome)
 			clearConfigEnv(t)
 			path := filepath.Join(configHome, "settings.json")
-			original := readSettingsFixture(t, generation.file)
+			// A key no build reads stands in for a setting a later release
+			// retires: an upgraded user's file may still hold it.
+			var withRetired map[string]interface{}
+			if err := json.Unmarshal(readSettingsFixture(t, generation.file), &withRetired); err != nil {
+				t.Fatal(err)
+			}
+			withRetired["retired_setting"] = "kept-across-upgrades"
+			original, err := json.Marshal(withRetired)
+			if err != nil {
+				t.Fatal(err)
+			}
 			if err := os.WriteFile(path, original, 0o600); err != nil {
 				t.Fatal(err)
 			}
