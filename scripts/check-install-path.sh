@@ -82,12 +82,6 @@ while :; do
     fi
     [ "$more" -eq 1 ] || break
 done
-# An empty PATH has no entries at all, not one empty entry.
-if [ -z "$PATH" ]; then
-    on_path=0
-    first=""
-fi
-
 same_binary() {
     [ "$1" = "$2" ] && return 0
     # -ef is not in POSIX test, but dash, bash, ksh, zsh, busybox, and

@@ -150,6 +150,14 @@ for name in 'plain' "with'single" 'with$USER' 'with space'; do
     if [ "$got" = "$dir" ]; then pass "empty PATH, exact directory: $name"; else fail "empty PATH, exact directory: $name (got '$got')"; fi
 done
 
+echo "install-path: an empty PATH means the current directory"
+# A shell searches the current directory when PATH is empty, so running
+# from the install directory with an empty PATH finds the installed binary.
+mkdir -p "$WORK/cwd/bin"
+fake_bin "$WORK/cwd/bin"
+OUT=$(cd "$WORK/cwd/bin" && PATH= /bin/sh "$SCRIPT" "$WORK/cwd/bin" "$NAME" 2>&1)
+if [ -z "$OUT" ]; then pass "empty PATH, run from the install directory"; else fail "empty PATH, run from the install directory"; fi
+
 if [ "$FAIL" -ne 0 ]; then
     echo "install-path tests FAILED"
     exit 1
