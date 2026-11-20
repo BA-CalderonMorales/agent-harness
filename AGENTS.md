@@ -49,6 +49,7 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 - Local LLM: `agent-harness.yml` targets Ornith-1.0 GGUF via a llama.cpp
   OpenAI-compatible endpoint; `./scripts/ah-fast.sh` for small Ollama smoke
   tests; `./scripts/ah-local.sh` for the local server flow.
+- Release: `make release-dry-run`, then `make release` (see Branch Strategy).
 - Structure check: `make verify` reports files over the line budget.
 - Complexity snapshot: `make complexity` ranks functions and packages; see
   `docs/complexity-analysis.md` before choosing a file to refactor.
@@ -71,44 +72,46 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 
 ## CI
 
-- `.github/workflows/ci.yml` runs on PRs: `build`, `quality`, `security`,
-  `secrets`, `sbom`, `branch-naming`, and a sharded `test` matrix (`tui`,
-  `core`, `rest`). The shard coverage check is a drift guard — a package in no
-  shard fails the gates job rather than silently going untested.
+- `.github/workflows/ci.yml` runs on PRs to `main` and on pushes to `main`:
+  `build`, `quality`, `security`, `secrets`, `sbom`, `scripts` (unit tests
+  for the repository's own shell and Python tooling), and a sharded `test`
+  matrix (`tui`, `core`, `rest`). The shard coverage check is a drift guard —
+  a package in no shard fails the gates job rather than silently going
+  untested.
 - `release.yml` runs on a tag push and builds and publishes the release
-  artifacts; it refuses to build unless the tag equals `main.go`'s version,
-  which is what `scripts/check-version-matches.sh` exists to catch early.
-- Version bumps belong in a dedicated commit on `release/X.Y.Z`, with the
-  changelog. The old direct-push bump workflow and publish scripts were
-  removed; use the two-PR release-workflow skill below.
+  artifacts, stamping the tag into the binary through `-ldflags`.
+- The git tag is the only place a version lives. No source file holds a
+  version and there is no bump commit. `make build` and `make install`
+  stamp `git describe`; `go install ...@vX.Y.Z` reports the module version;
+  anything else reports `dev` (see `cmd/agent-harness/version.go`).
 - Docs-only changes skip CI automatically where configured; trigger
   `workflow_dispatch` when needed.
 
 ## Branch Strategy
 
-The ship ritual — the ordered steps, the gates, and how to babysit CD — lives in
-`.agent-harness/skills/release-workflow/SKILL.md`. Run that rather than
-improvising; this section records the invariants it rests on.
+`main` is the only long-lived branch, and it is always releasable. The
+runbook is `.agent-harness/skills/release-workflow/SKILL.md`; this section
+records the invariants it rests on.
 
-- `main` and `develop` are both protected and both require a PR. `develop`
-  additionally requires **1 approving review** and resolution of every
-  conversation, so an unreplied review thread blocks a merge on its own.
-  `enforce_admins` is off, but an admin merge bypasses protection the
-  maintainer configured — ask before using it.
-- Release branches are named exactly `release/X.Y.Z` (no suffixes) — CI and
-  the pre-push hook both reject any other `release/*` name.
-- The flow is two PRs: `release/X.Y.Z` accumulates the work and merges into
-  `develop`, then `develop` merges into `main`, and the tag is cut from
-  `origin/main` — never from a local `main`, which drifts stale (it read 39
-  commits behind during the 0.3.37 cycle).
-- Remote first: the PRs carry the changes, remote CI is the gate, and remote CD
-  builds and publishes. A local version bump with a locally pushed tag that
-  bypasses CD is a last resort, not a route — say so out loud when taking it.
-- Copilot review is expected but not guaranteed (it covered 0.3.35 and skipped
-  0.3.36). When it lands, each comment gets its own commit, then the reply,
-  then the resolve — in that order.
+- Work happens on short-lived branches named for the change
+  (`feat/...`, `fix/...`, `chore/...`) and lands on `main` through a PR.
+  CI on the PR is the gate. Never push straight to `main`.
+- Work that is not ready for users merges behind a feature flag, so `main`
+  stays shippable without long-lived branches.
+- A release is a tag on `origin/main` and nothing else: `make release`
+  computes the next version from the conventional commits since the last
+  tag, refuses unless CI passed on that commit, and pushes the tag;
+  `release.yml` builds and publishes. `make release-dry-run` shows what it
+  would do. It tags `origin/main`, never the local checkout, so it can run
+  from any branch at any moment.
+- Remote first: remote CI is the gate and remote CD builds and publishes. A
+  locally built release that bypasses CD is a last resort, not a route —
+  say so out loud when taking it.
+- CodeRabbit reviews PRs; Copilot review is intentionally off. When a
+  CodeRabbit comment calls for a change, it gets its own commit, then the
+  reply, then the resolve — in that order.
 - Never merge dev-local working spaces (`scratch/`, `.workspace/`,
-  working ledgers) into `develop` or `main`.
+  working ledgers) into `main`.
 
 ## Rules
 
@@ -119,8 +122,10 @@ improvising; this section records the invariants it rests on.
   tests mirror sources. Stay inside the package boundary; split files
   before splitting packages.
 - No root-level helper scripts; scripts are bucketed under `scripts/`.
-- Conventional commits: `type(scope): description`. One change per commit;
-  stop and explain before major architectural changes.
+- Conventional commits: `type(scope): description`, enforced by the
+  `commit-msg` hook, CI's `commits` job, and the `pr-title` workflow
+  because `make release` picks the version from them. One change per commit; stop and explain before major
+  architectural changes.
 - Zero emojis in root-level .md files; lowercase filenames (except
   README.md, AGENTS.md); no horizontal rules as section separators.
 - Tool calling must work flawlessly - no regressions.
@@ -150,49 +155,3 @@ improvising; this section records the invariants it rests on.
 - **POLA** - behavior must not astonish: user settings persist silently,
   provider switches keep the current model, transient status never
   clobbers session state.
-
-<!-- gitnexus:start -->
-# GitNexus — Code Intelligence
-
-This project is indexed by GitNexus as **agent-harness** (6639 symbols, 24060 relationships, 444 execution flows).
-
-> Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
-
-## Always Do
-
-- **MUST run impact analysis before editing.** Use `impact({target: "symbolName", direction: "upstream"})` (MCP) or `node .gitnexus/run.cjs impact "symbolName" --direction upstream --repo .` (CLI fallback); report callers, processes, and risk. Never substitute grep for graph analysis.
-- **MUST analyze graph changes before committing.** Use `detect_changes({scope: "all"})` (MCP) or `node .gitnexus/run.cjs detect-changes --scope all --repo .` (CLI fallback). `partial: true` or `truncated: true` is not a clean check — a zero means unseen, not unaffected; re-run it. For regression review: `detect_changes({scope: "compare", base_ref: "main"})` or `node .gitnexus/run.cjs detect-changes --scope compare --base-ref "main" --repo .`.
-- **MUST warn the user** if impact analysis returns HIGH or CRITICAL risk before proceeding with edits.
-- **MUST treat `risk: UNKNOWN` as unresolved, not as low.** An empty caller set is not evidence the symbol is unused — it can also mean the callers are not resolvable by the index (plain-object property access, dynamic dispatch, cross-language calls). `impact` pairs `UNKNOWN` with a `riskNote` saying so. Confirm with a text search before treating the symbol as safe to change or delete; do not proceed on the strength of a zero.
-- When exploring unfamiliar code, use `query({search_query: "concept"})` to find execution flows instead of grepping. It returns process-grouped results ranked by relevance.
-- When you need full context on a specific symbol — callers, callees, which execution flows it participates in — use `context({name: "symbolName"})`.
-- For security review, `explain({target: "fileOrSymbol"})` lists taint findings (source→sink flows; needs `analyze --pdg`).
-
-## Never Do
-
-- NEVER edit a function, class, or method before MCP/CLI impact analysis.
-- NEVER ignore HIGH or CRITICAL risk warnings from impact analysis, and never read `UNKNOWN` as an all-clear — it means the walk could not answer, which is the one verdict that requires confirming by other means.
-- NEVER rename symbols with find-and-replace — use `rename` which understands the call graph.
-- NEVER commit before MCP/CLI graph change analysis.
-
-## Resources
-
-| Resource | Use for |
-| --- | --- |
-| `gitnexus://repo/agent-harness/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/agent-harness/clusters` | All functional areas |
-| `gitnexus://repo/agent-harness/processes` | All execution flows |
-| `gitnexus://repo/agent-harness/process/{name}` | Step-by-step execution trace |
-
-## CLI
-
-| Task | Read this skill file |
-| --- | --- |
-| Understand architecture / "How does X work?" | `.agents/skills/gitnexus/gitnexus-exploring/SKILL.md` |
-| Blast radius / "What breaks if I change X?" | `.agents/skills/gitnexus/gitnexus-impact-analysis/SKILL.md` |
-| Trace bugs / "Why is X failing?" | `.agents/skills/gitnexus/gitnexus-debugging/SKILL.md` |
-| Rename / extract / split / refactor | `.agents/skills/gitnexus/gitnexus-refactoring/SKILL.md` |
-| Tools, resources, schema reference | `.agents/skills/gitnexus/gitnexus-guide/SKILL.md` |
-| Index, status, clean, wiki CLI commands | `.agents/skills/gitnexus/gitnexus-cli/SKILL.md` |
-
-<!-- gitnexus:end -->

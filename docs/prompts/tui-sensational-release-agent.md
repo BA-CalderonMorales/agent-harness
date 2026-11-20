@@ -34,8 +34,8 @@ performance.
 Read AGENTS.md and applicable local instructions before working. Preserve
 unrelated work and personal settings.
 
-Determine the current release state rather than assuming a version. Follow
-the repository’s release/X.Y.Z branch convention, based on develop. Make
+Determine the current release state rather than assuming a version. Work
+on a short-lived branch off main and land it through a PR to main. Make
 focused conventional commits when checks permit. Prepare the release for
 review; do not merge, tag, publish, or deploy without authorization. Every
 PR description must end with:
@@ -55,13 +55,6 @@ Use the existing architecture:
 Keep one concept per file, target the 400-line limit, and keep pure moves
 separate from behavioral changes. Prefer existing extension points. Explain
 before making major architectural changes.
-
-Honor GitNexus requirements: impact analysis before symbol edits,
-caller/process/risk reporting, and complete graph change analysis before
-committing. Warn before HIGH/CRITICAL edits. UNKNOWN requires investigation;
-an empty graph result is not proof of safety. Use the repository CLI
-fallback when MCP is unavailable. Never bypass a required analysis gate
-silently.
 
 Proceed autonomously with ordinary implementation decisions. Ask only when
 missing access, a consequential product choice, or authorization actually
@@ -355,8 +348,6 @@ Before declaring the release ready:
   `go vet ./...`, `make build`, `make verify`, and other applicable CI checks.
 - Attribute pre-existing failures against a baseline; do not call a failing
   gate green.
-- Complete required GitNexus change analysis; partial/truncated results are
-  unresolved.
 - Keep scratch ledgers, personal state, credentials, and temporary captures
   out of release commits.
 

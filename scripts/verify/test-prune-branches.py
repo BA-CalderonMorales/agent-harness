@@ -33,8 +33,7 @@ def main():
         run("git", "config", "core.hooksPath", os.devnull)
         run("git", "commit", "--allow-empty", "-m", "fixture base")
         run("git", "remote", "add", "origin", str(remote))
-        for branch in ("develop", "release/0.3.0"):
-            run("git", "branch", branch)
+        run("git", "branch", "release/0.3.0")
         run("git", "push", "--all", "origin")
         run("git", "push", "origin", "main:refs/heads/release/0.3.1", "main:refs/heads/feature/HEAD-note")
         run("git", "checkout", "-b", "feature/pending")
@@ -59,7 +58,7 @@ def main():
             assert not exists("refs/heads/" + branch), branch
             assert not exists("refs/remotes/origin/" + branch), branch
             assert not run("git", "ls-remote", "--heads", "origin", "refs/heads/" + branch), branch
-        for branch in ("main", "develop", "feature/pending"):
+        for branch in ("main", "feature/pending"):
             assert exists("refs/heads/" + branch), branch
             assert exists("refs/remotes/origin/" + branch), branch
             assert run("git", "ls-remote", "--heads", "origin", "refs/heads/" + branch), branch

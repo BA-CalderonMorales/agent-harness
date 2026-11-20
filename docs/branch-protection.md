@@ -1,101 +1,56 @@
-# Branch Protection Setup
+# Branches and protection
 
-This document describes the branch protection configuration for agent-harness.
+`main` is the only long-lived branch. Work lands on it through PRs from
+short-lived branches, and a release is a tag on `origin/main` (see the
+release runbook in `.agent-harness/skills/release-workflow/SKILL.md`).
 
-## Local Protection (Configured)
+## What guards `main`
 
-### Auto-Prune on Fetch
+- **CI on every PR to `main`.** `ci.yml` runs the build, quality, security,
+  secrets, SBOM, script, and sharded test jobs. A red PR does not merge.
+- **The release gate.** `make release` refuses to tag unless the latest CI
+  run on `origin/main` passed, so a broken `main` cannot ship.
+- **GitHub branch protection on `main`** (Settings → Branches):
+
+  | Setting | Value |
+  |---|---|
+  | Require a pull request | on, with **0** required approvals |
+  | Required status checks | `build`, `test`, `quality`, branch up to date |
+  | Conversation resolution | required, so review threads get answered |
+  | Force pushes and deletion | blocked |
+  | Admin bypass | allowed, for emergencies only |
+
+  A solo maintainer cannot approve their own PR, so a required approval
+  only forces an admin bypass on every merge. CI is the gate instead.
+
+## Local hooks
+
+The repository ships hooks in `.githooks/`. Git does not use them until you
+opt in once per clone:
+
 ```bash
-git config --local fetch.prune true
-```
-Automatically prunes remote-tracking branches when fetching.
-
-### Git Aliases (Safe Delete)
-```bash
-# Safe branch deletion (checks protection)
-git del <branch>        # Same as git branch -d with protection
-git del-force <branch>  # Same as git branch -D with protection
-
-# Prune merged branches
-git prune-merged        # Delete branches merged to main/develop
-git prune-dry           # Preview what would be deleted
+git config core.hooksPath .githooks
 ```
 
-### Pre-Push Hook
-Prevents accidental deletion of `main` and `develop` branches on push.
-Located at: `.git/hooks/pre-push`
+- `pre-commit` blocks session artifacts and unformatted Go files.
+- `commit-msg` rejects subjects that are not conventional commits, which
+  `make release` relies on to pick the next version. CI's `commits` job
+  checks every commit in a PR the same way, and the `pr-title` workflow
+  checks the PR title, which a squash merge can use as the subject.
+- `pre-push` rejects version tags that are not semver.
 
-To bypass (emergency only):
-```bash
-git push --no-verify origin --delete <branch>
-```
+## Pruning merged branches
 
-## GitHub Protection (Manual Setup Required)
+`scripts/prune-branches.sh` deletes local and remote branches already merged
+into `main`. It never deletes `main` or an unmerged branch. Preview first:
 
-You must configure these in GitHub repository settings:
-
-### 1. Navigate to Settings
-Repository → Settings → Branches
-
-### 2. Add Protection Rule for `main`
-
-| Setting | Value |
-|---------|-------|
-| Branch name pattern | `main` |
-| Restrict deletions | ✓ Enabled |
-| Require pull request reviews | Optional (for this repo) |
-| Require status checks to pass | Optional |
-| Require conversation resolution | Optional |
-| Include administrators | Optional |
-
-### 3. Add Protection Rule for `develop`
-
-| Setting | Value |
-|---------|-------|
-| Branch name pattern | `develop` |
-| Restrict deletions | ✓ Enabled |
-| Require pull request reviews | Optional |
-| Require status checks to pass | Optional |
-| Require conversation resolution | Optional |
-| Include administrators | Optional |
-
-## Using the Prune Script
-
-### Dry Run (Recommended First)
 ```bash
 ./scripts/prune-branches.sh --dry-run
-```
-
-### Actual Prune
-```bash
 ./scripts/prune-branches.sh
 ```
 
-### What Gets Deleted
-- Local branches merged into `main` or `develop`
-- Remote branches merged into `origin/main` or `origin/develop`
-- Does NOT delete: `main`, `develop`, or unmerged branches
-
-## Protected Branches
-
-| Branch | Protection |
-|--------|------------|
-| `main` | Cannot delete locally or remotely |
-| `develop` | Cannot delete locally or remotely |
-
-## Emergency Override
-
-If you absolutely need to delete a protected branch:
+To prune remote-tracking refs on every fetch:
 
 ```bash
-# Remove local hook temporarily
-mv .git/hooks/pre-push .git/hooks/pre-push.bak
-
-# Delete branch
-git push origin --delete develop
-
-# Restore hook
-mv .git/hooks/pre-push.bak .git/hooks/pre-push
+git config --local fetch.prune true
 ```
-
-**Warning**: Only use this in extreme emergencies.

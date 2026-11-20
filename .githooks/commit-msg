@@ -1,0 +1,5 @@
+#!/bin/sh
+# commit-msg hook - conventional commit gate (scripts/check-commit-msg.sh).
+# Install: git config core.hooksPath .githooks
+HOOK_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
+exec sh "$HOOK_DIR/../scripts/check-commit-msg.sh" "$1"

@@ -85,8 +85,9 @@ tmux capture-pane -t vet -p > /tmp/frame.txt
 - POLA gate: would this astonish a vim-fluent engineer? Env pins
   (`AH_*`) outrank persisted state; honest failure beats plausible
   lies ("no stored API key for X" > sending garbage auth).
-- Version source of truth: `Version` constant in `cmd/agent-harness/main.go`
-  (the Makefile reads it; bump it when cutting a release).
+- Version source of truth: the git tag on `origin/main`. No source file
+  holds a version and nothing is bumped; `make release` picks the next tag
+  from conventional commits (`RELEASE_ARGS="--version vX.Y.Z"` overrides).
 
 ## Repo conventions to enforce on sight
 
@@ -107,10 +108,9 @@ codebase legible for future agentic sessions:
 ## Ship (release strategy)
 
 ```bash
-# on release/X.Y.Z, quality gates green (go test ./..., make verify):
-git checkout develop && git merge --no-ff release/X.Y.Z
-git checkout main && git merge --no-ff develop
-git tag -a vX.Y.Z && git push origin develop main vX.Y.Z   # tag fires release.yml
+# work lands on main through a PR with CI green; then, when it is time:
+make release-dry-run   # next version and the commits it carries
+make release           # tags origin/main; the tag fires release.yml
 ```
 
 ## Check-in protocol

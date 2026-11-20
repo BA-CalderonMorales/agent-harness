@@ -19,6 +19,5 @@ Dockerfile*
 evidence/
 evals/results/
 .workspace/
-.gitnexus/
 **/node_modules/
 tmp/

@@ -1,8 +1,7 @@
 #!/bin/sh
 # pre-push hook - Push-time release discipline.
-# 1. Rejects release/* branches not named exactly release/X.Y.Z (the same
-#    rule CI enforces; see scripts/check-branch-name.sh).
-# 2. Prevents pushing tags if versions don't match remote.
+# Rejects version tags that are not semver (vX.Y.Z, optionally -alpha,
+# -beta, or -rc), matching what release.yml publishes.
 # Install: git config core.hooksPath .githooks
 
 remote="$1"
@@ -12,17 +11,6 @@ url="$2"
 while read local_ref local_sha remote_ref remote_sha
 do
     case "$local_ref" in
-    refs/heads/*)
-        # Branch naming: release branches must be exactly release/X.Y.Z.
-        # POSIX-safe: no `--` end-of-options (dash's cd/dirname reject it);
-        # $0 in a git hook always starts with ./ or / so plain quoting is
-        # sufficient.
-        HOOK_DIR=$(CDPATH= cd "$(dirname "$0")" && pwd)
-        BRANCH="${local_ref#refs/heads/}"
-        if ! "$HOOK_DIR/../scripts/check-branch-name.sh" "$BRANCH"; then
-            exit 1
-        fi
-        ;;
     refs/tags/*)
         TAG="${local_ref#refs/tags/}"
         
@@ -42,8 +30,8 @@ do
             echo "You're pushing: $TAG"
             
             # Check if tag follows semver
-            if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
-                echo "[!] ERROR: Tag $TAG doesn't follow semver (vX.Y.Z)"
+            if ! echo "$TAG" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$'; then
+                echo "[!] ERROR: Tag $TAG doesn't follow semver (vX.Y.Z or vX.Y.Z-rc.N)"
                 exit 1
             fi
 

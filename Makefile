@@ -1,10 +1,11 @@
-.PHONY: help build test mutation-test run clean install fmt lint check-remote release verify-structure verify complexity
+.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
 RUN_ARGS ?=
 MUTATION_TARGETS ?=
 COMPLEXITY_ARGS ?=
+RELEASE_ARGS ?=
 
 ifeq ($(OS),Windows_NT)
 # PowerShell can invoke native GNU Make without adding Git's Unix tools to
@@ -30,14 +31,11 @@ export GOGC ?= 100
 MEMGUARD_MB ?= 8192
 MAIN_PKG := ./cmd/agent-harness
 
-# VERSION comes from the Version constant in main.go — the release bump commit
-# updates this line — so a build always reports the release line
-# it belongs to. git describe cannot do this job: tags live on main, so
-# develop and release/* builds describe against an older tag and lie
-# about what is running.
-APP_VERSION := $(shell sed -n 's/.*Version[[:space:]]*= "\([^"]*\)".*/\1/p' cmd/agent-harness/main.go)
-DIRTY_SUFFIX := $(shell git diff-index --quiet HEAD 2>/dev/null || printf dirty)
-VERSION := $(APP_VERSION)$(if $(DIRTY_SUFFIX),-$(DIRTY_SUFFIX))
+# VERSION comes from git. The release tag on main is the only place a
+# version lives, and git describe reports how far a build sits from it:
+# v0.4.2 on the tag itself, v0.4.2-3-gabc1234 three commits later, and a
+# -dirty suffix for uncommitted changes. Outside a git checkout it is dev.
+VERSION := $(shell git describe --tags --match 'v[0-9]*' --always --dirty 2>/dev/null || echo dev)
 GIT_TAG := $(shell git describe --tags --exact-match 2>/dev/null || echo none)
 BUILD_TIME := $(shell date -u +%Y-%m-%d_%H:%M:%S)
 GIT_SHA := $(shell git rev-parse --short HEAD)
@@ -51,9 +49,10 @@ help:
 	@printf '  make mutation-test  Run mutation tests for behavior-critical packages\n'
 	@printf '  make lint           Run golangci-lint across the repo\n'
 	@printf '  make fmt            Format all Go packages\n'
-	@printf '  make install        Install %s into GOPATH/GOBIN\n' "$(BINARY_NAME)"
+	@printf '  make install        Install %s and the ah shortcut into GOPATH/GOBIN\n' "$(BINARY_NAME)"
 	@printf '  make clean          Remove build artifacts\n'
-	@printf '  make release        Check remote release state, then build\n'
+	@printf '  make release        Tag origin/main as the next version and push it\n'
+	@printf '  make release-dry-run  Show the next version and its commits, change nothing\n'
 	@printf '  make verify         Run structure check and the full Go test suite\n'
 	@printf '  make complexity     Report function and package complexity hot spots\n'
 
@@ -71,17 +70,13 @@ build:
 	}
 	@printf '[ok] Binary ready: %s\n' "$(BUILD_DIR)/$(BINARY_NAME)"
 
-check-remote:
-	@printf '==> Checking remote release state\n'
-	@bash scripts/release/check-remote.sh || { \
-		status=$$?; \
-		printf '\n[fail] Remote release check failed with exit status %s.\n' "$$status"; \
-		exit $$status; \
-	}
-	@printf '[ok] Remote release state checked\n'
+# A release is a tag on origin/main; release.yml builds and publishes it.
+# RELEASE_ARGS passes options, e.g. RELEASE_ARGS="--bump minor".
+release:
+	@sh scripts/release/release.sh $(RELEASE_ARGS)
 
-release: check-remote build
-	@printf '[ok] Release build completed after remote verification\n'
+release-dry-run:
+	@sh scripts/release/release.sh --dry-run $(RELEASE_ARGS)
 
 test:
 	@printf '==> Running Go tests\n'
@@ -121,12 +116,21 @@ clean:
 
 install:
 	@printf '==> Installing %s\n' "$(BINARY_NAME)"
-	@go install "$(MAIN_PKG)" || { \
+	@go install -trimpath -ldflags "$(LDFLAGS)" "$(MAIN_PKG)" || { \
 		status=$$?; \
 		printf '\n[fail] Install failed with exit status %s.\n' "$$status"; \
 		exit $$status; \
 	}
-	@printf '[ok] Installed %s\n' "$(BINARY_NAME)"
+	@printf '[ok] Installed %s %s\n' "$(BINARY_NAME)" "$(VERSION)"
+ifneq ($(OS),Windows_NT)
+	@bindir="$$(go env GOBIN)"; [ -n "$$bindir" ] || bindir="$$(go env GOPATH | cut -d: -f1)/bin"; \
+	link="$$bindir/ah"; \
+	if { [ ! -e "$$link" ] && [ ! -L "$$link" ]; } || [ "$$(readlink "$$link")" = "$(BINARY_NAME)" ]; then \
+		ln -sfn "$(BINARY_NAME)" "$$link" && printf '[ok] Linked %s -> %s\n' "$$link" "$(BINARY_NAME)"; \
+	else \
+		printf '[skip] %s already exists and is not ours; ah was not linked\n' "$$link"; \
+	fi
+endif
 
 fmt:
 	@printf '==> Formatting Go packages\n'
