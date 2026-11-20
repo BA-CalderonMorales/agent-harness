@@ -317,12 +317,33 @@ func isMaxOutputTokensError(err error) bool {
 	return contains(errStr, "max_output_tokens") || contains(errStr, "max_tokens")
 }
 
+// promptTooLongPhrases are the ways providers say a request exceeded the
+// context window. Each server words it differently: Lemonade says "Max
+// length reached!", llama.cpp says the request "exceeds the available
+// context size", and OpenAI-compatible APIs name the maximum context
+// length or return context_length_exceeded.
+var promptTooLongPhrases = []string{
+	"prompt_too_long",
+	"prompt is too long",
+	"input is too long",
+	"context length",
+	"context_length_exceeded",
+	"max length reached",
+	"exceeds the available context",
+	"exceeds the context window",
+}
+
 func isPromptTooLongError(err error) bool {
 	if err == nil {
 		return false
 	}
-	errStr := err.Error()
-	return contains(errStr, "prompt_too_long") || contains(errStr, "context length")
+	errStr := strings.ToLower(err.Error())
+	for _, phrase := range promptTooLongPhrases {
+		if strings.Contains(errStr, phrase) {
+			return true
+		}
+	}
+	return false
 }
 
 func contains(s, substr string) bool {

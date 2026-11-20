@@ -110,7 +110,7 @@ type loopState struct {
 	messages                     []types.Message
 	toolUseContext               tools.Context
 	maxOutputTokensRecoveryCount int
-	hasAttemptedReactiveCompact  bool
+	reactiveCompactions          int
 	maxOutputTokensOverride      int
 	turnCount                    int
 	toolCallCount                int
@@ -123,6 +123,10 @@ type loopState struct {
 	// promptTokens is the fixed request cost from QueryParams, counted
 	// against BlockingTokenLimit on every iteration.
 	promptTokens int
+	// contextLimit, when set, replaces BlockingTokenLimit for the rest of
+	// the query. Recovery lowers it after the provider refuses a request
+	// the configured window said would fit.
+	contextLimit int
 }
 
 // Prominent token thresholds.

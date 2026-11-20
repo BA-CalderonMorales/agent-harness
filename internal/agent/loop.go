@@ -107,7 +107,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		// Token blocking check with auto-compaction
-		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(state.messages, state.promptTokens) {
+		if l.Config.AutoCompactEnabled && l.isAtBlockingLimit(state) {
 			compaction, err := l.compactMessages(ctx, state, false)
 			if err != nil {
 				compactionErr := fmt.Errorf("automatic context compaction failed: %w", err)
@@ -150,13 +150,22 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		}
 
 		// Call LLM
+		var assistantMsg *types.Message
+		var toolUses []types.ToolUseBlock
+		var streamErr error
 		llmEvents, err := l.Client.Stream(ctx, req)
-		if err != nil {
+		switch {
+		case err == nil:
+			assistantMsg, toolUses, streamErr = l.consumeStream(ctx, llmEvents, out)
+		case isPromptTooLongError(err):
+			// Providers usually refuse an oversized prompt with an HTTP error
+			// before any stream starts. Recover from it the same way as a
+			// refusal that arrives mid-stream.
+			streamErr = &recoverableError{err: err, reason: "prompt_too_long"}
+		default:
 			out <- types.StreamError{Error: err}
 			return Terminal{Reason: TerminalReasonError, Error: err}
 		}
-
-		assistantMsg, toolUses, streamErr := l.consumeStream(ctx, llmEvents, out)
 
 		// Handle recoverable errors with retry logic
 		if streamErr != nil {

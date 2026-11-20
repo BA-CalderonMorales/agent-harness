@@ -45,10 +45,14 @@ func TestBlockingLimitIncludesPromptOverhead(t *testing.T) {
 		Content: []types.ContentBlock{types.TextBlock{Text: strings.Repeat("x", 300)}},
 	}} // ~75 tokens
 
-	if !loop.isAtBlockingLimit(msgs, 30) {
+	if !loop.isAtBlockingLimit(&loopState{messages: msgs, promptTokens: 30}) {
 		t.Fatal("75 message tokens + 30 prompt tokens must exceed a 100-token limit")
 	}
-	if loop.isAtBlockingLimit(msgs, 20) {
+	if loop.isAtBlockingLimit(&loopState{messages: msgs, promptTokens: 20}) {
 		t.Fatal("75 message tokens + 20 prompt tokens must stay under a 100-token limit")
+	}
+	// A limit learned from a provider refusal replaces the configured one.
+	if !loop.isAtBlockingLimit(&loopState{messages: msgs, promptTokens: 20, contextLimit: 90}) {
+		t.Fatal("75 message tokens + 20 prompt tokens must exceed a learned 90-token limit")
 	}
 }
