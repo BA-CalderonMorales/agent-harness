@@ -78,7 +78,7 @@ func emitRejectedTool(ctx context.Context, state *loopState, use types.ToolUseBl
 	result := types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.ToolResultBlock{
 		ToolUseID: use.ID, IsError: true, Content: reason,
 	}}}
-	state.messages = append(state.messages, result)
+	state.add(result)
 	select {
 	case out <- types.StreamMessage{Message: result}:
 		return nil

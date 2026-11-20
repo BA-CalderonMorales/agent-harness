@@ -57,6 +57,7 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 		state := loopState{
 			messages:                     params.Messages,
 			promptTokens:                 params.PromptTokens,
+			record:                       seedRecord(params),
 			toolUseContext:               params.ToolUseContext,
 			maxOutputTokensOverride:      params.MaxOutputTokens,
 			maxOutputTokensRecoveryCount: 0,
@@ -192,7 +193,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			return Terminal{Reason: TerminalReasonComplete}
 		}
 
-		state.messages = append(state.messages, *assistantMsg)
+		state.add(*assistantMsg)
 
 		if len(toolUses) == 0 {
 			// No tools requested; turn is complete
@@ -259,7 +260,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 					// Update session messages for final results
 					if sm, ok := ev.(types.StreamMessage); ok {
 						l.mu.Lock()
-						state.messages = append(state.messages, sm.Message)
+						state.add(sm.Message)
 						l.mu.Unlock()
 					}
 				}
@@ -280,7 +281,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 				_ = execErr
 			}
 			for _, msg := range results {
-				state.messages = append(state.messages, msg)
+				state.add(msg)
 				select {
 				case out <- types.StreamMessage{Message: msg}:
 				case <-ctx.Done():

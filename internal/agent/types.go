@@ -4,6 +4,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -34,6 +35,10 @@ type QueryParams struct {
 	// prompt plus tool schemas). The loop counts it against the context
 	// budget; conversation messages alone understate the window.
 	PromptTokens int
+	// Record is the session's structured record. The loop keeps its own
+	// copy current as messages are appended and compacts from it. The zero
+	// Record means the loop folds one from Messages.
+	Record record.Record
 }
 
 // TerminalReason explains why the query loop ended.
@@ -123,6 +128,9 @@ type loopState struct {
 	// promptTokens is the fixed request cost from QueryParams, counted
 	// against BlockingTokenLimit on every iteration.
 	promptTokens int
+	// record follows every message the loop appends. Compaction renders it
+	// in place of a model-written summary.
+	record record.Record
 	// contextLimit, when set, replaces BlockingTokenLimit for the rest of
 	// the query. Recovery lowers it after the provider refuses a request
 	// the configured window said would fit.
