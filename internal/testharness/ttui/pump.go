@@ -150,9 +150,7 @@ func (p *pump) expand(msg tea.Msg) bool {
 	p.start(func() tea.Msg {
 		var out []tea.Msg
 		for _, cmd := range cmds {
-			if m := p.run(cmd); m != nil {
-				out = append(out, m)
-			}
+			out = append(out, p.resolve(cmd)...)
 		}
 		p.mu.Lock()
 		p.queue = append(p.queue, out...)
@@ -160,6 +158,48 @@ func (p *pump) expand(msg tea.Msg) bool {
 		return nil
 	})
 	return true
+}
+
+// resolve runs cmd to completion and returns every plain message it
+// produced, in order. A batch's commands run concurrently and all finish
+// before resolve returns; a sequence's commands run one after another.
+// A sequence element that is itself a batch or sequence is resolved the
+// same way, so it completes before the next element starts.
+func (p *pump) resolve(cmd tea.Cmd) []tea.Msg {
+	msg := p.run(cmd)
+	if msg == nil {
+		return nil
+	}
+	if batch, ok := msg.(tea.BatchMsg); ok {
+		results := make([][]tea.Msg, len(batch))
+		var wg sync.WaitGroup
+		for i, c := range batch {
+			if c == nil {
+				continue
+			}
+			wg.Add(1)
+			go func(i int, c tea.Cmd) {
+				defer wg.Done()
+				results[i] = p.resolve(c)
+			}(i, c)
+		}
+		wg.Wait()
+		var out []tea.Msg
+		for _, r := range results {
+			out = append(out, r...)
+		}
+		return out
+	}
+	if v := reflect.ValueOf(msg); v.Kind() == reflect.Slice && v.Type().Elem() == cmdType {
+		var out []tea.Msg
+		for i := 0; i < v.Len(); i++ {
+			if c, ok := v.Index(i).Interface().(tea.Cmd); ok && c != nil {
+				out = append(out, p.resolve(c)...)
+			}
+		}
+		return out
+	}
+	return []tea.Msg{msg}
 }
 
 // SetPumpOptions changes the pump bounds. Zero fields keep the default.

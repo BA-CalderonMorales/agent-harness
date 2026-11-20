@@ -188,6 +188,31 @@ func TestHarnessKeysAndAsserts(t *testing.T) {
 	h.AssertFitsWidth(200)
 }
 
+// A batch nested in a sequence must finish, every message delivered,
+// before the next sequence element runs: tea.Sequence(tea.Batch(a, b), c)
+// delivers a and b, then c.
+func TestSequenceHoldsOrderAroundNestedBatch(t *testing.T) {
+	slow := func(s string, d time.Duration) tea.Cmd {
+		return func() tea.Msg { time.Sleep(d); return s }
+	}
+	m := newCounter(func(msg tea.Msg) tea.Cmd {
+		if msg != "go" {
+			return nil
+		}
+		return tea.Sequence(tea.Batch(slow("first", 30*time.Millisecond), slow("first-b", 10*time.Millisecond)), slow("second", 0))
+	})
+	h := New(t, m)
+	h.SetPumpOptions(PumpOptions{Idle: 200 * time.Millisecond})
+	h.SendAndPump("go")
+	text := h.Text()
+	if !strings.Contains(text, "first") || !strings.Contains(text, "second") {
+		t.Fatalf("missing messages: %q", text)
+	}
+	if strings.Index(text, "first") > strings.Index(text, "second") {
+		t.Fatalf("sequence ran its second command before the nested batch finished: %q", text)
+	}
+}
+
 func TestNormalizeReplacesVolatileValues(t *testing.T) {
 	got := Normalize("\x1b[1mat 2026-01-02 03:04:05 took 12ms in /tmp/x id 123e4567-e89b-12d3-a456-426614174000  ")
 	want := "at <TIME> took <DURATION> in <PATH> id <ID>"
