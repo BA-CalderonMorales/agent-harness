@@ -15,7 +15,7 @@ real `HTTPClient` against it. No test touches the network.
 | lemonade | `stream-text.http` | Captured live |
 | lemonade | `stream-tool-call.http` | Captured live |
 | lemonade | `overflow.http` | Captured live |
-| openrouter | every file | Constructed |
+| openrouter | every file, including both `error-429-retry-after-*.http` | Constructed |
 | fireworks | every file | Constructed |
 
 ### Captured live
