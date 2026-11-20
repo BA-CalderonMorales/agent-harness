@@ -8,7 +8,7 @@ release runbook in `.agent-harness/skills/release-workflow/SKILL.md`).
 
 - **CI on every PR to `main`.** `ci.yml` runs the build, quality, security,
   secrets, SBOM, script, and sharded test jobs. A red PR does not merge.
-- **The release gate.** `make release` refuses to tag unless the latest CI
+- **The release gate.** Cut release refuses to tag unless the latest CI
   run on `origin/main` passed, so a broken `main` cannot ship.
 - **GitHub branch protection on `main`** (Settings → Branches):
 
@@ -34,7 +34,7 @@ git config core.hooksPath .githooks
 
 - `pre-commit` blocks session artifacts and unformatted Go files.
 - `commit-msg` rejects subjects that are not conventional commits, which
-  `make release` relies on to pick the next version. CI's `commits` job
+  the release relies on to pick the next version. CI's `commits` job
   checks every commit in a PR the same way, and the `pr-title` workflow
   checks the PR title, which a squash merge can use as the subject.
 - `pre-push` rejects version tags that are not semver.

@@ -99,7 +99,8 @@ cover quality, security, Linux terminal evals, Windows and container builds.
 The release workflow builds six platform archives and checksums from a
 tag on `main`, stamping the tag into each binary as its version.
 
-A release is a tag on `origin/main`, cut by `make release`; see
+A release is a tag on `origin/main`, cut by the Cut release workflow in
+GitHub Actions; see
 [the release runbook](../.agent-harness/skills/release-workflow/SKILL.md).
 Generated evidence and local campaign results are excluded from source
 checkouts/build context under the [retention policy](../evidence/README.md).

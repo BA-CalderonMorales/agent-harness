@@ -49,7 +49,8 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 - Local LLM: `agent-harness.yml` targets Ornith-1.0 GGUF via a llama.cpp
   OpenAI-compatible endpoint; `./scripts/ah-fast.sh` for small Ollama smoke
   tests; `./scripts/ah-local.sh` for the local server flow.
-- Release: `make release-dry-run`, then `make release` (see Branch Strategy).
+- Release: `gh workflow run cut-release.yml -f dry_run=true`, then
+  `gh workflow run cut-release.yml` (see Branch Strategy).
 - Structure check: `make verify` reports files over the line budget.
 - Complexity snapshot: `make complexity` ranks functions and packages; see
   `docs/complexity-analysis.md` before choosing a file to refactor.
@@ -98,12 +99,12 @@ records the invariants it rests on.
   CI on the PR is the gate. Never push straight to `main`.
 - Work that is not ready for users merges behind a feature flag, so `main`
   stays shippable without long-lived branches.
-- A release is a tag on `origin/main` and nothing else: `make release`
+- A release is a tag on `origin/main` and nothing else, cut in GitHub
+  Actions: `gh workflow run cut-release.yml` (or Actions → Cut release)
   computes the next version from the conventional commits since the last
-  tag, refuses unless CI passed on that commit, and pushes the tag;
-  `release.yml` builds and publishes. `make release-dry-run` shows what it
-  would do. It tags `origin/main`, never the local checkout, so it can run
-  from any branch at any moment.
+  tag, refuses unless CI passed on that commit, pushes the tag, and starts
+  `release.yml` and `container.yml` on it. `-f dry_run=true` shows what it
+  would do. `make release` runs the same script locally as a fallback only.
 - Remote first: remote CI is the gate and remote CD builds and publishes. A
   locally built release that bypasses CD is a last resort, not a route —
   say so out loud when taking it.
