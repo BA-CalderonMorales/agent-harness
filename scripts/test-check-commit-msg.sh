@@ -54,12 +54,45 @@ if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
 else
     echo "  FAIL    clean range rejected"; FAIL=1
 fi
+if (cd "$repo" && sh "$SCRIPT" --range "HEAD..HEAD" >/dev/null 2>&1); then
+    echo "  ok      empty range passes"
+else
+    echo "  FAIL    empty range rejected"; FAIL=1
+fi
+if (cd "$repo" && sh "$SCRIPT" --range "no-such-ref..HEAD" >/dev/null 2>&1); then
+    echo "  FAIL    unknown revision passed"; FAIL=1
+else
+    echo "  ok      unknown revision fails"
+fi
+git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "fixup! feat(x)!: good"
+if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
+    echo "  FAIL    range with an unsquashed fixup passed"; FAIL=1
+else
+    echo "  ok      range with an unsquashed fixup is rejected"
+fi
+git -C "$repo" reset -q --hard HEAD~1
 git -C "$repo" -c user.name=t -c user.email=t@example.invalid commit -q --allow-empty -m "wip stuff"
 if (cd "$repo" && sh "$SCRIPT" --range "$base..HEAD" >/dev/null 2>&1); then
     echo "  FAIL    range with a bad commit passed"; FAIL=1
 else
     echo "  ok      range with a bad commit is rejected"
 fi
+
+echo "commit-msg: title mode is strict"
+for title in "feat(tui): add a Labs section" 'Revert "feat(tui): add a Labs section"'; do
+    if sh "$SCRIPT" --title "$title" >/dev/null 2>&1; then
+        echo "  ok      $title"
+    else
+        echo "  FAIL    rejected title: $title"; FAIL=1
+    fi
+done
+for title in "Add export" "fixup! feat: x" "squash! fix: y"; do
+    if sh "$SCRIPT" --title "$title" >/dev/null 2>&1; then
+        echo "  FAIL    accepted title: $title"; FAIL=1
+    else
+        echo "  ok      rejected title: $title"
+    fi
+done
 
 if [ "$FAIL" -ne 0 ]; then
     echo "commit-msg tests FAILED"

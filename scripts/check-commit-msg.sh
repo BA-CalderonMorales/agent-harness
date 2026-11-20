@@ -7,6 +7,12 @@
 #
 # Usage: check-commit-msg.sh <message-file>       the commit-msg hook
 #        check-commit-msg.sh --range <git-range>   every commit in a PR (CI)
+#        check-commit-msg.sh --title <text>        a PR title, which a squash
+#                                                  merge can use as the subject
+#
+# The hook accepts fixup!, squash!, and amend! subjects so local autosquash
+# works. Range and title modes reject them: once one reaches main, its real
+# type is hidden behind the prefix and the release bump would miss it.
 
 set -eu
 
@@ -18,10 +24,18 @@ hint() {
     echo "    Types: $(printf '%s' "$TYPES" | sed 's/|/, /g')" >&2
 }
 
-# check_subject <subject> [label]
+# check_subject <subject> <label> <allow-autosquash: yes|no>
 check_subject() {
     case "$1" in
-        "Merge "*|'Revert "'*|"fixup! "*|"squash! "*|"amend! "*) return 0 ;;
+        "Merge "*|'Revert "'*) return 0 ;;
+        "fixup! "*|"squash! "*|"amend! "*)
+            if [ "$3" = yes ]; then
+                return 0
+            fi
+            echo "[!] unsquashed ${1%%!*}! commit${2:+ ($2)}: $1" >&2
+            echo "    Squash it into the commit it fixes before this reaches main." >&2
+            return 1
+            ;;
     esac
     if printf '%s\n' "$1" | grep -Eq "$PATTERN"; then
         return 0
@@ -30,26 +44,40 @@ check_subject() {
     return 1
 }
 
-if [ "${1:-}" = "--range" ]; then
-    range="${2:?usage: check-commit-msg.sh --range <git-range>}"
-    fail=0
-    for sha in $(git rev-list --no-merges "$range"); do
-        subject=$(git log -1 --format=%s "$sha")
-        check_subject "$subject" "$(git rev-parse --short "$sha")" || fail=1
-    done
-    if [ "$fail" -ne 0 ]; then
-        hint
-        exit 1
-    fi
-    echo "[OK] every commit in $range is a conventional commit"
-    exit 0
-fi
-
-file="${1:?usage: check-commit-msg.sh <message-file> | --range <git-range>}"
-subject=$(grep -v '^#' "$file" | sed '/^[[:space:]]*$/d' | head -n 1)
-# An empty message is git's to reject; it aborts the commit on its own.
-[ -n "$subject" ] || exit 0
-if ! check_subject "$subject"; then
-    hint
-    exit 1
-fi
+case "${1:-}" in
+    --range)
+        range="${2:?usage: check-commit-msg.sh --range <git-range>}"
+        commits=$(git rev-list --no-merges "$range") || {
+            echo "[!] cannot list commits in $range" >&2
+            exit 1
+        }
+        fail=0
+        for sha in $commits; do
+            subject=$(git log -1 --format=%s "$sha")
+            check_subject "$subject" "$(git rev-parse --short "$sha")" no || fail=1
+        done
+        if [ "$fail" -ne 0 ]; then
+            hint
+            exit 1
+        fi
+        echo "[OK] every commit in $range is a conventional commit"
+        ;;
+    --title)
+        title="${2:?usage: check-commit-msg.sh --title <text>}"
+        if ! check_subject "$title" "PR title" no; then
+            hint
+            exit 1
+        fi
+        echo "[OK] PR title is a conventional commit"
+        ;;
+    *)
+        file="${1:?usage: check-commit-msg.sh <message-file> | --range <git-range> | --title <text>}"
+        subject=$(grep -v '^#' "$file" | sed '/^[[:space:]]*$/d' | head -n 1)
+        # An empty message is git's to reject; it aborts the commit on its own.
+        [ -n "$subject" ] || exit 0
+        if ! check_subject "$subject" "" yes; then
+            hint
+            exit 1
+        fi
+        ;;
+esac
