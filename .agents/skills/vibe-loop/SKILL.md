@@ -85,8 +85,9 @@ tmux capture-pane -t vet -p > /tmp/frame.txt
 - POLA gate: would this astonish a vim-fluent engineer? Env pins
   (`AH_*`) outrank persisted state; honest failure beats plausible
   lies ("no stored API key for X" > sending garbage auth).
-- Version source of truth: `Version` constant in `cmd/agent-harness/main.go`
-  (the Makefile reads it; bump it when cutting a release).
+- Version source of truth: the git tag on `origin/main`. No source file
+  holds a version and nothing is bumped; `make release` picks the next tag
+  from conventional commits (`RELEASE_ARGS="--version vX.Y.Z"` overrides).
 
 ## Repo conventions to enforce on sight
 
