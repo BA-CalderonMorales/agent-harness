@@ -69,15 +69,15 @@ expect_silent "trailing slashes on the PATH entry" "$install//:$SYS" "$install"
 
 echo "install-path: bindir missing from PATH"
 expect_warn "not on PATH" "$other:$SYS" "$install" \
-    "$install" "export PATH=\"$install:\$PATH\""
+    "$install" "export PATH='$install':\"\$PATH\""
 expect_warn "not on PATH, an old binary runs instead" "$old:$SYS" "$install" \
-    "$install" "$old/$NAME" "export PATH=\"$install:\$PATH\""
+    "$install" "$old/$NAME" "export PATH='$install':\"\$PATH\""
 expect_no_gobin "not on PATH advice names no fixed install dir"
 
 echo "install-path: an earlier binary shadows the installed one"
 expect_warn "shadowed" "$old:$install:$SYS" "$install" \
     "$old/$NAME" "$install/$NAME" "remove or replace $old/$NAME" \
-    "put $install ahead of $old on PATH" "export PATH=\"$install:\$PATH\""
+    "put $install ahead of $old on PATH" "export PATH='$install':\"\$PATH\""
 expect_no_gobin "shadowed advice names no fixed install dir"
 
 echo "install-path: a version-manager shim shadows the installed one"
@@ -88,7 +88,7 @@ chmod +x "$WORK/usr/bin/mise"
 ln -s "$WORK/usr/bin/mise" "$shims/$NAME"
 expect_warn "shim dir earlier on PATH" "$shims:$old:$install:$SYS" "$install" \
     "$shims/$NAME is a shim from a version manager" \
-    "put $install ahead of $shims on PATH" "export PATH=\"$install:\$PATH\""
+    "put $install ahead of $shims on PATH" "export PATH='$install':\"\$PATH\""
 expect_no_gobin "shim advice does not suggest installing into the shims dir"
 case $OUT in *"remove or replace"*) fail "shim advice suggests replacing the shim" ;; *) pass "shim advice does not suggest replacing the shim" ;; esac
 mkdir -p "$WORK/asdf/bin"
@@ -123,6 +123,19 @@ if [ -n "$line" ] && /bin/sh -n -c "$line" 2>/dev/null; then
 else
     fail "export line parses as shell"
 fi
+
+echo "install-path: the suggested export line adds the exact directory"
+# Run the printed command and read PATH back: the first entry must be the
+# install directory byte for byte, whatever characters its name holds.
+for name in 'plain' 'with$USER' 'with"quote' "with'single" 'with space' 'with`tick`' 'with\back'; do
+    dir="$WORK/odd/$name/bin"
+    mkdir -p "$dir"
+    fake_bin "$dir"
+    run_check "$other:$SYS" "$dir"
+    line=$(printf '%s\n' "$OUT" | grep 'export PATH=' | head -n 1 | sed 's/^ *//')
+    got=$(PATH=/usr/bin:/bin USER=expanded /bin/sh -c "$line"'; printf "%s" "$PATH"' 2>/dev/null | sed 's/:.*//')
+    if [ "$got" = "$dir" ]; then pass "export adds the exact directory: $name"; else fail "export adds the exact directory: $name (got '$got')"; fi
+done
 
 if [ "$FAIL" -ne 0 ]; then
     echo "install-path tests FAILED"

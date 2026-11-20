@@ -39,6 +39,15 @@ canon() {
     printf '%s\n' "$d"
 }
 
+# shell_quote prints its argument as literal shell text: wrapped in single
+# quotes, with any embedded single quote written as '\''. A directory name
+# containing $, `, ", \\, or a space therefore pastes back unchanged.
+shell_quote() {
+    printf "'"
+    printf '%s' "$1" | sed "s/'/'\\\\''/g"
+    printf "'"
+}
+
 want=$(canon "$bindir")
 installed="$want/$name"
 
@@ -108,7 +117,7 @@ fi
     else
         printf '       Fix: add %s to PATH:\n' "$want"
     fi
-    printf '         export PATH="%s:$PATH"\n' "$want"
+    printf '         export PATH=%s:"$PATH"\n' "$(shell_quote "$want")"
     printf '         # Add that export line to your shell profile to keep it.\n'
 } >&2
 exit 0
