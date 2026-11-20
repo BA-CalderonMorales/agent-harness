@@ -99,6 +99,65 @@ class Sanitizer:
         expect(value, (str,), where)
         return f"sanitized-{key}"
 
+    def numbered(self, prefix):
+        """A rule that replaces a string with a distinct numbered placeholder."""
+        def rule(value, where, _=None):
+            expect(value, (str,), where)
+            self.texts += 1
+            return f"{prefix}-{self.texts:04d}"
+        return rule
+
+    def one_of(self, allowed):
+        """A rule for a closed vocabulary: known values stay, anything else is data."""
+        def rule(value, where, _=None):
+            if expect(value, (str,), where) not in allowed:
+                raise Unreviewed(f"{where}: value outside the reviewed vocabulary")
+            return value
+        return rule
+
+    def each(self, rule):
+        def apply_each(value, where, _=None):
+            expect(value, (list,), where)
+            return [rule(v, f"{where}[{i}]") for i, v in enumerate(value)]
+        return apply_each
+
+    def shaped(self, schema):
+        return lambda value, where, _=None: self.apply(schema, value, where)
+
+    def session_record(self, value, where, _=None):
+        """The record line: every string is replaced; only counts, flags, and
+        closed vocabularies (file ops, todo statuses, tool names) stay."""
+        text = self.numbered("sanitized-record-text")
+        return self.apply({
+            "v": keep_int,
+            "goal": self.numbered("sanitized-goal"),
+            "constraints": self.each(self.numbered("sanitized-constraint")),
+            "files": self.each(self.shaped({
+                "path": self.numbered("sanitized/path"),
+                "op": self.one_of({"read", "write", "edit"}),
+                "n": keep_int,
+            })),
+            "cmds": self.each(self.shaped({
+                "cmd": self.numbered("sanitized-cmd"),
+                "failed": keep_bool,
+                "err": self.numbered("sanitized-err"),
+            })),
+            "todos": self.each(self.shaped({
+                "text": self.numbered("sanitized-todo"),
+                "status": self.one_of({"pending", "in_progress", "done", "cancelled"}),
+            })),
+            "verified": self.each(self.numbered("sanitized-cmd")),
+            "pending": self.each(text),
+            "denied": self.each(self.numbered("sanitized-denied")),
+            "last_user": self.numbered("sanitized-user"),
+            "replied": keep_bool,
+            "open": self.each(self.shaped({
+                "id": self.tool_id,
+                "tool": self.one_of({"read", "write", "edit", "bash"}),
+                "arg": self.numbered("sanitized-arg"),
+            })),
+        }, value, where)
+
     def apply(self, schema, obj, where):
         if not isinstance(obj, dict):
             raise Unreviewed(f"{where}: expected an object, got {type(obj).__name__}")
@@ -162,6 +221,7 @@ class Sanitizer:
             "tool_limit": keep_int,
             "message": self.message,
             "meta": self.meta,
+            "record": self.session_record,
         }, value, where)
 
 
