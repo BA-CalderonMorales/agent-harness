@@ -67,7 +67,7 @@ if [ -n "$version" ]; then
         || die "--version must look like v1.2.3 or v1.2.3-rc.1, got '$version'"
     next="$version"
 else
-    next=$(git log --format=%B "$range" | sh "$script_dir/next-version.sh" "$base" "$bump") \
+    next=$(git log --format='%x1e%s%n%b' "$range" | sh "$script_dir/next-version.sh" "$base" "$bump") \
         || die "could not compute the next version"
 fi
 

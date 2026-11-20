@@ -2,13 +2,16 @@
 # next-version.sh - compute the next release version.
 #
 # Usage:
-#   git log --format=%B vX.Y.Z..origin/main | next-version.sh vX.Y.Z [auto|major|minor|patch]
+#   git log --format='%x1e%s%n%b' vX.Y.Z..origin/main | next-version.sh vX.Y.Z [auto|major|minor|patch]
 #
-# auto reads the conventional commit messages on stdin: a breaking change
-# (type!: or a BREAKING CHANGE: footer) bumps major, feat bumps minor, and
-# anything else bumps patch. Before 1.0.0 each auto step shifts down one,
-# so breaking bumps minor and feat bumps patch. An explicit bump is taken
-# as given and stdin is ignored.
+# stdin holds one record per commit: a line that starts with the ASCII
+# record separator (\036) is a commit subject, and the lines after it are
+# that commit's body. auto reads conventional commits from those records:
+# a subject with a ! breaking marker, or a BREAKING CHANGE: footer in a
+# body, bumps major; a feat subject bumps minor; anything else bumps patch.
+# Header-like text inside a body never counts. Before 1.0.0 each auto step
+# shifts down one, so breaking bumps minor and feat bumps patch. An explicit
+# bump is taken as given and stdin is ignored.
 
 set -eu
 
@@ -27,14 +30,16 @@ $core
 EOF
 
 if [ "$bump" = auto ]; then
-    messages=$(cat)
-    if printf '%s\n' "$messages" | grep -Eq '^[a-z]+(\([^)]*\))?!:|^BREAKING[ -]CHANGE:'; then
-        bump=major
-    elif printf '%s\n' "$messages" | grep -Eq '^feat(\([^)]*\))?:'; then
-        bump=minor
-    else
-        bump=patch
-    fi
+    bump=$(awk -v rs="$(printf '\036')" '
+        index($0, rs) == 1 {
+            subject = substr($0, length(rs) + 1)
+            if (subject ~ /^[a-z]+(\([^)]*\))?!:/) breaking = 1
+            else if (subject ~ /^feat(\([^)]*\))?:/) feature = 1
+            next
+        }
+        /^BREAKING[ -]CHANGE:/ { breaking = 1 }
+        END { print (breaking ? "major" : feature ? "minor" : "patch") }
+    ')
     if [ "$major" -eq 0 ]; then
         case "$bump" in
             major) bump=minor ;;
