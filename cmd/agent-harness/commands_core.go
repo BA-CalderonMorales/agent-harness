@@ -173,6 +173,7 @@ func (app *App) initCommandsCore() {
 					return err
 				}
 				app.session = loaded
+				rebuildRecord(loaded)
 				app.sessionManager.SetCurrent(loaded)
 				return nil
 			},

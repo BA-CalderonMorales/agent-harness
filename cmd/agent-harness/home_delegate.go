@@ -59,6 +59,7 @@ func (d *tuiHomeDelegate) OnLoadSession(id string) {
 		return
 	}
 	d.app.session = session
+	rebuildRecord(session)
 	d.app.costTracker.SetModel(session.Model)
 	d.tuiApp.Send(tui.SessionActivatedMsg{
 		SessionID:      session.ID,

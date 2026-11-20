@@ -209,6 +209,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 				}
 			}
 			app.session.AddMessage(e.Message)
+			app.recordMessage(e.Message)
 			app.sessionManager.SetCurrent(app.session)
 			if _, err := app.sessionManager.SaveCurrent(); err != nil {
 				diag.Error("session.save.turn", err)
