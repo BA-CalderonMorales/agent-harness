@@ -5,6 +5,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/charmbracelet/x/ansi"
+
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -136,4 +138,83 @@ func indexTool(messages []ChatMessage) int {
 		}
 	}
 	return 0
+}
+
+// TestSessionReloadRendersToolRowsOfTurn: a persisted turn stores the
+// tool call, its result, and the answer as separate messages. The
+// resumed frame must show the tool row inside the answer's turn block,
+// as the live turn did, not the answer alone.
+func TestSessionReloadRendersToolRowsOfTurn(t *testing.T) {
+	m := NewChatModel()
+	m.resize(80, 24)
+	now := time.Now()
+	m.SetMessages([]types.Message{
+		{UUID: "u1", Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "say hi"}}, Timestamp: now},
+		{UUID: "a1", Role: types.RoleAssistant, Content: []types.ContentBlock{
+			types.ToolUseBlock{ID: "call-1", Name: "bash", Input: map[string]any{"command": "echo hi"}},
+		}, Timestamp: now},
+		{UUID: "r1", Role: types.RoleUser, Content: []types.ContentBlock{
+			types.ToolResultBlock{ToolUseID: "call-1", Content: "hi"},
+		}, Timestamp: now},
+		{UUID: "a2", Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "It said hi."}}, Timestamp: now},
+	})
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"Shell", "echo hi", "It said hi."} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("resumed frame is missing %q:\n%s", want, view)
+		}
+	}
+}
+
+// TestSessionReloadSplitsParallelToolCalls: one persisted assistant
+// message can hold several tool calls. Each must reload as its own row
+// with its own name and command, the way the live turn showed them,
+// and both rows must render inside the answer's turn block.
+func TestSessionReloadSplitsParallelToolCalls(t *testing.T) {
+	m := NewChatModel()
+	m.resize(100, 30)
+	now := time.Now()
+	m.SetMessages([]types.Message{
+		{UUID: "u1", Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "look around"}}, Timestamp: now},
+		{UUID: "a1", Role: types.RoleAssistant, Content: []types.ContentBlock{
+			types.ToolUseBlock{ID: "call-1", Name: "bash", Input: map[string]any{"command": "echo first"}},
+			types.ToolUseBlock{ID: "call-2", Name: "grep", Input: map[string]any{"pattern": "second-needle"}},
+		}, Timestamp: now},
+		{UUID: "r1", Role: types.RoleUser, Content: []types.ContentBlock{
+			types.ToolResultBlock{ToolUseID: "call-1", Content: "first"},
+			types.ToolResultBlock{ToolUseID: "call-2", Content: "match"},
+		}, Timestamp: now},
+		{UUID: "a2", Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "Found both."}}, Timestamp: now},
+	})
+
+	rows := map[string]ChatMessage{}
+	for _, msg := range m.messages {
+		if msg.IsTool && msg.ToolName != "" {
+			if _, dup := rows[msg.ID]; dup {
+				t.Fatalf("two tool rows share ID %q", msg.ID)
+			}
+			rows[msg.ID] = msg
+		}
+	}
+	if len(rows) != 2 {
+		t.Fatalf("reload built %d named tool rows, want one per call (2): %+v", len(rows), rows)
+	}
+	byName := map[string]ChatMessage{}
+	for _, row := range rows {
+		byName[row.ToolDisplayName] = row
+	}
+	if got := byName["Shell"].ToolDetail; got != "echo first" {
+		t.Fatalf("Shell row detail = %q, want its own command", got)
+	}
+	if got := byName["Search"].ToolDetail; !strings.Contains(got, "second-needle") {
+		t.Fatalf("Search row detail = %q, want its own pattern", got)
+	}
+
+	view := ansi.Strip(m.View())
+	for _, want := range []string{"Shell", "echo first", "Search", "second-needle", "Found both."} {
+		if !strings.Contains(view, want) {
+			t.Fatalf("resumed frame is missing %q:\n%s", want, view)
+		}
+	}
 }

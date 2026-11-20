@@ -29,7 +29,10 @@ cycle.
 
 | Method | What it does |
 |---|---|
-| `Send(msg)` | Delivers a message and records the frame it rendered |
+| `Send(msg)` | Delivers a message and records the frame it rendered; the returned command is discarded |
+| `SendAndPump(msg)` | Delivers a message, then runs the returned commands and feeds their messages back until idle |
+| `Init()` / `Run(cmd)` / `Settle()` | Pump the model's `Init`, one command, or work still outstanding from earlier pumps |
+| `Drain(source)` | Feeds messages from `source` (for example an app's own message channel) until it and the pump are idle |
 | `Type(text)` | Sends each rune as its own key press |
 | `Press(name)` | Sends a named key (`enter`, `esc`, `up`, `ctrl+w`, ...) |
 | `Resize(w, h)` | Tells the model the pane changed size |
@@ -37,6 +40,16 @@ cycle.
 | `Frames()` | Every recorded frame, ANSI-stripped |
 | `AssertFitsWidth(w)` | Fails when any rendered line is wider than the pane |
 | `AssertContains` / `AssertNotContains` | Frame content checks |
+
+## Pumping commands
+
+A live program runs every command `Update` returns. The pump does the
+same, bounded: each pump delivers at most `MaxSteps` messages (200 by
+default), and a command still running after the idle window (25 ms by
+default) is left to finish in the background. Its message, such as a
+timer that fires later, arrives on the next pump. A spinner that
+reschedules itself forever therefore ends a pump at the step cap instead
+of hanging the test. `SetPumpOptions` changes both bounds.
 
 ## Golden files
 
