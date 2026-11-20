@@ -70,27 +70,42 @@ same_binary() {
     [ "$1" -ef "$2" ] 2>/dev/null
 }
 
-if [ "$on_path" -eq 0 ]; then
-    {
-        printf '\n[warn] %s is not on your PATH, so the %s just installed will not run by name.\n' "$want" "$name"
-        if [ -n "$first" ] && ! same_binary "$first" "$installed"; then
-            printf '[warn] Your shell will run %s instead.\n' "$first"
-        fi
-        printf '       Fix it one of two ways:\n'
-        printf '         1. Install into a directory already on PATH:\n'
-        printf '              GOBIN=$HOME/.local/bin make install\n'
-        printf '         2. Add %s to PATH in your shell profile:\n' "$want"
-        printf '              export PATH="%s:$PATH"\n' "$want"
-    } >&2
-    exit 0
-fi
+# is_shim FILE succeeds when FILE is a version-manager shim: it lives in
+# a directory named shims, or it is a symlink to a differently named
+# program (mise, asdf). Plain readlink, when present, behaves the same
+# on GNU and BSD; without it only the directory name is checked.
+is_shim() {
+    case ${1%/*} in */shims) return 0 ;; esac
+    [ -L "$1" ] || return 1
+    command -v readlink >/dev/null 2>&1 || return 1
+    target=$(readlink "$1" 2>/dev/null) || return 1
+    [ "${target##*/}" != "${1##*/}" ]
+}
 
+shadowed=0
 if [ -n "$first" ] && ! same_binary "$first" "$installed"; then
-    {
-        printf '\n[warn] %s comes earlier on your PATH and shadows the %s just installed.\n' "$first" "$name"
-        printf '       Installed: %s\n' "$installed"
-        printf '       Running %s will start %s.\n' "$name" "$first"
-        printf '       Remove the old binary, or move %s ahead of %s on PATH.\n' "$want" "${first%/*}"
-    } >&2
+    shadowed=1
 fi
+[ "$on_path" -eq 0 ] || [ "$shadowed" -eq 1 ] || exit 0
+
+# The advice only ever names $want first on PATH, the one placement
+# that is sure to win; a fixed directory can itself be shadowed.
+{
+    printf '\n'
+    if [ "$on_path" -eq 0 ]; then
+        printf '[warn] %s is not on your PATH, so the %s just installed will not run by name.\n' "$want" "$name"
+    fi
+    if [ "$shadowed" -eq 1 ]; then
+        printf '[warn] Running %s starts %s, not %s.\n' "$name" "$first" "$installed"
+        if is_shim "$first"; then
+            printf '       %s is a shim from a version manager; it will keep running its own copy.\n' "$first"
+            printf '       Fix: put %s ahead of %s on PATH:\n' "$want" "${first%/*}"
+        else
+            printf '       Fix: remove or replace %s, or put %s ahead of %s on PATH:\n' "$first" "$want" "${first%/*}"
+        fi
+    else
+        printf '       Fix: add %s to PATH:\n' "$want"
+    fi
+    printf '         export PATH="%s:$PATH"   (then add it to your shell profile)\n' "$want"
+} >&2
 exit 0

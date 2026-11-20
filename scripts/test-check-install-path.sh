@@ -43,6 +43,16 @@ expect_warn() {
     if [ "$ok" -eq 1 ]; then pass "$label"; else fail "$label (status $STATUS)"; fi
 }
 
+# expect_no_gobin LABEL: the last warning suggests no fixed install
+# directory, since any such directory can itself be shadowed. The only
+# placement it may suggest is the install dir first on PATH.
+expect_no_gobin() {
+    case $OUT in
+        *GOBIN=*|*"make install"*) fail "$1" ;;
+        *) pass "$1" ;;
+    esac
+}
+
 install="$WORK/go/bin"
 old="$WORK/local/bin"
 other="$WORK/other"
@@ -59,13 +69,32 @@ expect_silent "trailing slashes on the PATH entry" "$install//:$SYS" "$install"
 
 echo "install-path: bindir missing from PATH"
 expect_warn "not on PATH" "$other:$SYS" "$install" \
-    "$install" "GOBIN=\$HOME/.local/bin make install" "PATH"
+    "$install" "export PATH=\"$install:\$PATH\""
 expect_warn "not on PATH, an old binary runs instead" "$old:$SYS" "$install" \
-    "$install" "$old/$NAME"
+    "$install" "$old/$NAME" "export PATH=\"$install:\$PATH\""
+expect_no_gobin "not on PATH advice names no fixed install dir"
 
 echo "install-path: an earlier binary shadows the installed one"
 expect_warn "shadowed" "$old:$install:$SYS" "$install" \
-    "$old/$NAME" "$install/$NAME"
+    "$old/$NAME" "$install/$NAME" "remove or replace $old/$NAME" \
+    "put $install ahead of $old on PATH" "export PATH=\"$install:\$PATH\""
+expect_no_gobin "shadowed advice names no fixed install dir"
+
+echo "install-path: a version-manager shim shadows the installed one"
+shims="$WORK/mise/shims"
+mkdir -p "$shims" "$WORK/usr/bin"
+printf '#!/bin/sh\necho mise\n' > "$WORK/usr/bin/mise"
+chmod +x "$WORK/usr/bin/mise"
+ln -s "$WORK/usr/bin/mise" "$shims/$NAME"
+expect_warn "shim dir earlier on PATH" "$shims:$old:$install:$SYS" "$install" \
+    "$shims/$NAME is a shim from a version manager" \
+    "put $install ahead of $shims on PATH" "export PATH=\"$install:\$PATH\""
+expect_no_gobin "shim advice does not suggest installing into the shims dir"
+case $OUT in *"remove or replace"*) fail "shim advice suggests replacing the shim" ;; *) pass "shim advice does not suggest replacing the shim" ;; esac
+mkdir -p "$WORK/asdf/bin"
+ln -s "$WORK/usr/bin/mise" "$WORK/asdf/bin/$NAME"
+expect_warn "symlink to a differently named program is a shim" \
+    "$WORK/asdf/bin:$install:$SYS" "$install" "is a shim from a version manager"
 
 echo "install-path: empty PATH entries do not crash it"
 expect_silent "leading, trailing, and double colons" ":$install::$SYS:" "$install"
