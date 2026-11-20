@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -39,7 +40,7 @@ func TestLoadFile_ReadsValidJSON(t *testing.T) {
 	}
 }
 
-func TestFileConfig_SaveAndLoadRoundTrip(t *testing.T) {
+func TestLoadFile_ReadsWrittenJSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	path := filepath.Join(tmpDir, "config.json")
 
@@ -48,9 +49,12 @@ func TestFileConfig_SaveAndLoadRoundTrip(t *testing.T) {
 		Model:       "claude-3-5-sonnet-20241022",
 		AlwaysAllow: []string{"read", "glob"},
 	}
-
-	if err := original.Save(path); err != nil {
-		t.Fatalf("save failed: %v", err)
+	data, err := json.Marshal(original)
+	if err != nil {
+		t.Fatalf("marshal failed: %v", err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatalf("write failed: %v", err)
 	}
 
 	loaded, err := LoadFile(path)
