@@ -76,11 +76,11 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   `core`, `rest`). The shard coverage check is a drift guard — a package in no
   shard fails the gates job rather than silently going untested.
 - `release.yml` runs on a tag push and builds and publishes the release
-  artifacts; it refuses to build unless the tag equals `main.go`'s version,
-  which is what `scripts/check-version-matches.sh` exists to catch early.
-- Version bumps belong in a dedicated commit on `release/X.Y.Z`, with the
-  changelog. The old direct-push bump workflow and publish scripts were
-  removed; use the two-PR release-workflow skill below.
+  artifacts, stamping the tag into the binary through `-ldflags`.
+- The git tag is the only place a version lives. No source file holds a
+  version and there is no bump commit. `make build` and `make install`
+  stamp `git describe`; `go install ...@vX.Y.Z` reports the module version;
+  anything else reports `dev` (see `cmd/agent-harness/version.go`).
 - Docs-only changes skip CI automatically where configured; trigger
   `workflow_dispatch` when needed.
 

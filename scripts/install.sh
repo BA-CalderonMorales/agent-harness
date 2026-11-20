@@ -148,12 +148,36 @@ download_binary() {
         sudo mv "$binary_name" "$INSTALL_DIR/$BINARY_NAME"
         sudo chmod +x "$INSTALL_DIR/$BINARY_NAME"
     fi
-    
+
+    link_ah_shortcut
+
     # Cleanup
     cd -
     rm -rf "$temp_dir"
     
     log_success "Installed $BINARY_NAME $VERSION to $INSTALL_DIR"
+}
+
+# Link the short `ah` name to the binary, so `ah --version` works like
+# `agent-harness --version`. An `ah` that belongs to something else is
+# left alone. Windows has no symlink convention here, so it is skipped.
+link_ah_shortcut() {
+    if [ "$OS" = "windows" ]; then
+        return 0
+    fi
+    link="$INSTALL_DIR/ah"
+    if [ -e "$link" ] || [ -L "$link" ]; then
+        if [ "$(readlink "$link")" != "$BINARY_NAME" ]; then
+            log_warn "$link already exists and is not agent-harness; skipped the ah shortcut"
+            return 0
+        fi
+    fi
+    if [ -w "$INSTALL_DIR" ]; then
+        ln -sfn "$BINARY_NAME" "$link"
+    else
+        sudo ln -sfn "$BINARY_NAME" "$link"
+    fi
+    log_info "Linked ah -> $BINARY_NAME"
 }
 
 # Verify installation

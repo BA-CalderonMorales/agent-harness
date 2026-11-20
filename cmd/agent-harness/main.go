@@ -21,7 +21,7 @@ import (
 )
 
 var (
-	Version   = "0.4.1"
+	Version   = devVersion
 	BuildTime = "unknown"
 	GitSHA    = "unknown"
 	GitTag    = "unknown"
@@ -102,12 +102,8 @@ func run() error {
 }
 
 func printVersion() {
-	buildType := "release"
-	if stringsContains(Version, "dev") || stringsContains(Version, "local") {
-		buildType = "dev"
-	}
 	fmt.Printf("agent-harness %s\n", Version)
-	fmt.Printf("  Build type: %s\n", buildType)
+	fmt.Printf("  Build type: %s\n", buildType(Version))
 	if GitTag != "unknown" && GitTag != "" {
 		fmt.Printf("  Tag: %s\n", GitTag)
 	}
@@ -117,17 +113,4 @@ func printVersion() {
 	if GitSHA != "unknown" && GitSHA != "" {
 		fmt.Printf("  Git: %s\n", GitSHA)
 	}
-}
-
-func stringsContains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(substr) == 0 || containsSubstring(s, substr))
-}
-
-func containsSubstring(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
 }
