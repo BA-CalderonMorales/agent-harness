@@ -49,6 +49,7 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 - Local LLM: `agent-harness.yml` targets Ornith-1.0 GGUF via a llama.cpp
   OpenAI-compatible endpoint; `./scripts/ah-fast.sh` for small Ollama smoke
   tests; `./scripts/ah-local.sh` for the local server flow.
+- Release: `make release-dry-run`, then `make release` (see Branch Strategy).
 - Structure check: `make verify` reports files over the line budget.
 - Complexity snapshot: `make complexity` ranks functions and packages; see
   `docs/complexity-analysis.md` before choosing a file to refactor.
@@ -71,10 +72,12 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 
 ## CI
 
-- `.github/workflows/ci.yml` runs on PRs: `build`, `quality`, `security`,
-  `secrets`, `sbom`, `branch-naming`, and a sharded `test` matrix (`tui`,
-  `core`, `rest`). The shard coverage check is a drift guard — a package in no
-  shard fails the gates job rather than silently going untested.
+- `.github/workflows/ci.yml` runs on PRs to `main` and on pushes to `main`:
+  `build`, `quality`, `security`, `secrets`, `sbom`, `scripts` (unit tests
+  for the repository's own shell and Python tooling), and a sharded `test`
+  matrix (`tui`, `core`, `rest`). The shard coverage check is a drift guard —
+  a package in no shard fails the gates job rather than silently going
+  untested.
 - `release.yml` runs on a tag push and builds and publishes the release
   artifacts, stamping the tag into the binary through `-ldflags`.
 - The git tag is the only place a version lives. No source file holds a
@@ -86,29 +89,29 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
 
 ## Branch Strategy
 
-The ship ritual — the ordered steps, the gates, and how to babysit CD — lives in
-`.agent-harness/skills/release-workflow/SKILL.md`. Run that rather than
-improvising; this section records the invariants it rests on.
+`main` is the only long-lived branch, and it is always releasable. The
+runbook is `.agent-harness/skills/release-workflow/SKILL.md`; this section
+records the invariants it rests on.
 
-- `main` and `develop` are both protected and both require a PR. `develop`
-  additionally requires **1 approving review** and resolution of every
-  conversation, so an unreplied review thread blocks a merge on its own.
-  `enforce_admins` is off, but an admin merge bypasses protection the
-  maintainer configured — ask before using it.
-- Release branches are named exactly `release/X.Y.Z` (no suffixes) — CI and
-  the pre-push hook both reject any other `release/*` name.
-- The flow is two PRs: `release/X.Y.Z` accumulates the work and merges into
-  `develop`, then `develop` merges into `main`, and the tag is cut from
-  `origin/main` — never from a local `main`, which drifts stale (it read 39
-  commits behind during the 0.3.37 cycle).
-- Remote first: the PRs carry the changes, remote CI is the gate, and remote CD
-  builds and publishes. A local version bump with a locally pushed tag that
-  bypasses CD is a last resort, not a route — say so out loud when taking it.
-- Copilot review is expected but not guaranteed (it covered 0.3.35 and skipped
-  0.3.36). When it lands, each comment gets its own commit, then the reply,
-  then the resolve — in that order.
+- Work happens on short-lived branches named for the change
+  (`feat/...`, `fix/...`, `chore/...`) and lands on `main` through a PR.
+  CI on the PR is the gate. Never push straight to `main`.
+- Work that is not ready for users merges behind a feature flag, so `main`
+  stays shippable without long-lived branches.
+- A release is a tag on `origin/main` and nothing else: `make release`
+  computes the next version from the conventional commits since the last
+  tag, refuses unless CI passed on that commit, and pushes the tag;
+  `release.yml` builds and publishes. `make release-dry-run` shows what it
+  would do. It tags `origin/main`, never the local checkout, so it can run
+  from any branch at any moment.
+- Remote first: remote CI is the gate and remote CD builds and publishes. A
+  locally built release that bypasses CD is a last resort, not a route —
+  say so out loud when taking it.
+- CodeRabbit reviews PRs; Copilot review is intentionally off. When a
+  CodeRabbit comment calls for a change, it gets its own commit, then the
+  reply, then the resolve — in that order.
 - Never merge dev-local working spaces (`scratch/`, `.workspace/`,
-  working ledgers) into `develop` or `main`.
+  working ledgers) into `main`.
 
 ## Rules
 

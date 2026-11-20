@@ -43,7 +43,7 @@ tmp/
 /session-*
 scripts/demo/__pycache__/
 
-# Dev-local workspaces - never merged into develop/main (AGENTS.md)
+# Dev-local workspaces - never merged into main (AGENTS.md)
 /.workspace/
 
 # Any javascript stuff

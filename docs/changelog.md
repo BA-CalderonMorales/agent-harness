@@ -1,6 +1,8 @@
 # Changelog
 
-## [Unreleased]
+From v0.4.2, release notes are generated on each GitHub release from the
+merged pull requests, and this file is no longer updated. It records
+v0.4.1 and earlier.
 
 ## [0.4.1] - 2026-11-04
 

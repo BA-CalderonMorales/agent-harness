@@ -34,8 +34,8 @@ performance.
 Read AGENTS.md and applicable local instructions before working. Preserve
 unrelated work and personal settings.
 
-Determine the current release state rather than assuming a version. Follow
-the repository’s release/X.Y.Z branch convention, based on develop. Make
+Determine the current release state rather than assuming a version. Work
+on a short-lived branch off main and land it through a PR to main. Make
 focused conventional commits when checks permit. Prepare the release for
 review; do not merge, tag, publish, or deploy without authorization. Every
 PR description must end with:

@@ -107,10 +107,9 @@ codebase legible for future agentic sessions:
 ## Ship (release strategy)
 
 ```bash
-# on release/X.Y.Z, quality gates green (go test ./..., make verify):
-git checkout develop && git merge --no-ff release/X.Y.Z
-git checkout main && git merge --no-ff develop
-git tag -a vX.Y.Z && git push origin develop main vX.Y.Z   # tag fires release.yml
+# work lands on main through a PR with CI green; then, when it is time:
+make release-dry-run   # next version and the commits it carries
+make release           # tags origin/main; the tag fires release.yml
 ```
 
 ## Check-in protocol
