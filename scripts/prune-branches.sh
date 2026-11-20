@@ -1,5 +1,5 @@
 #!/bin/bash
-# prune-branches.sh - Safely remove branches merged into main or develop
+# prune-branches.sh - Safely remove branches merged into main
 # Usage: ./scripts/prune-branches.sh [--dry-run]
 
 set -e
@@ -12,7 +12,7 @@ if [ "$1" = "--dry-run" ]; then
 fi
 
 # Protected branches - never delete these
-PROTECTED_BRANCHES="main develop"
+PROTECTED_BRANCHES="main"
 
 # Colors for output
 RED='\033[0;31m'
@@ -65,21 +65,6 @@ for branch in $(git branch --merged main --format='%(refname:short)' 2>/dev/null
     fi
 done
 
-# Check local branches merged into develop
-echo ""
-echo "  Local branches merged into develop:"
-for branch in $(git branch --merged develop --format='%(refname:short)' 2>/dev/null || true); do
-    if ! is_protected "$branch"; then
-        FOUND_BRANCHES=true
-        if [ "$DRY_RUN" = true ]; then
-            print_status "$YELLOW" "[would delete]" "$branch"
-        else
-            print_status "$GREEN" "[deleting]" "$branch"
-            git branch -d "$branch" 2>/dev/null || print_status "$RED" "[failed]" "$branch"
-        fi
-    fi
-done
-
 # Only direct refs under origin are candidates; skip symbolic origin/HEAD
 # and other remotes. Real branch names containing HEAD remain eligible.
 # Check remote branches (that don't exist locally) merged into origin/main
@@ -88,25 +73,6 @@ echo "  Remote branches merged into origin/main:"
 for branch in $(git for-each-ref --merged=origin/main --format='%(refname:strip=3) %(symref)' refs/remotes/origin/ 2>/dev/null | awk 'NF == 1 {print $1}' || true); do
     if ! is_protected "$branch"; then
         # Skip if local branch exists (already handled above)
-        if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
-            continue
-        fi
-        FOUND_BRANCHES=true
-        if [ "$DRY_RUN" = true ]; then
-            print_status "$YELLOW" "[would delete remote]" "origin/$branch"
-        else
-            print_status "$GREEN" "[deleting remote]" "origin/$branch"
-            git push origin --delete "$branch" 2>/dev/null || print_status "$RED" "[failed]" "origin/$branch"
-        fi
-    fi
-done
-
-# Check remote branches merged into origin/develop
-echo ""
-echo "  Remote branches merged into origin/develop:"
-for branch in $(git for-each-ref --merged=origin/develop --format='%(refname:strip=3) %(symref)' refs/remotes/origin/ 2>/dev/null | awk 'NF == 1 {print $1}' || true); do
-    if ! is_protected "$branch"; then
-        # Skip if local branch exists
         if git show-ref --verify --quiet "refs/heads/$branch" 2>/dev/null; then
             continue
         fi
