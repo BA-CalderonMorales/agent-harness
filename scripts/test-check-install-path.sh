@@ -1,0 +1,84 @@
+#!/bin/sh
+# test-check-install-path.sh - unit tests for scripts/check-install-path.sh.
+
+SCRIPT="$(cd "$(dirname "$0")" && pwd)/check-install-path.sh"
+WORK=$(mktemp -d "${TMPDIR:-/tmp}/ah-install-path-test.XXXXXX")
+trap 'rm -rf "$WORK"' EXIT
+FAIL=0
+NAME=agent-harness
+
+# fake_bin DIR creates DIR with an executable $NAME inside it.
+fake_bin() {
+    mkdir -p "$1"
+    printf '#!/bin/sh\necho fake\n' > "$1/$NAME"
+    chmod +x "$1/$NAME"
+}
+
+# run_check PATH BINDIR runs the check with PATH set and captures
+# stdout+stderr in $OUT and the exit status in $STATUS.
+run_check() {
+    OUT=$(PATH="$1" /bin/sh "$SCRIPT" "$2" "$NAME" 2>&1)
+    STATUS=$?
+}
+
+pass() { echo "  ok      $1"; }
+fail() { echo "  FAIL    $1"; echo "$OUT" | sed 's/^/          /'; FAIL=1; }
+
+expect_silent() {
+    run_check "$2" "$3"
+    if [ "$STATUS" -eq 0 ] && [ -z "$OUT" ]; then pass "$1"; else fail "$1 (status $STATUS)"; fi
+}
+
+# expect_warn LABEL PATH BINDIR NEEDLE...: exit 0, a [warn], every needle present.
+expect_warn() {
+    label=$1 path=$2 bindir=$3
+    shift 3
+    run_check "$path" "$bindir"
+    ok=1
+    [ "$STATUS" -eq 0 ] || ok=0
+    case $OUT in *"[warn]"*) ;; *) ok=0 ;; esac
+    for needle in "$@"; do
+        case $OUT in *"$needle"*) ;; *) ok=0 ;; esac
+    done
+    if [ "$ok" -eq 1 ]; then pass "$label"; else fail "$label (status $STATUS)"; fi
+}
+
+install="$WORK/go/bin"
+old="$WORK/local/bin"
+other="$WORK/other"
+fake_bin "$install"
+fake_bin "$old"
+mkdir -p "$other"
+SYS=/usr/bin:/bin
+
+echo "install-path: installed binary is first on PATH"
+expect_silent "first on PATH" "$install:$SYS" "$install"
+expect_silent "first on PATH after a dir without it" "$other:$install:$old" "$install"
+expect_silent "trailing slash on the bindir" "$install:$SYS" "$install/"
+expect_silent "trailing slashes on the PATH entry" "$install//:$SYS" "$install"
+
+echo "install-path: bindir missing from PATH"
+expect_warn "not on PATH" "$other:$SYS" "$install" \
+    "$install" "GOBIN=\$HOME/.local/bin make install" "PATH"
+expect_warn "not on PATH, an old binary runs instead" "$old:$SYS" "$install" \
+    "$install" "$old/$NAME"
+
+echo "install-path: an earlier binary shadows the installed one"
+expect_warn "shadowed" "$old:$install:$SYS" "$install" \
+    "$old/$NAME" "$install/$NAME"
+
+echo "install-path: empty PATH entries do not crash it"
+expect_silent "leading, trailing, and double colons" ":$install::$SYS:" "$install"
+expect_warn "empty entries, not on PATH" "::$other:" "$install" "$install"
+expect_warn "PATH is empty" "" "$install" "$install"
+
+echo "install-path: a symlink to the installed binary is not a shadow"
+mkdir -p "$WORK/link"
+ln -s "$install/$NAME" "$WORK/link/$NAME"
+expect_silent "symlinked earlier on PATH" "$WORK/link:$install:$SYS" "$install"
+
+if [ "$FAIL" -ne 0 ]; then
+    echo "install-path tests FAILED"
+    exit 1
+fi
+echo "install-path tests passed"

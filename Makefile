@@ -129,7 +129,8 @@ ifneq ($(OS),Windows_NT)
 		ln -sfn "$(BINARY_NAME)" "$$link" && printf '[ok] Linked %s -> %s\n' "$$link" "$(BINARY_NAME)"; \
 	else \
 		printf '[skip] %s already exists and is not ours; ah was not linked\n' "$$link"; \
-	fi
+	fi; \
+	sh scripts/check-install-path.sh "$$bindir" "$(BINARY_NAME)"
 endif
 
 fmt:
