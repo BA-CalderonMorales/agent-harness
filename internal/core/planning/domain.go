@@ -70,7 +70,7 @@ Continue the carry-forward from %s: resume useful context, read the active dated
 - Active context can be resumed from the TUI without manual file hunting.
 - The next actionable dated-plan item is visible before execution.
 - Normal verification stays deterministic, local, and secret-free.
-- Changes are committed and pushed to `+"`develop`"+` only after green checks.
+- Changes land on `+"`main`"+` through a pull request only after green checks.
 
 ## Carry Forward
 
