@@ -22,7 +22,9 @@ name=$2
 # canon DIR prints DIR with symlinks and trailing slashes resolved. A
 # directory that does not exist is printed with trailing slashes removed.
 canon() {
-    if resolved=$(cd -P -- "$1" 2>/dev/null && pwd -P); then
+    # CDPATH is cleared so cd never searches elsewhere or prints the
+    # directory it found, which would corrupt a relative entry.
+    if resolved=$(CDPATH= cd -P -- "$1" 2>/dev/null && pwd -P); then
         printf '%s\n' "$resolved"
         return
     fi

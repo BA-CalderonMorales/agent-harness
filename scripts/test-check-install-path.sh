@@ -106,6 +106,15 @@ mkdir -p "$WORK/link"
 ln -s "$install/$NAME" "$WORK/link/$NAME"
 expect_silent "symlinked earlier on PATH" "$WORK/link:$install:$SYS" "$install"
 
+echo "install-path: relative PATH entries and CDPATH"
+# A relative PATH entry resolves against the current directory, never
+# through CDPATH, even when CDPATH holds a directory of the same name.
+mkdir -p "$WORK/rel/project/bin" "$WORK/cdpath/bin"
+fake_bin "$WORK/rel/project/bin"
+fake_bin "$WORK/cdpath/bin"
+OUT=$(cd "$WORK/rel/project" && CDPATH="$WORK/cdpath" PATH="bin:$SYS" /bin/sh "$SCRIPT" "$WORK/rel/project/bin" "$NAME" 2>&1)
+if [ -z "$OUT" ]; then pass "relative entry with CDPATH set"; else fail "relative entry with CDPATH set"; fi
+
 if [ "$FAIL" -ne 0 ]; then
     echo "install-path tests FAILED"
     exit 1
