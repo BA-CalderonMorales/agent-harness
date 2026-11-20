@@ -53,7 +53,11 @@ type LayeredConfig struct {
 	// ModelPinned is true when AH_MODEL pinned the model in the
 	// environment: the pin outranks a resumed session's stored model,
 	// exactly like EndpointPinned outranks provider defaults.
-	ModelPinned    bool
+	ModelPinned bool
+	// ProviderPinned is true when AH_PROVIDER pinned the provider.
+	ProviderPinned bool
+	// RuntimePinned is true when AH_RUNTIME pinned the runtime.
+	RuntimePinned  bool
 	EndpointPinned bool // endpoint came from AH_ENDPOINT_URL; survives provider switches
 	Runtime        string
 	ModelPath      string

@@ -80,3 +80,21 @@ func TestMakeRunExecsBuiltBinary(t *testing.T) {
 		t.Fatalf("make run must depend on build so a bare `make run` on a clean tree still launches:\n%s", targetLine(mk, "run"))
 	}
 }
+
+// TestMakeInstallFailsWhenTheAhLinkFails pins the install recipe's shape:
+// the PATH check runs only after the ah link step succeeded or was
+// deliberately skipped. Joined with `;` instead of `&&`, a failed
+// `ln -sfn` was followed by the always-successful check, and make install
+// reported success without creating ah.
+func TestMakeInstallFailsWhenTheAhLinkFails(t *testing.T) {
+	// recipe() stops at the unindented ifneq that guards this block, so the
+	// whole Makefile text is searched instead.
+	mk := readMakefile(t)
+	if targetLine(mk, "install") == "" {
+		t.Fatal("Makefile has no install target")
+	}
+	want := "\tfi && \\\n\tsh scripts/check-install-path.sh"
+	if !strings.Contains(mk, want) {
+		t.Fatal("install must join the ah link step and the PATH check with &&, so a failed link fails make install")
+	}
+}

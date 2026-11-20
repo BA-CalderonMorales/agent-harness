@@ -213,3 +213,21 @@ func TestCompleteLoginGreetsWithFreshSession(t *testing.T) {
 		t.Fatalf("previous session has %d messages, want 1", len(old.Messages))
 	}
 }
+
+// Logging in to a hosted provider with no typed key and nothing stored
+// must leave the key empty. The local dummy ("local") used to stay in
+// config and travel as "Bearer local" to the hosted provider, which 401'd
+// while the wizard claimed it was using a stored key.
+func TestLoginToHostedProviderNeverKeepsLocalDummyKey(t *testing.T) {
+	newCredentialTestEnv(t)
+	app := &App{config: &config.LayeredConfig{Provider: "local", APIKey: "local"}}
+
+	msg := app.applyLoginCredentials("openrouter", "", "some/model")
+
+	if app.config.APIKey != "" {
+		t.Fatalf("api key = %q after a keyless hosted login, want empty", app.config.APIKey)
+	}
+	if strings.Contains(msg, "Using stored API key") {
+		t.Fatalf("narration claims a stored key: %q", msg)
+	}
+}

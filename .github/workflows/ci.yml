@@ -176,6 +176,9 @@ jobs:
       - name: Run next-version unit tests
         run: sh scripts/test-next-version.sh
 
+      - name: Run install-path check unit tests
+        run: sh scripts/test-check-install-path.sh
+
       - name: Verify the release script in temporary repositories
         run: python3 scripts/verify/test-release.py
 
