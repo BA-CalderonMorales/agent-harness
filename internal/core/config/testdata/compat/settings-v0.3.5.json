@@ -1,0 +1,17 @@
+{
+  "context_length": 32768,
+  "endpoint_url": "http://127.0.0.1:8080/v1",
+  "max_tokens": 4096,
+  "model": "ornith-q4",
+  "model_path": "",
+  "perm_delete": false,
+  "perm_execute": true,
+  "perm_read": true,
+  "perm_write": true,
+  "permission_mode": "workspace-write",
+  "persona": "developer",
+  "provider": "local",
+  "runtime": "llamacpp",
+  "temperature": 0.2,
+  "workspace_path": ""
+}

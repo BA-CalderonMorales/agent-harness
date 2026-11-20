@@ -179,6 +179,9 @@ jobs:
       - name: Verify the release script in temporary repositories
         run: python3 scripts/verify/test-release.py
 
+      - name: Verify the session sanitizer never leaks private content
+        run: python3 scripts/verify/test-sanitize-session.py
+
       - name: Verify branch-pruning safety in temporary repositories
         run: python3 scripts/verify/test-prune-branches.py
 

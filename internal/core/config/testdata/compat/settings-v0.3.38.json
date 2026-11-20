@@ -1,0 +1,18 @@
+{
+  "context_length": 131072,
+  "endpoint_url": "https://openrouter.ai/api/v1",
+  "max_tokens": 8192,
+  "model": "nvidia/nemotron-3.5-lightning:free",
+  "model_path": "",
+  "perm_delete": false,
+  "perm_execute": true,
+  "perm_read": true,
+  "perm_write": true,
+  "permission_mode": "workspace-write",
+  "persona": "developer",
+  "provider": "openrouter",
+  "runtime": "",
+  "tagline": "Your workspace. Your models. Your way.",
+  "temperature": 0.7,
+  "workspace_path": ""
+}
