@@ -1,0 +1,17 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+: ping
+
+: ping
+
+: ping
+
+data: {"id":"chatcmpl-731ea3f37f1dc6d27c9597d4","object":"chat.completion.chunk","created":1795187302,"model":"qwen3.5:9b","choices":[{"index":0,"delta":{"tool_calls":[{"index":0,"id":"call_1795187306","type":"function","function":{"name":"get_weather","arguments":"{\"city\":\"Paris\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-731ea3f37f1dc6d27c9597d4","object":"chat.completion.chunk","created":1795187302,"model":"qwen3.5:9b","choices":[{"index":0,"delta":{"role":"assistant","content":"\n"},"finish_reason":null}]}
+
+data: {"id":"chatcmpl-731ea3f37f1dc6d27c9597d4","object":"chat.completion.chunk","created":1795187302,"model":"qwen3.5:9b","system_fingerprint":"fp_7b49937646a44dd7","choices":[{"index":0,"delta":{"content":null},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":282,"prompt_tokens_details":{"cached_tokens":0},"completion_tokens":26,"total_tokens":308,"active_kv_tokens":308,"max_kv_token_capacity":4096,"kv_token_occupancy_rate_percentage":7.51953125,"load_duration":5.15e-06,"prefill_duration_ttft":1.523823744,"decoding_duration":2.542975,"prefill_speed_tps":185.06077301286624,"decoding_speed_tps":10.22424522458931}}
+
+data: [DONE]
+

@@ -1,0 +1,7 @@
+HTTP/1.1 429 Too Many Requests
+Content-Type: application/json
+Retry-After: 60
+X-RateLimit-Limit: 50
+X-RateLimit-Remaining: 0
+
+{"error":{"message":"Provider returned error","code":429,"metadata":{"error_type":"rate_limit_exceeded","provider_code":"upstream-a"}}}

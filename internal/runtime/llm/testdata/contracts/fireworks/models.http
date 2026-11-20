@@ -1,0 +1,4 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"data":[{"id":"accounts/fireworks/models/glm-5p3-flash","context_length":1048576},{"id":"accounts/fireworks/models/deepseek-v4-flash-0731","context_length":1048576}]}

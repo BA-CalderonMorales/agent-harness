@@ -1,0 +1,15 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+data: {"id":"fw-contract-tool","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"content":"Checking both."},"finish_reason":null}]}
+
+data: {"id":"fw-contract-tool","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\":","name":"bash"},"id":"call_fw_a"}]},"finish_reason":null}]}
+
+data: {"id":"fw-contract-tool","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"\"ls\"}"}},{"index":1,"function":{"arguments":"{\"path\"","name":"file_read"},"id":"call_fw_b"}]},"finish_reason":null}]}
+
+data: {"id":"fw-contract-tool","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":":\"go.mod\"}"}}]},"finish_reason":null}]}
+
+data: {"id":"fw-contract-tool","model":"accounts/fireworks/models/glm-5p3-flash","choices":[{"delta":{},"finish_reason":"tool_calls"}],"usage":{"prompt_tokens":402,"completion_tokens":37,"prompt_tokens_details":{"cached_tokens":384}}}
+
+data: [DONE]
+

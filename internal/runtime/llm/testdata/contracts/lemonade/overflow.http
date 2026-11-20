@@ -1,0 +1,5 @@
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+
+data: {"error":{"code":400,"message":"Max length reached!","status_code":400,"type":"model_error"}}
+
