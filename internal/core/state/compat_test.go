@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,6 +97,90 @@ func installCompatFixture(t *testing.T, name string) (*SessionManager, string) {
 	return sm, path
 }
 
+// rawFixture reads a fixture with plain JSON decoding, independent of the
+// loader under test: the messages exactly as the file holds them, and the
+// turns a resume must restore (the header's, then each meta update's).
+func rawFixture(t *testing.T, name string) (messages []map[string]any, turns int) {
+	t.Helper()
+	data, err := os.ReadFile(compatFixturePath(name))
+	if err != nil {
+		t.Fatalf("read fixture: %v", err)
+	}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		var record map[string]any
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			t.Fatalf("fixture line is not JSON: %v", err)
+		}
+		switch record["type"] {
+		case "header":
+			if n, ok := record["turns"].(float64); ok {
+				turns = int(n)
+			}
+		case "meta":
+			meta, _ := record["meta"].(map[string]any)
+			n, _ := meta["turns"].(float64)
+			turns = int(n)
+		case "message":
+			messages = append(messages, record["message"].(map[string]any))
+		}
+	}
+	return messages, turns
+}
+
+func rawString(fields map[string]any, key string) string {
+	value, _ := fields[key].(string)
+	return value
+}
+
+// assertMatchesRaw compares loaded messages field by field with the raw
+// file, so a decoder that drops text, tool IDs, or links cannot pass.
+func assertMatchesRaw(t *testing.T, loaded []types.Message, raw []map[string]any) {
+	t.Helper()
+	if len(loaded) != len(raw) {
+		t.Fatalf("loaded %d messages, the file holds %d", len(loaded), len(raw))
+	}
+	for i, msg := range loaded {
+		want := raw[i]
+		if msg.UUID != rawString(want, "uuid") || string(msg.Role) != rawString(want, "role") ||
+			msg.StopReason != rawString(want, "stop_reason") || msg.Model != rawString(want, "model") {
+			t.Fatalf("message %d header fields = %q/%q/%q/%q, file has %q/%q/%q/%q", i,
+				msg.UUID, msg.Role, msg.StopReason, msg.Model,
+				rawString(want, "uuid"), rawString(want, "role"), rawString(want, "stop_reason"), rawString(want, "model"))
+		}
+		if stamp, err := time.Parse(time.RFC3339Nano, rawString(want, "timestamp")); err != nil || !stamp.Equal(msg.Timestamp) {
+			t.Fatalf("message %d timestamp = %v, file has %q", i, msg.Timestamp, rawString(want, "timestamp"))
+		}
+		blocks, _ := want["content"].([]any)
+		if len(msg.Content) != len(blocks) {
+			t.Fatalf("message %d has %d blocks, the file holds %d", i, len(msg.Content), len(blocks))
+		}
+		for j, block := range msg.Content {
+			fields := blocks[j].(map[string]any)
+			switch b := block.(type) {
+			case types.TextBlock:
+				if b.Text != rawString(fields, "text") {
+					t.Fatalf("message %d block %d text differs from the file", i, j)
+				}
+			case types.ToolUseBlock:
+				input, _ := json.Marshal(fields["input"])
+				got, _ := json.Marshal(b.Input)
+				if b.ID != rawString(fields, "id") || b.Name != rawString(fields, "name") || string(got) != string(input) {
+					t.Fatalf("message %d block %d tool call = %q %q %s, file has %q %q %s", i, j,
+						b.ID, b.Name, got, rawString(fields, "id"), rawString(fields, "name"), input)
+				}
+			case types.ToolResultBlock:
+				isError, _ := fields["is_error"].(bool)
+				if b.ToolUseID != rawString(fields, "tool_use_id") || b.Content != rawString(fields, "content") || b.IsError != isError {
+					t.Fatalf("message %d block %d tool result = %q error=%v, file has %q error=%v", i, j,
+						b.ToolUseID, b.IsError, rawString(fields, "tool_use_id"), isError)
+				}
+			default:
+				t.Fatalf("message %d block %d decoded as %T, which the file does not hold", i, j, block)
+			}
+		}
+	}
+}
+
 func messagesJSON(t *testing.T, messages []types.Message) []string {
 	t.Helper()
 	out := make([]string, len(messages))
@@ -129,6 +214,11 @@ func TestCompatFixturesLoadWithEveryBlockKind(t *testing.T) {
 			}
 			if session.Model == "" || session.Persona == "" {
 				t.Errorf("model %q / persona %q lost on load", session.Model, session.Persona)
+			}
+			raw, turns := rawFixture(t, fixture.name)
+			assertMatchesRaw(t, session.Messages, raw)
+			if session.Turns != turns {
+				t.Errorf("turns = %d, the file records %d", session.Turns, turns)
 			}
 		})
 	}
@@ -198,6 +288,11 @@ func TestCompatFixturesResumeAndAcceptNewMessages(t *testing.T) {
 			if !reflect.DeepEqual(after[:len(before)], before) {
 				t.Fatal("appending changed the messages the earlier build wrote")
 			}
+			raw, _ := rawFixture(t, fixture.name)
+			assertMatchesRaw(t, reloaded.Messages[:len(raw)], raw)
+			if want := messagesJSON(t, []types.Message{added})[0]; after[len(after)-1] != want {
+				t.Fatalf("the appended message reloaded as %s, want %s", after[len(after)-1], want)
+			}
 			if reloaded.Version != fixture.version || reloaded.Model != original.Model {
 				t.Errorf("header changed: version %d model %q, want %d %q",
 					reloaded.Version, reloaded.Model, fixture.version, original.Model)
@@ -235,6 +330,8 @@ func TestCompatFixturesSurviveAFullRewrite(t *testing.T) {
 			if !reflect.DeepEqual(messagesJSON(t, reloaded.Messages), messagesJSON(t, kept)) {
 				t.Fatal("the rewritten file does not hold exactly the kept messages")
 			}
+			raw, _ := rawFixture(t, fixture.name)
+			assertMatchesRaw(t, reloaded.Messages, raw[len(raw)-len(kept):])
 		})
 	}
 }
