@@ -78,10 +78,8 @@ its transport shutdown deadline; race detection remains enabled.
 
 The Go vulnerability scan reports no reachable findings. GO-2026-5932 is
 module-only in `x/crypto` v0.58.0; the database names a prerelease fix, while
-v0.58.0 remains the latest stable version checked on November 4. Optional
-GitNexus tooling has zero high/critical and three moderate npm audit findings,
-with no compatible fix offered. That JavaScript tooling is not shipped in
-the Go executable. Recheck both exceptions on the next dependency update.
+v0.58.0 remains the latest stable version checked on November 4. Recheck
+this exception on the next dependency update.
 
 These checks do not establish general task reliability. Campaigns screen
 bounded fixtures, retain inconclusive results, and do not deploy changes.

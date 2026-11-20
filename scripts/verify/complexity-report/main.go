@@ -139,7 +139,7 @@ func analyze(root string, top, budget int) (*report, error) {
 		}
 		if d.IsDir() {
 			switch d.Name() {
-			case ".git", "build", "node_modules", ".gitnexus", "vendor":
+			case ".git", "build", "node_modules", "vendor":
 				return fs.SkipDir
 			}
 			return nil

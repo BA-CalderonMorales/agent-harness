@@ -56,13 +56,6 @@ Keep one concept per file, target the 400-line limit, and keep pure moves
 separate from behavioral changes. Prefer existing extension points. Explain
 before making major architectural changes.
 
-Honor GitNexus requirements: impact analysis before symbol edits,
-caller/process/risk reporting, and complete graph change analysis before
-committing. Warn before HIGH/CRITICAL edits. UNKNOWN requires investigation;
-an empty graph result is not proof of safety. Use the repository CLI
-fallback when MCP is unavailable. Never bypass a required analysis gate
-silently.
-
 Proceed autonomously with ordinary implementation decisions. Ask only when
 missing access, a consequential product choice, or authorization actually
 blocks progress. Continue independent work while awaiting input.
@@ -355,8 +348,6 @@ Before declaring the release ready:
   `go vet ./...`, `make build`, `make verify`, and other applicable CI checks.
 - Attribute pre-existing failures against a baseline; do not call a failing
   gate green.
-- Complete required GitNexus change analysis; partial/truncated results are
-  unresolved.
 - Keep scratch ledgers, personal state, credentials, and temporary captures
   out of release commits.
 
