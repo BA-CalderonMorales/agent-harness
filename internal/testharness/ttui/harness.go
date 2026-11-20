@@ -24,6 +24,7 @@ import (
 type Harness struct {
 	t     *testing.T
 	model *recorder
+	pump  *pump
 }
 
 // recorder is the model wrapper: it forwards messages and keeps every
@@ -52,11 +53,12 @@ func New(t *testing.T, model tea.Model) *Harness {
 	if model == nil {
 		t.Fatal("ttui.New: model is nil")
 	}
-	return &Harness{t: t, model: &recorder{Model: model}}
+	return &Harness{t: t, model: &recorder{Model: model}, pump: newPump()}
 }
 
 // Send delivers a message to the model. The recorder keeps the updated
-// model and stores the view it rendered.
+// model and stores the view it rendered. The command Update returns is
+// discarded; SendAndPump runs it.
 func (h *Harness) Send(msg tea.Msg) {
 	h.t.Helper()
 	h.model.Update(msg)
