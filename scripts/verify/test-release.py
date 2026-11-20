@@ -83,8 +83,33 @@ def main():
         again = release("--yes").stdout
         assert "Nothing to release" in again, again
 
+        # An explicit --version is validated even when there is nothing new.
+        invalid = release("--version", "v0.5.0-rc..1", check=False)
+        assert invalid.returncode != 0 and "--version must look like" in invalid.stdout, invalid.stdout
+
+        # With no new commits, an explicit --version promotes the same commit.
+        promoted = release("--yes", "--version", "v0.5.0-rc.1").stdout
+        assert "Pushed v0.5.0-rc.1" in promoted, promoted
+        assert remote_tag("v0.5.0-rc.1") == released_sha, "promotion did not tag origin/main"
+
+        # A prerelease tag is never the base for the next automatic version.
+        run("git", "checkout", "--quiet", "main")
+        commit("fix(tui): after the candidate")
+        run("git", "push", "--quiet", "origin", "main")
+        after_rc = release("--dry-run").stdout
+        assert "Release v0.4.3" in after_rc and "v0.4.2 + 1 commit(s)" in after_rc, after_rc
+
+        # A non-conventional subject blocks an automatic bump, not an explicit one.
+        commit("Add export")
+        run("git", "push", "--quiet", "origin", "main")
+        blocked = release("--dry-run", check=False)
+        assert blocked.returncode != 0 and "not all conventional" in blocked.stdout, blocked.stdout
+        chosen = release("--dry-run", "--bump", "minor").stdout
+        assert "Release v0.5.0" in chosen, chosen
+
         print("release: dry run, origin/main targeting, prompt refusal, version validation,"
-              " explicit bumps, tag push and nothing-to-release passed")
+              " explicit bumps, tag push, nothing-to-release, same-commit promotion,"
+              " stable-tag base and the conventional-commit gate passed")
 
 
 if __name__ == "__main__":

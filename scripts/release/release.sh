@@ -47,7 +47,14 @@ git fetch --quiet --tags origin main || die "cannot fetch origin main"
 target=$(git rev-parse --verify --quiet 'origin/main^{commit}') || die "origin/main does not exist"
 short=$(git rev-parse --short "$target")
 
-last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' "$target" 2>/dev/null || true)
+if [ -n "$version" ]; then
+    printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$' \
+        || die "--version must look like v1.2.3 or v1.2.3-rc.1, got '$version'"
+fi
+
+# Versions are computed from the last stable tag. A prerelease such as
+# v0.5.0-rc.1 is a candidate for a version, not a base to bump from.
+last=$(git describe --tags --abbrev=0 --match 'v[0-9]*' --exclude '*-*' "$target" 2>/dev/null || true)
 if [ -n "$last" ]; then
     range="$last..$target"
     base="$last"
@@ -57,16 +64,24 @@ else
 fi
 
 count=$(git rev-list --count "$range")
-if [ "$count" -eq 0 ]; then
+# With no new commits only an explicit --version can release, which
+# promotes the same commit (v0.5.0-rc.1 to v0.5.0, say).
+if [ "$count" -eq 0 ] && [ -z "$version" ]; then
     echo "Nothing to release: origin/main ($short) is already $last."
     exit 0
 fi
 
 if [ -n "$version" ]; then
-    printf '%s\n' "$version" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)[0-9]*(\.[0-9A-Za-z]+)*)?$' \
-        || die "--version must look like v1.2.3 or v1.2.3-rc.1, got '$version'"
     next="$version"
 else
+    # An automatic bump trusts the commit subjects since the last tag, so
+    # every one of them must be a conventional commit. A squash merge with a
+    # free-form PR title, or an unsquashed fixup, would otherwise pick the
+    # wrong version silently. The first release (no earlier tag) is exempt.
+    if [ "$bump" = auto ] && [ -n "$last" ]; then
+        sh "$script_dir/../check-commit-msg.sh" --range "$range" >/dev/null \
+            || die "commits since $last are not all conventional; pass --bump or --version to choose the version yourself"
+    fi
     next=$(git log --format='%x1e%s%n%b' "$range" | sh "$script_dir/next-version.sh" "$base" "$bump") \
         || die "could not compute the next version"
 fi
