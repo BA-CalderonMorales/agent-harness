@@ -67,20 +67,28 @@ class Sanitizer:
     def scrub(self, value, where, key="input"):
         """Free-form tool input: keep its shape, replace every string.
 
-        Parameter names such as file_path are structure and stay. Any other
-        key may itself be data (a file name used as a key, say), so it is
-        replaced, and no placeholder ever repeats a replaced key.
+        A tool call's parameter names are the top-level keys of its input,
+        and those stay when they look like parameter names (file_path,
+        command). Every deeper key belongs to data the tool was given, such
+        as a map keyed by file names, so it is replaced however ordinary it
+        looks, and no placeholder ever repeats a replaced key.
         """
+        return self.scrub_value(value, where, key, top_level=True)
+
+    def scrub_value(self, value, where, label, top_level=False):
         if isinstance(value, str):
-            return f"sanitized-{key}" if PARAMETER_NAME.fullmatch(key) else "sanitized-input"
+            return f"sanitized-{label}"
         if isinstance(value, dict):
             out = {}
             for k, v in value.items():
-                name = k if PARAMETER_NAME.fullmatch(k) else self.fake_id(("key", k), "key")
-                out[name] = self.scrub(v, f"{where}.{name}", name)
+                if top_level and PARAMETER_NAME.fullmatch(k):
+                    name, child_label = k, k
+                else:
+                    name, child_label = self.fake_id(("key", k), "key"), "input"
+                out[name] = self.scrub_value(v, f"{where}.{name}", child_label)
             return out
         if isinstance(value, list):
-            return [self.scrub(v, f"{where}[]", key) for v in value]
+            return [self.scrub_value(v, f"{where}[]", label) for v in value]
         if value is None or isinstance(value, (bool, int, float)):
             return value
         raise Unreviewed(f"{where}: unexpected {type(value).__name__} value")

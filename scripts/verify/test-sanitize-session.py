@@ -49,7 +49,9 @@ def main():
     assert header["model"] == "qwen3.5-2b-FLM" and meta["meta"]["turns"] == 3
     blocks = call["message"]["content"]
     assert blocks[1]["name"] == "bash", "tool names are structural and must survive"
-    assert blocks[1]["input"]["nested"]["args"][1:] == [3, True, None], "non-string input values must survive"
+    nested = blocks[1]["input"]["nested"]
+    assert list(nested) and all(k.startswith("key-") for k in nested), "nested keys are data and must be replaced"
+    assert list(nested.values())[0][1:] == [3, True, None], "non-string input values must survive"
     call_id = blocks[1]["id"]
     assert call_id.startswith("toolu-") and answer["message"]["content"][0]["tool_use_id"] == call_id, \
         "a result must still point at the call it answers"
@@ -76,10 +78,13 @@ def main():
     private_key = "/private/customer-plan-7731.txt"
     keyed = {**CALL, "message": {**CALL["message"], "content": [
         {"id": "real-call-9", "name": "write",
-         "input": {"file_path": SECRET, "files": {private_key: SECRET, "Notes For Q3": [SECRET]}}}]}}
+         "input": {"file_path": SECRET, "files": {private_key: SECRET, "Notes For Q3": [SECRET],
+                                                   "customer_plan_7731": SECRET}}}]}}
     result = sanitize([HEADER, keyed])
     assert result.returncode == 0, result.stderr
     assert "customer-plan" not in result.stdout and "Notes For Q3" not in result.stdout, result.stdout
+    # A nested key shaped like an identifier is still data, not a parameter.
+    assert "customer_plan" not in result.stdout, result.stdout
     assert SECRET not in result.stdout, result.stdout
     block = json.loads(result.stdout.splitlines()[1])["message"]["content"][0]["input"]
     assert block["file_path"] == "sanitized-file_path", block
