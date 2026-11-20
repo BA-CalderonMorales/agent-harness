@@ -115,6 +115,15 @@ fake_bin "$WORK/cdpath/bin"
 OUT=$(cd "$WORK/rel/project" && CDPATH="$WORK/cdpath" PATH="bin:$SYS" /bin/sh "$SCRIPT" "$WORK/rel/project/bin" "$NAME" 2>&1)
 if [ -z "$OUT" ]; then pass "relative entry with CDPATH set"; else fail "relative entry with CDPATH set"; fi
 
+echo "install-path: the suggested export line can be pasted"
+run_check "$other:$SYS" "$install"
+line=$(printf '%s\n' "$OUT" | grep 'export PATH=' | head -n 1)
+if [ -n "$line" ] && /bin/sh -n -c "$line" 2>/dev/null; then
+    pass "export line parses as shell"
+else
+    fail "export line parses as shell"
+fi
+
 if [ "$FAIL" -ne 0 ]; then
     echo "install-path tests FAILED"
     exit 1

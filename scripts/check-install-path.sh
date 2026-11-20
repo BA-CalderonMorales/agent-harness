@@ -108,6 +108,7 @@ fi
     else
         printf '       Fix: add %s to PATH:\n' "$want"
     fi
-    printf '         export PATH="%s:$PATH"   (then add it to your shell profile)\n' "$want"
+    printf '         export PATH="%s:$PATH"\n' "$want"
+    printf '         # Add that export line to your shell profile to keep it.\n'
 } >&2
 exit 0
