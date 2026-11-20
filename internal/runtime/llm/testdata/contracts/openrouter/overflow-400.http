@@ -1,0 +1,4 @@
+HTTP/1.1 400 Bad Request
+Content-Type: application/json
+
+{"error":{"message":"This endpoint's maximum context length is 131072 tokens. However, you requested about 140210 tokens (140210 of text input). Please reduce the length of either one, or use the \"middle-out\" transform to compress your prompt automatically.","code":400}}

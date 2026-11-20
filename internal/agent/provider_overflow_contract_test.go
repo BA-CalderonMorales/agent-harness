@@ -29,6 +29,8 @@ func TestProviderOverflowIsRecognized(t *testing.T) {
 		fixture  string
 	}{
 		{"lemonade", "overflow.http"},
+		{"openrouter", "overflow-400.http"},
+		{"fireworks", "overflow-400.http"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.provider, func(t *testing.T) {

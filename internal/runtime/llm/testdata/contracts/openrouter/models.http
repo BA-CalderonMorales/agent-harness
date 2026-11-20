@@ -1,0 +1,4 @@
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{"data":[{"id":"openai/gpt-oss-120b:free","context_length":131072},{"id":"z-ai/glm-4.6","context_length":202752}]}

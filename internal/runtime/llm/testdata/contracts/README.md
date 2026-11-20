@@ -15,6 +15,8 @@ real `HTTPClient` against it. No test touches the network.
 | lemonade | `stream-text.http` | Captured live |
 | lemonade | `stream-tool-call.http` | Captured live |
 | lemonade | `overflow.http` | Captured live |
+| openrouter | every file | Constructed |
+| fireworks | every file | Constructed |
 
 ### Captured live
 
@@ -33,3 +35,21 @@ Lemonade facts these fixtures pin:
   line, `{"error":{"code":400,"message":"Max length reached!",...}}`,
   with no `[DONE]`. It is not an HTTP 400.
 - A streamed tool call arrives whole in a single chunk.
+
+### Constructed
+
+No OpenRouter or Fireworks key was available where these were written,
+so their fixtures are built by hand from the shapes `HTTPClient` already
+parses (`sse.go`, `api_errors.go`, `models.go`) and from the existing
+unit tests. They carry only the fields the client reads: chunk `id`,
+`model`, `choices[0].delta` (`content`, `reasoning` or
+`reasoning_content`, `tool_calls`), `finish_reason`, `usage`
+(`prompt_tokens`, `completion_tokens`, `prompt_tokens_details.cached_tokens`),
+the `error` envelope with OpenRouter's `metadata`, the `X-RateLimit-*`
+headers, and `/models` `id` plus `context_length`. Overflow messages use
+each provider's known wording; the Fireworks sentence is the least
+certain and should be replaced by a capture when a key is at hand.
+
+Tool-call arguments are split across chunks on purpose (mid-key and
+mid-value for OpenRouter, two interleaved parallel calls for Fireworks),
+because Lemonade's whole-call chunks never exercise accumulation.
