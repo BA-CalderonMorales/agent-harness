@@ -277,3 +277,45 @@ func TestFailedRollbackForcesARewriteOnTheNextSave(t *testing.T) {
 		t.Fatalf("physical message lines = %d, want %d after the next append", physical, len(s.Messages))
 	}
 }
+
+// Two app instances in one project resume the same session file. If this
+// save fails after another writer has appended its own save, rolling back to
+// the pre-save size would erase the other writer's data. The rollback must
+// notice that the file grew by more than this save wrote and leave it alone.
+func TestRollbackNeverErasesAnotherWritersAppend(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	const otherWriter = `{"type":"meta","meta":{"model":"saved-by-another-instance"}}` + "\n"
+	sm.appendFault = func() error {
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = f.Close() }()
+		if _, err := f.WriteString(otherWriter); err != nil {
+			return err
+		}
+		return errors.New("disk full")
+	}
+	_, err = sm.SaveCurrent()
+	if err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	if !strings.Contains(err.Error(), "not rolled back") {
+		t.Fatalf("the error must say the file was not rolled back, got: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "saved-by-another-instance") {
+		t.Fatal("the rollback erased another writer's save")
+	}
+}

@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -168,12 +169,23 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		return fmt.Errorf("failed to inspect session file: %w", err)
 	}
 	size := info.Size()
+	out := &countingWriter{w: f}
 	defer func() {
 		// A failed append leaves the file as it found it. Otherwise the
 		// caller's retry (it keeps the old offset) writes the same messages
 		// again, and the loader would replay duplicates over a snapshot that
 		// already counted them.
 		if retErr != nil {
+			// Only roll back if this save's own writes are all that was
+			// added. If the file grew by anything else, another writer
+			// appended to it, and truncating would erase their save; keep
+			// it and report instead (a duplicate is recoverable, a lost
+			// save is not).
+			if now, serr := os.Stat(path); serr == nil && now.Size() != size+out.n {
+				retErr = fmt.Errorf("%w (the file changed during the save, so it was not rolled back)", retErr)
+				_ = f.Close()
+				return
+			}
 			truncate := func(n int64) error { return truncateThroughWriteHandle(f, path, n) }
 			if sm.truncateFault != nil {
 				truncate = func(int64) error { return sm.truncateFault() }
@@ -194,7 +206,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		if err != nil {
 			return fmt.Errorf("failed to marshal message: %w", err)
 		}
-		if err := writeEvent(f, storeEvent{Kind: "message", Message: rawPtr(raw)}); err != nil {
+		if err := writeEvent(out, storeEvent{Kind: "message", Message: rawPtr(raw)}); err != nil {
 			return err
 		}
 	}
@@ -211,7 +223,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		// next save retries, and the loader's replay covers the gap.
 		if n, err := countMessageEventsChecked(path); err == nil {
 			rec := s.Record
-			if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
+			if err := writeEvent(out, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
 				return err
 			}
 			wroteRecord = true
@@ -227,7 +239,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 	// Rolling meta rides along on every save: one short line, and the
 	// loader folds the latest over.
 	meta := storeMeta{Model: s.Model, Persona: s.Persona, Turns: s.Turns, PlanMode: s.PlanMode, ToolLimit: s.ToolLimit}
-	if err := writeEvent(f, storeEvent{Kind: "meta", Meta: &meta}); err != nil {
+	if err := writeEvent(out, storeEvent{Kind: "meta", Meta: &meta}); err != nil {
 		return err
 	}
 	if err := f.Sync(); err != nil {
@@ -241,7 +253,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 	return nil
 }
 
-func writeEvent(f *os.File, event storeEvent) error {
+func writeEvent(f io.Writer, event storeEvent) error {
 	line, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal store event: %w", err)
@@ -306,4 +318,17 @@ func truncateThroughWriteHandle(appendHandle *os.File, path string, size int64) 
 	}
 	defer func() { _ = w.Close() }()
 	return w.Truncate(size)
+}
+
+// countingWriter counts the bytes that actually reached the file, so a
+// rollback can tell whether anything but this save's own writes is there.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }
