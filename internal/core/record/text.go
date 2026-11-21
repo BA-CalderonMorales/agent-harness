@@ -1,6 +1,9 @@
 package record
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 // clip collapses whitespace to single spaces and cuts s to at most n runes,
 // ending in an ellipsis when it had to cut. The result is always one line.
@@ -60,12 +63,10 @@ var constraintLeads = []string{"never", "do not", "don't", "don’t", "must", "o
 // with Never, Do not, Don't, Must, Only or Always, matched case-insensitively
 // on a word boundary. Callers pass user text only.
 func constraintsIn(text string) []string {
-	sentences := strings.FieldsFunc(text, func(r rune) bool {
-		return r == '.' || r == '!' || r == '?' || r == '\n' || r == ';'
-	})
+	sentences := splitSentences(text)
 	var out []string
 	for _, sentence := range sentences {
-		s := strings.TrimLeft(strings.TrimSpace(sentence), "-*>• \t")
+		s := strings.TrimRight(strings.TrimLeft(strings.TrimSpace(sentence), "-*>• \t"), ".!? ")
 		lower := strings.ToLower(s)
 		for _, lead := range constraintLeads {
 			if !strings.HasPrefix(lower, lead) {
@@ -79,4 +80,24 @@ func constraintsIn(text string) []string {
 		}
 	}
 	return out
+}
+
+// splitSentences cuts at newlines and semicolons, and at '.', '!' or '?' only
+// when followed by whitespace or the end of the text, so periods inside file
+// names and paths (config.yml, main.go, .env) stay in the sentence.
+func splitSentences(text string) []string {
+	r := []rune(text)
+	var out []string
+	start := 0
+	for i, c := range r {
+		cut := c == '\n' || c == ';'
+		if c == '.' || c == '!' || c == '?' {
+			cut = i+1 == len(r) || unicode.IsSpace(r[i+1])
+		}
+		if cut {
+			out = append(out, string(r[start:i]))
+			start = i + 1
+		}
+	}
+	return append(out, string(r[start:]))
 }
