@@ -42,10 +42,8 @@ func (l *Loop) compactFromRecord(state *loopState, keepStart, current, target in
 	if !hasRecordContent(state.record) {
 		return compactionOutcome{}, false, nil
 	}
-	budget := target/2 - estimateText(recordSummaryLead)
-	if budget > maxRecordSummaryTokens {
-		budget = maxRecordSummaryTokens
-	}
+	// The cap covers the whole record message, so the lead comes out of it.
+	budget := min(target/2, maxRecordSummaryTokens) - estimateText(recordSummaryLead)
 	last := len(state.messages) - 1
 	var after int
 	for start := keepStart; start <= last; start++ {
