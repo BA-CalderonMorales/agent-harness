@@ -76,6 +76,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 
 	params := agent.QueryParams{
 		Messages:        app.session.Messages,
+		Record:          app.session.Record,
 		SystemPrompt:    sysPrompt,
 		CanUseTool:      canUseTool,
 		ToolUseContext:  toolCtx,
