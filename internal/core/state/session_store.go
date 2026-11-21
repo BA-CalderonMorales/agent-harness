@@ -30,6 +30,11 @@ type storeEvent struct {
 	Message *json.RawMessage `json:"message,omitempty"`
 	Meta    *storeMeta       `json:"meta,omitempty"`
 	Record  *record.Record   `json:"record,omitempty"`
+	// Msgs, on a record line, is how many messages the file held when the
+	// snapshot was written. A loader replays any messages after that point,
+	// so a crash between a message and its snapshot loses no evidence. Not
+	// part of Record: it describes the file, not the session.
+	Msgs *int `json:"msgs,omitempty"`
 
 	// Header fields.
 	ID        string    `json:"id,omitempty"`
@@ -106,8 +111,8 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		events = append(events, storeEvent{Kind: "message", Message: rawPtr(raw)})
 	}
 	if !s.Record.IsZero() {
-		rec := s.Record
-		events = append(events, storeEvent{Kind: "record", Record: &rec})
+		rec, n := s.Record, len(s.Messages)
+		events = append(events, storeEvent{Kind: "record", Record: &rec, Msgs: &n})
 	}
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
@@ -167,8 +172,8 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	// The record is written only when it changed since the last write, so
 	// an unchanged record never costs a second line.
 	if !s.Record.IsZero() && !reflect.DeepEqual(s.Record, sm.recordOnDisk) {
-		rec := s.Record
-		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec}); err != nil {
+		rec, n := s.Record, len(s.Messages)
+		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
 			return err
 		}
 	}
@@ -209,6 +214,7 @@ func loadSessionFile(path string) (*Session, error) {
 	}
 
 	s := &Session{}
+	haveRecord, recordCovers := false, 0
 	lines := strings.Split(string(data), "\n")
 	for lineNumber, line := range lines {
 		if strings.TrimSpace(line) == "" {
@@ -241,6 +247,13 @@ func loadSessionFile(path string) (*Session, error) {
 				return nil, fmt.Errorf("session file %s has an empty record at line %d", filepath.Base(path), lineNumber+1)
 			}
 			s.Record = *event.Record
+			haveRecord = true
+			// A line without msgs (written before the field existed) covers
+			// every message read so far.
+			recordCovers = len(s.Messages)
+			if event.Msgs != nil && *event.Msgs >= 0 && *event.Msgs < recordCovers {
+				recordCovers = *event.Msgs
+			}
 		case "message":
 			if event.Message == nil {
 				return nil, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)
@@ -250,6 +263,13 @@ func loadSessionFile(path string) (*Session, error) {
 				return nil, fmt.Errorf("session file %s has a corrupt message at line %d: %w", filepath.Base(path), lineNumber+1, err)
 			}
 			s.Messages = append(s.Messages, msg)
+		}
+	}
+	if haveRecord {
+		// Messages written after the last snapshot (a save that died before
+		// its record line) are folded onto it.
+		for _, msg := range s.Messages[recordCovers:] {
+			s.Record = record.Apply(s.Record, msg)
 		}
 	}
 	if s.ID == "" {

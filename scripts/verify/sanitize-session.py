@@ -222,6 +222,7 @@ class Sanitizer:
             "message": self.message,
             "meta": self.meta,
             "record": self.session_record,
+            "msgs": keep_int,
         }, value, where)
 
 

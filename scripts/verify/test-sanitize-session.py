@@ -22,7 +22,7 @@ RESULT = {"type": "message", "created_at": "0001-01-01T00:00:00Z", "message": {
 META = {"type": "meta", "created_at": "0001-01-01T00:00:00Z",
         "meta": {"model": "qwen3.5-2b-FLM", "persona": "developer", "turns": 3}}
 PRIVATE_PATH = "/home/someone/clients/acme-7731/plan.txt"
-RECORD = {"type": "record", "created_at": "0001-01-01T00:00:00Z", "record": {
+RECORD = {"type": "record", "msgs": 2, "created_at": "0001-01-01T00:00:00Z", "record": {
     "v": 1, "goal": f"fix {SECRET}", "constraints": [f"Never touch {PRIVATE_PATH}"],
     "files": [{"path": PRIVATE_PATH, "op": "edit", "n": 2}],
     "cmds": [{"cmd": f"cat {PRIVATE_PATH} {SECRET}", "failed": True, "err": SECRET}],
@@ -100,7 +100,7 @@ def main():
     for leak in (SECRET, "someone", "acme", "plan.txt"):
         assert leak not in result.stdout, f"record leaked {leak!r}: {result.stdout}"
     kept = json.loads(result.stdout.splitlines()[3])
-    assert kept["type"] == "record" and kept["record"]["v"] == 1
+    assert kept["type"] == "record" and kept["record"]["v"] == 1 and kept["msgs"] == 2
     body = kept["record"]
     assert body["files"][0]["op"] == "edit" and body["files"][0]["n"] == 2
     assert body["cmds"][0]["failed"] is True and body["todos"][0]["status"] == "in_progress"
