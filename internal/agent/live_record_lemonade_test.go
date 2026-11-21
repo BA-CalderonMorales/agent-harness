@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"sort"
+	"sync"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -26,6 +27,8 @@ type liveClient struct {
 	llm.Client
 	summaries atomic.Int32
 	mains     atomic.Int32
+	mu        sync.Mutex
+	lastMain  llm.Request
 }
 
 func (c *liveClient) Stream(ctx context.Context, req llm.Request) (<-chan types.LLMEvent, error) {
@@ -33,6 +36,9 @@ func (c *liveClient) Stream(ctx context.Context, req llm.Request) (<-chan types.
 		c.summaries.Add(1)
 	} else {
 		c.mains.Add(1)
+		c.mu.Lock()
+		c.lastMain = req
+		c.mu.Unlock()
 	}
 	return c.Client.Stream(ctx, req)
 }
@@ -75,6 +81,9 @@ type liveScore struct {
 	latency  time.Duration
 	compacts int32
 	failure  string
+	// seen is the conversation text of the final main request, minus the
+	// padded system prompt, so a failure can be traced to what the model saw.
+	seen string
 }
 
 func liveScoreAnswer(answer string) (bool, []string) {
@@ -166,6 +175,8 @@ func TestLiveRecordCompactionAB(t *testing.T) {
 				mode, i+1, s.pass, s.notes, s.latency.Round(time.Second), s.compacts, s.failure, oneLine(s.answer))
 		}
 	}
+	t.Logf("scored keywords: goal = 'settings' and ('write path' or 'persistence'); constraint = 'main'; todo-test = 'regression test' or 'concurrent'; todo-changelog = 'changelog'")
+	t.Logf("final request as the model saw it (A, run 1, first 2500 chars):\n%s", headString(results["A record"][0].seen, 2500))
 	t.Log("| mode | runs | pass | median latency | compaction model requests | failures |")
 	t.Log("|---|---|---|---|---|---|")
 	for _, mode := range []string{"A record", "B summary-only"} {
@@ -224,6 +235,15 @@ func liveRun(t *testing.T, baseURL, model string, history []types.Message, withR
 	start := time.Now()
 	terminal := loop.queryLoop(ctx, params, state, make(chan types.StreamEvent, 1024))
 	s := liveScore{latency: time.Since(start), compacts: counting.summaries.Load()}
+	counting.mu.Lock()
+	for _, m := range counting.lastMain.Messages {
+		for _, b := range m.Content {
+			if tb, ok := b.(types.TextBlock); ok {
+				s.seen += "[" + string(m.Role) + "] " + tb.Text + "\n"
+			}
+		}
+	}
+	counting.mu.Unlock()
 	if terminal.Error != nil {
 		s.failure = terminal.Error.Error()
 		s.notes = []string{"no answer"}
@@ -250,4 +270,11 @@ func liveSystemPrompt() string {
 		fmt.Fprintf(&b, "Tool note %d: the helper named tool_%d accepts a path argument and an options object, returns text, and must not be retried with identical input after an error.\n", i, i)
 	}
 	return b.String()
+}
+
+func headString(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return s[:n] + "..."
 }
