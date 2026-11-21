@@ -81,7 +81,8 @@ func TestShellScannerRobustness(t *testing.T) {
 		}
 		s := string(in)
 		a, b := joinCommandLines(s), joinCommandLines(s)
-		if a != b || isCheckCommand(s) != isCheckCommand(s) {
+		checkA, checkB := isCheckCommand(s), isCheckCommand(s)
+		if a != b || checkA != checkB {
 			t.Fatalf("nondeterministic on %q", s)
 		}
 	}
