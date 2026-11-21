@@ -29,12 +29,12 @@ var checkRules = []checkRule{
 }
 
 // isCheckCommand reports whether any command in a shell line (split at
-// && || ; | and newlines) is a real check. A word like "test" or "build"
-// appearing as a path or argument elsewhere does not count.
+// && || ; | and newlines, outside quotes and heredoc bodies) is a real
+// check. A word like "test" or "build" appearing as a path, argument or
+// quoted text does not count.
 func isCheckCommand(line string) bool {
-	line = strings.NewReplacer("&&", "\n", "||", "\n", ";", "\n", "|", "\n").Replace(line)
-	for _, segment := range strings.Split(line, "\n") {
-		if isCheckSegment(strings.Fields(segment)) {
+	for _, segment := range splitShell(line) {
+		if isCheckSegment(strings.Fields(segment.Text)) {
 			return true
 		}
 	}
