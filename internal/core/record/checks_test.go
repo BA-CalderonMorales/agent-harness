@@ -98,3 +98,28 @@ func TestVerifiedHandlesHereStringsAndQuotedDelimiters(t *testing.T) {
 		})
 	}
 }
+
+// Inside double quotes a backslash only escapes $, `, ", \ and a newline;
+// before an ordinary letter it stays. So <<"E\OF" closes at the line E\OF,
+// not at EOF, and the check after that line is a real check.
+func TestVerifiedKeepsBackslashesInDoubleQuotedDelimiters(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"backslash before a letter stays", "cat <<\"E\\OF\"\nbody\nE\\OF\ngo test ./...", true},
+		{"backslash before a letter, body hides a check", "cat <<\"E\\OF\"\ngo test ./...\nE\\OF", false},
+		{"escaped dollar is unescaped", "cat <<\"E\\$F\"\nbody\nE$F\ngo vet ./...", true},
+		{"escaped quote is unescaped", "cat <<\"E\\\"F\"\nbody\nE\"F\nmake verify", true},
+		{"single quotes keep every backslash", "cat <<'E\\OF'\nbody\nE\\OF\ngo test ./...", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("d1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v (cmds %v), want a check recorded: %v", r.Verified, r.Cmds, c.want)
+			}
+		})
+	}
+}

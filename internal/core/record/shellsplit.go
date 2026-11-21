@@ -77,7 +77,7 @@ func splitShell(cmd string) []shellSegment {
 				i += 2
 				break
 			}
-			cur.WriteString("<<" + h.word)
+			cur.WriteString("<<" + storableWord(h.word))
 			pending = append(pending, h)
 			i = next
 		case c == '\n':
@@ -143,7 +143,9 @@ func parseHeredoc(r []rune, i int) (heredoc, int) {
 			}
 		case '\'', '"':
 			for i++; i < len(r) && r[i] != c && r[i] != '\n'; i++ {
-				if c == '"' && r[i] == '\\' && i+1 < len(r) && r[i+1] != '\n' {
+				// Inside double quotes a backslash escapes only $ ` " \ (and a
+				// newline); before any other character it stays a backslash.
+				if c == '"' && r[i] == '\\' && i+1 < len(r) && strings.ContainsRune("$`\"\\", r[i+1]) {
 					i++
 				}
 				word.WriteRune(r[i])
@@ -198,4 +200,18 @@ func joinSegments(segs []shellSegment) string {
 		}
 	}
 	return b.String()
+}
+
+// storableWord is a heredoc delimiter made safe to write back into the
+// stored command: quotes, backslashes, expansion characters and whitespace
+// become underscores. The record only needs to show that a heredoc was
+// there, and an unbalanced quote in the stored text would make a later scan
+// of that text swallow everything after it.
+func storableWord(word string) string {
+	return strings.Map(func(r rune) rune {
+		if strings.ContainsRune("'\"\\$` \t", r) {
+			return '_'
+		}
+		return r
+	}, word)
 }
