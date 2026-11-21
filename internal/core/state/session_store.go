@@ -174,7 +174,17 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		// again, and the loader would replay duplicates over a snapshot that
 		// already counted them.
 		if retErr != nil {
-			_ = f.Truncate(size)
+			truncate := f.Truncate
+			if sm.truncateFault != nil {
+				truncate = func(int64) error { return sm.truncateFault() }
+			}
+			if terr := truncate(size); terr != nil {
+				// Partial events may remain, and a plain retry would
+				// duplicate them. Say so, and make the next save rewrite
+				// the file whole.
+				sm.needsRewrite = true
+				retErr = fmt.Errorf("%w (the rollback also failed, the next save rewrites the session file: %v)", retErr, terr)
+			}
 		}
 		_ = f.Close()
 	}()

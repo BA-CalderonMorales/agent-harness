@@ -220,3 +220,60 @@ func TestFailedAppendThenUnreadableRetryLoadsCleanly(t *testing.T) {
 		t.Fatalf("a load between saves double-counted evidence:\n got %#v\nwant %#v", loaded.Record, s.Record)
 	}
 }
+
+// If the rollback itself fails, the file may end in the partial events of the
+// failed append. The save must say so, and the next save must rewrite the file
+// from memory instead of appending to a damaged tail: no duplicate message
+// lines, and a loaded record equal to the live one.
+func TestFailedRollbackForcesARewriteOnTheNextSave(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	sm.appendFault = func() error { return errors.New("disk full") }
+	sm.truncateFault = func() error { return errors.New("rollback refused") }
+	_, err = sm.SaveCurrent()
+	if err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	if !strings.Contains(err.Error(), "disk full") || !strings.Contains(err.Error(), "rollback") {
+		t.Fatalf("the error must report both the failed append and the failed rollback, got: %v", err)
+	}
+	if got := messageLineCount(t, path); got <= 2 {
+		t.Fatalf("the fault left the file clean (%d message lines), so this test checks nothing", got)
+	}
+
+	sm.appendFault, sm.truncateFault = nil, nil
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatalf("the repairing save failed: %v", err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d: the repair appended to a damaged tail", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+	if sm.needsRewrite {
+		t.Fatal("the rewrite flag stayed set after a successful repair")
+	}
+
+	// And the save after that is an ordinary append again.
+	extra := laterEvidence()[0]
+	s.AddMessage(extra)
+	s.Record = record.Apply(s.Record, extra)
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatal(err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d after the next append", physical, len(s.Messages))
+	}
+}
