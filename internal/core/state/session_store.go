@@ -114,18 +114,39 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		events = append(events, storeEvent{Kind: "record", Record: &rec, Msgs: &n})
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	// The replacement is written beside the original and renamed over it only
+	// once it is complete and synced, so a failure or a crash partway leaves
+	// the saved session exactly as it was. Truncating the original first
+	// would lose every saved message if the rewrite did not finish.
+	tmp := path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to create session file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
-	for _, event := range events {
-		if err := writeEvent(f, event); err != nil {
-			return err
+	werr := func() error {
+		for _, event := range events {
+			if err := writeEvent(f, event); err != nil {
+				return err
+			}
 		}
+		if err := f.Sync(); err != nil {
+			return fmt.Errorf("failed to sync session file: %w", err)
+		}
+		return nil
+	}()
+	if cerr := f.Close(); werr == nil && cerr != nil {
+		werr = fmt.Errorf("failed to close session file: %w", cerr)
 	}
-	if err := f.Sync(); err != nil {
-		return fmt.Errorf("failed to sync session file: %w", err)
+	if werr == nil && sm.rewriteFault != nil {
+		werr = sm.rewriteFault()
+	}
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return werr
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("failed to replace session file: %w", err)
 	}
 	sm.recordOnDisk = s.Record
 	return nil

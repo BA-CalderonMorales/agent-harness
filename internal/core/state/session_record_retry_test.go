@@ -319,3 +319,56 @@ func TestRollbackNeverErasesAnotherWritersAppend(t *testing.T) {
 		t.Fatal("the rollback erased another writer's save")
 	}
 }
+
+// A rewrite (compaction, or the repair after a failed rollback) replaces the
+// only copy of the session. If it fails partway, the saved messages must
+// still be there: the replacement is written to a temp file and renamed over
+// the original only once it is complete.
+func TestFailedRewriteLeavesTheSavedSessionIntact(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+
+	sm.rewriteFault = func() error { return errors.New("disk full") }
+	if err := sm.createSessionFile(path); err == nil {
+		t.Fatal("the injected fault did not fail the rewrite")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the saved session is gone after a failed rewrite: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("a failed rewrite changed the saved session (%d bytes before, %d after)", len(before), len(after))
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("the failed rewrite left its temp file behind (stat: %v)", err)
+	}
+
+	sm.rewriteFault = nil
+	if err := sm.createSessionFile(path); err != nil {
+		t.Fatalf("the rewrite failed once the fault cleared: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("a successful rewrite left its temp file behind (stat: %v)", err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+}

@@ -39,6 +39,7 @@ type SessionManager struct {
 	// needsRewrite is set when a failed append could not be rolled back, so
 	// the file may end in partial events; the next save rewrites it whole.
 	needsRewrite bool
+	rewriteFault func() error // test seam: fails a rewrite after its temp file is written, before the rename
 	sessionMetas map[string]metaStamp
 }
 
