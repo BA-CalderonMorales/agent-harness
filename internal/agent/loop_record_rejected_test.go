@@ -3,7 +3,7 @@ package agent
 import (
 	"context"
 	"testing"
-	
+
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 

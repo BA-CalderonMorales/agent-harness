@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
-	
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
