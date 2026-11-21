@@ -18,8 +18,6 @@ const (
 
 var todoStatuses = map[string]bool{"pending": true, "in_progress": true, "done": true, "cancelled": true}
 
-var verifyWords = []string{"test", "build", "vet", "lint"}
-
 // Fold builds a record from a transcript: Apply over every message, starting
 // from the zero Record.
 func Fold(msgs []types.Message) Record {
@@ -174,12 +172,8 @@ func (r *Record) ran(fullCmd string, res types.ToolResultBlock) {
 		r.Verified = removeString(r.Verified, run.Cmd)
 		return
 	}
-	lower := strings.ToLower(fullCmd)
-	for _, word := range verifyWords {
-		if strings.Contains(lower, word) {
-			r.Verified = moveToEnd(r.Verified, run.Cmd, MaxVerified)
-			return
-		}
+	if isCheckCommand(fullCmd) {
+		r.Verified = moveToEnd(r.Verified, run.Cmd, MaxVerified)
 	}
 }
 
