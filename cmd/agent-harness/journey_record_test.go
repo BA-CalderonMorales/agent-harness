@@ -107,6 +107,8 @@ func TestJourneySessionRecordIsSavedReloadedAndRebuilt(t *testing.T) {
 	t.Setenv("AH_EXECUTION_MODE", "yolo")
 	t.Setenv("AH_PERM_EXECUTE", "true")
 	t.Setenv("AH_PERM_READ", "true")
+	// The plan must be accepted to count: a denied todo_write is rolled back.
+	t.Setenv("AH_PERMISSION_MODE", "workspace-write")
 	notes := filepath.Join(workspace, "notes.txt")
 	if err := os.WriteFile(notes, []byte("alpha\nbeta\n"), 0o600); err != nil {
 		t.Fatal(err)

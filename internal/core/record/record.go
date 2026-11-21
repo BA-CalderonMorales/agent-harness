@@ -87,11 +87,13 @@ type Record struct {
 	LastUser string     `json:"last_user,omitempty"`
 	Replied  bool       `json:"replied,omitempty"`
 	Open     []OpenCall `json:"open,omitempty"`
+	// Undo holds the plan each unanswered todo_write proposal replaced.
+	Undo []TodoUndo `json:"undo,omitempty"`
 }
 
 // IsZero reports whether nothing has been recorded.
 func (r Record) IsZero() bool {
 	return r.V == 0 && r.Goal == "" && len(r.Constraints) == 0 && len(r.Files) == 0 &&
 		len(r.Cmds) == 0 && len(r.Todos) == 0 && len(r.Verified) == 0 &&
-		len(r.Pending) == 0 && len(r.Denied) == 0 && r.LastUser == "" && !r.Replied && len(r.Open) == 0
+		len(r.Pending) == 0 && len(r.Denied) == 0 && r.LastUser == "" && !r.Replied && len(r.Open) == 0 && len(r.Undo) == 0
 }
