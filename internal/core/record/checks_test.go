@@ -123,3 +123,28 @@ func TestVerifiedKeepsBackslashesInDoubleQuotedDelimiters(t *testing.T) {
 		})
 	}
 }
+
+// A heredoc delimiter is only a delimiter: shell separators inside it must not
+// become commands in the stored text. cat <<"X';pytest" runs cat and nothing
+// else, however the delimiter reads when written back.
+func TestVerifiedIgnoresSeparatorsInsideHeredocDelimiters(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"semicolon in the delimiter", "cat <<\"X';pytest\"\nbody\nX';pytest", false},
+		{"and-and in the delimiter", "cat <<\"X&&go test ./...\"\nbody\nX&&go test ./...", false},
+		{"pipe in the delimiter", "cat <<\"X|make verify\"\nbody\nX|make verify", false},
+		{"newline-free redirect in the delimiter", "cat <<\"X>go vet\"\nbody\nX>go vet", false},
+		{"a real check after such a heredoc still counts", "cat <<\"X';pytest\"\nbody\nX';pytest\nmake verify", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("s1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v (cmds %v), want a check recorded: %v", r.Verified, r.Cmds, c.want)
+			}
+		})
+	}
+}

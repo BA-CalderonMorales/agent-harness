@@ -203,15 +203,19 @@ func joinSegments(segs []shellSegment) string {
 }
 
 // storableWord is a heredoc delimiter made safe to write back into the
-// stored command: quotes, backslashes, expansion characters and whitespace
-// become underscores. The record only needs to show that a heredoc was
-// there, and an unbalanced quote in the stored text would make a later scan
-// of that text swallow everything after it.
+// stored command: only letters, digits and _ - . / survive, and everything
+// else (quotes, backslashes, separators such as ; | & < >, expansion
+// characters, whitespace) becomes an underscore. The record only needs to
+// show that a heredoc was there, and anything else could turn into a quote or
+// a command boundary when the stored text is scanned again.
 func storableWord(word string) string {
 	return strings.Map(func(r rune) rune {
-		if strings.ContainsRune("'\"\\$` \t", r) {
-			return '_'
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+			return r
+		case r == '_' || r == '-' || r == '.' || r == '/':
+			return r
 		}
-		return r
+		return '_'
 	}, word)
 }
