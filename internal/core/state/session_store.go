@@ -172,7 +172,9 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	// The record is written only when it changed since the last write, so
 	// an unchanged record never costs a second line.
 	if !s.Record.IsZero() && !reflect.DeepEqual(s.Record, sm.recordOnDisk) {
-		rec, n := s.Record, len(s.Messages)
+		// msgs counts the message events physically in the file, which a
+		// retried append can leave above len(s.Messages).
+		rec, n := s.Record, countMessageEvents(path)
 		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
 			return err
 		}
