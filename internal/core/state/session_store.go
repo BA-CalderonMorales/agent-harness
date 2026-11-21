@@ -118,11 +118,14 @@ func (sm *SessionManager) createSessionFile(path string) error {
 	// once it is complete and synced, so a failure or a crash partway leaves
 	// the saved session exactly as it was. Truncating the original first
 	// would lose every saved message if the rewrite did not finish.
-	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	// Each rewrite owns its temp file (created exclusively, with a unique
+	// name): two app instances rewriting one session at once must never
+	// share it, or one would publish the other's unfinished file.
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create session file: %w", err)
 	}
+	tmp := f.Name()
 	werr := func() error {
 		for _, event := range events {
 			if err := writeEvent(f, event); err != nil {

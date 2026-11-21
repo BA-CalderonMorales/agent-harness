@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -350,17 +351,13 @@ func TestFailedRewriteLeavesTheSavedSessionIntact(t *testing.T) {
 	if string(after) != string(before) {
 		t.Fatalf("a failed rewrite changed the saved session (%d bytes before, %d after)", len(before), len(after))
 	}
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("the failed rewrite left its temp file behind (stat: %v)", err)
-	}
+	assertNoTempFiles(t, path)
 
 	sm.rewriteFault = nil
 	if err := sm.createSessionFile(path); err != nil {
 		t.Fatalf("the rewrite failed once the fault cleared: %v", err)
 	}
-	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
-		t.Fatalf("a successful rewrite left its temp file behind (stat: %v)", err)
-	}
+	assertNoTempFiles(t, path)
 	if physical := messageLineCount(t, path); physical != len(s.Messages) {
 		t.Fatalf("physical message lines = %d, want %d", physical, len(s.Messages))
 	}
@@ -370,5 +367,55 @@ func TestFailedRewriteLeavesTheSavedSessionIntact(t *testing.T) {
 	}
 	if !reflect.DeepEqual(loaded.Record, s.Record) {
 		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+}
+
+func assertNoTempFiles(t *testing.T, path string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("a rewrite left a temp file behind: %s", e.Name())
+		}
+	}
+}
+
+// Two app instances can resume the same session and rewrite it at once. If
+// they shared one temp name, the second would truncate the file the first had
+// finished, and the first would publish (or fail to rename) the wrong file.
+// Each rewrite owns its own temp file, so a rewrite that runs inside another
+// one's window leaves both succeeding and the session whole.
+func TestConcurrentRewritesDoNotShareATempFile(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	var inner error
+	sm.rewriteFault = func() error {
+		sm.rewriteFault = nil // the second instance's rewrite runs to completion
+		inner = sm.createSessionFile(path)
+		return nil
+	}
+	if err := sm.createSessionFile(path); err != nil {
+		t.Fatalf("the first rewrite failed because another rewrote at the same time: %v", err)
+	}
+	if inner != nil {
+		t.Fatalf("the second rewrite failed: %v", inner)
+	}
+	assertNoTempFiles(t, path)
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("the session is unreadable after two rewrites: %v", err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) || len(loaded.Messages) != len(s.Messages) {
+		t.Fatalf("the session is not whole after two rewrites: %d messages, want %d", len(loaded.Messages), len(s.Messages))
 	}
 }
