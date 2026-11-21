@@ -38,6 +38,7 @@ func (app *App) handleUserSubmit(text string, tuiApp *tui.App) {
 		Timestamp: time.Now(),
 	}
 	app.session.AddMessage(userMsg)
+	app.recordMessage(userMsg)
 	app.sessionManager.SetCurrent(app.session)
 	if _, err := app.sessionManager.SaveCurrent(); err != nil {
 		// Persistence must never block chatting, but the failure is

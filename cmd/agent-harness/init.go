@@ -72,6 +72,7 @@ func (app *App) initSession() error {
 	resumed, resumeErr := sessionManager.ResumeLatestSessionWithError()
 	if resumeErr == nil && resumed != nil {
 		app.session = resumed
+		rebuildRecord(resumed)
 		// Historical chats retain their model without replacing the user's
 		// default for new chats. An explicit environment pin wins in both.
 		// An empty session has no conversation whose model to preserve, so

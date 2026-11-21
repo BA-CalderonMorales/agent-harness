@@ -6,6 +6,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/messages"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"github.com/google/uuid"
@@ -29,6 +30,10 @@ type Session struct {
 	// ToolLimit overrides the loop's per-query tool ceiling for this
 	// session (the /limit knob); 0 keeps the loop default.
 	ToolLimit int `json:"tool_limit,omitempty"`
+	// Record is the structured session record, persisted as its own
+	// "record" line in the session file. It stays out of the whole-JSON
+	// shapes (legacy saves, exports) on purpose.
+	Record record.Record `json:"-"`
 }
 
 // SessionMetadata contains lightweight session info
