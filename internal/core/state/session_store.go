@@ -174,7 +174,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		// again, and the loader would replay duplicates over a snapshot that
 		// already counted them.
 		if retErr != nil {
-			truncate := f.Truncate
+			truncate := func(n int64) error { return truncateThroughWriteHandle(f, path, n) }
 			if sm.truncateFault != nil {
 				truncate = func(int64) error { return sm.truncateFault() }
 			}
@@ -291,4 +291,19 @@ func (sm *SessionManager) migrateLegacySessionFiles() int {
 	}
 	sm.current = nil
 	return converted
+}
+
+// truncateThroughWriteHandle cuts the file at path back to size using a fresh
+// write handle. The append handle cannot do it everywhere: on Windows a file
+// opened with O_APPEND has no right to set its end, so truncating through it
+// fails and a rolled-back append would silently stay in the file. The append
+// handle is closed first so the two never overlap.
+func truncateThroughWriteHandle(appendHandle *os.File, path string, size int64) error {
+	_ = appendHandle.Close()
+	w, err := os.OpenFile(path, os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = w.Close() }()
+	return w.Truncate(size)
 }
