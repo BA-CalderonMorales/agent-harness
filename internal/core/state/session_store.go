@@ -7,12 +7,10 @@ import (
 	"path/filepath"
 	"reflect"
 	"runtime"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/record"
-	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // The session store is append-only JSONL, one file per session, grouped
@@ -30,6 +28,11 @@ type storeEvent struct {
 	Message *json.RawMessage `json:"message,omitempty"`
 	Meta    *storeMeta       `json:"meta,omitempty"`
 	Record  *record.Record   `json:"record,omitempty"`
+	// Msgs, on a record line, is how many messages the file held when the
+	// snapshot was written. A loader replays any messages after that point,
+	// so a crash between a message and its snapshot loses no evidence. Not
+	// part of Record: it describes the file, not the session.
+	Msgs *int `json:"msgs,omitempty"`
 
 	// Header fields.
 	ID        string    `json:"id,omitempty"`
@@ -106,8 +109,8 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		events = append(events, storeEvent{Kind: "message", Message: rawPtr(raw)})
 	}
 	if !s.Record.IsZero() {
-		rec := s.Record
-		events = append(events, storeEvent{Kind: "record", Record: &rec})
+		rec, n := s.Record, len(s.Messages)
+		events = append(events, storeEvent{Kind: "record", Record: &rec, Msgs: &n})
 	}
 
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
@@ -130,9 +133,16 @@ func (sm *SessionManager) createSessionFile(path string) error {
 // countMessageEvents counts message events already on disk — the
 // boundary between "append the delta" and "rewrite after compaction".
 func countMessageEvents(path string) int {
+	n, _ := countMessageEventsChecked(path)
+	return n
+}
+
+// countMessageEventsChecked is countMessageEvents that says when the file
+// could not be read, for callers that must not treat that as "no events".
+func countMessageEventsChecked(path string) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	count := 0
 	for _, line := range strings.Split(string(data), "\n") {
@@ -140,19 +150,34 @@ func countMessageEvents(path string) int {
 			count++
 		}
 	}
-	return count
+	return count, nil
 }
 
 // appendSessionEventsFrom appends message and meta events for everything
 // not yet on disk, starting at message index `from`.
-func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
+func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr error) {
 	s := sm.current
 
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to open session file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("failed to inspect session file: %w", err)
+	}
+	size := info.Size()
+	defer func() {
+		// A failed append leaves the file as it found it. Otherwise the
+		// caller's retry (it keeps the old offset) writes the same messages
+		// again, and the loader would replay duplicates over a snapshot that
+		// already counted them.
+		if retErr != nil {
+			_ = f.Truncate(size)
+		}
+		_ = f.Close()
+	}()
 
 	for i := from; i < len(s.Messages); i++ {
 		raw, err := json.Marshal(s.Messages[i])
@@ -164,11 +189,27 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 		}
 	}
 
+	wroteRecord := false
 	// The record is written only when it changed since the last write, so
 	// an unchanged record never costs a second line.
 	if !s.Record.IsZero() && !reflect.DeepEqual(s.Record, sm.recordOnDisk) {
-		rec := s.Record
-		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec}); err != nil {
+		// msgs counts the message events physically in the file, which a
+		// retried append can leave above len(s.Messages).
+		// If the file cannot be read back, the count is unknown: a snapshot
+		// with a guessed msgs would make the loader replay messages the
+		// record already holds. Skip it; recordOnDisk stays behind so the
+		// next save retries, and the loader's replay covers the gap.
+		if n, err := countMessageEventsChecked(path); err == nil {
+			rec := s.Record
+			if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
+				return err
+			}
+			wroteRecord = true
+		}
+	}
+
+	if sm.appendFault != nil {
+		if err := sm.appendFault(); err != nil {
 			return err
 		}
 	}
@@ -182,7 +223,11 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	if err := f.Sync(); err != nil {
 		return fmt.Errorf("failed to sync session file: %w", err)
 	}
-	sm.recordOnDisk = s.Record
+	// Remember the record as written only if it was, so a skipped snapshot
+	// is retried on the next save.
+	if wroteRecord || reflect.DeepEqual(s.Record, sm.recordOnDisk) || s.Record.IsZero() {
+		sm.recordOnDisk = s.Record
+	}
 	return nil
 }
 
@@ -199,120 +244,6 @@ func writeEvent(f *os.File, event storeEvent) error {
 
 func rawPtr(raw json.RawMessage) *json.RawMessage {
 	return &raw
-}
-
-// loadSessionFile folds a JSONL file back into a Session.
-func loadSessionFile(path string) (*Session, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, err
-	}
-
-	s := &Session{}
-	lines := strings.Split(string(data), "\n")
-	for lineNumber, line := range lines {
-		if strings.TrimSpace(line) == "" {
-			continue
-		}
-		var event storeEvent
-		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			return nil, fmt.Errorf("session file %s is corrupt at line %d: %w", filepath.Base(path), lineNumber+1, err)
-		}
-		switch event.Kind {
-		case "header":
-			s.ID, s.CreatedAt = event.ID, event.CreatedAt
-			s.Model, s.Persona, s.Version = event.Model, event.Persona, event.Version
-			s.Turns, s.PlanMode, s.ToolLimit = event.Turns, event.PlanMode, event.ToolLimit
-		case "meta":
-			if event.Meta == nil {
-				return nil, fmt.Errorf("session file %s has an empty meta event at line %d", filepath.Base(path), lineNumber+1)
-			}
-			if event.Meta.Model != "" {
-				s.Model = event.Meta.Model
-			}
-			if event.Meta.Persona != "" {
-				s.Persona = event.Meta.Persona
-			}
-			s.Turns = event.Meta.Turns
-			s.PlanMode = event.Meta.PlanMode
-			s.ToolLimit = event.Meta.ToolLimit
-		case "record":
-			if event.Record == nil {
-				return nil, fmt.Errorf("session file %s has an empty record at line %d", filepath.Base(path), lineNumber+1)
-			}
-			s.Record = *event.Record
-		case "message":
-			if event.Message == nil {
-				return nil, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)
-			}
-			var msg types.Message
-			if err := json.Unmarshal(*event.Message, &msg); err != nil {
-				return nil, fmt.Errorf("session file %s has a corrupt message at line %d: %w", filepath.Base(path), lineNumber+1, err)
-			}
-			s.Messages = append(s.Messages, msg)
-		}
-	}
-	if s.ID == "" {
-		return nil, fmt.Errorf("session file %s has no header", filepath.Base(path))
-	}
-	s.UpdatedAt = fileModTime(path)
-	return s, nil
-}
-
-func fileModTime(path string) time.Time {
-	info, err := os.Stat(path)
-	if err != nil {
-		return time.Time{}
-	}
-	return info.ModTime()
-}
-
-// listProjectSessionFiles returns the project's JSONL files, oldest
-// first.
-func (sm *SessionManager) listProjectSessionFiles() ([]string, error) {
-	dir := sm.projectSessionsDir()
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("failed to read sessions directory: %w", err)
-	}
-	var paths []string
-	for _, entry := range entries {
-		if !entry.IsDir() && strings.HasSuffix(entry.Name(), ".jsonl") {
-			paths = append(paths, filepath.Join(dir, entry.Name()))
-		}
-	}
-	sort.Strings(paths)
-	return paths, nil
-}
-
-// findSessionFile locates a session file by full or prefix ID within
-// the project's sessions.
-func (sm *SessionManager) findSessionFile(id string) (string, error) {
-	paths, err := sm.listProjectSessionFiles()
-	if err != nil {
-		return "", err
-	}
-	var matches []string
-	for _, path := range paths {
-		base := strings.TrimSuffix(filepath.Base(path), ".jsonl")
-		if suffix := strings.SplitN(base, "_", 2); len(suffix) == 2 {
-			base = suffix[1]
-		}
-		if base == id || strings.HasPrefix(base, id) {
-			matches = append(matches, path)
-		}
-	}
-	switch len(matches) {
-	case 0:
-		return "", fmt.Errorf("session not found")
-	case 1:
-		return matches[0], nil
-	default:
-		return "", fmt.Errorf("ambiguous session id %q matches %d sessions", id, len(matches))
-	}
 }
 
 // migrateLegacySessionFiles converts legacy flat whole-JSON sessions

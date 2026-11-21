@@ -18,8 +18,6 @@ const (
 
 var todoStatuses = map[string]bool{"pending": true, "in_progress": true, "done": true, "cancelled": true}
 
-var verifyWords = []string{"test", "build", "vet", "lint"}
-
 // Fold builds a record from a transcript: Apply over every message, starting
 // from the zero Record.
 func Fold(msgs []types.Message) Record {
@@ -103,7 +101,7 @@ func (r *Record) applyUse(use types.ToolUseBlock) {
 	case toolBash:
 		cmd, _ := use.Input["command"].(string)
 		if strings.TrimSpace(cmd) != "" {
-			r.open(use.ID, use.Name, clip(cmd, maxOpenCallArgLen))
+			r.open(use.ID, use.Name, clip(joinCommandLines(cmd), maxOpenCallArgLen))
 		}
 	case toolTodo:
 		if todos, ok := todosFrom(use.Input); ok {
@@ -116,7 +114,7 @@ func (r *Record) open(id, tool, arg string) {
 	if id == "" {
 		return
 	}
-	r.Open = pushNewest(r.Open, OpenCall{ID: id, Tool: tool, Arg: arg}, maxOpenCalls)
+	r.Open = pushNewest(r.Open, OpenCall{ID: boundID(id), Tool: tool, Arg: arg}, maxOpenCalls)
 }
 
 func (r *Record) applyResult(res types.ToolResultBlock) {
@@ -125,7 +123,7 @@ func (r *Record) applyResult(res types.ToolResultBlock) {
 	}
 	idx := -1
 	for i, call := range r.Open {
-		if call.ID == res.ToolUseID {
+		if call.ID == boundID(res.ToolUseID) {
 			idx = i
 			break
 		}
@@ -174,12 +172,8 @@ func (r *Record) ran(fullCmd string, res types.ToolResultBlock) {
 		r.Verified = removeString(r.Verified, run.Cmd)
 		return
 	}
-	lower := strings.ToLower(fullCmd)
-	for _, word := range verifyWords {
-		if strings.Contains(lower, word) {
-			r.Verified = moveToEnd(r.Verified, run.Cmd, MaxVerified)
-			return
-		}
+	if isCheckCommand(fullCmd) {
+		r.Verified = moveToEnd(r.Verified, run.Cmd, MaxVerified)
 	}
 }
 
