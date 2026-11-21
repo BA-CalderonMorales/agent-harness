@@ -101,3 +101,31 @@ func splitSentences(text string) []string {
 	}
 	return append(out, string(r[start:]))
 }
+
+// joinCommandLines turns a multiline shell command into one line without
+// losing where one command ends and the next begins: physical lines become
+// " ; " boundaries, blank lines vanish, and a trailing backslash continues
+// the same command like a space. clip would otherwise flatten the newlines
+// to spaces and fuse "cd project" and "go test ./..." into one segment.
+func joinCommandLines(cmd string) string {
+	cmd = strings.ReplaceAll(cmd, "\r\n", "\n")
+	var b strings.Builder
+	lines := strings.Split(cmd, "\n")
+	continued := false
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		if b.Len() > 0 {
+			if continued {
+				b.WriteByte(' ')
+			} else {
+				b.WriteString(" ; ")
+			}
+		}
+		continued = strings.HasSuffix(line, "\\")
+		b.WriteString(strings.TrimSpace(strings.TrimSuffix(line, "\\")))
+	}
+	return b.String()
+}

@@ -3,6 +3,7 @@ package record
 import (
 	"fmt"
 	"reflect"
+	"strings"
 	"testing"
 )
 
@@ -37,5 +38,35 @@ func TestVerifiedIgnoresNonCheckCommands(t *testing.T) {
 	}
 	if want := []string{"go test ./...", "make verify"}; !reflect.DeepEqual(r.Verified, want) {
 		t.Fatalf("verified = %v", r.Verified)
+	}
+}
+
+// A multiline shell command keeps its command boundaries through the full
+// Apply path: storing the call must not fuse "cd project" and "go test"
+// into one segment.
+func TestVerifiedSeesChecksInMultilineCommands(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"cd then check on the next line", "cd project\ngo test ./...", true},
+		{"CRLF line endings", "cd project\r\ngo vet ./...", true},
+		{"blank lines and indentation", "cd project\n\n   make verify\n", true},
+		{"check on the first line", "go test ./...\necho done", true},
+		{"backslash continuation of one command", "go test \\\n  ./...", true},
+		{"no check on any line", "cd project\ncat build.log", false},
+		{"check words only as arguments across lines", "git diff \\\n  -- test/foo.go", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("m1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v, want a check recorded: %v", r.Verified, c.want)
+			}
+			if len(r.Cmds) != 1 || strings.Contains(r.Cmds[0].Cmd, "\n") {
+				t.Fatalf("recorded command must be a single line: %#v", r.Cmds)
+			}
+		})
 	}
 }

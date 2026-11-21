@@ -101,7 +101,7 @@ func (r *Record) applyUse(use types.ToolUseBlock) {
 	case toolBash:
 		cmd, _ := use.Input["command"].(string)
 		if strings.TrimSpace(cmd) != "" {
-			r.open(use.ID, use.Name, clip(cmd, maxOpenCallArgLen))
+			r.open(use.ID, use.Name, clip(joinCommandLines(cmd), maxOpenCallArgLen))
 		}
 	case toolTodo:
 		if todos, ok := todosFrom(use.Input); ok {
