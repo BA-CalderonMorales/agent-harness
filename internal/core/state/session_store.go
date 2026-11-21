@@ -135,9 +135,16 @@ func (sm *SessionManager) createSessionFile(path string) error {
 // countMessageEvents counts message events already on disk — the
 // boundary between "append the delta" and "rewrite after compaction".
 func countMessageEvents(path string) int {
+	n, _ := countMessageEventsChecked(path)
+	return n
+}
+
+// countMessageEventsChecked is countMessageEvents that says when the file
+// could not be read, for callers that must not treat that as "no events".
+func countMessageEventsChecked(path string) (int, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return 0
+		return 0, err
 	}
 	count := 0
 	for _, line := range strings.Split(string(data), "\n") {
@@ -145,7 +152,7 @@ func countMessageEvents(path string) int {
 			count++
 		}
 	}
-	return count
+	return count, nil
 }
 
 // appendSessionEventsFrom appends message and meta events for everything
@@ -169,14 +176,22 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 		}
 	}
 
+	wroteRecord := false
 	// The record is written only when it changed since the last write, so
 	// an unchanged record never costs a second line.
 	if !s.Record.IsZero() && !reflect.DeepEqual(s.Record, sm.recordOnDisk) {
 		// msgs counts the message events physically in the file, which a
 		// retried append can leave above len(s.Messages).
-		rec, n := s.Record, countMessageEvents(path)
-		if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
-			return err
+		// If the file cannot be read back, the count is unknown: a snapshot
+		// with a guessed msgs would make the loader replay messages the
+		// record already holds. Skip it; recordOnDisk stays behind so the
+		// next save retries, and the loader's replay covers the gap.
+		if n, err := countMessageEventsChecked(path); err == nil {
+			rec := s.Record
+			if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
+				return err
+			}
+			wroteRecord = true
 		}
 	}
 
@@ -189,7 +204,11 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 	if err := f.Sync(); err != nil {
 		return fmt.Errorf("failed to sync session file: %w", err)
 	}
-	sm.recordOnDisk = s.Record
+	// Remember the record as written only if it was, so a skipped snapshot
+	// is retried on the next save.
+	if wroteRecord || reflect.DeepEqual(s.Record, sm.recordOnDisk) || s.Record.IsZero() {
+		sm.recordOnDisk = s.Record
+	}
 	return nil
 }
 
