@@ -114,7 +114,7 @@ func (r *Record) open(id, tool, arg string) {
 	if id == "" {
 		return
 	}
-	r.Open = pushNewest(r.Open, OpenCall{ID: id, Tool: tool, Arg: arg}, maxOpenCalls)
+	r.Open = pushNewest(r.Open, OpenCall{ID: boundID(id), Tool: tool, Arg: arg}, maxOpenCalls)
 }
 
 func (r *Record) applyResult(res types.ToolResultBlock) {
@@ -123,7 +123,7 @@ func (r *Record) applyResult(res types.ToolResultBlock) {
 	}
 	idx := -1
 	for i, call := range r.Open {
-		if call.ID == res.ToolUseID {
+		if call.ID == boundID(res.ToolUseID) {
 			idx = i
 			break
 		}
