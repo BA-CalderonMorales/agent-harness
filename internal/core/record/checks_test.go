@@ -70,3 +70,31 @@ func TestVerifiedSeesChecksInMultilineCommands(t *testing.T) {
 		})
 	}
 }
+
+// A here-string (<<<) is not a heredoc, and a heredoc delimiter is read with
+// shell quoting removed: \EOF, 'EOF', "EOF" and E"O"F all close at EOF.
+func TestVerifiedHandlesHereStringsAndQuotedDelimiters(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"here-string then a check on the next line", "cat <<< hello\ngo test ./...", true},
+		{"here-string without a space", "cat <<<hello\ngo vet ./...", true},
+		{"here-string content that looks like a check", `cat <<<"go test ./..."`, false},
+		{"backslash-escaped delimiter, body only", "cat <<\\EOF\ngo test ./...\nEOF", false},
+		{"backslash-escaped delimiter, check after", "cat <<\\EOF\nx\nEOF\ngo test ./...", true},
+		{"partly quoted delimiter", "cat <<E\"O\"F\ngo test ./...\nEOF\nmake verify", true},
+		{"dash heredoc with escaped delimiter", "cat <<-\\EOF\n\tgo test ./...\n\tEOF\nmake verify", true},
+		{"quoted delimiter with a space", "cat <<'MY EOF'\ngo test ./...\nMY EOF\ngo vet ./...", true},
+		{"heredoc body only still hides a check", "cat <<EOF\ngo test ./...\nEOF", false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("h1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v (cmds %v), want a check recorded: %v", r.Verified, r.Cmds, c.want)
+			}
+		})
+	}
+}

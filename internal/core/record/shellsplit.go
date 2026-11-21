@@ -66,7 +66,11 @@ func splitShell(cmd string) []shellSegment {
 				cur.WriteRune(r[i])
 				i++
 			}
-		case c == '<' && i+1 < len(r) && r[i+1] == '<' && (i+2 >= len(r) || r[i+2] != '<'):
+		case c == '<' && i+2 < len(r) && r[i+1] == '<' && r[i+2] == '<':
+			// A here-string (<<<) feeds a word to stdin; it opens no body.
+			cur.WriteString("<<<")
+			i += 3
+		case c == '<' && i+1 < len(r) && r[i+1] == '<':
 			h, next := parseHeredoc(r, i+2)
 			if h.word == "" {
 				cur.WriteString("<<")
@@ -125,18 +129,31 @@ func parseHeredoc(r []rune, i int) (heredoc, int) {
 	for i < len(r) && (r[i] == ' ' || r[i] == '\t') {
 		i++
 	}
+	// The delimiter is read the way the shell reads a word: backslashes and
+	// quotes are removed, so \EOF, 'EOF', "EOF" and E"O"F all close at EOF.
 	var word strings.Builder
-	if i < len(r) && (r[i] == '\'' || r[i] == '"') {
-		q := r[i]
-		for i++; i < len(r) && r[i] != q && r[i] != '\n'; i++ {
-			word.WriteRune(r[i])
-		}
-		if i < len(r) && r[i] == q {
+	for i < len(r) && !strings.ContainsRune(" \t\n;|&<>()", r[i]) {
+		switch c := r[i]; c {
+		case '\\':
+			if i+1 < len(r) && r[i+1] != '\n' {
+				word.WriteRune(r[i+1])
+				i += 2
+			} else {
+				i++
+			}
+		case '\'', '"':
+			for i++; i < len(r) && r[i] != c && r[i] != '\n'; i++ {
+				if c == '"' && r[i] == '\\' && i+1 < len(r) && r[i+1] != '\n' {
+					i++
+				}
+				word.WriteRune(r[i])
+			}
+			if i < len(r) && r[i] == c {
+				i++
+			}
+		default:
+			word.WriteRune(c)
 			i++
-		}
-	} else {
-		for ; i < len(r) && !strings.ContainsRune(" \t\n;|&<>()", r[i]); i++ {
-			word.WriteRune(r[i])
 		}
 	}
 	h.word = word.String()
