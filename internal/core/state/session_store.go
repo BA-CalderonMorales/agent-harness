@@ -157,14 +157,29 @@ func countMessageEventsChecked(path string) (int, error) {
 
 // appendSessionEventsFrom appends message and meta events for everything
 // not yet on disk, starting at message index `from`.
-func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
+func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr error) {
 	s := sm.current
 
 	f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o600)
 	if err != nil {
 		return fmt.Errorf("failed to open session file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return fmt.Errorf("failed to inspect session file: %w", err)
+	}
+	size := info.Size()
+	defer func() {
+		// A failed append leaves the file as it found it. Otherwise the
+		// caller's retry (it keeps the old offset) writes the same messages
+		// again, and the loader would replay duplicates over a snapshot that
+		// already counted them.
+		if retErr != nil {
+			_ = f.Truncate(size)
+		}
+		_ = f.Close()
+	}()
 
 	for i := from; i < len(s.Messages); i++ {
 		raw, err := json.Marshal(s.Messages[i])
@@ -192,6 +207,12 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) error {
 				return err
 			}
 			wroteRecord = true
+		}
+	}
+
+	if sm.appendFault != nil {
+		if err := sm.appendFault(); err != nil {
+			return err
 		}
 	}
 

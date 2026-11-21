@@ -29,6 +29,10 @@ type SessionManager struct {
 	// recordOnDisk is the last record line written (or adopted) for the
 	// journalled session; an equal record is not written twice.
 	recordOnDisk record.Record
+	// appendFault is a test seam: when set, an append calls it after its
+	// messages and record are written and before its meta line, and an
+	// error aborts the save there. Production leaves it nil.
+	appendFault  func() error
 	sessionMetas map[string]metaStamp
 }
 

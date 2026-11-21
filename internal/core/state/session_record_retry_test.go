@@ -2,6 +2,7 @@ package state
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"reflect"
 	"runtime"
@@ -126,5 +127,96 @@ func TestRecordSnapshotSkippedWhenMessageCountUnreadable(t *testing.T) {
 	}
 	if got := len(recordLines(t, path)); got != linesBefore+1 {
 		t.Fatalf("the snapshot was not retried once the file was readable (%d record lines, want %d)", got, linesBefore+1)
+	}
+}
+
+// An append that fails after writing its messages must leave the file as it
+// found it. Otherwise the retry appends the same messages again, the file
+// holds duplicate message events, and a loader replays them over a snapshot
+// that already counted them (a file touch counted twice).
+func TestFailedAppendRollsBackSoRetryNeverDuplicates(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	sm.appendFault = func() error { return errors.New("disk full") }
+	if _, err := sm.SaveCurrent(); err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("a failed append changed the file (%d bytes before, %d after)", len(before), len(after))
+	}
+
+	sm.appendFault = nil
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatalf("the retry failed: %v", err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d: the retry duplicated messages", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+}
+
+// The combination CodeRabbit raised: a failed append, then a retry on a file
+// that is writable but unreadable, then the file becomes readable again and
+// is loaded before another save. No duplicates and no double counting.
+func TestFailedAppendThenUnreadableRetryLoadsCleanly(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("needs a writable but unreadable file, which this environment cannot make")
+	}
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	sm.appendFault = func() error { return errors.New("disk full") }
+	if _, err := sm.SaveCurrent(); err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	sm.appendFault = nil
+
+	if err := os.Chmod(path, 0o200); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatalf("the unreadable retry must not fail: %v", err)
+	}
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("a load between saves double-counted evidence:\n got %#v\nwant %#v", loaded.Record, s.Record)
 	}
 }
