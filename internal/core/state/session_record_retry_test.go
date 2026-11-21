@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"os"
+	"path/filepath"
 	"reflect"
 	"runtime"
 	"strings"
@@ -218,5 +219,203 @@ func TestFailedAppendThenUnreadableRetryLoadsCleanly(t *testing.T) {
 	}
 	if !reflect.DeepEqual(loaded.Record, s.Record) {
 		t.Fatalf("a load between saves double-counted evidence:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+}
+
+// If the rollback itself fails, the file may end in the partial events of the
+// failed append. The save must say so, and the next save must rewrite the file
+// from memory instead of appending to a damaged tail: no duplicate message
+// lines, and a loaded record equal to the live one.
+func TestFailedRollbackForcesARewriteOnTheNextSave(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	sm.appendFault = func() error { return errors.New("disk full") }
+	sm.truncateFault = func() error { return errors.New("rollback refused") }
+	_, err = sm.SaveCurrent()
+	if err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	if !strings.Contains(err.Error(), "disk full") || !strings.Contains(err.Error(), "rollback") {
+		t.Fatalf("the error must report both the failed append and the failed rollback, got: %v", err)
+	}
+	if got := messageLineCount(t, path); got <= 2 {
+		t.Fatalf("the fault left the file clean (%d message lines), so this test checks nothing", got)
+	}
+
+	sm.appendFault, sm.truncateFault = nil, nil
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatalf("the repairing save failed: %v", err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d: the repair appended to a damaged tail", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+	if sm.needsRewrite {
+		t.Fatal("the rewrite flag stayed set after a successful repair")
+	}
+
+	// And the save after that is an ordinary append again.
+	extra := laterEvidence()[0]
+	s.AddMessage(extra)
+	s.Record = record.Apply(s.Record, extra)
+	if _, err := sm.SaveCurrent(); err != nil {
+		t.Fatal(err)
+	}
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d after the next append", physical, len(s.Messages))
+	}
+}
+
+// Two app instances in one project resume the same session file. If this
+// save fails after another writer has appended its own save, rolling back to
+// the pre-save size would erase the other writer's data. The rollback must
+// notice that the file grew by more than this save wrote and leave it alone.
+func TestRollbackNeverErasesAnotherWritersAppend(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	const otherWriter = `{"type":"meta","meta":{"model":"saved-by-another-instance"}}` + "\n"
+	sm.appendFault = func() error {
+		f, err := os.OpenFile(path, os.O_APPEND|os.O_WRONLY, 0o600)
+		if err != nil {
+			return err
+		}
+		defer func() { _ = f.Close() }()
+		if _, err := f.WriteString(otherWriter); err != nil {
+			return err
+		}
+		return errors.New("disk full")
+	}
+	_, err = sm.SaveCurrent()
+	if err == nil {
+		t.Fatal("the injected fault did not fail the save")
+	}
+	if !strings.Contains(err.Error(), "not rolled back") {
+		t.Fatalf("the error must say the file was not rolled back, got: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "saved-by-another-instance") {
+		t.Fatal("the rollback erased another writer's save")
+	}
+}
+
+// A rewrite (compaction, or the repair after a failed rollback) replaces the
+// only copy of the session. If it fails partway, the saved messages must
+// still be there: the replacement is written to a temp file and renamed over
+// the original only once it is complete.
+func TestFailedRewriteLeavesTheSavedSessionIntact(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+
+	sm.rewriteFault = func() error { return errors.New("disk full") }
+	if err := sm.createSessionFile(path); err == nil {
+		t.Fatal("the injected fault did not fail the rewrite")
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("the saved session is gone after a failed rewrite: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("a failed rewrite changed the saved session (%d bytes before, %d after)", len(before), len(after))
+	}
+	assertNoTempFiles(t, path)
+
+	sm.rewriteFault = nil
+	if err := sm.createSessionFile(path); err != nil {
+		t.Fatalf("the rewrite failed once the fault cleared: %v", err)
+	}
+	assertNoTempFiles(t, path)
+	if physical := messageLineCount(t, path); physical != len(s.Messages) {
+		t.Fatalf("physical message lines = %d, want %d", physical, len(s.Messages))
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) {
+		t.Fatalf("loaded record differs from the live one:\n got %#v\nwant %#v", loaded.Record, s.Record)
+	}
+}
+
+func assertNoTempFiles(t *testing.T, path string) {
+	t.Helper()
+	entries, err := os.ReadDir(filepath.Dir(path))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if strings.HasSuffix(e.Name(), ".tmp") {
+			t.Fatalf("a rewrite left a temp file behind: %s", e.Name())
+		}
+	}
+}
+
+// Two app instances can resume the same session and rewrite it at once. If
+// they shared one temp name, the second would truncate the file the first had
+// finished, and the first would publish (or fail to rename) the wrong file.
+// Each rewrite owns its own temp file, so a rewrite that runs inside another
+// one's window leaves both succeeding and the session whole.
+func TestConcurrentRewritesDoNotShareATempFile(t *testing.T) {
+	sm, s := newCrashSession(t)
+	path, err := sm.SaveCurrent()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range laterEvidence() {
+		s.AddMessage(m)
+		s.Record = record.Apply(s.Record, m)
+	}
+	var inner error
+	sm.rewriteFault = func() error {
+		sm.rewriteFault = nil // the second instance's rewrite runs to completion
+		inner = sm.createSessionFile(path)
+		return nil
+	}
+	if err := sm.createSessionFile(path); err != nil {
+		t.Fatalf("the first rewrite failed because another rewrote at the same time: %v", err)
+	}
+	if inner != nil {
+		t.Fatalf("the second rewrite failed: %v", inner)
+	}
+	assertNoTempFiles(t, path)
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("the session is unreadable after two rewrites: %v", err)
+	}
+	if !reflect.DeepEqual(loaded.Record, s.Record) || len(loaded.Messages) != len(s.Messages) {
+		t.Fatalf("the session is not whole after two rewrites: %d messages, want %d", len(loaded.Messages), len(s.Messages))
 	}
 }

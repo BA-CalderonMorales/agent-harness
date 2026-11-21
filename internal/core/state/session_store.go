@@ -3,6 +3,7 @@ package state
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -113,18 +114,42 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		events = append(events, storeEvent{Kind: "record", Record: &rec, Msgs: &n})
 	}
 
-	f, err := os.OpenFile(path, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0o600)
+	// The replacement is written beside the original and renamed over it only
+	// once it is complete and synced, so a failure or a crash partway leaves
+	// the saved session exactly as it was. Truncating the original first
+	// would lose every saved message if the rewrite did not finish.
+	// Each rewrite owns its temp file (created exclusively, with a unique
+	// name): two app instances rewriting one session at once must never
+	// share it, or one would publish the other's unfinished file.
+	f, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*.tmp")
 	if err != nil {
 		return fmt.Errorf("failed to create session file: %w", err)
 	}
-	defer func() { _ = f.Close() }()
-	for _, event := range events {
-		if err := writeEvent(f, event); err != nil {
-			return err
+	tmp := f.Name()
+	werr := func() error {
+		for _, event := range events {
+			if err := writeEvent(f, event); err != nil {
+				return err
+			}
 		}
+		if err := f.Sync(); err != nil {
+			return fmt.Errorf("failed to sync session file: %w", err)
+		}
+		return nil
+	}()
+	if cerr := f.Close(); werr == nil && cerr != nil {
+		werr = fmt.Errorf("failed to close session file: %w", cerr)
 	}
-	if err := f.Sync(); err != nil {
-		return fmt.Errorf("failed to sync session file: %w", err)
+	if werr == nil && sm.rewriteFault != nil {
+		werr = sm.rewriteFault()
+	}
+	if werr != nil {
+		_ = os.Remove(tmp)
+		return werr
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return fmt.Errorf("failed to replace session file: %w", err)
 	}
 	sm.recordOnDisk = s.Record
 	return nil
@@ -168,13 +193,34 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		return fmt.Errorf("failed to inspect session file: %w", err)
 	}
 	size := info.Size()
+	out := &countingWriter{w: f}
 	defer func() {
 		// A failed append leaves the file as it found it. Otherwise the
 		// caller's retry (it keeps the old offset) writes the same messages
 		// again, and the loader would replay duplicates over a snapshot that
 		// already counted them.
 		if retErr != nil {
-			_ = f.Truncate(size)
+			// Only roll back if this save's own writes are all that was
+			// added. If the file grew by anything else, another writer
+			// appended to it, and truncating would erase their save; keep
+			// it and report instead (a duplicate is recoverable, a lost
+			// save is not).
+			if now, serr := os.Stat(path); serr == nil && now.Size() != size+out.n {
+				retErr = fmt.Errorf("%w (the file changed during the save, so it was not rolled back)", retErr)
+				_ = f.Close()
+				return
+			}
+			truncate := func(n int64) error { return truncateThroughWriteHandle(f, path, n) }
+			if sm.truncateFault != nil {
+				truncate = func(int64) error { return sm.truncateFault() }
+			}
+			if terr := truncate(size); terr != nil {
+				// Partial events may remain, and a plain retry would
+				// duplicate them. Say so, and make the next save rewrite
+				// the file whole.
+				sm.needsRewrite = true
+				retErr = fmt.Errorf("%w (the rollback also failed, the next save rewrites the session file: %v)", retErr, terr)
+			}
 		}
 		_ = f.Close()
 	}()
@@ -184,7 +230,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		if err != nil {
 			return fmt.Errorf("failed to marshal message: %w", err)
 		}
-		if err := writeEvent(f, storeEvent{Kind: "message", Message: rawPtr(raw)}); err != nil {
+		if err := writeEvent(out, storeEvent{Kind: "message", Message: rawPtr(raw)}); err != nil {
 			return err
 		}
 	}
@@ -201,7 +247,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 		// next save retries, and the loader's replay covers the gap.
 		if n, err := countMessageEventsChecked(path); err == nil {
 			rec := s.Record
-			if err := writeEvent(f, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
+			if err := writeEvent(out, storeEvent{Kind: "record", Record: &rec, Msgs: &n}); err != nil {
 				return err
 			}
 			wroteRecord = true
@@ -217,7 +263,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 	// Rolling meta rides along on every save: one short line, and the
 	// loader folds the latest over.
 	meta := storeMeta{Model: s.Model, Persona: s.Persona, Turns: s.Turns, PlanMode: s.PlanMode, ToolLimit: s.ToolLimit}
-	if err := writeEvent(f, storeEvent{Kind: "meta", Meta: &meta}); err != nil {
+	if err := writeEvent(out, storeEvent{Kind: "meta", Meta: &meta}); err != nil {
 		return err
 	}
 	if err := f.Sync(); err != nil {
@@ -231,7 +277,7 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 	return nil
 }
 
-func writeEvent(f *os.File, event storeEvent) error {
+func writeEvent(f io.Writer, event storeEvent) error {
 	line, err := json.Marshal(event)
 	if err != nil {
 		return fmt.Errorf("failed to marshal store event: %w", err)
@@ -281,4 +327,32 @@ func (sm *SessionManager) migrateLegacySessionFiles() int {
 	}
 	sm.current = nil
 	return converted
+}
+
+// truncateThroughWriteHandle cuts the file at path back to size using a fresh
+// write handle. The append handle cannot do it everywhere: on Windows a file
+// opened with O_APPEND has no right to set its end, so truncating through it
+// fails and a rolled-back append would silently stay in the file. The append
+// handle is closed first so the two never overlap.
+func truncateThroughWriteHandle(appendHandle *os.File, path string, size int64) error {
+	_ = appendHandle.Close()
+	w, err := os.OpenFile(path, os.O_WRONLY, 0o600)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = w.Close() }()
+	return w.Truncate(size)
+}
+
+// countingWriter counts the bytes that actually reached the file, so a
+// rollback can tell whether anything but this save's own writes is there.
+type countingWriter struct {
+	w io.Writer
+	n int64
+}
+
+func (c *countingWriter) Write(p []byte) (int, error) {
+	n, err := c.w.Write(p)
+	c.n += int64(n)
+	return n, err
 }

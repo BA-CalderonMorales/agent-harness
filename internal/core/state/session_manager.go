@@ -32,7 +32,14 @@ type SessionManager struct {
 	// appendFault is a test seam: when set, an append calls it after its
 	// messages and record are written and before its meta line, and an
 	// error aborts the save there. Production leaves it nil.
-	appendFault  func() error
+	appendFault func() error
+	// truncateFault is a test seam: when set, it stands in for the rollback
+	// truncate of a failed append, and an error simulates a failed rollback.
+	truncateFault func() error
+	// needsRewrite is set when a failed append could not be rolled back, so
+	// the file may end in partial events; the next save rewrites it whole.
+	needsRewrite bool
+	rewriteFault func() error // test seam: fails a rewrite after its temp file is written, before the rename
 	sessionMetas map[string]metaStamp
 }
 
@@ -141,10 +148,11 @@ func (sm *SessionManager) SaveCurrent() (string, error) {
 	// Compaction (or Clear) shrinks the transcript below what is on
 	// disk: rewrite. Otherwise append only the delta.
 	onDisk := sm.appendOffset
-	if onDisk > len(sm.current.Messages) {
+	if onDisk > len(sm.current.Messages) || sm.needsRewrite {
 		if err := sm.createSessionFile(path); err != nil {
 			return "", err
 		}
+		sm.needsRewrite = false
 		sm.appendOffset = len(sm.current.Messages)
 		return path, nil
 	}

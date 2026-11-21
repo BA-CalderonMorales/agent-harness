@@ -98,3 +98,53 @@ func TestVerifiedHandlesHereStringsAndQuotedDelimiters(t *testing.T) {
 		})
 	}
 }
+
+// Inside double quotes a backslash only escapes $, `, ", \ and a newline;
+// before an ordinary letter it stays. So <<"E\OF" closes at the line E\OF,
+// not at EOF, and the check after that line is a real check.
+func TestVerifiedKeepsBackslashesInDoubleQuotedDelimiters(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"backslash before a letter stays", "cat <<\"E\\OF\"\nbody\nE\\OF\ngo test ./...", true},
+		{"backslash before a letter, body hides a check", "cat <<\"E\\OF\"\ngo test ./...\nE\\OF", false},
+		{"escaped dollar is unescaped", "cat <<\"E\\$F\"\nbody\nE$F\ngo vet ./...", true},
+		{"escaped quote is unescaped", "cat <<\"E\\\"F\"\nbody\nE\"F\nmake verify", true},
+		{"single quotes keep every backslash", "cat <<'E\\OF'\nbody\nE\\OF\ngo test ./...", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("d1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v (cmds %v), want a check recorded: %v", r.Verified, r.Cmds, c.want)
+			}
+		})
+	}
+}
+
+// A heredoc delimiter is only a delimiter: shell separators inside it must not
+// become commands in the stored text. cat <<"X';pytest" runs cat and nothing
+// else, however the delimiter reads when written back.
+func TestVerifiedIgnoresSeparatorsInsideHeredocDelimiters(t *testing.T) {
+	cases := []struct {
+		name string
+		cmd  string
+		want bool
+	}{
+		{"semicolon in the delimiter", "cat <<\"X';pytest\"\nbody\nX';pytest", false},
+		{"and-and in the delimiter", "cat <<\"X&&go test ./...\"\nbody\nX&&go test ./...", false},
+		{"pipe in the delimiter", "cat <<\"X|make verify\"\nbody\nX|make verify", false},
+		{"newline-free redirect in the delimiter", "cat <<\"X>go vet\"\nbody\nX>go vet", false},
+		{"a real check after such a heredoc still counts", "cat <<\"X';pytest\"\nbody\nX';pytest\nmake verify", true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			r := fold(bashCall("s1", c.cmd, "ok", false))
+			if got := len(r.Verified) == 1; got != c.want {
+				t.Fatalf("verified = %v (cmds %v), want a check recorded: %v", r.Verified, r.Cmds, c.want)
+			}
+		})
+	}
+}
