@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -98,6 +100,30 @@ func TestTogglingLabRowPersists(t *testing.T) {
 	delegate.OnSettingChange(config.LabLoopTrack, "false")
 	if v, ok := readUserSettings(t)[config.LabLoopTrack]; ok || app.config.LabEnabled(config.LabLoopTrack) {
 		t.Fatalf("toggling back to the default left loop_track = %v saved", v)
+	}
+}
+
+// A project layer that turns a lab on must not win back a Settings
+// toggle on the next boot.
+func TestTogglingLabOffOverProjectLayerSurvivesRestart(t *testing.T) {
+	journeyHome(t)
+	if err := os.MkdirAll(".agent-harness", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(".agent-harness", "settings.json"), []byte(`{"loop_track": true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := bootJourneyApp(t)
+	if !app.config.LabEnabled(config.LabLoopTrack) {
+		t.Fatal("project layer loop_track=true did not apply")
+	}
+
+	delegateFor(t, app).OnSettingChange(config.LabLoopTrack, "false")
+	if v := readUserSettings(t)[config.LabLoopTrack]; v != false {
+		t.Fatalf("user layer loop_track = %v, want an explicit false over the project value", v)
+	}
+	if bootJourneyApp(t).config.LabEnabled(config.LabLoopTrack) {
+		t.Fatal("the project layer turned loop_track back on after a restart")
 	}
 }
 

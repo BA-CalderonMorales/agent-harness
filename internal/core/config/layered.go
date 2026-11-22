@@ -114,10 +114,12 @@ type LayeredConfig struct {
 
 	// LabsSaved holds the Labs choices a settings layer (or this
 	// session's Settings tab) made, keyed by Lab.Key. LabsPinned holds
-	// the ones the environment pinned for this session. Read a flag
-	// through LabEnabled, never from these maps directly.
-	LabsSaved  map[string]bool
-	LabsPinned map[string]bool
+	// the ones the environment pinned for this session, and
+	// labsInherited the ones a project layer (below the user layer)
+	// sets. Read a flag through LabEnabled, never from these maps.
+	LabsSaved     map[string]bool
+	LabsPinned    map[string]bool
+	labsInherited map[string]bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.
@@ -267,6 +269,7 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 		}
 
 		dropNoOpValues(data)
+		extractLabs(config, entry.Source, data)
 		ll.deepMerge(config.merged, data)
 		config.loadedEntries = append(config.loadedEntries, entry)
 	}

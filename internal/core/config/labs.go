@@ -79,20 +79,30 @@ func applyLabEnvOverrides(config *LayeredConfig) {
 	}
 }
 
-// extractLabs reads every lab a settings layer saved.
-func extractLabs(config *LayeredConfig, values map[string]interface{}) {
+// extractLabs reads every lab one settings layer sets. A project layer
+// sits below the user layer, so its value is inherited, not the user's
+// choice: it is never copied into the user layer on save. The user and
+// local layers hold the user's own choices.
+func extractLabs(config *LayeredConfig, source ConfigSource, values map[string]interface{}) {
 	for _, lab := range Labs {
-		if v, ok := boolValue(values, lab.Key); ok {
-			if config.LabsSaved == nil {
-				config.LabsSaved = map[string]bool{}
-			}
-			config.LabsSaved[lab.Key] = v
+		v, ok := boolValue(values, lab.Key)
+		if !ok {
+			continue
 		}
+		target := &config.LabsSaved
+		if source == SourceProject {
+			target = &config.labsInherited
+		}
+		if *target == nil {
+			*target = map[string]bool{}
+		}
+		(*target)[lab.Key] = v
 	}
 }
 
 // LabEnabled reports whether the lab is on: an environment pin wins, then
-// a saved choice, then the registry Default. An unregistered key is off.
+// the user's saved choice, then a value inherited from a project layer,
+// then the registry Default. An unregistered key is off.
 func (c *LayeredConfig) LabEnabled(key string) bool {
 	lab, ok := LookupLab(key)
 	if !ok {
@@ -104,6 +114,9 @@ func (c *LayeredConfig) LabEnabled(key string) bool {
 	if v, ok := c.LabsSaved[key]; ok {
 		return v
 	}
+	if v, ok := c.labsInherited[key]; ok {
+		return v
+	}
 	return lab.Default
 }
 
@@ -113,15 +126,16 @@ func (c *LayeredConfig) LabPinned(key string) bool {
 	return ok
 }
 
-// SetLab records the user's choice for a lab. Choosing the Default clears
-// the choice instead of storing it, so the lab keeps following the
-// registry.
+// SetLab records the user's choice for a lab. With no lower layer setting
+// the lab, choosing the Default clears the choice instead of storing it,
+// so the lab keeps following the registry. When a project layer sets it,
+// the choice is always stored, so it outlasts the inherited value.
 func (c *LayeredConfig) SetLab(key string, enabled bool) {
 	lab, ok := LookupLab(key)
 	if !ok {
 		return
 	}
-	if enabled == lab.Default {
+	if _, inherited := c.labsInherited[key]; !inherited && enabled == lab.Default {
 		c.ClearLab(key)
 		return
 	}
@@ -131,7 +145,8 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 	c.LabsSaved[key] = enabled
 }
 
-// ClearLab drops the saved choice so the lab returns to its Default.
+// ClearLab drops the saved choice so the lab returns to the value a
+// project layer sets, or else its Default.
 func (c *LayeredConfig) ClearLab(key string) {
 	delete(c.LabsSaved, key)
 }

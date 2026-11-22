@@ -50,3 +50,60 @@ func TestSaveSettingsNilValueRemovesKey(t *testing.T) {
 		t.Fatalf("theme = %v, want the unrelated key kept", saved["theme"])
 	}
 }
+
+// loadLabs reloads every layer the way a fresh boot does.
+func loadLabs(t *testing.T, dir string) *LayeredConfig {
+	t.Helper()
+	cfg, err := NewLayeredLoader(dir).Load()
+	if err != nil {
+		t.Fatalf("Load() error = %v", err)
+	}
+	return cfg
+}
+
+// A lab a project layer turns on must be possible to turn off for good:
+// the user layer stores the explicit choice, and clearing it falls back
+// to the inherited project value.
+func TestLabToggleOverProjectLayerIsDurable(t *testing.T) {
+	dir := isolateLabs(t)
+	writeProjectSettings(t, dir, `{"loop_track": true}`)
+
+	cfg := loadLabs(t, dir)
+	if !cfg.LabEnabled(LabLoopTrack) {
+		t.Fatal("project layer loop_track=true did not apply")
+	}
+	if v := cfg.LabSettingsValues()[LabLoopTrack]; v != nil {
+		t.Fatalf("an inherited project value would be copied into the user layer as %v", v)
+	}
+
+	cfg.SetLab(LabLoopTrack, false)
+	if err := NewLayeredLoader(dir).SaveSettings(SourceUser, cfg.LabSettingsValues()); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	if loadLabs(t, dir).LabEnabled(LabLoopTrack) {
+		t.Fatal("toggled off over a project layer, but the next boot turned it back on")
+	}
+
+	cfg = loadLabs(t, dir)
+	cfg.ClearLab(LabLoopTrack)
+	if !cfg.LabEnabled(LabLoopTrack) {
+		t.Fatal("clearing did not fall back to the inherited project value")
+	}
+	if err := NewLayeredLoader(dir).SaveSettings(SourceUser, cfg.LabSettingsValues()); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+	if !loadLabs(t, dir).LabEnabled(LabLoopTrack) {
+		t.Fatal("after clearing, the next boot did not inherit the project value")
+	}
+}
+
+// Without a lower layer, choosing the Default leaves no key behind.
+func TestLabToggleToDefaultWithoutLowerLayerRemovesKey(t *testing.T) {
+	dir := isolateLabs(t)
+	cfg := loadLabs(t, dir)
+	cfg.SetLab(LabLoopTrack, true)
+	cfg.SetLab(LabLoopTrack, false)
+	if v, ok := cfg.LabSettingsValues()[LabLoopTrack]; !ok || v != nil {
+		t.Fatalf("loop_track = %v (present %v), want nil so the save removes the key", v, ok)
+	}
+}
