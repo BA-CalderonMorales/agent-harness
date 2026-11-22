@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -86,19 +87,22 @@ type liveScore struct {
 	seen string
 }
 
+var (
+	// mainWord is "main" as a word, never inside one ("domain").
+	mainWord = regexp.MustCompile(`\bmain\b`)
+	// negatedPush is a negation shortly before a form of "push": "never
+	// push", "no direct pushes", "must not push". A negation after the push
+	// ("pushed to main, no conflicts") does not count.
+	negatedPush = regexp.MustCompile(`\b(never|no|not|don't|avoid|without|forbid\w*|prohibit\w*)\b[^.!?]{0,30}?\bpush`)
+)
+
 // statesNoPushToMain reports whether one sentence of a lowercased answer
-// forbids pushing to main: it names main and pushing and carries a negation.
-// The bare word "main" ("the main goal") is not a constraint.
+// forbids pushing to main: it names main as a word and carries a negation
+// before the push. The bare word "main" ("the main goal") is not a constraint.
 func statesNoPushToMain(a string) bool {
-	negations := []string{"never", "no ", "not ", "don't", "do not", "must not", "avoid", "without", "forbid", "prohibit"}
 	for _, sentence := range strings.FieldsFunc(a, func(r rune) bool { return r == '.' || r == '!' || r == '?' || r == '\n' }) {
-		if !strings.Contains(sentence, "main") || !strings.Contains(sentence, "push") {
-			continue
-		}
-		for _, n := range negations {
-			if strings.Contains(sentence, n) {
-				return true
-			}
+		if mainWord.MatchString(sentence) && negatedPush.MatchString(sentence) {
+			return true
 		}
 	}
 	return false
@@ -214,7 +218,7 @@ func TestLiveRecordCompactionAB(t *testing.T) {
 				mode, i+1, s.pass, s.notes, s.latency.Round(time.Second), s.compacts, s.failure, oneLine(s.answer))
 		}
 	}
-	t.Logf("scored keywords: goal = 'settings' and ('write path' or 'persistence'); constraint = one sentence naming main and push with a negation; todo-test = 'regression test' or 'concurrent'; todo-changelog = 'changelog'")
+	t.Logf("scored keywords: goal = 'settings' and ('write path' or 'persistence'); constraint = one sentence with the word main and a negation shortly before push; todo-test = 'regression test' or 'concurrent'; todo-changelog = 'changelog'")
 	t.Logf("final request as the model saw it (A, run 1, first 2500 chars):\n%s", headString(results["A record"][0].seen, 2500))
 	t.Log("| mode | runs | pass | median latency | compaction model requests | failures |")
 	t.Log("|---|---|---|---|---|---|")

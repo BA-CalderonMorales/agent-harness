@@ -22,9 +22,15 @@ func TestLiveScoreRequiresTheNoPushToMainConstraint(t *testing.T) {
 		{"The goal is settings persistence on one write path. Never push directly to main. Pending: the regression test and the changelog.", true},
 		{"Goal: migrate settings persistence. Constraint: no direct pushes to the main branch. Pending: regression test, changelog.", true},
 		{"Goal: settings persistence. We must not push to `main`. Still pending: concurrent save test, changelog entry.", true},
+		// The two answers the real model gave in the live A/B.
+		{"The goal is to migrate settings persistence to a single write path while ensuring no direct pushes occur to the main branch.", true},
+		{"**Constraint:** Never push code directly to `main` until verified; use feature branches or PRs.", true},
 		// "main" appears, but no constraint is stated.
 		{"The main goal is settings persistence. The regression test and changelog are pending.", false},
 		{"Goal: settings persistence. Pushed the fix to main. Pending: regression test, changelog.", false},
+		// A negation after the push, or "main" inside another word, is not it.
+		{"Goal: settings persistence. Pushed to main, no conflicts. Pending: regression test, changelog.", false},
+		{"Goal: settings persistence. Never push directly to the domain registry. Pending: regression test, changelog.", false},
 	}
 	for _, c := range cases {
 		_, missed := liveScoreAnswer(c.answer)
