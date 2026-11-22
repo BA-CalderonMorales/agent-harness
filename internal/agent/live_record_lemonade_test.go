@@ -126,25 +126,46 @@ func liveScoreAnswer(answer string) (bool, []string) {
 	return pass, missed
 }
 
-func liveHealthModel(t *testing.T, root string) string {
-	t.Helper()
-	resp, err := http.Get(root + "/api/v1/health")
+// liveHealthTimeout bounds the health probe, body included. A server that
+// accepts the connection and then stalls must not hold the test until its
+// 60-minute timeout.
+const liveHealthTimeout = 15 * time.Second
+
+type liveHealth struct {
+	ModelLoaded string `json:"model_loaded"`
+	Models      []struct {
+		Name string `json:"model_name"`
+		Busy bool   `json:"is_busy"`
+		Opts struct {
+			Ctx int `json:"ctx_size"`
+		} `json:"recipe_options"`
+	} `json:"all_models_loaded"`
+}
+
+// fetchLiveHealth reads /api/v1/health under ctx, which covers the request
+// and the body decode.
+func fetchLiveHealth(ctx context.Context, root string) (liveHealth, error) {
+	var body liveHealth
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, root+"/api/v1/health", nil)
 	if err != nil {
-		t.Fatalf("health: %v (is Lemonade running?)", err)
+		return body, err
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return body, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	var body struct {
-		ModelLoaded string `json:"model_loaded"`
-		Models      []struct {
-			Name string `json:"model_name"`
-			Busy bool   `json:"is_busy"`
-			Opts struct {
-				Ctx int `json:"ctx_size"`
-			} `json:"recipe_options"`
-		} `json:"all_models_loaded"`
-	}
-	if err := json.NewDecoder(resp.Body).Decode(&body); err != nil {
-		t.Fatalf("health body: %v", err)
+	err = json.NewDecoder(resp.Body).Decode(&body)
+	return body, err
+}
+
+func liveHealthModel(t *testing.T, root string) string {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), liveHealthTimeout)
+	defer cancel()
+	body, err := fetchLiveHealth(ctx, root)
+	if err != nil {
+		t.Fatalf("health: %v (is Lemonade running?)", err)
 	}
 	for _, m := range body.Models {
 		if m.Name == body.ModelLoaded {

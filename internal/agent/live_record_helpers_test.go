@@ -1,8 +1,12 @@
 package agent
 
 import (
+	"context"
+	"net/http"
+	"net/http/httptest"
 	"slices"
 	"testing"
+	"time"
 )
 
 // The live A/B scorer runs only against a real server, so its checks are
@@ -25,5 +29,31 @@ func TestLiveScoreRequiresTheNoPushToMainConstraint(t *testing.T) {
 		if got := !slices.Contains(missed, "constraint"); got != c.want {
 			t.Errorf("constraint scored %v, want %v, for %q", got, c.want, c.answer)
 		}
+	}
+}
+
+// A server that accepts the health request and then stalls must not hold the
+// probe past its deadline.
+func TestLiveHealthProbeHonorsItsDeadline(t *testing.T) {
+	release := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-release:
+		case <-time.After(3 * time.Second):
+		}
+		_, _ = w.Write([]byte(`{"model_loaded":"late"}`))
+	}))
+	defer server.Close()
+	defer close(release)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := fetchLiveHealth(ctx, server.URL)
+	if err == nil {
+		t.Fatal("a stalled health request returned without error")
+	}
+	if elapsed := time.Since(start); elapsed > 2*time.Second {
+		t.Fatalf("the probe took %s; the 200ms deadline did not stop it", elapsed)
 	}
 }
