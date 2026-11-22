@@ -75,3 +75,40 @@ func TestTodoProposalWithoutAnIDAppliesImmediately(t *testing.T) {
 		t.Fatalf("todos = %+v, want the id-less plan applied", r.Todos)
 	}
 }
+
+// Two proposals rejected in one batch: the rollback must reach the plan that
+// was accepted before either, whichever order the rejections arrive in.
+func TestTwoRejectedProposalsRollBackToTheLastAcceptedPlan(t *testing.T) {
+	accepted := []Todo{{Text: "p", Status: "pending"}}
+	for name, order := range map[string][2]string{"oldest first": {"t2", "t3"}, "newest first": {"t3", "t2"}} {
+		t.Run(name, func(t *testing.T) {
+			r := fold(
+				one(user("ship it")),
+				one(todoCall("t1", [2]string{"p", "pending"})), one(result("t1", "ok", false)),
+				one(todoCall("t2", [2]string{"a", "pending"})),
+				one(todoCall("t3", [2]string{"b", "pending"})),
+				one(result(order[0], "rejected", true)),
+				one(result(order[1], "rejected", true)),
+			)
+			if !reflect.DeepEqual(r.Todos, accepted) {
+				t.Fatalf("todos = %+v, want the accepted plan %+v", r.Todos, accepted)
+			}
+		})
+	}
+}
+
+// Two proposals can carry the same plan. Identity is the proposal, not its
+// content: rejecting the older one while the newer is current changes nothing.
+func TestRejectingAnOlderIdenticalProposalKeepsTheCurrentOne(t *testing.T) {
+	r := fold(
+		one(user("ship it")),
+		one(todoCall("t1", [2]string{"p", "pending"})), one(result("t1", "ok", false)),
+		one(todoCall("t2", [2]string{"a", "pending"})),
+		one(todoCall("t3", [2]string{"a", "pending"})),
+		one(result("t3", "ok", false)),
+		one(result("t2", "rejected", true)),
+	)
+	if want := []Todo{{Text: "a", Status: "pending"}}; !reflect.DeepEqual(r.Todos, want) {
+		t.Fatalf("todos = %+v, want the accepted identical plan %+v", r.Todos, want)
+	}
+}
