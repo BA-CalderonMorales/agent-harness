@@ -237,6 +237,21 @@ func TestLiveRecordCompactionAB(t *testing.T) {
 		sort.Ints(reqs)
 		t.Logf("| %s | %d | %d/%d | %s | %v | %d |", mode, len(rs), passes, len(rs), lat[len(lat)/2].Round(time.Second), reqs, fails)
 	}
+	if err := liveRecordVerdict(results); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// liveRecordVerdict fails the smoke test when no record-backed run completed.
+// Summary-only failures are an expected comparison outcome and never fail it;
+// a record mode that never finishes a turn is the regression this test guards.
+func liveRecordVerdict(results map[string][]liveScore) error {
+	for _, r := range results["A record"] {
+		if r.failure == "" {
+			return nil
+		}
+	}
+	return fmt.Errorf("no record-backed run completed (%d runs)", len(results["A record"]))
 }
 
 func oneLine(s string) string {

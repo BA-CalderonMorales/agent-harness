@@ -57,3 +57,17 @@ func TestLiveHealthProbeHonorsItsDeadline(t *testing.T) {
 		t.Fatalf("the probe took %s; the 200ms deadline did not stop it", elapsed)
 	}
 }
+
+func TestLiveRecordVerdictFailsOnlyWhenNoRecordRunCompleted(t *testing.T) {
+	failed := liveScore{failure: "automatic context compaction failed"}
+	ok := liveScore{answer: "an answer"}
+	if err := liveRecordVerdict(map[string][]liveScore{"A record": {failed, failed}, "B summary-only": {ok}}); err == nil {
+		t.Error("every record run failed, want the smoke test to fail")
+	}
+	if err := liveRecordVerdict(map[string][]liveScore{"A record": {failed, ok}, "B summary-only": {failed, failed}}); err != nil {
+		t.Errorf("one record run completed and summary-only failures are expected, got %v", err)
+	}
+	if err := liveRecordVerdict(map[string][]liveScore{}); err == nil {
+		t.Error("no record runs at all, want the smoke test to fail")
+	}
+}
