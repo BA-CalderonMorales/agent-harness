@@ -86,6 +86,24 @@ type liveScore struct {
 	seen string
 }
 
+// statesNoPushToMain reports whether one sentence of a lowercased answer
+// forbids pushing to main: it names main and pushing and carries a negation.
+// The bare word "main" ("the main goal") is not a constraint.
+func statesNoPushToMain(a string) bool {
+	negations := []string{"never", "no ", "not ", "don't", "do not", "must not", "avoid", "without", "forbid", "prohibit"}
+	for _, sentence := range strings.FieldsFunc(a, func(r rune) bool { return r == '.' || r == '!' || r == '?' || r == '\n' }) {
+		if !strings.Contains(sentence, "main") || !strings.Contains(sentence, "push") {
+			continue
+		}
+		for _, n := range negations {
+			if strings.Contains(sentence, n) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func liveScoreAnswer(answer string) (bool, []string) {
 	a := strings.ToLower(answer)
 	checks := []struct {
@@ -93,7 +111,7 @@ func liveScoreAnswer(answer string) (bool, []string) {
 		ok   bool
 	}{
 		{"goal", strings.Contains(a, "settings") && (strings.Contains(a, "write path") || strings.Contains(a, "persistence"))},
-		{"constraint", strings.Contains(a, "main")},
+		{"constraint", statesNoPushToMain(a)},
 		{"todo-test", strings.Contains(a, "regression test") || strings.Contains(a, "concurrent")},
 		{"todo-changelog", strings.Contains(a, "changelog")},
 	}
@@ -175,7 +193,7 @@ func TestLiveRecordCompactionAB(t *testing.T) {
 				mode, i+1, s.pass, s.notes, s.latency.Round(time.Second), s.compacts, s.failure, oneLine(s.answer))
 		}
 	}
-	t.Logf("scored keywords: goal = 'settings' and ('write path' or 'persistence'); constraint = 'main'; todo-test = 'regression test' or 'concurrent'; todo-changelog = 'changelog'")
+	t.Logf("scored keywords: goal = 'settings' and ('write path' or 'persistence'); constraint = one sentence naming main and push with a negation; todo-test = 'regression test' or 'concurrent'; todo-changelog = 'changelog'")
 	t.Logf("final request as the model saw it (A, run 1, first 2500 chars):\n%s", headString(results["A record"][0].seen, 2500))
 	t.Log("| mode | runs | pass | median latency | compaction model requests | failures |")
 	t.Log("|---|---|---|---|---|---|")
