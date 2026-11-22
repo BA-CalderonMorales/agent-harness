@@ -19,16 +19,24 @@ const (
 )
 
 // earlierUserRequests lists the user's own words in the removed history,
-// oldest first, newest few only. The first user message is the record's goal
-// and is skipped. The record keeps the goal and a few constraint sentences,
-// but a later instruction such as a changed technology choice is neither, so
-// without this a compaction would silently drop it. Tool results are user-role
-// messages too; only text blocks count.
-func earlierUserRequests(removed []types.Message) []string {
+// oldest first, newest few only. The record keeps the goal and a few
+// constraint sentences, but a later instruction such as a changed technology
+// choice is neither, so without this a compaction would silently drop it.
+//
+// The message that is the record's goal is skipped; any other user message is
+// a request, including the first one left after an earlier compaction. A
+// record message from an earlier compaction contributes the requests it
+// carried, so they survive every later compaction too. Tool results are
+// user-role messages as well; only text blocks count.
+func earlierUserRequests(removed []types.Message, goal string) []string {
 	var out []string
-	seenFirst := false
 	for _, m := range removed {
-		if m.Role != types.RoleUser {
+		switch m.Role {
+		case types.RoleSystem:
+			out = append(out, carriedIn(m)...)
+			continue
+		case types.RoleUser:
+		default:
 			continue
 		}
 		var text strings.Builder
@@ -39,22 +47,56 @@ func earlierUserRequests(removed []types.Message) []string {
 			}
 		}
 		line := strings.Join(strings.Fields(text.String()), " ")
-		if line == "" {
+		if line == "" || isGoal(line, goal) {
 			continue
 		}
-		if !seenFirst {
-			seenFirst = true
-			continue
-		}
-		if r := []rune(line); len(r) > maxCarriedRequestRunes {
-			line = string(r[:maxCarriedRequestRunes-1]) + "…"
-		}
-		out = append(out, line)
+		out = append(out, clipRequest(line))
 	}
 	if len(out) > maxCarriedRequests {
 		out = out[len(out)-maxCarriedRequests:]
 	}
 	return out
+}
+
+// isGoal reports whether a whitespace-collapsed message is the one the record
+// took its goal from. The record clips a long goal and ends it with "…".
+func isGoal(line, goal string) bool {
+	if goal == "" {
+		return false
+	}
+	if line == goal {
+		return true
+	}
+	head, cut := strings.CutSuffix(goal, "…")
+	return cut && strings.HasPrefix(line, strings.TrimRight(head, " "))
+}
+
+// carriedIn returns the requests an earlier record message carried.
+func carriedIn(m types.Message) []string {
+	var out []string
+	for _, b := range m.Content {
+		tb, ok := b.(types.TextBlock)
+		if !ok || !strings.HasPrefix(tb.Text, recordSummaryLead) {
+			continue
+		}
+		_, section, found := strings.Cut(tb.Text, carriedRequestsTitle)
+		if !found {
+			continue
+		}
+		for _, line := range strings.Split(section, "\n") {
+			if req, ok := strings.CutPrefix(line, "- "); ok && req != "" {
+				out = append(out, req)
+			}
+		}
+	}
+	return out
+}
+
+func clipRequest(line string) string {
+	if r := []rune(line); len(r) > maxCarriedRequestRunes {
+		return string(r[:maxCarriedRequestRunes-1]) + "…"
+	}
+	return line
 }
 
 func requestsSection(reqs []string) string {

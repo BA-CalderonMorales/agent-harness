@@ -110,3 +110,50 @@ func TestCarriedUserRequestsShareTheRecordBudget(t *testing.T) {
 		}
 	}
 }
+
+// A carried request lives in the record message. The next compaction removes
+// that message, so it must carry the request forward again.
+func TestCarriedUserRequestsSurviveASecondCompaction(t *testing.T) {
+	loop := NewLoop(&failOnSummaryClient{t: t})
+	msgs := requestsSession()
+	state := &loopState{messages: msgs, record: record.Fold(msgs), toolUseContext: edgeToolContext(nil)}
+	const target = 1000
+	if _, handled, err := loop.compactFromRecord(state, len(msgs)-1, estimateTokens(msgs), target); err != nil || !handled {
+		t.Fatalf("first compaction: handled=%v err=%v", handled, err)
+	}
+
+	state.add(assistantText(strings.Repeat("more progress ", 1500)))
+	state.add(userText("next"))
+	if _, handled, err := loop.compactFromRecord(state, len(state.messages)-1, estimateTokens(state.messages), target); err != nil || !handled {
+		t.Fatalf("second compaction: handled=%v err=%v", handled, err)
+	}
+	text := firstText(state.messages)
+	if !strings.Contains(text, "Use SQLite rather than JSON") {
+		t.Fatalf("the requirement did not survive the second compaction:\n%s", text)
+	}
+	if !strings.Contains(text, "- continue") {
+		t.Fatalf("the user turn removed by the second compaction was dropped:\n%s", text)
+	}
+	if strings.Count(text, carriedRequestsTitle) != 1 {
+		t.Fatalf("want one requests section, not a nested copy:\n%s", text)
+	}
+}
+
+// Only the goal itself is skipped. After an earlier compaction the first user
+// message in the removed range is an ordinary request and must be carried.
+func TestTheFirstRemovedUserMessageIsCarriedWhenItIsNotTheGoal(t *testing.T) {
+	loop := NewLoop(&failOnSummaryClient{t: t})
+	rec := record.Fold([]types.Message{userText("Migrate settings persistence to one write path.")})
+	msgs := []types.Message{
+		userText("Keep the SQLite store behind the interface."),
+		assistantText(strings.Repeat("progress ", 2000)),
+		userText("go"),
+	}
+	state := &loopState{messages: msgs, record: rec, toolUseContext: edgeToolContext(nil)}
+	if _, handled, err := loop.compactFromRecord(state, len(msgs)-1, estimateTokens(msgs), 1000); err != nil || !handled {
+		t.Fatalf("handled=%v err=%v", handled, err)
+	}
+	if text := firstText(state.messages); !strings.Contains(text, "Keep the SQLite store behind the interface.") {
+		t.Fatalf("a non-goal first message was dropped as the goal:\n%s", text)
+	}
+}

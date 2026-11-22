@@ -48,7 +48,7 @@ func (l *Loop) compactFromRecord(state *loopState, keepStart, current, target in
 	var after int
 	for start := keepStart; start <= last; start++ {
 		suffix := state.messages[start:]
-		reqs := earlierUserRequests(state.messages[:start])
+		reqs := earlierUserRequests(state.messages[:start], state.record.Goal)
 		for _, tokens := range renderBudgets(budget) {
 			body := recordBody(state.record, reqs, tokens)
 			if body == "" {
