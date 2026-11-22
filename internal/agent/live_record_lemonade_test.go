@@ -254,6 +254,28 @@ func liveRecordVerdict(results map[string][]liveScore) error {
 	return fmt.Errorf("no record-backed run completed (%d runs)", len(results["A record"]))
 }
 
+// liveEventBuffer is the stream buffer for a live run. A drain reads it, so
+// the size only smooths bursts; it is not what keeps the run from blocking.
+const liveEventBuffer = 1024
+
+// runDrained runs a query with a stream channel that a goroutine drains, then
+// closes the channel once the query returns. Nothing reads a live run's events,
+// and a full buffer would block the loop on an unguarded send, past the run's
+// own deadline.
+func runDrained(run func(out chan<- types.StreamEvent) Terminal) Terminal {
+	events := make(chan types.StreamEvent, liveEventBuffer)
+	drained := make(chan struct{})
+	go func() {
+		defer close(drained)
+		for range events {
+		}
+	}()
+	terminal := run(events)
+	close(events)
+	<-drained
+	return terminal
+}
+
 func oneLine(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
 	if len(s) > 400 {
@@ -287,7 +309,9 @@ func liveRun(t *testing.T, baseURL, model string, history []types.Message, withR
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Minute)
 	defer cancel()
 	start := time.Now()
-	terminal := loop.queryLoop(ctx, params, state, make(chan types.StreamEvent, 1024))
+	terminal := runDrained(func(out chan<- types.StreamEvent) Terminal {
+		return loop.queryLoop(ctx, params, state, out)
+	})
 	s := liveScore{latency: time.Since(start), compacts: counting.summaries.Load()}
 	counting.mu.Lock()
 	for _, m := range counting.lastMain.Messages {

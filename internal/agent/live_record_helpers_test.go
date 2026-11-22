@@ -7,6 +7,8 @@ import (
 	"slices"
 	"testing"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // The live A/B scorer runs only against a real server, so its checks are
@@ -69,5 +71,27 @@ func TestLiveRecordVerdictFailsOnlyWhenNoRecordRunCompleted(t *testing.T) {
 	}
 	if err := liveRecordVerdict(map[string][]liveScore{}); err == nil {
 		t.Error("no record runs at all, want the smoke test to fail")
+	}
+}
+
+// A run that emits more events than the buffer holds must still finish:
+// something has to read the stream while the query runs.
+func TestRunDrainedDoesNotBlockWhenEventsOverflowTheBuffer(t *testing.T) {
+	done := make(chan Terminal, 1)
+	go func() {
+		done <- runDrained(func(out chan<- types.StreamEvent) Terminal {
+			for i := 0; i < 4*liveEventBuffer; i++ {
+				out <- types.StreamRequestStart{}
+			}
+			return Terminal{Reason: TerminalReasonComplete}
+		})
+	}()
+	select {
+	case terminal := <-done:
+		if terminal.Reason != TerminalReasonComplete {
+			t.Fatalf("terminal = %q, want the run's own result", terminal.Reason)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the run blocked on a full event buffer")
 	}
 }
