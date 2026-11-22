@@ -31,25 +31,25 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("FeatureFlag followed by IsFeatureFlagged returns true", prop.ForAll(
+	properties.Property("MarkPlanned followed by IsPlanned returns true", prop.ForAll(
 		func(name string) bool {
 			if name == "" {
 				return true
 			}
 			reg := NewSlashRegistry()
-			reg.FeatureFlag(name, "Coming soon")
-			return reg.IsFeatureFlagged(name)
+			reg.MarkPlanned(name, "Coming soon")
+			return reg.IsPlanned(name)
 		},
 		gen.AlphaString(),
 	))
 
-	properties.Property("Handle on a feature-flagged command returns coming soon", prop.ForAll(
+	properties.Property("Handle on a planned command returns coming soon", prop.ForAll(
 		func(name string) bool {
 			if name == "" {
 				return true
 			}
 			reg := NewSlashRegistry()
-			reg.FeatureFlag(name, "Coming soon")
+			reg.MarkPlanned(name, "Coming soon")
 			result, handled, err := reg.Handle("/" + name)
 			return err == nil && handled && strings.Contains(result, "Coming soon")
 		},
@@ -69,14 +69,14 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("Feature-flagged and registered commands parity across all discovery surfaces", prop.ForAll(
+	properties.Property("Planned and registered commands parity across all discovery surfaces", prop.ForAll(
 		func(regName string, flagName string) bool {
 			if regName == "" || flagName == "" || regName == flagName {
 				return true
 			}
 			reg := NewSlashRegistry()
 			reg.Register(regName, "registered desc", func(_ string) (string, error) { return "ok", nil })
-			reg.FeatureFlag(flagName, "feature flagged desc")
+			reg.MarkPlanned(flagName, "planned desc")
 
 			help := reg.GetHelp()
 			comps := reg.GetCompletions()
@@ -118,9 +118,9 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 				return false
 			}
 
-			// 2. Feature-flagged commands stay out of the dispatch
+			// 2. Planned commands stay out of the dispatch
 			// surfaces (completions, descriptions, infos) but are listed
-			// in /help under the Coming soon banner (the FeatureFlag
+			// in /help under the Coming soon banner (the MarkPlanned
 			// documented contract).
 			flaggedPresentInComps := false
 			for _, c := range comps {

@@ -20,17 +20,17 @@ type SlashHandler func(args string) (string, error)
 
 // SlashRegistry holds all slash commands
 type SlashRegistry struct {
-	commands     map[string]SlashHandler
-	help         map[string]string
-	featureFlags map[string]string
+	commands map[string]SlashHandler
+	help     map[string]string
+	planned  map[string]string
 }
 
 // NewSlashRegistry creates a new slash command registry
 func NewSlashRegistry() *SlashRegistry {
 	return &SlashRegistry{
-		commands:     make(map[string]SlashHandler),
-		help:         make(map[string]string),
-		featureFlags: make(map[string]string),
+		commands: make(map[string]SlashHandler),
+		help:     make(map[string]string),
+		planned:  make(map[string]string),
 	}
 }
 
@@ -40,22 +40,23 @@ func (sr *SlashRegistry) Register(name, description string, handler SlashHandler
 	sr.help[name] = description
 }
 
-// FeatureFlag marks a command as not yet available.
-// The command will appear in /help under "Coming Soon" and will return an
+// MarkPlanned marks a command as planned but not yet available. It is not
+// a Labs flag: a Labs flag (config.Labs) toggles a feature that exists,
+// while a planned command has no implementation yet. The command will appear in /help under "Coming Soon" and will return an
 // informational message when invoked.
-func (sr *SlashRegistry) FeatureFlag(name, description string) {
-	sr.featureFlags[name] = description
+func (sr *SlashRegistry) MarkPlanned(name, description string) {
+	sr.planned[name] = description
 }
 
-// IsFeatureFlagged returns true if the named command is feature-flagged.
-func (sr *SlashRegistry) IsFeatureFlagged(name string) bool {
-	_, ok := sr.featureFlags[name]
+// IsPlanned returns true if the named command is a planned command.
+func (sr *SlashRegistry) IsPlanned(name string) bool {
+	_, ok := sr.planned[name]
 	return ok
 }
 
-// FeatureFlagMessage returns the "coming soon" message for a flagged command.
-func (sr *SlashRegistry) FeatureFlagMessage(name string) string {
-	desc := sr.featureFlags[name]
+// PlannedMessage returns the "coming soon" message for a flagged command.
+func (sr *SlashRegistry) PlannedMessage(name string) string {
+	desc := sr.planned[name]
 	var b strings.Builder
 	fmt.Fprintf(&b, "/%s — coming soon\n", name)
 	fmt.Fprintf(&b, "  %s\n\n", desc)
@@ -75,8 +76,8 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 
 	cmd := ParseSlashCommand(input)
 
-	if sr.IsFeatureFlagged(cmd.Name) {
-		return sr.FeatureFlagMessage(cmd.Name), true, nil
+	if sr.IsPlanned(cmd.Name) {
+		return sr.PlannedMessage(cmd.Name), true, nil
 	}
 
 	handler, exists := sr.commands[cmd.Name]
@@ -181,17 +182,17 @@ func (sr *SlashRegistry) GetHelp() string {
 		lines = append(lines, "")
 	}
 
-	// Feature-flagged commands are invisible in /help otherwise: list
+	// Planned commands are invisible in /help otherwise: list
 	// them under a coming-soon banner so the plan is public knowledge.
 	var flagged []string
-	for name := range sr.featureFlags {
+	for name := range sr.planned {
 		flagged = append(flagged, name)
 	}
 	sort.Strings(flagged)
 	if len(flagged) > 0 {
 		lines = append(lines, "Coming soon:")
 		for _, cmd := range flagged {
-			lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, sr.featureFlags[cmd]))
+			lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, sr.planned[cmd]))
 		}
 	}
 

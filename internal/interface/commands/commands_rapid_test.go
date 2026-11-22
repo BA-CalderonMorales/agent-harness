@@ -50,16 +50,16 @@ func TestSlashCommandsRapid_Properties(t *testing.T) {
 			}
 		}
 
-		// Invariant 3: Feature-flagged commands are isolated and return Coming Soon notice
+		// Invariant 3: Planned commands are isolated and return Coming Soon notice
 		featureCmd := rapid.StringMatching("flag_[a-z]{3,8}").Draw(t, "featureCmd")
-		registry.FeatureFlag(featureCmd, "Feature coming soon")
+		registry.MarkPlanned(featureCmd, "Feature coming soon")
 
 		resFlag, handledFlag, errFlag := registry.Handle("/" + featureCmd)
 		if !handledFlag || errFlag != nil {
-			t.Fatalf("Expected feature-flagged command /%s to be handled without error", featureCmd)
+			t.Fatalf("Expected planned command /%s to be handled without error", featureCmd)
 		}
 		if !strings.Contains(resFlag, "coming soon") {
-			t.Fatalf("Expected 'coming soon' notice for feature flag /%s, got %q", featureCmd, resFlag)
+			t.Fatalf("Expected 'coming soon' notice for planned command /%s, got %q", featureCmd, resFlag)
 		}
 	})
 }

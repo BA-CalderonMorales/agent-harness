@@ -1188,7 +1188,7 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
-	Describe("Feature Flags", func() {
+	Describe("Planned Commands", func() {
 		var registry *SlashRegistry
 
 		BeforeEach(func() {
@@ -1197,14 +1197,14 @@ var _ = Describe("Slash Commands", func() {
 			registry.Register("clear", "Clear session", ClearHandler(func() error { return nil }, nil))
 		})
 
-		It("should mark commands as feature-flagged", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
-			Expect(registry.IsFeatureFlagged("export")).To(BeTrue())
-			Expect(registry.IsFeatureFlagged("clear")).To(BeFalse())
+		It("should mark commands as planned", func() {
+			registry.MarkPlanned("export", "Export conversation to file")
+			Expect(registry.IsPlanned("export")).To(BeTrue())
+			Expect(registry.IsPlanned("clear")).To(BeFalse())
 		})
 
 		It("should return coming soon message for flagged commands", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			result, handled, err := registry.Handle("/export")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
@@ -1218,7 +1218,7 @@ var _ = Describe("Slash Commands", func() {
 				handlerCalled = true
 				return "should not reach", nil
 			})
-			registry.FeatureFlag("model", "Switch model")
+			registry.MarkPlanned("model", "Switch model")
 			result, handled, err := registry.Handle("/model gpt-4o")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
@@ -1227,8 +1227,8 @@ var _ = Describe("Slash Commands", func() {
 		})
 
 		It("should list flagged commands only under the Coming soon banner", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
-			registry.FeatureFlag("cost", "Show token usage")
+			registry.MarkPlanned("export", "Export conversation to file")
+			registry.MarkPlanned("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
@@ -1240,8 +1240,8 @@ var _ = Describe("Slash Commands", func() {
 			Expect(body).ToNot(ContainSubstring("/cost"))
 		})
 
-		It("should show feature flag message for specific help query", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+		It("should show planned-command message for specific help query", func() {
+			registry.MarkPlanned("export", "Export conversation to file")
 			handler := HelpHandler(registry)
 			result, err := handler("export")
 			Expect(err).ToNot(HaveOccurred())
@@ -1249,26 +1249,26 @@ var _ = Describe("Slash Commands", func() {
 		})
 
 		It("should exclude flagged commands from completions", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			completions := registry.GetCompletions()
 			Expect(completions).ToNot(ContainElement("/export"))
 		})
 
 		It("should exclude flagged descriptions from completion descriptions", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			descriptions := registry.GetCompletionDescriptions()
 			Expect(descriptions).ToNot(HaveKey("/export"))
 		})
 
 		It("should not suggest flagged commands in findSimilar", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			result, _, _ := registry.Handle("/exp")
 			Expect(result).ToNot(ContainSubstring("/export"))
 		})
 
 		It("should not duplicate flagged commands in help when also registered", func() {
 			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "" }, func(string) error { return nil }))
-			registry.FeatureFlag("session", "Manage sessions")
+			registry.MarkPlanned("session", "Manage sessions")
 			result, handled, err := registry.Handle("/session")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
@@ -1276,7 +1276,7 @@ var _ = Describe("Slash Commands", func() {
 		})
 	})
 
-	Describe("Feature Flags", func() {
+	Describe("Planned Commands", func() {
 		var registry *SlashRegistry
 
 		BeforeEach(func() {
@@ -1285,14 +1285,14 @@ var _ = Describe("Slash Commands", func() {
 			registry.Register("clear", "Clear session", ClearHandler(func() error { return nil }, nil))
 		})
 
-		It("should mark commands as feature-flagged", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
-			Expect(registry.IsFeatureFlagged("export")).To(BeTrue())
-			Expect(registry.IsFeatureFlagged("clear")).To(BeFalse())
+		It("should mark commands as planned", func() {
+			registry.MarkPlanned("export", "Export conversation to file")
+			Expect(registry.IsPlanned("export")).To(BeTrue())
+			Expect(registry.IsPlanned("clear")).To(BeFalse())
 		})
 
 		It("should return coming soon message for flagged commands", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			result, handled, err := registry.Handle("/export")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
@@ -1306,7 +1306,7 @@ var _ = Describe("Slash Commands", func() {
 				handlerCalled = true
 				return "should not reach", nil
 			})
-			registry.FeatureFlag("model", "Switch model")
+			registry.MarkPlanned("model", "Switch model")
 			result, handled, err := registry.Handle("/model gpt-4o")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
@@ -1315,8 +1315,8 @@ var _ = Describe("Slash Commands", func() {
 		})
 
 		It("should list flagged commands under Coming soon in help output", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
-			registry.FeatureFlag("cost", "Show token usage")
+			registry.MarkPlanned("export", "Export conversation to file")
+			registry.MarkPlanned("cost", "Show token usage")
 			help := HelpHandler(registry)
 			result, err := help("")
 			Expect(err).ToNot(HaveOccurred())
@@ -1326,8 +1326,8 @@ var _ = Describe("Slash Commands", func() {
 			Expect(body).ToNot(ContainSubstring("/cost"))
 		})
 
-		It("should show feature flag message for specific help query", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+		It("should show planned-command message for specific help query", func() {
+			registry.MarkPlanned("export", "Export conversation to file")
 			handler := HelpHandler(registry)
 			result, err := handler("export")
 			Expect(err).ToNot(HaveOccurred())
@@ -1335,26 +1335,26 @@ var _ = Describe("Slash Commands", func() {
 		})
 
 		It("should exclude flagged commands from completions", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			completions := registry.GetCompletions()
 			Expect(completions).ToNot(ContainElement("/export"))
 		})
 
 		It("should exclude flagged descriptions from completion descriptions", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			descriptions := registry.GetCompletionDescriptions()
 			Expect(descriptions).ToNot(HaveKey("/export"))
 		})
 
 		It("should exclude flagged commands from findSimilar", func() {
-			registry.FeatureFlag("export", "Export conversation to file")
+			registry.MarkPlanned("export", "Export conversation to file")
 			result, _, _ := registry.Handle("/exp")
 			Expect(result).ToNot(ContainSubstring("/export"))
 		})
 
 		It("should not duplicate flagged commands in help when also registered", func() {
 			registry.Register("session", "Manage sessions", SessionHandler(func() string { return "" }, func(string) error { return nil }))
-			registry.FeatureFlag("session", "Manage sessions")
+			registry.MarkPlanned("session", "Manage sessions")
 			result, handled, err := registry.Handle("/session")
 			Expect(err).ToNot(HaveOccurred())
 			Expect(handled).To(BeTrue())
