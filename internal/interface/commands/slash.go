@@ -42,8 +42,9 @@ func (sr *SlashRegistry) Register(name, description string, handler SlashHandler
 
 // MarkPlanned marks a command as planned but not yet available. It is not
 // a Labs flag: a Labs flag (config.Labs) toggles a feature that exists,
-// while a planned command has no implementation yet. The command will appear in /help under "Coming Soon" and will return an
-// informational message when invoked.
+// while a planned command has no implementation yet. The command appears
+// in /help under "Coming soon" and returns an informational message when
+// invoked.
 func (sr *SlashRegistry) MarkPlanned(name, description string) {
 	sr.planned[name] = description
 }
@@ -54,7 +55,7 @@ func (sr *SlashRegistry) IsPlanned(name string) bool {
 	return ok
 }
 
-// PlannedMessage returns the "coming soon" message for a flagged command.
+// PlannedMessage returns the "coming soon" message for a planned command.
 func (sr *SlashRegistry) PlannedMessage(name string) string {
 	desc := sr.planned[name]
 	var b strings.Builder
@@ -184,14 +185,14 @@ func (sr *SlashRegistry) GetHelp() string {
 
 	// Planned commands are invisible in /help otherwise: list
 	// them under a coming-soon banner so the plan is public knowledge.
-	var flagged []string
+	var plannedNames []string
 	for name := range sr.planned {
-		flagged = append(flagged, name)
+		plannedNames = append(plannedNames, name)
 	}
-	sort.Strings(flagged)
-	if len(flagged) > 0 {
+	sort.Strings(plannedNames)
+	if len(plannedNames) > 0 {
 		lines = append(lines, "Coming soon:")
-		for _, cmd := range flagged {
+		for _, cmd := range plannedNames {
 			lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, sr.planned[cmd]))
 		}
 	}
