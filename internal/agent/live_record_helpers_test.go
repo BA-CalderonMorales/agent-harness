@@ -79,12 +79,13 @@ func TestLiveRecordVerdictFailsOnlyWhenNoRecordRunCompleted(t *testing.T) {
 func TestRunDrainedDoesNotBlockWhenEventsOverflowTheBuffer(t *testing.T) {
 	done := make(chan Terminal, 1)
 	go func() {
-		done <- runDrained(func(out chan<- types.StreamEvent) Terminal {
+		terminal, _ := runDrained(func(out chan<- types.StreamEvent) Terminal {
 			for i := 0; i < 4*liveEventBuffer; i++ {
 				out <- types.StreamRequestStart{}
 			}
 			return Terminal{Reason: TerminalReasonComplete}
 		})
+		done <- terminal
 	}()
 	select {
 	case terminal := <-done:
@@ -93,5 +94,31 @@ func TestRunDrainedDoesNotBlockWhenEventsOverflowTheBuffer(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("the run blocked on a full event buffer")
+	}
+}
+
+// runDrained returns only after its drainer has read the closed stream to the
+// end, so nothing is still consuming a finished run's events. A run that
+// returns at once can find the drainer done by luck, so the check repeats.
+func TestRunDrainedWaitsForItsDrainerToFinish(t *testing.T) {
+	for attempt := 0; attempt < 20; attempt++ {
+		reads := make(chan int, 1)
+		go func() {
+			_, read := runDrained(func(out chan<- types.StreamEvent) Terminal {
+				for i := 0; i < liveEventBuffer; i++ {
+					out <- types.StreamRequestStart{}
+				}
+				return Terminal{Reason: TerminalReasonComplete}
+			})
+			reads <- read
+		}()
+		select {
+		case read := <-reads:
+			if read != liveEventBuffer {
+				t.Fatalf("attempt %d: runDrained returned after the drainer read %d of %d events", attempt, read, liveEventBuffer)
+			}
+		case <-time.After(5 * time.Second):
+			t.Fatalf("attempt %d: runDrained never returned; the drainer was never released", attempt)
+		}
 	}
 }
