@@ -48,7 +48,7 @@ func (l *Loop) compactFromRecord(state *loopState, keepStart, current, target in
 	var after int
 	for start := keepStart; start <= last; start++ {
 		suffix := state.messages[start:]
-		for tokens := budget; tokens >= minRecordSummaryTokens; tokens = tokens * 3 / 4 {
+		for _, tokens := range renderBudgets(budget) {
 			body := record.Render(state.record, tokens)
 			if body == "" {
 				return compactionOutcome{}, false, nil
@@ -87,6 +87,26 @@ func (l *Loop) compactFromRecord(state *loopState, keepStart, current, target in
 		"session record and the newest message exceed the bounded target (%d estimated tokens, target %d)",
 		after, target,
 	)
+}
+
+// renderBudgets lists the render budgets to try, largest first. They step
+// down by a quarter and always include the minimum, which a 3/4 progression
+// can step past (31 then 23, never 24). A start below the minimum, as a tiny
+// target leaves, tries the minimum first, because the whole-message check
+// against the target decides whether it fits, and then the start itself.
+func renderBudgets(start int) []int {
+	var out []int
+	for b := max(start, minRecordSummaryTokens); ; {
+		out = append(out, b)
+		if b <= minRecordSummaryTokens {
+			break
+		}
+		b = max(b*3/4, minRecordSummaryTokens)
+	}
+	if start > 0 && start < minRecordSummaryTokens {
+		out = append(out, start)
+	}
+	return out
 }
 
 // estimateText is the repo's four-characters-per-token estimate for a string.
