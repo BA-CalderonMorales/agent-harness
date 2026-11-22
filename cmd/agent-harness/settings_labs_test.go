@@ -103,12 +103,12 @@ func TestTogglingLabRowPersists(t *testing.T) {
 
 func TestTogglingPinnedLabRowIsRefused(t *testing.T) {
 	journeyHome(t)
-	t.Setenv("AH_LOOP_TRACK", "1")
+	t.Setenv("AH_LOOP_TRACK", "0")
 	app := bootJourneyApp(t)
 	delegate := delegateFor(t, app)
 
-	delegate.OnSettingChange(config.LabLoopTrack, "false")
-	if !app.config.LabEnabled(config.LabLoopTrack) {
+	delegate.OnSettingChange(config.LabLoopTrack, "true")
+	if app.config.LabEnabled(config.LabLoopTrack) {
 		t.Fatal("the Settings row overrode an env-pinned lab")
 	}
 	if _, ok := app.config.LabsSaved[config.LabLoopTrack]; ok {
