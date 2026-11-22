@@ -108,6 +108,12 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 		}
 	}
 
+	// A usable session record stands in for the removed turns without a
+	// model call, which a small window cannot afford.
+	if outcome, handled, err := l.compactFromRecord(state, keepStart, current, target); handled {
+		return outcome, err
+	}
+
 	removedPrefix := append([]types.Message(nil), state.messages[:keepStart]...)
 	recentSuffix := append([]types.Message(nil), state.messages[keepStart:]...)
 	model := state.toolUseContext.Options.MainLoopModel

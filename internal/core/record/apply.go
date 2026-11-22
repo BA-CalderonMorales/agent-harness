@@ -105,7 +105,7 @@ func (r *Record) applyUse(use types.ToolUseBlock) {
 		}
 	case toolTodo:
 		if todos, ok := todosFrom(use.Input); ok {
-			r.Todos = todos
+			r.replacePlan(use.ID, todos)
 		}
 	}
 }
@@ -121,6 +121,7 @@ func (r *Record) applyResult(res types.ToolResultBlock) {
 	if res.IsError && isDenial(res.Content) {
 		r.Denied = moveToEnd(r.Denied, clip(res.Content, MaxDeniedLen), MaxDenied)
 	}
+	r.settlePlan(res)
 	idx := -1
 	for i, call := range r.Open {
 		if call.ID == boundID(res.ToolUseID) {
@@ -261,5 +262,6 @@ func clone(r Record) Record {
 	r.Pending = append([]string(nil), r.Pending...)
 	r.Denied = append([]string(nil), r.Denied...)
 	r.Open = append([]OpenCall(nil), r.Open...)
+	r.Undo = append([]TodoUndo(nil), r.Undo...)
 	return r
 }

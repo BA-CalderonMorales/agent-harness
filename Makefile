@@ -1,4 +1,4 @@
-.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity smoke-lemonade
+.PHONY: help build test mutation-test run clean install fmt lint release release-dry-run verify-structure verify complexity smoke-lemonade smoke-record
 
 BINARY_NAME := agent-harness
 BUILD_DIR := ./build
@@ -56,6 +56,7 @@ help:
 	@printf '  make verify         Run structure check and the full Go test suite\n'
 	@printf '  make complexity     Report function and package complexity hot spots\n'
 	@printf '  make smoke-lemonade Run one live turn against local Lemonade (opt-in, never CI)\n'
+	@printf '  make smoke-record   Live A/B of record vs summary compaction (opt-in, never CI)\n'
 
 build:
 	@printf '==> Building %s\n' "$(BINARY_NAME)"
@@ -160,6 +161,11 @@ verify-structure:
 # Needs the server running; never wired into CI.
 smoke-lemonade:
 	@AH_LIVE_LEMONADE=1 go test ./internal/runtime/llm/ -run TestLiveLemonadeSmoke -count=1 -v -timeout 10m
+
+# Opt-in live A/B: compaction from the session record vs a model-written
+# summary, on a real Lemonade server. Never wired into CI.
+smoke-record:
+	@AH_LIVE_LEMONADE=1 go test ./internal/agent/ -run TestLiveRecordCompactionAB -count=1 -v -timeout 60m
 
 verify: verify-structure
 	@printf '==> Running tests\n'
