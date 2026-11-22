@@ -1,0 +1,137 @@
+package config
+
+import (
+	"strconv"
+	"strings"
+)
+
+// Lab is one experimental, behavior-changing feature that ships behind a
+// flag. Key is also the settings.json key the choice is saved under, so
+// it must not collide with any other settings key.
+type Lab struct {
+	Key         string
+	Label       string
+	Description string
+	// EnvVar pins the flag for one session (AH_*); the AGENT_HARNESS_*
+	// spelling of the same name is accepted too, like every other
+	// setting.
+	EnvVar  string
+	Default bool
+}
+
+// LabLoopTrack shows the Ask/Plan/Review/Try beat track in the chat chrome.
+const LabLoopTrack = "loop_track"
+
+// Labs is the only list of experimental flags. New behavior-changing
+// features ship behind an entry here; the Settings tab, the environment
+// overrides, and persistence are all generated from it.
+//
+// Graduation rule: a flag graduates when it has a named use, documented
+// behavior, and tests. Graduating deletes the entry and the branch it
+// guards; a graduated flag is never left here switched on.
+//
+// Record compaction (session record, PR #63) is the next planned entry;
+// add it here when that feature lands on main, not before.
+var Labs = []Lab{
+	{
+		Key:         LabLoopTrack,
+		Label:       "Loop Track",
+		Description: "Show the Ask/Plan/Review/Try beat track in the chat while a turn runs.",
+		EnvVar:      "AH_LOOP_TRACK",
+		Default:     false,
+	},
+}
+
+// LookupLab returns the registry entry for key.
+func LookupLab(key string) (Lab, bool) {
+	for _, lab := range Labs {
+		if lab.Key == key {
+			return lab, true
+		}
+	}
+	return Lab{}, false
+}
+
+// labEnvNames lists the environment names that pin lab, AH_* first.
+func labEnvNames(lab Lab) []string {
+	names := []string{lab.EnvVar}
+	if rest, ok := strings.CutPrefix(lab.EnvVar, "AH_"); ok {
+		names = append(names, "AGENT_HARNESS_"+rest)
+	}
+	return names
+}
+
+// applyLabEnvOverrides records every lab the environment pins. A value
+// that does not parse as a bool is ignored, the same rule the other bool
+// environment settings follow.
+func applyLabEnvOverrides(config *LayeredConfig) {
+	for _, lab := range Labs {
+		v := firstEnv(labEnvNames(lab)...)
+		if v == "" {
+			continue
+		}
+		if parsed, err := strconv.ParseBool(v); err == nil {
+			if config.LabsPinned == nil {
+				config.LabsPinned = map[string]bool{}
+			}
+			config.LabsPinned[lab.Key] = parsed
+		}
+	}
+}
+
+// extractLabs reads every lab a settings layer saved.
+func extractLabs(config *LayeredConfig, values map[string]interface{}) {
+	for _, lab := range Labs {
+		if v, ok := boolValue(values, lab.Key); ok {
+			if config.LabsSaved == nil {
+				config.LabsSaved = map[string]bool{}
+			}
+			config.LabsSaved[lab.Key] = v
+		}
+	}
+}
+
+// LabEnabled reports whether the lab is on: an environment pin wins, then
+// a saved choice, then the registry Default. An unregistered key is off.
+func (c *LayeredConfig) LabEnabled(key string) bool {
+	lab, ok := LookupLab(key)
+	if !ok {
+		return false
+	}
+	if v, ok := c.LabsPinned[key]; ok {
+		return v
+	}
+	if v, ok := c.LabsSaved[key]; ok {
+		return v
+	}
+	return lab.Default
+}
+
+// LabPinned reports whether the environment pins the lab this session.
+func (c *LayeredConfig) LabPinned(key string) bool {
+	_, ok := c.LabsPinned[key]
+	return ok
+}
+
+// SetLab records the user's choice for a lab. Choosing the Default clears
+// the choice instead of storing it, so the lab keeps following the
+// registry.
+func (c *LayeredConfig) SetLab(key string, enabled bool) {
+	lab, ok := LookupLab(key)
+	if !ok {
+		return
+	}
+	if enabled == lab.Default {
+		c.ClearLab(key)
+		return
+	}
+	if c.LabsSaved == nil {
+		c.LabsSaved = map[string]bool{}
+	}
+	c.LabsSaved[key] = enabled
+}
+
+// ClearLab drops the saved choice so the lab returns to its Default.
+func (c *LayeredConfig) ClearLab(key string) {
+	delete(c.LabsSaved, key)
+}

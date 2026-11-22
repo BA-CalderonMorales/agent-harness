@@ -220,4 +220,9 @@ func clearConfigEnv(t *testing.T) {
 	} {
 		t.Setenv(key, "")
 	}
+	for _, lab := range Labs {
+		for _, key := range labEnvNames(lab) {
+			t.Setenv(key, "")
+		}
+	}
 }

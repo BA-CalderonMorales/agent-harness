@@ -61,9 +61,7 @@ func (ll *LayeredLoader) extractValues(config *LayeredConfig) {
 	if v, ok := boolValue(config.merged, "reduced_motion"); ok {
 		config.ReducedMotion = v
 	}
-	if v, ok := boolValue(config.merged, "loop_track"); ok {
-		config.LoopTrack = v
-	}
+	extractLabs(config, config.merged)
 	if v, ok := stringValue(config.merged, "persona"); ok {
 		config.Persona = v
 	}

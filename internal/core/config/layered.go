@@ -112,10 +112,12 @@ type LayeredConfig struct {
 	// only the movement goes.
 	ReducedMotion bool
 
-	// LoopTrack shows the Ask/Plan/Review/Try beat track in the chat
-	// chrome. Off by default: it is an opt-in reading of the turn's
-	// shape, not part of the default conversation surface.
-	LoopTrack bool
+	// LabsSaved holds the Labs choices a settings layer (or this
+	// session's Settings tab) made, keyed by Lab.Key. LabsPinned holds
+	// the ones the environment pinned for this session. Read a flag
+	// through LabEnabled, never from these maps directly.
+	LabsSaved  map[string]bool
+	LabsPinned map[string]bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.

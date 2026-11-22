@@ -66,13 +66,9 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 			config.ReducedMotion = parsed
 		}
 	}
-	// The beat track is opt-in; the feature flag is the environment (or
-	// the loop_track settings key), never an accidental default.
-	if v := firstEnv("AH_LOOP_TRACK", "AGENT_HARNESS_LOOP_TRACK"); v != "" {
-		if parsed, err := strconv.ParseBool(v); err == nil {
-			config.LoopTrack = parsed
-		}
-	}
+	// Labs flags (AH_LOOP_TRACK and the rest of the registry) pin for
+	// the session; see labs.go.
+	applyLabEnvOverrides(config)
 	applyEnvPermissionMode(firstEnv("AH_PERMISSION_MODE", "AGENT_HARNESS_PERMISSION_MODE"), &config.PermissionMode)
 	applyEnvString(firstEnv("AH_EXECUTION_MODE", "AGENT_HARNESS_EXECUTION_MODE"), &config.ExecutionMode)
 	applyEnvBool(firstEnv("AH_PERM_READ", "AGENT_HARNESS_PERM_READ"), &config.PermRead, &config.PermExplicit)

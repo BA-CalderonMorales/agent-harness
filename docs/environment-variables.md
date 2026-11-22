@@ -27,7 +27,10 @@ override every config file layer.
   same. The information stays, only the motion goes
 - `AH_LOOP_TRACK`: set to `1` to show the Ask/Plan/Review/Try beat track
   above the composer; `loop_track: true` in settings does the same. Off by
-  default — the live turn phase rides on the Agent header
+  default — the live turn phase rides on the Agent header. It is a Labs
+  flag: every Labs entry in `internal/core/config/labs.go` reads its own
+  `AH_*` variable (or the `AGENT_HARNESS_*` spelling), and a set variable
+  pins the flag for the session without being saved
 - `OLLAMA_HOST`: Ollama server URL for the fallback Ollama scripts
 - `AGENT_HARNESS_EVENT_LOG`: opt-in JSONL observation log for real TUI
   journeys. Requires a new destination; creates it with mode 0600 on Unix (Windows uses directory ACLs). Includes
