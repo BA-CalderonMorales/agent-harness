@@ -77,6 +77,10 @@ func userSettingsValues(cfg *config.LayeredConfig) (map[string]interface{}, []st
 	if cfg.Theme != "" {
 		values["theme"] = cfg.Theme
 	}
+	// Labs follow the same pin rule: an env-pinned flag is left out.
+	for key, value := range cfg.LabSettingsValues() {
+		values[key] = value
+	}
 	return values, rejected
 }
 

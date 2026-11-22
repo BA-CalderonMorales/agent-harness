@@ -10,7 +10,8 @@ import (
 // SaveSettings writes an explicit set of values to a configuration layer,
 // deep-merging with any existing file so unrelated keys survive. It persists
 // only the keys the caller passes, keeping user settings a delta over the
-// tracked project defaults instead of a frozen snapshot.
+// tracked project defaults instead of a frozen snapshot. A key passed
+// with a nil value is removed from the file.
 func (ll *LayeredLoader) SaveSettings(source ConfigSource, values map[string]interface{}) error {
 	var path string
 	switch source {
@@ -31,6 +32,13 @@ func (ll *LayeredLoader) SaveSettings(source ConfigSource, values map[string]int
 		return fmt.Errorf("failed to read config %s: %w", path, err)
 	}
 	ll.deepMerge(merged, values)
+	// A nil value clears its key: the setting returns to whatever the
+	// lower layers or the defaults say.
+	for key, value := range values {
+		if value == nil {
+			delete(merged, key)
+		}
+	}
 
 	// Ensure directory exists
 	dir := filepath.Dir(path)

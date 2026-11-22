@@ -135,3 +135,22 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 func (c *LayeredConfig) ClearLab(key string) {
 	delete(c.LabsSaved, key)
 }
+
+// LabSettingsValues is the Labs part of a settings save: a saved choice
+// is written, a cleared one is nil (SaveSettings removes the key), and an
+// environment-pinned lab is left out so the pin does not outlive the
+// variable and the user's own saved choice survives it.
+func (c *LayeredConfig) LabSettingsValues() map[string]interface{} {
+	values := make(map[string]interface{}, len(Labs))
+	for _, lab := range Labs {
+		if c.LabPinned(lab.Key) {
+			continue
+		}
+		if v, ok := c.LabsSaved[lab.Key]; ok {
+			values[lab.Key] = v
+		} else {
+			values[lab.Key] = nil
+		}
+	}
+	return values
+}
