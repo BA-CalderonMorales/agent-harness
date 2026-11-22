@@ -113,6 +113,10 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "session_dir":
 		d.app.config.SessionDir = value
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Session directory: %s (applied on next restart)", value), Type: "success"})
+	default:
+		if lab, ok := config.LookupLab(key); ok {
+			d.handleLabChange(lab, value)
+		}
 	}
 	d.tuiApp.Send(tui.SessionsRefreshedMsg{
 		Sessions: d.app.getSessionInfos(),

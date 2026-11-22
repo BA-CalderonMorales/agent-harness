@@ -1,9 +1,13 @@
 package main
 
 import (
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
+	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	tea "github.com/charmbracelet/bubbletea"
 )
 
 // Labs choices reach settings.json through the one settings write path,
@@ -45,5 +49,90 @@ func TestCommitConfigChangeSkipsEnvPinnedLabs(t *testing.T) {
 	}
 	if v, ok := saved[config.LabLoopTrack]; ok {
 		t.Fatalf("env-pinned loop_track = %v was written to settings.json", v)
+	}
+}
+
+// The Settings tab lists one bool row per registry entry, last, under the
+// Labs header. The rows come from config.Labs, not from a hand list.
+
+func TestLabsSettingsRowsComeFromRegistry(t *testing.T) {
+	journeyHome(t)
+	app := bootJourneyApp(t)
+	app.config.SetLab(config.LabLoopTrack, true)
+	rows := app.getSettings()
+
+	var labs []tui.Setting
+	for i, row := range rows {
+		if row.Category == labsCategory {
+			labs = append(labs, row)
+		} else if len(labs) > 0 {
+			t.Fatalf("row %d (%s) follows the Labs section; Labs must be listed last", i, row.Key)
+		}
+	}
+	if len(labs) != len(config.Labs) {
+		t.Fatalf("Labs rows = %d, want one per registry entry (%d)", len(labs), len(config.Labs))
+	}
+	for i, lab := range config.Labs {
+		row := labs[i]
+		if row.Key != lab.Key || row.Label != lab.Label || row.Type != "bool" {
+			t.Errorf("row %d = %s/%s/%s, want bool row %s/%s", i, row.Key, row.Label, row.Type, lab.Key, lab.Label)
+		}
+		if row.BoolValue != app.config.LabEnabled(lab.Key) {
+			t.Errorf("row %s shows %v, want the effective value %v", lab.Key, row.BoolValue, app.config.LabEnabled(lab.Key))
+		}
+		if !strings.Contains(row.Description, lab.Description) || !strings.Contains(strings.ToLower(row.Description), "experimental, may be removed") {
+			t.Errorf("row %s description %q lacks the lab description or the experimental marker", lab.Key, row.Description)
+		}
+	}
+}
+
+func TestTogglingLabRowPersists(t *testing.T) {
+	journeyHome(t)
+	app := bootJourneyApp(t)
+	delegate := delegateFor(t, app)
+
+	delegate.OnSettingChange(config.LabLoopTrack, "true")
+	if !app.config.LabEnabled(config.LabLoopTrack) || readUserSettings(t)[config.LabLoopTrack] != true {
+		t.Fatal("toggling the Labs row on did not enable and save loop_track")
+	}
+	delegate.OnSettingChange(config.LabLoopTrack, "false")
+	if v, ok := readUserSettings(t)[config.LabLoopTrack]; ok || app.config.LabEnabled(config.LabLoopTrack) {
+		t.Fatalf("toggling back to the default left loop_track = %v saved", v)
+	}
+}
+
+func TestTogglingPinnedLabRowIsRefused(t *testing.T) {
+	journeyHome(t)
+	t.Setenv("AH_LOOP_TRACK", "1")
+	app := bootJourneyApp(t)
+	delegate := delegateFor(t, app)
+
+	delegate.OnSettingChange(config.LabLoopTrack, "false")
+	if !app.config.LabEnabled(config.LabLoopTrack) {
+		t.Fatal("the Settings row overrode an env-pinned lab")
+	}
+	if _, ok := app.config.LabsSaved[config.LabLoopTrack]; ok {
+		t.Fatal("toggling an env-pinned lab recorded a saved choice")
+	}
+}
+
+func TestLabsSectionRendersInTerminal(t *testing.T) {
+	for _, size := range [][2]int{{40, 15}, {80, 24}} {
+		t.Run(fmt.Sprintf("%dx%d", size[0], size[1]), func(t *testing.T) {
+			journeyHome(t)
+			app := bootJourneyApp(t)
+			screen := newJourneyScreen(t, wireJourneyTUI(t, app), size[0], size[1])
+			screen.Keys("5")
+			screen.SendAndPump(tea.KeyMsg{Type: tea.KeyHome})
+			screen.Press("up") // wraps to the last row: the Labs section
+			screen.AssertFitsWidth(size[0])
+			screen.AssertContains(config.Labs[len(config.Labs)-1].Label, "Experimental")
+			// At 40x15 the list window is one row tall, so the focused row
+			// scrolls its section header out of view (true of every
+			// section); the header is checked where there is room for it.
+			if size[1] >= 24 {
+				screen.AssertContains(labsCategory)
+			}
+		})
 	}
 }
