@@ -43,6 +43,9 @@ func TestCommitConfigChangeSkipsEnvPinnedLabs(t *testing.T) {
 		t.Fatal("AH_LOOP_TRACK=1 did not enable the loop track")
 	}
 
+	// A choice recorded while pinned (by code, not the refused Settings
+	// row) must still stay out of the file: the write path owns the rule.
+	app.config.SetLab(config.LabLoopTrack, true)
 	app.config.Theme = "nord"
 	app.commitConfigChange()
 	saved := readUserSettings(t)
@@ -139,6 +142,13 @@ func TestTogglingPinnedLabRowIsRefused(t *testing.T) {
 	}
 	if _, ok := app.config.LabsSaved[config.LabLoopTrack]; ok {
 		t.Fatal("toggling an env-pinned lab recorded a saved choice")
+	}
+	data, err := os.ReadFile(filepath.Join(config.ConfigHome(), "settings.json"))
+	if err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), config.LabLoopTrack) {
+		t.Fatalf("toggling an env-pinned lab wrote it to settings.json:\n%s", data)
 	}
 }
 
