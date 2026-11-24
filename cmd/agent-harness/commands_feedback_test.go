@@ -111,6 +111,12 @@ func TestFeedbackCommandEmptyTextShowsUsageAndWritesNothing(t *testing.T) {
 }
 
 func TestFeedbackCommandAppendsOneRecordWithAgreedFieldsOnly(t *testing.T) {
+	// Pin a non-UTC local zone so a record stamped with local time is
+	// caught on every host, not only on machines that run off UTC.
+	prevLocal := time.Local
+	time.Local = time.FixedZone("probe", -5*3600)
+	t.Cleanup(func() { time.Local = prevLocal })
+
 	app, path := feedbackTestApp(t, true)
 	tuiApp := tui.NewApp()
 
