@@ -117,9 +117,13 @@ type LayeredConfig struct {
 	// the ones the environment pinned for this session, and
 	// labsInherited the ones a project layer (below the user layer)
 	// sets. Read a flag through LabEnabled, never from these maps.
-	LabsSaved     map[string]bool
-	LabsPinned    map[string]bool
-	labsInherited map[string]bool
+	// labsLocal / labsLocalLoaded are the local layer's labs, current
+	// and as loaded (labs_local.go).
+	LabsSaved       map[string]bool
+	LabsPinned      map[string]bool
+	labsInherited   map[string]bool
+	labsLocal       map[string]bool
+	labsLocalLoaded map[string]bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.

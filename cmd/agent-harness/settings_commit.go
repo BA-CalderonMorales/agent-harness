@@ -98,6 +98,13 @@ func (app *App) persistUserSettings() {
 	if err := loader.SaveSettings(config.SourceUser, values); err != nil {
 		app.warnSettings(sprintf("Warning: failed to save settings: %v", err))
 	}
+	// A lab settings.local.json sets is saved there: it outranks the
+	// user layer, so a toggle written anywhere else would not last.
+	if local := app.config.LabLocalValues(); len(local) > 0 {
+		if err := loader.SaveSettings(config.SourceLocal, local); err != nil {
+			app.warnSettings(sprintf("Warning: failed to save settings.local.json: %v", err))
+		}
+	}
 }
 
 // warnSettings reports a settings-write problem through the status line.

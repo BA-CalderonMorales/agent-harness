@@ -130,6 +130,41 @@ func TestTogglingLabOffOverProjectLayerSurvivesRestart(t *testing.T) {
 	}
 }
 
+// settings.local.json owns a lab it sets: an unrelated save leaves the
+// user layer alone, and a Settings toggle is written to the local file.
+func TestLocalLayerLabStaysInLocalFile(t *testing.T) {
+	journeyHome(t)
+	local := filepath.Join(".agent-harness", "settings.local.json")
+	if err := os.MkdirAll(".agent-harness", 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(local, []byte(`{"loop_track": true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	app := bootJourneyApp(t)
+
+	app.config.Theme = "nord"
+	app.commitConfigChange()
+	if v, ok := readUserSettings(t)[config.LabLoopTrack]; ok {
+		t.Fatalf("an unrelated save copied the local loop_track = %v into the user layer", v)
+	}
+
+	delegateFor(t, app).OnSettingChange(config.LabLoopTrack, "false")
+	if v, ok := readUserSettings(t)[config.LabLoopTrack]; ok {
+		t.Fatalf("the toggle wrote loop_track = %v to the user layer, not the local file", v)
+	}
+	data, err := os.ReadFile(local)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), `"loop_track": false`) {
+		t.Fatalf("settings.local.json = %s, want loop_track false", data)
+	}
+	if bootJourneyApp(t).config.LabEnabled(config.LabLoopTrack) {
+		t.Fatal("the toggle over settings.local.json did not survive a restart")
+	}
+}
+
 func TestTogglingPinnedLabRowIsRefused(t *testing.T) {
 	journeyHome(t)
 	t.Setenv("AH_LOOP_TRACK", "0")

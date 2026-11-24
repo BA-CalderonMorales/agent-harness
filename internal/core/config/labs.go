@@ -81,12 +81,17 @@ func applyLabEnvOverrides(config *LayeredConfig) {
 
 // extractLabs reads every lab one settings layer sets. A project layer
 // sits below the user layer, so its value is inherited, not the user's
-// choice: it is never copied into the user layer on save. The user and
-// local layers hold the user's own choices.
+// choice: it is never copied into the user layer on save. A local-layer
+// value belongs to the local file (see labs_local.go). Only the user
+// layer holds LabsSaved.
 func extractLabs(config *LayeredConfig, source ConfigSource, values map[string]interface{}) {
 	for _, lab := range Labs {
 		v, ok := boolValue(values, lab.Key)
 		if !ok {
+			continue
+		}
+		if source == SourceLocal {
+			noteLocalLab(config, lab.Key, v)
 			continue
 		}
 		target := &config.LabsSaved
@@ -101,14 +106,17 @@ func extractLabs(config *LayeredConfig, source ConfigSource, values map[string]i
 }
 
 // LabEnabled reports whether the lab is on: an environment pin wins, then
-// the user's saved choice, then a value inherited from a project layer,
-// then the registry Default. An unregistered key is off.
+// the local layer, then the user's saved choice, then a value inherited
+// from a project layer, then the registry Default. An unregistered key is off.
 func (c *LayeredConfig) LabEnabled(key string) bool {
 	lab, ok := LookupLab(key)
 	if !ok {
 		return false
 	}
 	if v, ok := c.LabsPinned[key]; ok {
+		return v
+	}
+	if v, ok := c.labsLocal[key]; ok {
 		return v
 	}
 	if v, ok := c.LabsSaved[key]; ok {
@@ -135,6 +143,10 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 	if !ok {
 		return
 	}
+	if c.labLocalOwned(key) {
+		c.labsLocal[key] = enabled
+		return
+	}
 	if _, inherited := c.labsInherited[key]; !inherited && enabled == lab.Default {
 		c.ClearLab(key)
 		return
@@ -148,6 +160,10 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 // ClearLab drops the saved choice so the lab returns to the value a
 // project layer sets, or else its Default.
 func (c *LayeredConfig) ClearLab(key string) {
+	if c.labLocalOwned(key) {
+		delete(c.labsLocal, key)
+		return
+	}
 	delete(c.LabsSaved, key)
 }
 
@@ -158,7 +174,7 @@ func (c *LayeredConfig) ClearLab(key string) {
 func (c *LayeredConfig) LabSettingsValues() map[string]interface{} {
 	values := make(map[string]interface{}, len(Labs))
 	for _, lab := range Labs {
-		if c.LabPinned(lab.Key) {
+		if c.LabPinned(lab.Key) || c.labLocalOwned(lab.Key) {
 			continue
 		}
 		if v, ok := c.LabsSaved[lab.Key]; ok {
