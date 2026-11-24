@@ -9,29 +9,55 @@ Core:
   /help            Show available commands
   /clear           Clear the session history
   /compact         Compact session to reduce token usage
+  /version         Show version
+  /quit            Exit the application
+  /workspace       Show workspace information
   /init            Initialize project with standard files
   /current-model   Show the current model
 
 Session:
   /status          Show session status
   /session         Manage sessions
+  /steer           Queue a message for current turn
 
 Model:
   /model           Cycle to the next model; /model <name> picks one, /current-model shows it
+  /models          Pick a model from the full list
+  /provider        Switch provider and pick a model
+
+Settings:
+  /permissions     Show or change permission mode
+  /config          Show or update configuration (usage: /config [provider|endpoint|model|key] <val>)
+  /login           Log in with new credentials
+  /logout          Log out and clear credentials
+  /settings        Open settings dashboard tab
+
+Git:
+  /branch          Manage git branches
+  /pr              Manage pull requests
 
 Output:
   /cost            Show token usage and cost
   /export          Export conversation to file
 
 Tools:
+  /agents          Show available agents
+  /skills          Show available skills
+  /audit           Show recent tool activity
   /plan            Toggle plan mode (outline before executing)
   /memory          Show system prompt and context state
 
 Other:
   /cleanup         List saved sessions by size/age; delete with --confirm
+  /commit          Stage and commit changes
   /diagnose        Report provider, permissions, and storage state
+  /diff            Show git working tree changes
+  /doctor          Check that everything is ready
   /effort          Show or cycle reasoning effort (usage: /effort [low|medium|high])
+  /keys            List the keyboard shortcuts
   /limit           Show or set the session tool-call limit
+  /persona         Switch behavior mode
+  /reset           Reset credentials and sessions
   /theme           Cycle to the next theme, or set one by name
 
 
