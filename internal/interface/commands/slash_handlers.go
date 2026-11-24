@@ -14,7 +14,7 @@ import (
 func HelpHandler(registry *SlashRegistry) SlashHandler {
 	return func(args string) (string, error) {
 		if args != "" {
-			if desc, exists := registry.help[args]; exists {
+			if desc, exists := registry.help[args]; exists && registry.visible(args) {
 				return fmt.Sprintf("/%s - %s", args, desc), nil
 			}
 			if registry.IsPlanned(args) {
