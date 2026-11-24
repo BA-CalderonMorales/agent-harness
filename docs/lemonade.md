@@ -35,7 +35,7 @@ make run
 ```
 
 Open `/login`. Under **On this computer**, choose **Lemonade**, then
-`qwen3.5-4b-FLM`. Lemonade uses port 13305; **FastFlowLM (direct)** connects
+`gemma4-it-12b-FLM`. Lemonade uses port 13305; **FastFlowLM (direct)** connects
 to a separate `flm serve` endpoint on port 52625. **Custom local server**
 keeps the generic OpenAI-compatible connection, whose default is port 8080.
 Hosted inference services appear in their own group.
@@ -68,10 +68,12 @@ alongside the in-process regression checks.
 
 ## Model candidates
 
-Use Qwen3.5-4B as the current working candidate based on the successful
-local task. Keep Qwen3.5-9B for quality comparisons on harder tasks. Both have vision and tool-calling entries in the
-[Lemonade catalog](https://lemonade-server.ai/docs/models.html). Compare
-Gemma-4-12B-it if the initial model's task accuracy is inadequate. These are
+Use `gemma4-it-12b-FLM` as the current default local model. It passed 11 of
+15 automatic eval runs, against 5 of 15 for Qwen3.5-9B. Qwen3.5-4B was the
+earlier working candidate on the successful local task, and Qwen3.5-9B remains
+useful for quality comparisons on harder tasks. Both have vision and
+tool-calling entries in the
+[Lemonade catalog](https://lemonade-server.ai/docs/models.html). These are
 evaluation candidates, not benchmark winners on this machine.
 
 The catalog lists the Qwen3.5 9B GGUF package at about 6.88 GB and the 4B
@@ -146,7 +148,7 @@ bash /home/bmoe/Projects/agent-harness/scripts/ah-lemonade.sh
 
 The launcher checks that the endpoint lists the selected model, builds the
 current app, and launches it in the caller's workspace. It defaults to
-`qwen3.5-4b-FLM`. It sets the local
+`gemma4-it-12b-FLM`. It sets the local
 endpoint, model, placeholder key, 8K input budget, and 4K output limit for
 that process. It does not install packages, start the service, or edit the
 repository's default YAML. The app's normal settings/session persistence
@@ -170,7 +172,7 @@ Run the server smoke checks from any directory:
 
 ```bash
 python /home/bmoe/Projects/agent-harness/examples/lemonade/smoke.py \
-  --model qwen3.5-4b-FLM
+  --model gemma4-it-12b-FLM
 ```
 
 The script sends text, a harmless synthetic tool round trip, and a generated
