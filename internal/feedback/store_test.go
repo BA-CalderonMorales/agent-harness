@@ -96,3 +96,28 @@ func TestAppendIsAppendOnlyAndCreatesMode0600(t *testing.T) {
 		t.Fatalf("file mode = %o, want 0600", mode)
 	}
 }
+
+func TestAppendTightensExistingFileTo0600(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("file mode bits are not meaningful on windows")
+	}
+	path := filepath.Join(t.TempDir(), "feedback.jsonl")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatalf("pre-create: %v", err)
+	}
+	if err := os.Chmod(path, 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+
+	if err := Append(path, sampleRecord()); err != nil {
+		t.Fatalf("Append() error = %v", err)
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat: %v", err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Fatalf("pre-existing 0644 file after append = %o, want 0600", mode)
+	}
+}
