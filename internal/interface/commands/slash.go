@@ -22,7 +22,6 @@ type SlashHandler func(args string) (string, error)
 type SlashRegistry struct {
 	commands map[string]SlashHandler
 	help     map[string]string
-	planned  map[string]string
 	gates    map[string]slashGate
 }
 
@@ -31,7 +30,6 @@ func NewSlashRegistry() *SlashRegistry {
 	return &SlashRegistry{
 		commands: make(map[string]SlashHandler),
 		help:     make(map[string]string),
-		planned:  make(map[string]string),
 		gates:    make(map[string]slashGate),
 	}
 }
@@ -42,35 +40,6 @@ func (sr *SlashRegistry) Register(name, description string, handler SlashHandler
 	sr.help[name] = description
 }
 
-// MarkPlanned marks a command as planned but not yet available. It is not
-// a Labs flag: a Labs flag (config.Labs) toggles a feature that exists,
-// while a planned command has no implementation yet. The command appears
-// in /help under "Coming soon" and returns an informational message when
-// invoked.
-func (sr *SlashRegistry) MarkPlanned(name, description string) {
-	sr.planned[name] = description
-}
-
-// IsPlanned returns true if the named command is a planned command.
-func (sr *SlashRegistry) IsPlanned(name string) bool {
-	_, ok := sr.planned[name]
-	return ok
-}
-
-// PlannedMessage returns the "coming soon" message for a planned command.
-func (sr *SlashRegistry) PlannedMessage(name string) string {
-	desc := sr.planned[name]
-	var b strings.Builder
-	fmt.Fprintf(&b, "/%s — coming soon\n", name)
-	fmt.Fprintf(&b, "  %s\n\n", desc)
-	b.WriteString("  This command is planned for an upcoming release.\n")
-	b.WriteString("  We are working to stabilize it with full test coverage.\n\n")
-	b.WriteString("  In the meantime, OpenCode (https://opencode.ai) offers\n")
-	b.WriteString("  similar functionality for coding agent workflows.\n\n")
-	b.WriteString("  Type /help to see all available commands.")
-	return b.String()
-}
-
 // Handle handles a slash command
 func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 	if !strings.HasPrefix(input, "/") {
@@ -78,10 +47,6 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 	}
 
 	cmd := ParseSlashCommand(input)
-
-	if sr.IsPlanned(cmd.Name) {
-		return sr.PlannedMessage(cmd.Name), true, nil
-	}
 
 	if msg, off := sr.gatedOffMessage(cmd.Name); off {
 		return msg, true, nil
@@ -190,20 +155,6 @@ func (sr *SlashRegistry) GetHelp() string {
 			}
 		}
 		lines = append(lines, "")
-	}
-
-	// Planned commands are invisible in /help otherwise: list
-	// them under a coming-soon banner so the plan is public knowledge.
-	var plannedNames []string
-	for name := range sr.planned {
-		plannedNames = append(plannedNames, name)
-	}
-	sort.Strings(plannedNames)
-	if len(plannedNames) > 0 {
-		lines = append(lines, "Coming soon:")
-		for _, cmd := range plannedNames {
-			lines = append(lines, fmt.Sprintf("  /%-15s %s", cmd, sr.planned[cmd]))
-		}
 	}
 
 	return strings.Join(lines, "\n")

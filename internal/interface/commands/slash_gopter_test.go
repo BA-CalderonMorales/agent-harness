@@ -31,31 +31,6 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("MarkPlanned followed by IsPlanned returns true", prop.ForAll(
-		func(name string) bool {
-			if name == "" {
-				return true
-			}
-			reg := NewSlashRegistry()
-			reg.MarkPlanned(name, "Coming soon")
-			return reg.IsPlanned(name)
-		},
-		gen.AlphaString(),
-	))
-
-	properties.Property("Handle on a planned command returns coming soon", prop.ForAll(
-		func(name string) bool {
-			if name == "" {
-				return true
-			}
-			reg := NewSlashRegistry()
-			reg.MarkPlanned(name, "Coming soon")
-			result, handled, err := reg.Handle("/" + name)
-			return err == nil && handled && strings.Contains(result, "Coming soon")
-		},
-		gen.AlphaString(),
-	))
-
 	properties.Property("GetHelp includes registered commands", prop.ForAll(
 		func(name string) bool {
 			if name == "" {
@@ -69,14 +44,13 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 		gen.AlphaString(),
 	))
 
-	properties.Property("Planned and registered commands parity across all discovery surfaces", prop.ForAll(
-		func(regName string, flagName string) bool {
-			if regName == "" || flagName == "" || regName == flagName {
+	properties.Property("Registered commands appear on every discovery surface", prop.ForAll(
+		func(regName string) bool {
+			if regName == "" {
 				return true
 			}
 			reg := NewSlashRegistry()
 			reg.Register(regName, "registered desc", func(_ string) (string, error) { return "ok", nil })
-			reg.MarkPlanned(flagName, "planned desc")
 
 			help := reg.GetHelp()
 			comps := reg.GetCompletions()
@@ -114,47 +88,8 @@ func TestSlashCommandsPropertyBased(t *testing.T) {
 				}
 			}
 
-			if !registeredPresent || !foundComp || !descExists || !infoFound {
-				return false
-			}
-
-			// 2. Planned commands stay out of the dispatch
-			// surfaces (completions, descriptions, infos) but are listed
-			// in /help under the Coming soon banner (the MarkPlanned
-			// documented contract).
-			flaggedPresentInComps := false
-			for _, c := range comps {
-				if c == "/"+flagName {
-					flaggedPresentInComps = true
-					break
-				}
-			}
-			flaggedPresentInDescs := descs["/"+flagName] != ""
-			flaggedPresentInInfos := false
-			for _, info := range infos {
-				if info.Command == "/"+flagName {
-					flaggedPresentInInfos = true
-					break
-				}
-			}
-
-			flaggedInComingSoon := false
-			inComingSoon := false
-			for _, line := range strings.Split(help, "\n") {
-				trimmed := strings.TrimSpace(line)
-				if strings.HasPrefix(trimmed, "Coming soon") {
-					inComingSoon = true
-					continue
-				}
-				if inComingSoon && (trimmed == "/"+flagName || strings.HasPrefix(trimmed, "/"+flagName+" ")) {
-					flaggedInComingSoon = true
-					break
-				}
-			}
-
-			return !flaggedPresentInComps && !flaggedPresentInDescs && !flaggedPresentInInfos && flaggedInComingSoon
+			return registeredPresent && foundComp && descExists && infoFound
 		},
-		gen.AlphaString(),
 		gen.AlphaString(),
 	))
 

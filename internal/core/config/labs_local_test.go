@@ -1,15 +1,14 @@
 package config
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 // settings.local.json sits above the user layer. A lab it sets belongs to
-// that file: it is never copied into the user layer, and a toggle over it
-// is written back to the local file, where it lasts.
+// that file: it is never copied into the user layer, and the app does not
+// change it. Only editing the file changes it.
 
 func writeLocalSettings(t *testing.T, dir, body string) {
 	t.Helper()
@@ -22,64 +21,36 @@ func writeLocalSettings(t *testing.T, dir, body string) {
 	}
 }
 
-func readLocalSettings(t *testing.T, dir string) map[string]interface{} {
-	t.Helper()
-	data, err := os.ReadFile(filepath.Join(dir, ".agent-harness", "settings.local.json"))
-	if err != nil {
-		t.Fatalf("read local settings: %v", err)
-	}
-	var values map[string]interface{}
-	if err := json.Unmarshal(data, &values); err != nil {
-		t.Fatalf("parse local settings: %v", err)
-	}
-	return values
-}
-
 func TestLocalLabIsNotCopiedToUserLayer(t *testing.T) {
 	dir := isolateLabs(t)
 	writeLocalSettings(t, dir, `{"loop_track": true}`)
 
 	cfg := loadLabs(t, dir)
-	if !cfg.LabEnabled(LabLoopTrack) {
-		t.Fatal("settings.local.json loop_track=true did not apply")
+	if !cfg.LabEnabled(LabLoopTrack) || !cfg.LabSetByLocal(LabLoopTrack) {
+		t.Fatal("settings.local.json loop_track=true did not apply as a local-layer value")
 	}
 	if v, ok := cfg.LabSettingsValues()[LabLoopTrack]; ok {
 		t.Fatalf("a local-layer lab is in the user-layer save as %v", v)
 	}
-	if got := cfg.LabLocalValues(); len(got) != 0 {
-		t.Fatalf("an untouched local lab would be rewritten: %v", got)
-	}
 }
 
-func TestLabToggleOverLocalLayerWritesLocalFile(t *testing.T) {
+func TestLabToggleOverLocalLayerIsRefused(t *testing.T) {
 	dir := isolateLabs(t)
-	writeLocalSettings(t, dir, `{"loop_track": true, "other": "kept"}`)
+	writeLocalSettings(t, dir, `{"loop_track": true}`)
 
 	cfg := loadLabs(t, dir)
 	cfg.SetLab(LabLoopTrack, false)
-	if cfg.LabEnabled(LabLoopTrack) {
-		t.Fatal("toggling off over the local layer did not apply in session")
+	if !cfg.LabEnabled(LabLoopTrack) {
+		t.Fatal("SetLab changed a lab settings.local.json sets")
+	}
+	cfg.ClearLab(LabLoopTrack)
+	if !cfg.LabEnabled(LabLoopTrack) {
+		t.Fatal("ClearLab changed a lab settings.local.json sets")
 	}
 	if v, ok := cfg.LabSettingsValues()[LabLoopTrack]; ok {
-		t.Fatalf("a toggle over the local layer went to the user layer as %v", v)
+		t.Fatalf("a refused toggle reached the user-layer save as %v", v)
 	}
-	if err := NewLayeredLoader(dir).SaveSettings(SourceLocal, cfg.LabLocalValues()); err != nil {
-		t.Fatalf("SaveSettings: %v", err)
-	}
-	local := readLocalSettings(t, dir)
-	if local[LabLoopTrack] != false || local["other"] != "kept" {
-		t.Fatalf("local file = %v, want loop_track false and other keys kept", local)
-	}
-	if loadLabs(t, dir).LabEnabled(LabLoopTrack) {
-		t.Fatal("the toggle over the local layer did not survive a reload")
-	}
-
-	cfg = loadLabs(t, dir)
-	cfg.ClearLab(LabLoopTrack)
-	if err := NewLayeredLoader(dir).SaveSettings(SourceLocal, cfg.LabLocalValues()); err != nil {
-		t.Fatalf("SaveSettings: %v", err)
-	}
-	if _, ok := readLocalSettings(t, dir)[LabLoopTrack]; ok {
-		t.Fatal("clearing a local-layer lab left its key in settings.local.json")
+	if loadLabs(t, dir).LabSetByLocal("no_such_lab") {
+		t.Fatal("an unregistered key reports a local-layer value")
 	}
 }
