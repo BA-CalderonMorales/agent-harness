@@ -16,7 +16,7 @@ func userText(text string) types.Message {
 
 func TestSeedRecordPrefersTheCallersRecord(t *testing.T) {
 	given := record.Fold([]types.Message{userText("migrate settings persistence to one write path")})
-	params := QueryParams{Record: given, Messages: []types.Message{userText("something else entirely")}}
+	params := QueryParams{Record: given, Messages: []types.Message{userText("something else entirely")}, RecordCompaction: true}
 	if got := seedRecord(params); !reflect.DeepEqual(got, given) {
 		t.Fatalf("seed = %+v, want the caller's record %+v", got, given)
 	}
@@ -24,7 +24,7 @@ func TestSeedRecordPrefersTheCallersRecord(t *testing.T) {
 
 func TestSeedRecordFoldsTheTranscriptWhenNoRecordIsGiven(t *testing.T) {
 	msgs := []types.Message{userText("migrate settings persistence to one write path")}
-	got := seedRecord(QueryParams{Messages: msgs})
+	got := seedRecord(QueryParams{Messages: msgs, RecordCompaction: true})
 	if want := record.Fold(msgs); !reflect.DeepEqual(got, want) {
 		t.Fatalf("seed = %+v, want Fold of the messages %+v", got, want)
 	}

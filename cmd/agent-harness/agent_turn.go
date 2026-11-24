@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
@@ -74,16 +75,19 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 		toolCtx.AskUser = app.requestUserQuestion
 	}
 
+	// The record compaction lab's gate lives in the agent loop (seedRecord);
+	// this only forwards the user's choice.
 	params := agent.QueryParams{
-		Messages:        app.session.Messages,
-		Record:          app.session.Record,
-		SystemPrompt:    sysPrompt,
-		CanUseTool:      canUseTool,
-		ToolUseContext:  toolCtx,
-		MaxOutputTokens: maxOutput,
-		Temperature:     app.config.Temperature,
-		TemperatureSet:  app.config.TemperatureSet,
-		ReasoningEffort: app.config.Effort,
+		Messages:         app.session.Messages,
+		Record:           app.session.Record,
+		RecordCompaction: app.config.LabEnabled(config.LabRecordCompaction),
+		SystemPrompt:     sysPrompt,
+		CanUseTool:       canUseTool,
+		ToolUseContext:   toolCtx,
+		MaxOutputTokens:  maxOutput,
+		Temperature:      app.config.Temperature,
+		TemperatureSet:   app.config.TemperatureSet,
+		ReasoningEffort:  app.config.Effort,
 		// The session-scoped /limit knob overrides the loop default.
 		MaxToolCalls: app.session.ToolLimit,
 		PromptTokens: promptTokens,

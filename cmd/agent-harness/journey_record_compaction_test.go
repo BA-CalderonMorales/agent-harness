@@ -85,6 +85,7 @@ func recordJourneySession() []types.Message {
 func TestJourneyRecordCompactionOnSmallWindow(t *testing.T) {
 	workspace := journeyHome(t)
 	journeyLocal(t)
+	t.Setenv("AH_RECORD_COMPACTION", "1")
 
 	app := bootJourneyApp(t)
 	history := recordJourneySession()
