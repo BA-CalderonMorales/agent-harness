@@ -22,6 +22,12 @@ func Append(path string, rec Record) error {
 	if err != nil {
 		return fmt.Errorf("open feedback file: %w", err)
 	}
+	// OpenFile applies the mode only on create; tighten a file that
+	// already exists so the 0600 promise holds for every append.
+	if err := os.Chmod(path, 0o600); err != nil {
+		_ = f.Close()
+		return fmt.Errorf("restrict feedback file: %w", err)
+	}
 	if _, err := f.Write(append(line, '\n')); err != nil {
 		_ = f.Close()
 		return fmt.Errorf("write feedback: %w", err)
