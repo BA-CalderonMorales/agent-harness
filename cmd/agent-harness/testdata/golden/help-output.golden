@@ -1,0 +1,47 @@
+$ /help
+Available commands:
+
+Modes:
+  /mode            Set or cycle the agent mode (manual/auto/plan/chat)
+  /modes           List agent modes, marking the active one
+
+Core:
+  /help            Show available commands
+  /clear           Clear the session history
+  /compact         Compact session to reduce token usage
+  /init            Initialize project with standard files
+  /current-model   Show the current model
+
+Session:
+  /status          Show session status
+  /session         Manage sessions
+
+Model:
+  /model           Cycle to the next model; /model <name> picks one, /current-model shows it
+
+Output:
+  /cost            Show token usage and cost
+  /export          Export conversation to file
+
+Tools:
+  /plan            Toggle plan mode (outline before executing)
+  /memory          Show system prompt and context state
+
+Other:
+  /cleanup         List saved sessions by size/age; delete with --confirm
+  /diagnose        Report provider, permissions, and storage state
+  /effort          Show or cycle reasoning effort (usage: /effort [low|medium|high])
+  /limit           Show or set the session tool-call limit
+  /theme           Cycle to the next theme, or set one by name
+
+
+$ /help modes
+/modes - List agent modes, marking the active one
+
+$ /help no-such-command
+Unknown command: /no-such-command
+
+$ /no-such-command
+Unknown command: /no-such-command
+Type /help for available commands
+

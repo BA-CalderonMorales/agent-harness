@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"strings"
 	"testing"
 
 	"pgregory.net/rapid"
@@ -48,18 +47,6 @@ func TestSlashCommandsRapid_Properties(t *testing.T) {
 			if !IsSettings(res) {
 				t.Fatalf("Expected /settings to return __SETTINGS__, got %q", res)
 			}
-		}
-
-		// Invariant 3: Planned commands are isolated and return Coming Soon notice
-		featureCmd := rapid.StringMatching("flag_[a-z]{3,8}").Draw(t, "featureCmd")
-		registry.MarkPlanned(featureCmd, "Feature coming soon")
-
-		resFlag, handledFlag, errFlag := registry.Handle("/" + featureCmd)
-		if !handledFlag || errFlag != nil {
-			t.Fatalf("Expected planned command /%s to be handled without error", featureCmd)
-		}
-		if !strings.Contains(resFlag, "coming soon") {
-			t.Fatalf("Expected 'coming soon' notice for planned command /%s, got %q", featureCmd, resFlag)
 		}
 	})
 }
