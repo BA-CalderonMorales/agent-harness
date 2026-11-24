@@ -257,3 +257,39 @@ func TestLabsSectionRendersInTerminal(t *testing.T) {
 		})
 	}
 }
+
+// A locked or pinned row says why on the detail line, which keeps only
+// its first line: the reason comes before the description.
+func TestLabsLockReasonIsVisibleInTerminal(t *testing.T) {
+	last := config.Labs[len(config.Labs)-1]
+	for _, size := range [][2]int{{40, 15}, {80, 24}} {
+		t.Run(fmt.Sprintf("local %dx%d", size[0], size[1]), func(t *testing.T) {
+			journeyHome(t)
+			if err := os.MkdirAll(".agent-harness", 0o755); err != nil {
+				t.Fatal(err)
+			}
+			body := fmt.Sprintf(`{%q: true}`, last.Key)
+			if err := os.WriteFile(filepath.Join(".agent-harness", "settings.local.json"), []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			app := bootJourneyApp(t)
+			screen := newJourneyScreen(t, wireJourneyTUI(t, app), size[0], size[1])
+			screen.Keys("5")
+			screen.SendAndPump(tea.KeyMsg{Type: tea.KeyHome})
+			screen.Press("up") // wraps to the last Labs row
+			screen.AssertFitsWidth(size[0])
+			screen.AssertContains(last.Label, "Set by settings.local.json")
+		})
+		t.Run(fmt.Sprintf("pinned %dx%d", size[0], size[1]), func(t *testing.T) {
+			journeyHome(t)
+			t.Setenv(last.EnvVar, "1")
+			app := bootJourneyApp(t)
+			screen := newJourneyScreen(t, wireJourneyTUI(t, app), size[0], size[1])
+			screen.Keys("5")
+			screen.SendAndPump(tea.KeyMsg{Type: tea.KeyHome})
+			screen.Press("up")
+			screen.AssertFitsWidth(size[0])
+			screen.AssertContains(last.Label, "Pinned by")
+		})
+	}
+}

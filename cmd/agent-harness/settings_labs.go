@@ -9,8 +9,9 @@ import (
 // is always the last section.
 const labsCategory = "Labs"
 
-// labsMarker opens every Labs row's description so even a narrow pane's
-// clipped detail line says the flag is not a promise.
+// labsMarker opens every unlocked Labs row's description so even a narrow
+// pane's clipped detail line says the flag is not a promise. A locked row
+// leads with its lock reason instead.
 const labsMarker = "Experimental, may be removed. "
 
 // labsLocalLock locks a row whose lab settings.local.json sets: the app
@@ -22,12 +23,14 @@ const labsLocalLock = "Set by settings.local.json. Edit that file to change it."
 func (app *App) labsSettings() []tui.Setting {
 	rows := make([]tui.Setting, 0, len(config.Labs))
 	for _, lab := range config.Labs {
+		// The detail panel keeps only the first line, so a reason the
+		// row is locked comes first: otherwise it is clipped away.
 		desc := labsMarker + lab.Description
 		switch {
 		case app.config.LabPinned(lab.Key):
-			desc += " Pinned by " + app.config.LabPinnedBy(lab.Key) + " for this session."
+			desc = "Pinned by " + app.config.LabPinnedBy(lab.Key) + " for this session. " + desc
 		case app.config.LabSetByLocal(lab.Key):
-			desc += " " + labsLocalLock
+			desc = labsLocalLock + " " + desc
 		}
 		rows = append(rows, tui.Setting{
 			Key:         lab.Key,
