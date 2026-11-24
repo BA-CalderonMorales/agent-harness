@@ -184,7 +184,7 @@ Permissions updated
 ```
 
 In read-only mode:
-- ✅ Read, search, and analyze tools work
+- ✅ Read, search, and analyze tools work, and `todo_write` (the plan checklist) works because it writes no files
 - ❌ Bash, write, and edit tools are blocked
 - Use for: Code review, analysis, safe exploration
 
