@@ -195,7 +195,8 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 // isStateOnlyTool reports tools that change only in-session state (the plan
 // checklist) and touch no files or shell. Read-only mode permits them so the
 // agent can plan before it has write access. Kept apart from isReadOnlyTool
-// because plan mode and the repeated-read recovery use that list.
+// because plan mode gates on that list. The repeated-read recovery does not
+// use it: it reads each tool's Capabilities.IsReadOnly flag (agent/loop_repetition.go).
 var stateOnlyTools = []string{"todo_write"}
 
 func isStateOnlyTool(name string) bool {
