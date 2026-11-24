@@ -50,6 +50,9 @@ func DataAudit() string       { return filepath.Join(DataHome(), "audit") }
 func DataLogs() string        { return filepath.Join(DataHome(), "logs") }
 func DataToolResults() string { return filepath.Join(DataHome(), "tool-results") }
 
+// DataFeedback is the local file /feedback appends reports to.
+func DataFeedback() string { return filepath.Join(DataHome(), "feedback.jsonl") }
+
 // legacyHome is the pre-XDG flat directory. New installs never create
 // it; existing installs are migrated once at boot.
 func legacyHome() string {

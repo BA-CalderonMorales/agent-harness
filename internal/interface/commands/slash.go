@@ -22,6 +22,7 @@ type SlashHandler func(args string) (string, error)
 type SlashRegistry struct {
 	commands map[string]SlashHandler
 	help     map[string]string
+	gates    map[string]slashGate
 }
 
 // NewSlashRegistry creates a new slash command registry
@@ -29,6 +30,7 @@ func NewSlashRegistry() *SlashRegistry {
 	return &SlashRegistry{
 		commands: make(map[string]SlashHandler),
 		help:     make(map[string]string),
+		gates:    make(map[string]slashGate),
 	}
 }
 
@@ -45,6 +47,10 @@ func (sr *SlashRegistry) Handle(input string) (string, bool, error) {
 	}
 
 	cmd := ParseSlashCommand(input)
+
+	if msg, off := sr.gatedOffMessage(cmd.Name); off {
+		return msg, true, nil
+	}
 
 	handler, exists := sr.commands[cmd.Name]
 	if !exists {
@@ -87,6 +93,9 @@ func ParseSlashCommand(input string) SlashCommand {
 func (sr *SlashRegistry) findSimilar(name string) []string {
 	var suggestions []string
 	for cmdName := range sr.commands {
+		if !sr.visible(cmdName) {
+			continue
+		}
 		if strings.HasPrefix(cmdName, name) || strings.HasPrefix(name, cmdName) {
 			suggestions = append(suggestions, "/"+cmdName)
 		}
@@ -120,7 +129,7 @@ func (sr *SlashRegistry) GetHelp() string {
 		var catLines []string
 		for _, cmd := range cat.cmds {
 			categorized[cmd] = true
-			if desc, exists := sr.help[cmd]; exists {
+			if desc, exists := sr.help[cmd]; exists && sr.visible(cmd) {
 				catLines = append(catLines, fmt.Sprintf("  /%-15s %s", cmd, desc))
 			}
 		}
@@ -133,7 +142,7 @@ func (sr *SlashRegistry) GetHelp() string {
 
 	var other []string
 	for cmd := range sr.commands {
-		if !categorized[cmd] && cmd != "exit" {
+		if !categorized[cmd] && cmd != "exit" && sr.visible(cmd) {
 			other = append(other, cmd)
 		}
 	}
@@ -155,7 +164,7 @@ func (sr *SlashRegistry) GetHelp() string {
 func (sr *SlashRegistry) GetCompletions() []string {
 	completions := make([]string, 0, len(sr.commands))
 	for name := range sr.commands {
-		if name == "exit" {
+		if name == "exit" || !sr.visible(name) {
 			continue
 		}
 		completions = append(completions, "/"+name)
@@ -176,7 +185,7 @@ type CommandInfo struct {
 func (sr *SlashRegistry) GetCommandInfos() []CommandInfo {
 	var infos []CommandInfo
 	for name, desc := range sr.help {
-		if name == "exit" {
+		if name == "exit" || !sr.visible(name) {
 			continue
 		}
 		infos = append(infos, CommandInfo{
@@ -212,7 +221,7 @@ func guessCategory(name string) string {
 func (sr *SlashRegistry) GetCompletionDescriptions() map[string]string {
 	descriptions := make(map[string]string, len(sr.help))
 	for name, description := range sr.help {
-		if name == "exit" {
+		if name == "exit" || !sr.visible(name) {
 			continue
 		}
 		descriptions["/"+name] = description
