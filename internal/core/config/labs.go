@@ -156,10 +156,6 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 	if !ok {
 		return
 	}
-	if c.labLocalOwned(key) {
-		c.labsLocal[key] = enabled
-		return
-	}
 	if _, inherited := c.labsInherited[key]; !inherited && enabled == lab.Default {
 		c.ClearLab(key)
 		return
@@ -173,10 +169,6 @@ func (c *LayeredConfig) SetLab(key string, enabled bool) {
 // ClearLab drops the saved choice so the lab returns to the value a
 // project layer sets, or else its Default.
 func (c *LayeredConfig) ClearLab(key string) {
-	if c.labLocalOwned(key) {
-		delete(c.labsLocal, key)
-		return
-	}
 	delete(c.LabsSaved, key)
 }
 
@@ -187,7 +179,7 @@ func (c *LayeredConfig) ClearLab(key string) {
 func (c *LayeredConfig) LabSettingsValues() map[string]interface{} {
 	values := make(map[string]interface{}, len(Labs))
 	for _, lab := range Labs {
-		if c.LabPinned(lab.Key) || c.labLocalOwned(lab.Key) {
+		if c.LabPinned(lab.Key) || c.LabSetByLocal(lab.Key) {
 			continue
 		}
 		if v, ok := c.LabsSaved[lab.Key]; ok {

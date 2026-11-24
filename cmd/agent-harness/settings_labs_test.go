@@ -132,14 +132,16 @@ func TestTogglingLabOffOverProjectLayerSurvivesRestart(t *testing.T) {
 }
 
 // settings.local.json owns a lab it sets: an unrelated save leaves the
-// user layer alone, and a Settings toggle is written to the local file.
-func TestLocalLayerLabStaysInLocalFile(t *testing.T) {
+// user layer alone, and a Settings toggle is refused without touching
+// either file. The row says which file to edit.
+func TestLocalLayerLabIsLockedInSettings(t *testing.T) {
 	journeyHome(t)
 	local := filepath.Join(".agent-harness", "settings.local.json")
 	if err := os.MkdirAll(".agent-harness", 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(local, []byte(`{"loop_track": true}`), 0o600); err != nil {
+	localBody := "{\n\"loop_track\":   true }"
+	if err := os.WriteFile(local, []byte(localBody), 0o600); err != nil {
 		t.Fatal(err)
 	}
 	app := bootJourneyApp(t)
@@ -150,19 +152,31 @@ func TestLocalLayerLabStaysInLocalFile(t *testing.T) {
 		t.Fatalf("an unrelated save copied the local loop_track = %v into the user layer", v)
 	}
 
-	delegateFor(t, app).OnSettingChange(config.LabLoopTrack, "false")
-	if v, ok := readUserSettings(t)[config.LabLoopTrack]; ok {
-		t.Fatalf("the toggle wrote loop_track = %v to the user layer, not the local file", v)
+	for _, row := range app.getSettings() {
+		if row.Key == config.LabLoopTrack && !strings.Contains(row.Description, labsLocalLock) {
+			t.Fatalf("row description %q does not name settings.local.json", row.Description)
+		}
 	}
-	data, err := os.ReadFile(local)
+
+	userPath := filepath.Join(config.ConfigHome(), "settings.json")
+	userBefore, err := os.ReadFile(userPath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(data), `"loop_track": false`) {
-		t.Fatalf("settings.local.json = %s, want loop_track false", data)
+	delegate := delegateFor(t, app)
+	delegate.OnSettingChange(config.LabLoopTrack, "false")
+
+	if !app.config.LabEnabled(config.LabLoopTrack) {
+		t.Fatal("the toggle changed a lab settings.local.json sets")
 	}
-	if bootJourneyApp(t).config.LabEnabled(config.LabLoopTrack) {
-		t.Fatal("the toggle over settings.local.json did not survive a restart")
+	if after, _ := os.ReadFile(userPath); string(after) != string(userBefore) {
+		t.Fatalf("settings.json changed on a refused toggle:\n%s", after)
+	}
+	if after, _ := os.ReadFile(local); string(after) != localBody {
+		t.Fatalf("settings.local.json changed on a refused toggle:\n%s", after)
+	}
+	if texts := strings.Join(statusTexts(app.tuiApp), "\n"); !strings.Contains(texts, labsLocalLock) {
+		t.Fatalf("the refusal does not name settings.local.json:\n%s", texts)
 	}
 }
 
