@@ -14,8 +14,8 @@ import (
 	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
+	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
