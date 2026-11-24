@@ -201,7 +201,7 @@ func getModelsForProvider(provider, currentModel string) []tui.ModelItem {
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "ollama", ContextLen: 128000, IsDefault: currentModel == "llama3.2:3b"},
 		}
 	case "lemonade":
-		return []tui.ModelItem{{ID: config.DefaultLemonadeModel, Name: "Qwen 3.5 4B (FLM)", Provider: "lemonade", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultLemonadeModel}}
+		return []tui.ModelItem{{ID: config.DefaultLemonadeModel, Name: "Gemma 4 12B (FLM)", Provider: "lemonade", ContextLen: config.DefaultContextLength, IsDefault: currentModel == config.DefaultLemonadeModel}}
 	case "flm":
 		return []tui.ModelItem{
 			{ID: "llama3.2:3b", Name: "Llama 3.2 3B", Provider: "flm", ContextLen: 131072, IsDefault: currentModel == "llama3.2:3b"},

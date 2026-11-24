@@ -19,7 +19,7 @@ func TestLemonadeDiscoveryLoginAndRestart(t *testing.T) {
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
 	original := http.DefaultTransport
 	t.Cleanup(func() { http.DefaultTransport = original })
-	ids := `{"data":[{"id":"qwen3.5-4b-FLM"},{"id":"next-local-model"}]}`
+	ids := `{"data":[{"id":"gemma4-it-12b-FLM"},{"id":"next-local-model"}]}`
 	http.DefaultTransport = lemonadeTransport(func(r *http.Request) (*http.Response, error) {
 		if r.URL.String() != config.DefaultLemonadeEndpoint+"/models" {
 			t.Fatalf("wrong discovery endpoint: %s", r.URL)
