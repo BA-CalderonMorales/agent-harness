@@ -1,6 +1,7 @@
 package config
 
 import (
+	"os"
 	"strconv"
 	"strings"
 )
@@ -61,22 +62,34 @@ func labEnvNames(lab Lab) []string {
 	return names
 }
 
-// applyLabEnvOverrides records every lab the environment pins. A value
-// that does not parse as a bool is ignored, the same rule the other bool
-// environment settings follow.
+// applyLabEnvOverrides records every lab the environment pins, and which
+// accepted variable pinned it. The first set name wins, as firstEnv does.
+// A value that does not parse as a bool is ignored, the same rule the
+// other bool environment settings follow.
 func applyLabEnvOverrides(config *LayeredConfig) {
 	for _, lab := range Labs {
-		v := firstEnv(labEnvNames(lab)...)
-		if v == "" {
-			continue
-		}
-		if parsed, err := strconv.ParseBool(v); err == nil {
-			if config.LabsPinned == nil {
-				config.LabsPinned = map[string]bool{}
+		for _, name := range labEnvNames(lab) {
+			v := os.Getenv(name)
+			if v == "" {
+				continue
 			}
-			config.LabsPinned[lab.Key] = parsed
+			if parsed, err := strconv.ParseBool(v); err == nil {
+				if config.LabsPinned == nil {
+					config.LabsPinned = map[string]bool{}
+					config.labsPinnedBy = map[string]string{}
+				}
+				config.LabsPinned[lab.Key] = parsed
+				config.labsPinnedBy[lab.Key] = name
+			}
+			break
 		}
 	}
+}
+
+// LabPinnedBy names the environment variable that pins the lab this
+// session, or "" when nothing pins it.
+func (c *LayeredConfig) LabPinnedBy(key string) string {
+	return c.labsPinnedBy[key]
 }
 
 // extractLabs reads every lab one settings layer sets. A project layer

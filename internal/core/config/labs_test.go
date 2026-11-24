@@ -129,6 +129,22 @@ func TestLoopTrackEnvironmentStillWorks(t *testing.T) {
 	}
 }
 
+func TestLabPinnedByNamesTheVariableThatPinned(t *testing.T) {
+	for _, name := range []string{"AH_LOOP_TRACK", "AGENT_HARNESS_LOOP_TRACK"} {
+		t.Run(name, func(t *testing.T) {
+			dir := isolateLabs(t)
+			t.Setenv(name, "1")
+			cfg := loadLabs(t, dir)
+			if got := cfg.LabPinnedBy(LabLoopTrack); got != name {
+				t.Fatalf("LabPinnedBy = %q, want %q (the variable actually set)", got, name)
+			}
+		})
+	}
+	if got := (&LayeredConfig{}).LabPinnedBy(LabLoopTrack); got != "" {
+		t.Fatalf("unpinned LabPinnedBy = %q, want empty", got)
+	}
+}
+
 func TestLabEnvironmentIgnoresUnparsableValue(t *testing.T) {
 	dir := isolateLabs(t)
 	writeProjectSettings(t, dir, `{"loop_track": true}`)

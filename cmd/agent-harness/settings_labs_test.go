@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -184,6 +185,45 @@ func TestTogglingPinnedLabRowIsRefused(t *testing.T) {
 	}
 	if strings.Contains(string(data), config.LabLoopTrack) {
 		t.Fatalf("toggling an env-pinned lab wrote it to settings.json:\n%s", data)
+	}
+}
+
+// statusTexts drains the TUI's message channel and returns every status
+// line the app sent.
+func statusTexts(app *tui.App) []string {
+	channel := exportedField(reflect.ValueOf(app).Elem().FieldByName("msgChan"))
+	var texts []string
+	for {
+		value, ok := channel.TryRecv()
+		if !ok {
+			return texts
+		}
+		if status, ok := value.Interface().(tui.StatusMsg); ok {
+			texts = append(texts, status.Text)
+		}
+	}
+}
+
+// The pin names the variable that set it, not always the AH_* spelling.
+func TestPinnedLabNamesTheVariableThatPinnedIt(t *testing.T) {
+	journeyHome(t)
+	t.Setenv("AGENT_HARNESS_LOOP_TRACK", "1")
+	app := bootJourneyApp(t)
+
+	for _, row := range app.getSettings() {
+		if row.Key != config.LabLoopTrack {
+			continue
+		}
+		if !strings.Contains(row.Description, "AGENT_HARNESS_LOOP_TRACK") || strings.Contains(row.Description, "AH_LOOP_TRACK") {
+			t.Fatalf("row description %q does not name AGENT_HARNESS_LOOP_TRACK alone", row.Description)
+		}
+	}
+
+	delegate := delegateFor(t, app)
+	delegate.OnSettingChange(config.LabLoopTrack, "false")
+	texts := strings.Join(statusTexts(app.tuiApp), "\n")
+	if !strings.Contains(texts, "pinned by AGENT_HARNESS_LOOP_TRACK") || strings.Contains(texts, "AH_LOOP_TRACK") {
+		t.Fatalf("pin warning does not name AGENT_HARNESS_LOOP_TRACK alone:\n%s", texts)
 	}
 }
 

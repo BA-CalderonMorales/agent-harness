@@ -20,7 +20,7 @@ func (app *App) labsSettings() []tui.Setting {
 	for _, lab := range config.Labs {
 		desc := labsMarker + lab.Description
 		if app.config.LabPinned(lab.Key) {
-			desc += " Pinned by " + lab.EnvVar + " for this session."
+			desc += " Pinned by " + app.config.LabPinnedBy(lab.Key) + " for this session."
 		}
 		rows = append(rows, tui.Setting{
 			Key:         lab.Key,
@@ -38,7 +38,7 @@ func (app *App) labsSettings() []tui.Setting {
 // the change: the environment owns it for this session.
 func (d *tuiSettingsDelegate) handleLabChange(lab config.Lab, value string) {
 	if d.app.config.LabPinned(lab.Key) {
-		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("%s is pinned by %s for this session.", lab.Label, lab.EnvVar), Type: "warning"})
+		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("%s is pinned by %s for this session.", lab.Label, d.app.config.LabPinnedBy(lab.Key)), Type: "warning"})
 		return
 	}
 	d.app.config.SetLab(lab.Key, value == "true")

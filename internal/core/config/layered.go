@@ -121,6 +121,7 @@ type LayeredConfig struct {
 	// and as loaded (labs_local.go).
 	LabsSaved       map[string]bool
 	LabsPinned      map[string]bool
+	labsPinnedBy    map[string]string
 	labsInherited   map[string]bool
 	labsLocal       map[string]bool
 	labsLocalLoaded map[string]bool
