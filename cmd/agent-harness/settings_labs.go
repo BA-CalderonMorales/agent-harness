@@ -43,7 +43,9 @@ func (app *App) labsSettings() []tui.Setting {
 
 // handleLabChange applies a Labs row toggle. An env-pinned lab refuses
 // the change: the environment owns it for this session. A lab
-// settings.local.json sets refuses it too, and nothing is written.
+// settings.local.json sets refuses it too, and nothing is written. The
+// view already flipped the row; OnSettingChange resends the settings after
+// every change, refused or not, which puts the real value back.
 func (d *tuiSettingsDelegate) handleLabChange(lab config.Lab, value string) {
 	if d.app.config.LabPinned(lab.Key) {
 		d.tuiApp.Send(tui.StatusMsg{Text: sprintf("%s is pinned by %s for this session.", lab.Label, d.app.config.LabPinnedBy(lab.Key)), Type: "warning"})
