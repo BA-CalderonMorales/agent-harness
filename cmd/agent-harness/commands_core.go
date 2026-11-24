@@ -269,6 +269,7 @@ func (app *App) initCommandsCore() {
 		})
 
 	registerDiagnoseCommand(app)
+	registerFeedbackCommand(app)
 
 	app.cmdRegistry.Register("memory", "Show system prompt and context state",
 		commands.MemoryHandler(func() string {

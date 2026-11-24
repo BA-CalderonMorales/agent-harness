@@ -23,6 +23,10 @@ type Lab struct {
 // LabLoopTrack shows the Ask/Plan/Review/Try beat track in the chat chrome.
 const LabLoopTrack = "loop_track"
 
+// LabFeedback enables /feedback, which saves friction reports to a local
+// file. Nothing is sent anywhere.
+const LabFeedback = "feedback"
+
 // Labs is the only list of experimental flags. New behavior-changing
 // features ship behind an entry here; the Settings tab, the environment
 // overrides, and persistence are all generated from it.
@@ -39,6 +43,13 @@ var Labs = []Lab{
 		Label:       "Loop Track",
 		Description: "Show the Ask/Plan/Review/Try beat track in the chat while a turn runs.",
 		EnvVar:      "AH_LOOP_TRACK",
+		Default:     false,
+	},
+	{
+		Key:         LabFeedback,
+		Label:       "Feedback",
+		Description: "Enable /feedback to save friction notes to a local file. Nothing is sent off this machine.",
+		EnvVar:      "AH_FEEDBACK",
 		Default:     false,
 	},
 }
