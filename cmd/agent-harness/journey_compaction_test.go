@@ -115,8 +115,8 @@ func TestJourneyCompactionOnSmallWindow(t *testing.T) {
 	screen.waitFor(t, journeyAnswerText)
 	screen.waitIdle(t)
 
-	if client.summaries == 0 {
-		t.Fatal("the turn never summarized the history")
+	if client.summaries != 0 {
+		t.Fatalf("the turn sent %d summarizer request(s); the session record replaces them", client.summaries)
 	}
 	if client.refused != 0 {
 		t.Fatalf("the server refused %d request(s); every request must fit the window", client.refused)
@@ -142,8 +142,8 @@ func TestJourneyCompactionOnSmallWindow(t *testing.T) {
 	if len(resumed) != compacted {
 		t.Fatalf("resumed session has %d messages, want the compacted %d", len(resumed), compacted)
 	}
-	if !messagesMention(resumed, journeySummaryText) {
-		t.Fatal("resumed session lost the summary that carries the goal")
+	if !messagesMention(resumed, "[Session record]") || !messagesMention(resumed, "Goal: JOURNEY-GOAL") {
+		t.Fatal("resumed session lost the session record that carries the goal")
 	}
 	if !messagesMention(resumed, journeyAnswerText) {
 		t.Fatal("resumed session lost the turn's answer")
