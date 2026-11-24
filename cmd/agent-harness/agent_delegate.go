@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agents"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -95,6 +96,8 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 		MaxTurns:        delegatedAgentMaxTurns,
 		MaxToolCalls:    delegatedAgentMaxTools,
 		PromptTokens:    agent.EstimatePromptTokens(childSystemPrompt, childTools),
+		// Sub-agents follow the same record compaction lab choice as the turn.
+		RecordCompaction: app.config.LabEnabled(config.LabRecordCompaction),
 	})
 	if err != nil {
 		return "", fmt.Errorf("delegated worker failed: %w", err)
