@@ -175,7 +175,7 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 		// the user flipped it in settings, and a setting that does not
 		// apply is the lie. The approval flow (interactive/yolo) still
 		// gates the command downstream.
-		if !isReadOnlyTool(toolName) && !app.granularAllows(toolName) {
+		if !isReadOnlyTool(toolName) && !isStateOnlyTool(toolName) && !app.granularAllows(toolName) {
 			return tools.PermissionDecision{
 				Behavior: tools.Deny,
 				Message:  sprintf("Permission denied: %s", toolName),
@@ -190,6 +190,16 @@ func (app *App) checkPermissionMode(toolName string) tools.PermissionDecision {
 		}
 	}
 	return tools.PermissionDecision{Behavior: tools.Allow}
+}
+
+// isStateOnlyTool reports tools that change only in-session state (the plan
+// checklist) and touch no files or shell. Read-only mode permits them so the
+// agent can plan before it has write access. Kept apart from isReadOnlyTool
+// because plan mode and the repeated-read recovery use that list.
+var stateOnlyTools = []string{"todo_write"}
+
+func isStateOnlyTool(name string) bool {
+	return stringSliceContains(stateOnlyTools, name)
 }
 
 // granularAllows reports whether the tool maps to a granular toggle
