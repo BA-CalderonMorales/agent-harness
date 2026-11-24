@@ -1,11 +1,11 @@
 # Everyday capability checks
 
-This is a small baseline for Agent-Harness with `qwen3.5-4b-FLM`, not a
+This is a small baseline for Agent-Harness with the Lemonade default `gemma4-it-12b-FLM`, not a
 benchmark framework. Start with five situations we have actually encountered.
 Do not add a case unless a real failure or product decision needs it.
 
 The goal is an everyday desktop assistant whose routine turns cost almost
-nothing. Lemonade with `qwen3.5-4b-FLM` is the current local candidate; hosted
+nothing. Lemonade with `gemma4-it-12b-FLM` is the current local default (it passed 11 of 15 automatic runs against qwen3.5-9b-FLM at 5 of 15; `qwen3.5-4b-FLM` is the earlier baseline in `baseline.md`); hosted
 providers stay supported for work the local model cannot do. Keep the checks
 portable: judge outcomes, not the wording one model prefers. Do not tune shared
 prompts, tool behavior, or acceptance criteria to Qwen, this laptop, or these

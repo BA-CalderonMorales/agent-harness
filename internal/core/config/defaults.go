@@ -4,7 +4,7 @@ import "time"
 
 const (
 	DefaultLemonadeEndpoint   = "http://127.0.0.1:13305/v1"
-	DefaultLemonadeModel      = "qwen3.5-4b-FLM"
+	DefaultLemonadeModel      = "gemma4-it-12b-FLM"
 	DefaultTagline            = "Your workspace. Your models. Your way."
 	DefaultProvider           = "local"
 	DefaultRuntime            = "llama.cpp"
