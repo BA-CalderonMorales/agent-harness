@@ -237,13 +237,9 @@ func TestLabsSectionRendersInTerminal(t *testing.T) {
 			screen.SendAndPump(tea.KeyMsg{Type: tea.KeyHome})
 			screen.Press("up") // wraps to the last row: the Labs section
 			screen.AssertFitsWidth(size[0])
-			screen.AssertContains(config.Labs[len(config.Labs)-1].Label, "Experimental")
-			// At 40x15 the list window is one row tall, so the focused row
-			// scrolls its section header out of view (true of every
-			// section); the header is checked where there is room for it.
-			if size[1] >= 24 {
-				screen.AssertContains(labsCategory)
-			}
+			// The section header stays pinned even when the list window
+			// is one row tall (40x15).
+			screen.AssertContains(labsCategory, config.Labs[len(config.Labs)-1].Label, "Experimental")
 		})
 	}
 }
