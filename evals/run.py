@@ -19,7 +19,7 @@ import urllib.request
 ROOT = Path(__file__).resolve().parents[1]
 CASES = json.loads((ROOT / "evals/cases.json").read_text())
 RESULTS = ROOT / "evals/results"
-DEFAULT_MODEL = "qwen3.5-4b-FLM"
+DEFAULT_MODEL = "gemma4-it-12b-FLM"
 ENDPOINT = "http://127.0.0.1:13305/v1"
 STATUSES = ("needs_review", "fail", "blocked", "interrupted", "not_run")
 VERDICTS = ("pass", "fail", "capability_gap", "unreviewed")

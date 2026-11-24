@@ -35,7 +35,7 @@ make run
 ```
 
 Open `/login`. Under **On this computer**, choose **Lemonade**, then
-`qwen3.5-4b-FLM`. Lemonade uses port 13305; **FastFlowLM (direct)** connects
+`gemma4-it-12b-FLM`. Lemonade uses port 13305; **FastFlowLM (direct)** connects
 to a separate `flm serve` endpoint on port 52625. **Custom local server**
 keeps the generic OpenAI-compatible connection, whose default is port 8080.
 Hosted inference services appear in their own group.
@@ -146,7 +146,7 @@ bash /home/bmoe/Projects/agent-harness/scripts/ah-lemonade.sh
 
 The launcher checks that the endpoint lists the selected model, builds the
 current app, and launches it in the caller's workspace. It defaults to
-`qwen3.5-4b-FLM`. It sets the local
+`gemma4-it-12b-FLM`. It sets the local
 endpoint, model, placeholder key, 8K input budget, and 4K output limit for
 that process. It does not install packages, start the service, or edit the
 repository's default YAML. The app's normal settings/session persistence
@@ -170,7 +170,7 @@ Run the server smoke checks from any directory:
 
 ```bash
 python /home/bmoe/Projects/agent-harness/examples/lemonade/smoke.py \
-  --model qwen3.5-4b-FLM
+  --model gemma4-it-12b-FLM
 ```
 
 The script sends text, a harmless synthetic tool round trip, and a generated
