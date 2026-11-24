@@ -17,8 +17,8 @@ func HelpHandler(registry *SlashRegistry) SlashHandler {
 			if desc, exists := registry.help[args]; exists {
 				return fmt.Sprintf("/%s - %s", args, desc), nil
 			}
-			if registry.IsFeatureFlagged(args) {
-				return registry.FeatureFlagMessage(args), nil
+			if registry.IsPlanned(args) {
+				return registry.PlannedMessage(args), nil
 			}
 			return fmt.Sprintf("Unknown command: /%s", args), nil
 		}

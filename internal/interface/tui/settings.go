@@ -24,7 +24,7 @@ type Setting struct {
 	Label       string
 	Value       string
 	Description string
-	Category    string // "Provider & Connection", "Model & Agent Behavior", "Workspace & Permissions", "System & Storage"
+	Category    string // section header; rows of one category stay adjacent (e.g. "Provider & Connection", ..., "Appearance", "Labs")
 	Type        string // "string", "bool", "number", "choice"
 	Options     []string
 	BoolValue   bool // For boolean settings

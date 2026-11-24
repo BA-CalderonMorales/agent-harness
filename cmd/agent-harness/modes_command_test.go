@@ -44,7 +44,7 @@ func TestModesCommandListsAllFourAndMarksActive(t *testing.T) {
 func TestHelpGroupsModesAndFlags(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	app.initCommandsCore()
-	app.cmdRegistry.FeatureFlag("todo", "Persistent task lists")
+	app.cmdRegistry.MarkPlanned("todo", "Persistent task lists")
 
 	out, handled, err := app.cmdRegistry.Handle("/help")
 	if !handled || err != nil {
@@ -57,6 +57,6 @@ func TestHelpGroupsModesAndFlags(t *testing.T) {
 		t.Fatalf("/help missing /modes:\n%s", out)
 	}
 	if !strings.Contains(out, "Coming soon:") || !strings.Contains(out, "/todo") {
-		t.Fatalf("/help missing feature-flag section:\n%s", out)
+		t.Fatalf("/help missing planned-command section:\n%s", out)
 	}
 }

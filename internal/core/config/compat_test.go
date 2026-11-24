@@ -85,6 +85,13 @@ func assertGeneration(t *testing.T, cfg *LayeredConfig, want settingsGeneration)
 	if cfg.MaxTokens != want.maxTokens {
 		t.Errorf("max tokens = %d, want %d", cfg.MaxTokens, want.maxTokens)
 	}
+	// No generation saved a Labs choice, so every lab loads at its
+	// Default, unpinned.
+	for _, lab := range Labs {
+		if cfg.LabEnabled(lab.Key) != lab.Default || cfg.LabPinned(lab.Key) {
+			t.Errorf("lab %s = %v (pinned %v), want Default %v", lab.Key, cfg.LabEnabled(lab.Key), cfg.LabPinned(lab.Key), lab.Default)
+		}
+	}
 	got := [4]bool{cfg.PermRead, cfg.PermWrite, cfg.PermDelete, cfg.PermExecute}
 	if wantPerms := [4]bool{want.permRead, want.permWrite, want.permDelete, want.permExecute}; got != wantPerms || !cfg.PermExplicit {
 		t.Errorf("read/write/delete/execute = %v (explicit %v), want %v (explicit)", got, cfg.PermExplicit, wantPerms)

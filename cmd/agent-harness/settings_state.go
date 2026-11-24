@@ -12,7 +12,7 @@ func (app *App) getSettings() []tui.Setting {
 	if theme == "" {
 		theme = "default"
 	}
-	return []tui.Setting{
+	rows := []tui.Setting{
 		// Provider & Connection
 		{Key: "provider", Label: "Provider", Value: app.config.Provider, Category: "Provider & Connection", Description: "Hosted inference service or local runtime, including Lemonade.", Type: "choice", Options: []string{"local", "openai", "anthropic", "openrouter", "ollama", "flm", "lemonade", "fireworks", "nvidia", "omniroute"}},
 		{Key: "endpoint_url", Label: "Endpoint URL", Value: app.config.EndpointURL, Category: "Provider & Connection", Description: "OpenAI-compatible API base URL (e.g. http://localhost:8080/v1 or https://openrouter.ai/api/v1).", Type: "string"},
@@ -41,6 +41,8 @@ func (app *App) getSettings() []tui.Setting {
 		{Key: "tagline", Label: "Home Tagline", Value: app.config.Tagline, Category: "Appearance", Description: "Make Home your own. Enter to edit; Enter saves, Esc cancels. Blank hides the tagline.", Type: "string"},
 		{Key: "theme", Label: "Theme", Value: theme, Category: "Appearance", Description: "TUI color palette. See /theme for the catalog.", Type: "choice", Options: tui.ThemeNames()},
 	}
+	// Labs: generated from the registry, always last.
+	return append(rows, app.labsSettings()...)
 }
 
 // getModelItems returns available models for TUI.

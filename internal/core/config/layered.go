@@ -112,10 +112,19 @@ type LayeredConfig struct {
 	// only the movement goes.
 	ReducedMotion bool
 
-	// LoopTrack shows the Ask/Plan/Review/Try beat track in the chat
-	// chrome. Off by default: it is an opt-in reading of the turn's
-	// shape, not part of the default conversation surface.
-	LoopTrack bool
+	// LabsSaved holds the Labs choices a settings layer (or this
+	// session's Settings tab) made, keyed by Lab.Key. LabsPinned holds
+	// the ones the environment pinned for this session, and
+	// labsInherited the ones a project layer (below the user layer)
+	// sets. Read a flag through LabEnabled, never from these maps.
+	// labsLocal / labsLocalLoaded are the local layer's labs, current
+	// and as loaded (labs_local.go).
+	LabsSaved       map[string]bool
+	LabsPinned      map[string]bool
+	labsPinnedBy    map[string]string
+	labsInherited   map[string]bool
+	labsLocal       map[string]bool
+	labsLocalLoaded map[string]bool
 }
 
 // LayerSet reports whether any configuration layer explicitly set key.
@@ -265,6 +274,7 @@ func (ll *LayeredLoader) Load() (*LayeredConfig, error) {
 		}
 
 		dropNoOpValues(data)
+		extractLabs(config, entry.Source, data)
 		ll.deepMerge(config.merged, data)
 		config.loadedEntries = append(config.loadedEntries, entry)
 	}
