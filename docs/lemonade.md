@@ -68,10 +68,12 @@ alongside the in-process regression checks.
 
 ## Model candidates
 
-Use Qwen3.5-4B as the current working candidate based on the successful
-local task. Keep Qwen3.5-9B for quality comparisons on harder tasks. Both have vision and tool-calling entries in the
-[Lemonade catalog](https://lemonade-server.ai/docs/models.html). Compare
-Gemma-4-12B-it if the initial model's task accuracy is inadequate. These are
+Use `gemma4-it-12b-FLM` as the current default local model. It passed 11 of
+15 automatic eval runs, against 5 of 15 for Qwen3.5-9B. Qwen3.5-4B was the
+earlier working candidate on the successful local task, and Qwen3.5-9B remains
+useful for quality comparisons on harder tasks. Both have vision and
+tool-calling entries in the
+[Lemonade catalog](https://lemonade-server.ai/docs/models.html). These are
 evaluation candidates, not benchmark winners on this machine.
 
 The catalog lists the Qwen3.5 9B GGUF package at about 6.88 GB and the 4B
