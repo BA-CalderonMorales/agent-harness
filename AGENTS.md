@@ -13,12 +13,9 @@
 - `internal/agent/` is the core agent loop; `internal/interface/tui/` the
   terminal UI; `internal/runtime/{llm,tools}/` providers and tools;
   `internal/core/{config,state,persona,audit}/` cross-cutting state.
-  The dormant modular loop and alternate buckets were retired in the 0.4.1
-  cleanup; use Git history for those designs, not as a runtime entry point.
 - `pkg/` shared types, messages, git, bash, sandbox helpers.
 - `scripts/` local automation; `docs/` the reference reading for every
   section below.
-- Pre-rewrite leftovers are pruned; use Git history for legacy reference.
 
 ## Key Sections
 
@@ -33,7 +30,7 @@
 | Edge cases and parity | `docs/edgecases.md`, `docs/parity.md` |
 | Security posture and accepted risks | `docs/security-review.md` |
 | Optional runtime isolation (OpenShell) | `docs/openshell.md`, `examples/openshell/` |
-| Sub-agent definitions and delegation | `docs/subagents.md`, `.agent-harness/agents/` |
+| Sub-agent definitions and delegation | `docs/subagents.md`, `internal/agents/` |
 | Complexity hot spots and coverage gaps | `docs/complexity-analysis.md` |
 | Environment variables | `docs/environment-variables.md` |
 | Recent DX improvements | `docs/dx-improvements.md` |
@@ -81,7 +78,7 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   `build`, `quality`, `security`, `secrets`, `sbom`, `scripts` (unit tests
   for the repository's own shell and Python tooling), and a sharded `test`
   matrix (`tui`, `core`, `rest`). The shard coverage check is a drift guard —
-  a package in no shard fails the gates job rather than silently going
+  a package in no shard fails the `scripts` job rather than silently going
   untested.
 - `release.yml` runs on a tag push and builds and publishes the release
   artifacts, stamping the tag into the binary through `-ldflags`.
@@ -89,8 +86,6 @@ Lost in the woods? Start with `docs/architecture.md` for *why*, then
   version and there is no bump commit. `make build` and `make install`
   stamp `git describe`; `go install ...@vX.Y.Z` reports the module version;
   anything else reports `dev` (see `cmd/agent-harness/version.go`).
-- Docs-only changes skip CI automatically where configured; trigger
-  `workflow_dispatch` when needed.
 
 ## Branch Strategy
 
