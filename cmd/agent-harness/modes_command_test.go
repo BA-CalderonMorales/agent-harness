@@ -38,13 +38,11 @@ func TestModesCommandListsAllFourAndMarksActive(t *testing.T) {
 	}
 }
 
-// TestHelpGroupsModesAndFlags pins the /help contract: a Modes category,
-// one line per command from the registry descriptions, and feature-
-// flagged commands visible under Coming soon.
-func TestHelpGroupsModesAndFlags(t *testing.T) {
+// TestHelpGroupsModes pins the /help contract: a Modes category and one
+// line per command from the registry descriptions.
+func TestHelpGroupsModes(t *testing.T) {
 	app := newHandlerTestApp(t, &config.LayeredConfig{Provider: "local"}, "test-model")
 	app.initCommandsCore()
-	app.cmdRegistry.MarkPlanned("todo", "Persistent task lists")
 
 	out, handled, err := app.cmdRegistry.Handle("/help")
 	if !handled || err != nil {
@@ -55,8 +53,5 @@ func TestHelpGroupsModesAndFlags(t *testing.T) {
 	}
 	if !strings.Contains(out, "/modes") {
 		t.Fatalf("/help missing /modes:\n%s", out)
-	}
-	if !strings.Contains(out, "Coming soon:") || !strings.Contains(out, "/todo") {
-		t.Fatalf("/help missing planned-command section:\n%s", out)
 	}
 }

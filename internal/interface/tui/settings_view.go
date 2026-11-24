@@ -37,13 +37,6 @@ func (m SettingsModel) View() string {
 
 	var b strings.Builder
 
-	// Header (always visible, not in viewport)
-	b.WriteString(RenderHeader(HeaderConfig{
-		Title:    "Settings",
-		Subtitle: "Choose a row, then change its value",
-		Count:    -1, // no count: 17 settings is noise, not signal
-	}))
-
 	// Build the rows-only list for the viewport. Every row renders one
 	// line (an editing row adds its input line); cursorLine tracks each
 	// row's rendered line so the scroll can land the selection exactly
@@ -51,7 +44,10 @@ func (m SettingsModel) View() string {
 	var settingsContent strings.Builder
 	currentCat := ""
 	cursorLine := make([]int, len(m.settings))
+	rowEnd := make([]int, len(m.settings))
+	headerLine := make([]int, len(m.settings))
 	cursorRowLines := 1
+	currentHeader := -1
 	line := 0
 	for i, setting := range m.settings {
 		if setting.Category != "" && setting.Category != currentCat {
@@ -60,6 +56,7 @@ func (m SettingsModel) View() string {
 				line++
 			}
 			currentCat = setting.Category
+			currentHeader = line
 			settingsContent.WriteString(SectionHeaderStyle.Render("  " + currentCat))
 			settingsContent.WriteString("\n")
 			line++
@@ -71,6 +68,11 @@ func (m SettingsModel) View() string {
 			cursorRowLines = rowLines
 		}
 		line += rowLines
+		rowEnd[i] = line
+		headerLine[i] = currentHeader
+		if setting.Category == "" {
+			headerLine[i] = -1
+		}
 		settingsContent.WriteString(row)
 		settingsContent.WriteString("\n")
 	}
@@ -100,6 +102,19 @@ func (m SettingsModel) View() string {
 		}
 		m.viewport.SetYOffset(offset)
 	}
+
+	// Header (always visible, not in viewport). Its spacer line holds the
+	// pinned section header: when the top visible row's own header has
+	// scrolled above the window, the section name stays in view there.
+	b.WriteString(strings.TrimSuffix(RenderHeader(HeaderConfig{
+		Title:    "Settings",
+		Subtitle: "Choose a row, then change its value",
+		Count:    -1, // no count: 17 settings is noise, not signal
+	}), "\n"))
+	if section := pinnedSection(m.settings, rowEnd, headerLine, m.viewport.YOffset); section != "" {
+		b.WriteString(SectionHeaderStyle.Render("  " + section))
+	}
+	b.WriteString("\n")
 
 	// Render viewport (scrollable settings list). bubbles' viewport
 	// does not end its output with a newline; without the terminator
