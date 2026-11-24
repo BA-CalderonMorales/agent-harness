@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/agents"
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/builtin"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -84,18 +85,7 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	childLoop.Config.MaxToolCalls = delegatedAgentMaxTools
 	childLoop.Config.StreamingToolExecution = false
 	childSystemPrompt := delegatedSystemPrompt(app.buildSystemPrompt(), definition, hasDefinition)
-	stream, err := childLoop.Query(subCtx, agent.QueryParams{
-		Messages:        []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
-		SystemPrompt:    childSystemPrompt,
-		CanUseTool:      canUseTool,
-		ToolUseContext:  childCtx,
-		MaxOutputTokens: app.config.MaxTokens,
-		Temperature:     app.config.Temperature,
-		TemperatureSet:  app.config.TemperatureSet,
-		MaxTurns:        delegatedAgentMaxTurns,
-		MaxToolCalls:    delegatedAgentMaxTools,
-		PromptTokens:    agent.EstimatePromptTokens(childSystemPrompt, childTools),
-	})
+	stream, err := childLoop.Query(subCtx, app.delegatedQueryParams(prompt, childSystemPrompt, childTools, canUseTool, childCtx))
 	if err != nil {
 		return "", fmt.Errorf("delegated worker failed: %w", err)
 	}
@@ -128,4 +118,22 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 		return result.String(), fmt.Errorf("delegated worker stopped before completion: %s", terminal.Reason)
 	}
 	return result.String(), nil
+}
+
+// delegatedQueryParams is the query a sub-agent runs. It carries the same
+// record compaction lab choice as the turn that started the sub-agent.
+func (app *App) delegatedQueryParams(prompt, systemPrompt string, childTools []tools.Tool, canUseTool tools.CanUseToolFn, childCtx tools.Context) agent.QueryParams {
+	return agent.QueryParams{
+		Messages:         []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
+		SystemPrompt:     systemPrompt,
+		CanUseTool:       canUseTool,
+		ToolUseContext:   childCtx,
+		MaxOutputTokens:  app.config.MaxTokens,
+		Temperature:      app.config.Temperature,
+		TemperatureSet:   app.config.TemperatureSet,
+		MaxTurns:         delegatedAgentMaxTurns,
+		MaxToolCalls:     delegatedAgentMaxTools,
+		PromptTokens:     agent.EstimatePromptTokens(systemPrompt, childTools),
+		RecordCompaction: app.config.LabEnabled(config.LabRecordCompaction),
+	}
 }

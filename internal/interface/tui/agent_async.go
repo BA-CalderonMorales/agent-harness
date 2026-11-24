@@ -150,6 +150,19 @@ type AgentQueryParams struct {
 	CanUseTool   func(string, map[string]any, tools.Context) (tools.PermissionDecision, error)
 	ToolCtx      tools.Context
 	Client       llm.Client
+	// RecordCompaction is the record compaction lab choice for this query.
+	RecordCompaction bool
+}
+
+// asyncQueryParams is the agent.QueryParams both async paths run with.
+func asyncQueryParams(params AgentQueryParams) agent.QueryParams {
+	return agent.QueryParams{
+		Messages:         params.Messages,
+		SystemPrompt:     params.SystemPrompt,
+		CanUseTool:       params.CanUseTool,
+		ToolUseContext:   params.ToolCtx,
+		RecordCompaction: params.RecordCompaction,
+	}
 }
 
 // AgentQueryCmd returns a tea.Cmd that runs the agent query asynchronously
@@ -159,12 +172,7 @@ func AgentQueryCmd(params AgentQueryParams) tea.Cmd {
 		loop := agent.NewLoop(params.Client)
 
 		// Build query params
-		queryParams := agent.QueryParams{
-			Messages:       params.Messages,
-			SystemPrompt:   params.SystemPrompt,
-			CanUseTool:     params.CanUseTool,
-			ToolUseContext: params.ToolCtx,
-		}
+		queryParams := asyncQueryParams(params)
 
 		// Execute query (this blocks in the goroutine, not the UI)
 		stream, err := loop.Query(context.Background(), queryParams)
@@ -216,12 +224,7 @@ func StreamingAgentQuery(params AgentQueryParams, updateChan chan<- tea.Msg) tea
 		updateChan <- AgentStartMsg{Timestamp: time.Now()}
 
 		loop := agent.NewLoop(params.Client)
-		queryParams := agent.QueryParams{
-			Messages:       params.Messages,
-			SystemPrompt:   params.SystemPrompt,
-			CanUseTool:     params.CanUseTool,
-			ToolUseContext: params.ToolCtx,
-		}
+		queryParams := asyncQueryParams(params)
 
 		stream, err := loop.Query(context.Background(), queryParams)
 		if err != nil {

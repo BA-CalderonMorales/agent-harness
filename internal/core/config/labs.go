@@ -23,6 +23,10 @@ type Lab struct {
 // LabLoopTrack shows the Ask/Plan/Review/Try beat track in the chat chrome.
 const LabLoopTrack = "loop_track"
 
+// LabRecordCompaction compacts long sessions from the session record, with
+// no summary request to the model.
+const LabRecordCompaction = "record_compaction"
+
 // Labs is the only list of experimental flags. New behavior-changing
 // features ship behind an entry here; the Settings tab, the environment
 // overrides, and persistence are all generated from it.
@@ -30,15 +34,19 @@ const LabLoopTrack = "loop_track"
 // Graduation rule: a flag graduates when it has a named use, documented
 // behavior, and tests. Graduating deletes the entry and the branch it
 // guards; a graduated flag is never left here switched on.
-//
-// Record compaction (session record, PR #63) is the next planned entry;
-// add it here when that feature lands on main, not before.
 var Labs = []Lab{
 	{
 		Key:         LabLoopTrack,
 		Label:       "Loop Track",
 		Description: "Show the Ask/Plan/Review/Try beat track in the chat while a turn runs.",
 		EnvVar:      "AH_LOOP_TRACK",
+		Default:     false,
+	},
+	{
+		Key:         LabRecordCompaction,
+		Label:       "Record Compaction",
+		Description: "Shorten long sessions from the session record instead of asking the model to write a summary. Off keeps the model summary.",
+		EnvVar:      "AH_RECORD_COMPACTION",
 		Default:     false,
 	},
 }
