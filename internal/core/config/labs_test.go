@@ -50,6 +50,23 @@ func TestLabsRegistryEntriesAreComplete(t *testing.T) {
 	}
 }
 
+func TestLookupFeedbackLab(t *testing.T) {
+	isolateLabs(t)
+	lab, ok := LookupLab(LabFeedback)
+	if !ok || lab.Key != "feedback" || lab.EnvVar != "AH_FEEDBACK" || lab.Default {
+		t.Fatalf("LookupLab(feedback) = %+v, %v; want the opt-in AH_FEEDBACK entry", lab, ok)
+	}
+	cfg := &LayeredConfig{}
+	if cfg.LabEnabled(LabFeedback) {
+		t.Fatal("feedback lab on by default, want off")
+	}
+	t.Setenv("AH_FEEDBACK", "true")
+	applyLabEnvOverrides(cfg)
+	if !cfg.LabEnabled(LabFeedback) {
+		t.Fatal("AH_FEEDBACK=true did not turn the feedback lab on")
+	}
+}
+
 func TestLookupLab(t *testing.T) {
 	lab, ok := LookupLab(LabLoopTrack)
 	if !ok || lab.Key != "loop_track" || lab.EnvVar != "AH_LOOP_TRACK" || lab.Default {

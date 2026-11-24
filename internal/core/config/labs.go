@@ -27,6 +27,10 @@ const LabLoopTrack = "loop_track"
 // no summary request to the model.
 const LabRecordCompaction = "record_compaction"
 
+// LabFeedback enables /feedback, which saves friction reports to a local
+// file. Nothing is sent anywhere.
+const LabFeedback = "feedback"
+
 // Labs is the only list of experimental flags. New behavior-changing
 // features ship behind an entry here; the Settings tab, the environment
 // overrides, and persistence are all generated from it.
@@ -47,6 +51,13 @@ var Labs = []Lab{
 		Label:       "Record Compaction",
 		Description: "Shorten long sessions from the session record instead of asking the model to write a summary. Off keeps the model summary.",
 		EnvVar:      "AH_RECORD_COMPACTION",
+		Default:     false,
+	},
+	{
+		Key:         LabFeedback,
+		Label:       "Feedback",
+		Description: "Enable /feedback to save friction notes to a local file. Nothing is sent off this machine.",
+		EnvVar:      "AH_FEEDBACK",
 		Default:     false,
 	},
 }
