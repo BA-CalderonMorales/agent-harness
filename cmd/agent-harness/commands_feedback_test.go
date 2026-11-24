@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -135,6 +136,13 @@ func TestFeedbackCommandAppendsOneRecordWithAgreedFieldsOnly(t *testing.T) {
 	}
 	if first["provider"] != "ollama" || first["model"] != "test-model" || first["session_id"] != app.session.ID {
 		t.Fatalf("record identity = %v", first)
+	}
+	stamp, _ := first["time"].(string)
+	if parsed, err := time.Parse(time.RFC3339, stamp); err != nil || parsed.Location() != time.UTC || !strings.HasSuffix(stamp, "Z") {
+		t.Fatalf("record time %q is not RFC3339 UTC (err %v)", stamp, err)
+	}
+	if first["harness_version"] != Version {
+		t.Fatalf("harness_version = %v, want %q", first["harness_version"], Version)
 	}
 
 	if runtime.GOOS != "windows" {
