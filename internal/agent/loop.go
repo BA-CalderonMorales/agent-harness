@@ -58,6 +58,7 @@ func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.Stre
 			messages:                     params.Messages,
 			promptTokens:                 params.PromptTokens,
 			record:                       seedRecord(params),
+			recordOff:                    !params.RecordCompaction,
 			toolUseContext:               params.ToolUseContext,
 			maxOutputTokensOverride:      params.MaxOutputTokens,
 			maxOutputTokensRecoveryCount: 0,

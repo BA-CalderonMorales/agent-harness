@@ -83,6 +83,8 @@ func journeyLongHistory(count int) []types.Message {
 func TestJourneyCompactionOnSmallWindow(t *testing.T) {
 	journeyHome(t)
 	journeyLocal(t)
+	// This journey asserts the record path, which is behind the lab.
+	t.Setenv("AH_RECORD_COMPACTION", "1")
 
 	app := bootJourneyApp(t)
 	history := journeyLongHistory(120)

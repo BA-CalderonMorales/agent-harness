@@ -39,6 +39,10 @@ type QueryParams struct {
 	// copy current as messages are appended and compacts from it. The zero
 	// Record means the loop folds one from Messages.
 	Record record.Record
+	// RecordCompaction turns on the record compaction lab. Off, the query
+	// never seeds or applies the record and compaction asks the model for
+	// its summary, as it did before the record existed.
+	RecordCompaction bool
 }
 
 // TerminalReason explains why the query loop ended.
@@ -131,6 +135,9 @@ type loopState struct {
 	// record follows every message the loop appends. Compaction renders it
 	// in place of a model-written summary.
 	record record.Record
+	// recordOff is set when the record compaction lab is off: the loop
+	// neither seeds nor applies the record for this query.
+	recordOff bool
 	// contextLimit, when set, replaces BlockingTokenLimit for the rest of
 	// the query. Recovery lowers it after the provider refuses a request
 	// the configured window said would fit.
