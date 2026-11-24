@@ -251,7 +251,8 @@ func TestResumedOversizedSessionCompactsFromTheFoldedRecord(t *testing.T) {
 	params := edgeParams(nil)
 	params.Messages = history
 	params.SystemPrompt = strings.Repeat("s", 2800*4)
-	params.PromptTokens = 2800 // no params.Record: a resume with only the transcript
+	params.PromptTokens = 2800     // no params.Record: a resume with only the transcript
+	params.RecordCompaction = true // the lab is on; the record is folded from the transcript
 
 	events, err := loop.Query(context.Background(), params)
 	if err != nil {
