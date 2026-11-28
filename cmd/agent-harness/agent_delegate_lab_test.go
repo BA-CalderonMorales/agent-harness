@@ -28,3 +28,27 @@ func TestDelegatedQueryCarriesTheRecordLab(t *testing.T) {
 		})
 	}
 }
+
+func TestDelegatedQueryForwardsEffortAndFitsContextBudget(t *testing.T) {
+	journeyHome(t)
+	app := bootJourneyApp(t)
+	app.config.Effort = "high"
+	app.config.ContextLength = 4096
+	app.config.MaxTokens = 8192
+
+	got := app.delegatedQueryParams("review the change", "system prompt", nil, nil, tools.Context{})
+	if got.ReasoningEffort != "high" {
+		t.Fatalf("ReasoningEffort = %q, want high", got.ReasoningEffort)
+	}
+	if got.MaxOutputTokens >= 4096 {
+		t.Fatalf("MaxOutputTokens = %d, want bounded below 4096 context window", got.MaxOutputTokens)
+	}
+
+	child := app.newConfiguredLoop()
+	if child.Config.BlockingTokenLimit != 4096 {
+		t.Fatalf("child BlockingTokenLimit = %d, want 4096", child.Config.BlockingTokenLimit)
+	}
+	if child.Config.StreamIdleTimeout != app.config.StreamIdleTimeout {
+		t.Fatalf("child StreamIdleTimeout = %v, want %v", child.Config.StreamIdleTimeout, app.config.StreamIdleTimeout)
+	}
+}

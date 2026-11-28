@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/BA-CalderonMorales/agent-harness/internal/agent"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/interface/tui"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -105,11 +104,7 @@ func (app *App) completeLogin(provider, apiKey, model string, tuiApp *tui.App) {
 	// model from inheriting the local 8k default (and compacting at it).
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
 	app.applyModelContext(model)
-	app.loop = agent.NewLoop(app.client)
-	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
-	if app.config.ContextLength > 0 {
-		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
-	}
+	app.loop = app.newConfiguredLoop()
 
 	app.commitConfigChange()
 	app.storeProviderModel(provider, model)

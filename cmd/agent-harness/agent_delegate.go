@@ -80,7 +80,7 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	if app.tuiApp != nil {
 		childCtx.AskUser = app.requestUserQuestion
 	}
-	childLoop := agent.NewLoop(app.client)
+	childLoop := app.newConfiguredLoop()
 	childLoop.Config.DefaultMaxTurns = delegatedAgentMaxTurns
 	childLoop.Config.MaxToolCalls = delegatedAgentMaxTools
 	childLoop.Config.StreamingToolExecution = false
@@ -91,10 +91,19 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	}
 	var result strings.Builder
 	var terminal types.StreamTerminal
+	var streamErr error
 	terminalSeen := false
 	for event := range stream {
+		// Keep draining after an error so the child loop goroutine can
+		// emit its terminal event and close the channel without blocking.
+		if streamErr != nil {
+			continue
+		}
 		switch e := event.(type) {
 		case types.StreamMessage:
+			if e.Message.Role != types.RoleAssistant {
+				break
+			}
 			for _, block := range e.Message.Content {
 				if text, ok := block.(types.TextBlock); ok {
 					result.WriteString(text.Text)
@@ -102,11 +111,14 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 			}
 		case types.StreamError:
 			if e.Error != nil {
-				return result.String(), fmt.Errorf("delegated worker failed: %w", e.Error)
+				streamErr = fmt.Errorf("delegated worker failed: %w", e.Error)
 			}
 		case types.StreamTerminal:
 			terminal, terminalSeen = e, true
 		}
+	}
+	if streamErr != nil {
+		return result.String(), streamErr
 	}
 	if !terminalSeen {
 		return result.String(), fmt.Errorf("delegated worker ended without a terminal result")
@@ -120,20 +132,24 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	return result.String(), nil
 }
 
-// delegatedQueryParams is the query a sub-agent runs. It carries the same
-// record compaction lab choice as the turn that started the sub-agent.
+// delegatedQueryParams is the query a sub-agent runs. It carries the active
+// session's record compaction lab, reasoning effort, temperature, and bounded
+// output budget so small-window local models never overflow on delegation.
 func (app *App) delegatedQueryParams(prompt, systemPrompt string, childTools []tools.Tool, canUseTool tools.CanUseToolFn, childCtx tools.Context) agent.QueryParams {
+	promptTokens := agent.EstimatePromptTokens(systemPrompt, childTools)
+	maxOutput := fitOutputBudget(app.config.ContextLength, promptTokens, len(prompt)/4+1, app.config.MaxTokens)
 	return agent.QueryParams{
 		Messages:         []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
 		SystemPrompt:     systemPrompt,
 		CanUseTool:       canUseTool,
 		ToolUseContext:   childCtx,
-		MaxOutputTokens:  app.config.MaxTokens,
+		MaxOutputTokens:  maxOutput,
 		Temperature:      app.config.Temperature,
 		TemperatureSet:   app.config.TemperatureSet,
+		ReasoningEffort:  app.config.Effort,
 		MaxTurns:         delegatedAgentMaxTurns,
 		MaxToolCalls:     delegatedAgentMaxTools,
-		PromptTokens:     agent.EstimatePromptTokens(systemPrompt, childTools),
+		PromptTokens:     promptTokens,
 		RecordCompaction: app.config.LabEnabled(config.LabRecordCompaction),
 	}
 }

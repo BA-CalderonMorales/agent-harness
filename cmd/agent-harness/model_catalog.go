@@ -93,9 +93,7 @@ func (app *App) applyDiscoveredModelContext(tuiApp *tui.App, provider, model str
 		return
 	}
 	app.config.ContextLength = contextLength
-	if app.loop != nil {
-		app.loop.Config.BlockingTokenLimit = contextLength
-	}
+	app.syncLoopConfig(app.loop)
 	diag.Infof("model.context", "%s context window: %d tokens (provider-advertised)", model, contextLength)
 	app.refreshTelemetry(tuiApp)
 	app.commitConfigChange()

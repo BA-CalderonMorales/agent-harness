@@ -7,13 +7,34 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 )
 
+// syncLoopConfig pushes the active client, context window, and idle watchdog
+// from app.config onto loop. Keeping one wiring path prevents boot, login,
+// settings changes, provider switches, and sub-agents from drifting out of sync.
+func (app *App) syncLoopConfig(loop *agent.Loop) {
+	if loop == nil {
+		return
+	}
+	loop.Client = app.client
+	if app.config == nil {
+		return
+	}
+	if app.config.ContextLength > 0 {
+		loop.Config.BlockingTokenLimit = app.config.ContextLength
+	}
+	loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
+}
+
+// newConfiguredLoop creates an agent loop already wired to app.client and app.config.
+func (app *App) newConfiguredLoop() *agent.Loop {
+	loop := agent.NewLoop(app.client)
+	app.syncLoopConfig(loop)
+	return loop
+}
+
 // rebuildLLMClient reconstructs client, updates models, and re-probes provider readiness.
 func (app *App) rebuildLLMClient() {
 	app.client = llm.NewHTTPClientWithBaseURLTimeout(app.config.Provider, app.config.APIKey, app.config.EndpointURL, app.config.HTTPTimeout)
-	if app.loop != nil {
-		app.loop.Client = app.client
-		app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
-	}
+	app.syncLoopConfig(app.loop)
 	if app.tuiApp != nil {
 		app.tuiApp.SetModels(app.getModelItems())
 		app.tuiApp.SetRuntimeContext(app.config.Provider, app.config.Effort, app.cwd)
