@@ -210,23 +210,50 @@ func Messages(msgs []types.Message) []types.Message {
 			switch v := block.(type) {
 			case types.TextBlock:
 				msg.Content = append(msg.Content, types.TextBlock{Text: String(v.Text)})
+			case *types.TextBlock:
+				if v != nil {
+					msg.Content = append(msg.Content, &types.TextBlock{Text: String(v.Text)})
+				}
 			case types.ToolUseBlock:
 				msg.Content = append(msg.Content, types.ToolUseBlock{
 					ID:    v.ID,
 					Name:  v.Name,
 					Input: Map(v.Input),
 				})
+			case *types.ToolUseBlock:
+				if v != nil {
+					msg.Content = append(msg.Content, &types.ToolUseBlock{
+						ID:    v.ID,
+						Name:  v.Name,
+						Input: Map(v.Input),
+					})
+				}
 			case types.ToolResultBlock:
 				msg.Content = append(msg.Content, types.ToolResultBlock{
 					ToolUseID: v.ToolUseID,
 					Content:   String(v.Content),
 					IsError:   v.IsError,
 				})
+			case *types.ToolResultBlock:
+				if v != nil {
+					msg.Content = append(msg.Content, &types.ToolResultBlock{
+						ToolUseID: v.ToolUseID,
+						Content:   String(v.Content),
+						IsError:   v.IsError,
+					})
+				}
 			case types.ThinkingBlock:
 				msg.Content = append(msg.Content, types.ThinkingBlock{
 					Thinking:  "<redacted>",
 					Signature: "<redacted>",
 				})
+			case *types.ThinkingBlock:
+				if v != nil {
+					msg.Content = append(msg.Content, &types.ThinkingBlock{
+						Thinking:  "<redacted>",
+						Signature: "<redacted>",
+					})
+				}
 			default:
 				msg.Content = append(msg.Content, block)
 			}

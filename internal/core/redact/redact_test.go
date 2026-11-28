@@ -132,6 +132,41 @@ func TestValueRedactsTypedContainersWithoutMutatingInput(t *testing.T) {
 	}
 }
 
+func TestMessagesRedactsPointerContentBlocksAndSkipsNilPointers(t *testing.T) {
+	SetSecret("ptr-secret-value")
+	defer SetSecret("")
+
+	origText := &types.TextBlock{Text: "leak ptr-secret-value"}
+	origThink := &types.ThinkingBlock{Thinking: "private reasoning", Signature: "sig"}
+	origUse := &types.ToolUseBlock{ID: "c1", Name: "fetch", Input: map[string]any{"api_key": "k", "note": "ptr-secret-value"}}
+	origRes := &types.ToolResultBlock{ToolUseID: "c1", Content: "ptr-secret-value"}
+	var nilText *types.TextBlock
+
+	msgs := []types.Message{{
+		Role:    types.RoleAssistant,
+		Content: []types.ContentBlock{origText, origThink, origUse, origRes, nilText},
+	}}
+	got := Messages(msgs)
+	if len(got[0].Content) != 4 {
+		t.Fatalf("len(Content) = %d, want 4 (nil pointer skipped)", len(got[0].Content))
+	}
+	if tb := got[0].Content[0].(*types.TextBlock); strings.Contains(tb.Text, "ptr-secret-value") {
+		t.Fatalf("*TextBlock leaked secret: %q", tb.Text)
+	}
+	if !strings.Contains(origText.Text, "ptr-secret-value") {
+		t.Fatal("Messages mutated input *TextBlock")
+	}
+	if th := got[0].Content[1].(*types.ThinkingBlock); th.Thinking != "<redacted>" || th.Signature != "<redacted>" {
+		t.Fatalf("*ThinkingBlock not redacted: %+v", th)
+	}
+	if tu := got[0].Content[2].(*types.ToolUseBlock); tu.Input["api_key"] != "<redacted>" || strings.Contains(tu.Input["note"].(string), "ptr-secret-value") {
+		t.Fatalf("*ToolUseBlock not redacted: %#v", tu.Input)
+	}
+	if tr := got[0].Content[3].(*types.ToolResultBlock); strings.Contains(tr.Content, "ptr-secret-value") {
+		t.Fatalf("*ToolResultBlock leaked secret: %q", tr.Content)
+	}
+}
+
 func TestSetSecretConcurrentSafety(t *testing.T) {
 	defer SetSecret("")
 	var wg sync.WaitGroup
