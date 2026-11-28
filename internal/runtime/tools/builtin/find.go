@@ -52,14 +52,16 @@ var FindTool = tools.NewTool(tools.Tool{
 		}
 
 		const maxResults = 200
+		cleanRoot := filepath.Clean(root)
 		var matches []string
 		err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 			if err != nil {
 				return nil // skip paths we can't access
 			}
 
-			// Skip common ignored directories for performance
-			if info.IsDir() && isCommonIgnoredDir(info.Name()) {
+			// Skip common ignored directories for performance, except when
+			// the caller explicitly asked to search that directory as root.
+			if info.IsDir() && filepath.Clean(path) != cleanRoot && isCommonIgnoredDir(info.Name()) {
 				return filepath.SkipDir
 			}
 

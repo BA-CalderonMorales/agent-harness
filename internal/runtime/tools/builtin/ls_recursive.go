@@ -58,6 +58,7 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 		exclude, _ := input["exclude"].(string)
 
 		const maxResults = 200
+		cleanRoot := filepath.Clean(root)
 		var results []string
 		var dirs, files int
 		err = filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
@@ -65,8 +66,9 @@ var LsRecursiveTool = tools.NewTool(tools.Tool{
 				return err
 			}
 
-			// Skip common ignored directories for performance
-			if info.IsDir() && isCommonIgnoredDir(info.Name()) {
+			// Skip common ignored directories for performance, except when
+			// the caller explicitly asked to list that directory as root.
+			if info.IsDir() && filepath.Clean(path) != cleanRoot && isCommonIgnoredDir(info.Name()) {
 				return filepath.SkipDir
 			}
 
