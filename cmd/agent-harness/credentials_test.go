@@ -97,10 +97,21 @@ func TestStoredKeyForProvider_EnvPinWins(t *testing.T) {
 		t.Fatalf("NVIDIA_API_KEY must pin nvidia, got (%q, %v)", key, ok)
 	}
 
-	// Omniroute env vars must populate config.APIKey and pin omniroute.
+	// Omniroute env vars must populate config.APIKey and pin omniroute only
+	// when omniroute is the selected provider (never leaking into other providers).
 	t.Setenv("NVIDIA_API_KEY", "")
 	t.Setenv("OMNIROUTE_API_KEY", "sk-omni-env")
 	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	t.Setenv("AH_PROVIDER", "openai")
+	openaiCfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() with openai + OMNIROUTE_API_KEY: %v", err)
+	}
+	if openaiCfg.APIKey != "" {
+		t.Fatalf("OMNIROUTE_API_KEY leaked into openai config.APIKey = %q, want empty", openaiCfg.APIKey)
+	}
+
+	t.Setenv("AH_PROVIDER", "omniroute")
 	loadedCfg, err := config.NewLayeredLoader(t.TempDir()).Load()
 	if err != nil {
 		t.Fatalf("Load() with OMNIROUTE_API_KEY: %v", err)

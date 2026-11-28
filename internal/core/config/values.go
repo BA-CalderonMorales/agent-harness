@@ -41,7 +41,10 @@ func (ll *LayeredLoader) applyEnvOverrides(config *LayeredConfig) {
 		// would lie about what the app will actually use.
 		config.EndpointPinned = true
 	}
-	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY", "OMNIROUTE_API_KEY", "OMNITROUTE_API_KEY"), &config.APIKey)
+	applyEnvString(firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY", "OPENROUTER_API_KEY", "NVIDIA_API_KEY"), &config.APIKey)
+	if config.Provider == "omniroute" && firstEnv("AH_API_KEY", "AGENT_HARNESS_API_KEY") == "" {
+		applyEnvString(firstEnv("OMNIROUTE_API_KEY", "OMNITROUTE_API_KEY"), &config.APIKey)
+	}
 	applyEnvInt(firstEnv("AH_CONTEXT_LENGTH", "AGENT_HARNESS_CONTEXT_LENGTH"), &config.ContextLength)
 	if raw := firstEnv("AH_TEMPERATURE", "AGENT_HARNESS_TEMPERATURE"); raw != "" {
 		if parsed, err := strconv.ParseFloat(raw, 64); err == nil {
