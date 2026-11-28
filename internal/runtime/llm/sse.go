@@ -2,6 +2,7 @@ package llm
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,27 @@ import (
 	"sort"
 	"strings"
 )
+
+// maxSSELineBytes bounds any single SSE line so a broken server emitting a
+// stream without newlines cannot grow memory without limit.
+const maxSSELineBytes = 4 << 20
+
+// readBoundedLine reads through the next '\n' (or EOF) while capping the
+// buffered line length at limit bytes.
+func readBoundedLine(r *bufio.Reader, limit int) (string, error) {
+	var buf bytes.Buffer
+	for {
+		frag, err := r.ReadSlice('\n')
+		if buf.Len()+len(frag) > limit {
+			return "", fmt.Errorf("SSE line exceeds %d bytes", limit)
+		}
+		buf.Write(frag)
+		if err == bufio.ErrBufferFull {
+			continue
+		}
+		return buf.String(), err
+	}
+}
 
 func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<- types.LLMEvent) {
 	defer close(out)
@@ -172,7 +194,7 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 			return
 		}
 
-		line, err := reader.ReadString('\n')
+		line, err := readBoundedLine(reader, maxSSELineBytes)
 		if len(line) > 0 {
 			trimmed := strings.TrimSpace(line)
 			if strings.HasPrefix(trimmed, "data:") {
@@ -310,5 +332,3 @@ func (c *HTTPClient) readSSE(ctx context.Context, body io.ReadCloser, out chan<-
 		}
 	}
 }
-
-// modelCache caches fetched model lists per base URL.

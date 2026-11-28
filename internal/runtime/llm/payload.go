@@ -15,7 +15,7 @@ func (c *HTTPClient) buildPayload(req Request) ([]byte, error) {
 		})
 	}
 	for _, m := range req.Messages {
-		messages = append(messages, c.convertMessage(m))
+		messages = append(messages, c.convertMessages(m)...)
 	}
 
 	toolsPayload := make([]map[string]any, 0, len(req.Tools))
@@ -131,14 +131,54 @@ func anthropicReasoningBudget(effort string) int {
 	}
 }
 
+func (c *HTTPClient) convertMessages(m types.Message) []map[string]any {
+	// Tool result messages: OpenAI-compatible endpoints expect one
+	// role:"tool" message per tool_call_id, and strict providers reject
+	// completely empty tool_result content.
+	var toolResults []types.ToolResultBlock
+	var otherBlocks []types.ContentBlock
+	for _, block := range m.Content {
+		if tr, ok := block.(types.ToolResultBlock); ok {
+			toolResults = append(toolResults, tr)
+		} else {
+			otherBlocks = append(otherBlocks, block)
+		}
+	}
+	if len(toolResults) > 0 {
+		out := make([]map[string]any, 0, len(toolResults)+1)
+		for _, tr := range toolResults {
+			content := tr.Content
+			if content == "" {
+				content = " "
+			}
+			out = append(out, map[string]any{
+				"role":         "tool",
+				"tool_call_id": tr.ToolUseID,
+				"content":      content,
+			})
+		}
+		if len(otherBlocks) > 0 {
+			rest := m
+			rest.Content = otherBlocks
+			out = append(out, c.convertMessage(rest))
+		}
+		return out
+	}
+	return []map[string]any{c.convertMessage(m)}
+}
+
 func (c *HTTPClient) convertMessage(m types.Message) map[string]any {
 	// Tool result messages: OpenAI uses role "tool" with tool_call_id
 	if len(m.Content) == 1 {
 		if tr, ok := m.Content[0].(types.ToolResultBlock); ok {
+			content := tr.Content
+			if content == "" {
+				content = " "
+			}
 			return map[string]any{
 				"role":         "tool",
 				"tool_call_id": tr.ToolUseID,
-				"content":      tr.Content,
+				"content":      content,
 			}
 		}
 	}
@@ -152,7 +192,14 @@ func (c *HTTPClient) convertMessage(m types.Message) map[string]any {
 			case types.TextBlock:
 				textParts = append(textParts, v.Text)
 			case types.ToolUseBlock:
-				inputJSON, _ := json.Marshal(v.Input)
+				input := v.Input
+				if input == nil {
+					input = map[string]any{}
+				}
+				inputJSON, err := json.Marshal(input)
+				if err != nil {
+					inputJSON = []byte("{}")
+				}
 				toolCalls = append(toolCalls, map[string]any{
 					"id":   v.ID,
 					"type": "function",
