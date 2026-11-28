@@ -51,12 +51,11 @@ func (ll *LayeredLoader) SaveSettings(source ConfigSource, values map[string]int
 		return fmt.Errorf("failed to marshal config: %w", err)
 	}
 
-	// Write with secure permissions
-	if err := os.WriteFile(path, append(jsonData, '\n'), 0600); err != nil {
+	// Write atomically with secure permissions so a crash mid-save cannot
+	// truncate or corrupt the settings file.
+	if err := writeFileSecure(path, append(jsonData, '\n'), 0600); err != nil {
 		return fmt.Errorf("failed to write config: %w", err)
 	}
 
 	return nil
 }
-
-// GetConfigReport returns a formatted report of the current configuration

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"time"
 )
 
 // PromptNewPassword prompts for a new password with confirmation
@@ -33,9 +35,11 @@ func PromptNewPassword() (string, error) {
 	}
 }
 
-// writeFileSecure writes a file with specific permissions atomically
-func writeFileSecure(path string, data []byte, perm os.FileMode) error {
-	// Create temp file in same directory
+// writeFileSecure writes a file with specific permissions atomically.
+// Syncs before rename so a crash cannot leave a truncated file, cleans up
+// the temp file on any failure (including rename), and retries transiently
+// on Windows where another reader/indexer can briefly hold the target open.
+func writeFileSecure(path string, data []byte, perm os.FileMode) (err error) {
 	dir := filepath.Dir(path)
 	tmpFile, err := os.CreateTemp(dir, ".tmp-*")
 	if err != nil {
@@ -43,31 +47,39 @@ func writeFileSecure(path string, data []byte, perm os.FileMode) error {
 	}
 	tmpPath := tmpFile.Name()
 
-	// Ensure cleanup on error
 	defer func() {
 		if err != nil {
 			_ = os.Remove(tmpPath)
 		}
 	}()
 
-	// Set permissions before writing (security: prevent race condition)
 	if err = tmpFile.Chmod(perm); err != nil {
 		_ = tmpFile.Close()
 		return err
 	}
-
-	// Write data
 	if _, err = tmpFile.Write(data); err != nil {
 		_ = tmpFile.Close()
 		return err
 	}
-
+	if err = tmpFile.Sync(); err != nil {
+		_ = tmpFile.Close()
+		return err
+	}
 	if err = tmpFile.Close(); err != nil {
 		return err
 	}
 
-	// Atomic rename
-	return os.Rename(tmpPath, path)
+	const attempts = 10
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err = os.Rename(tmpPath, path); err == nil {
+			return nil
+		}
+		if runtime.GOOS != "windows" {
+			return err
+		}
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+	return err
 }
 
 // ClearSecureConfig removes all secure credentials

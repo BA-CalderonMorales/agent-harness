@@ -357,38 +357,22 @@ func (cm *CredentialManager) ClearSecureConfig() error {
 	return nil
 }
 
-// UpdateDefaultModel updates just the default model in secure storage
-// This is called when the user changes the model at runtime
+// UpdateDefaultModel updates the active provider's default model in secure
+// storage, keeping both the encrypted per-provider envelope and the top-level
+// header field in sync so LoadSecure returns the updated model on the next boot.
 func (cm *CredentialManager) UpdateDefaultModel(model string) error {
-	// Load existing credentials
-	data, err := readPrivateFile(cm.configPath)
+	cfg, err := cm.LoadSecure()
 	if err != nil {
-		return fmt.Errorf("failed to read secure config: %w", err)
+		return err
 	}
-
-	var store SecureStore
-	if err := json.Unmarshal(data, &store); err != nil {
-		return fmt.Errorf("failed to parse secure config: %w", err)
+	cfg.Model = model
+	if cfg.ProviderModels == nil {
+		cfg.ProviderModels = map[string]string{}
 	}
-
-	if store.Version != secureStoreVersion {
-		return fmt.Errorf("unsupported secure store version: %d", store.Version)
+	if cfg.Provider != "" && model != "" {
+		cfg.ProviderModels[cfg.Provider] = model
 	}
-
-	// Update the model
-	store.Model = model
-
-	// Marshal and save
-	newData, err := json.MarshalIndent(store, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal store: %w", err)
-	}
-
-	if err := writeFileSecure(cm.configPath, newData, secureFilePerms); err != nil {
-		return fmt.Errorf("failed to write secure config: %w", err)
-	}
-
-	return nil
+	return cm.SaveSecure(cfg)
 }
 
 // GetEncryptionStatus returns the current encryption status
