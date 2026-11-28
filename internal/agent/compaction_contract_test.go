@@ -318,6 +318,36 @@ func TestOversizedToolResultKeepsHeadTailAndDurableReceipt(t *testing.T) {
 	}
 }
 
+type cancelObservingSummaryClient struct {
+	canceled chan struct{}
+}
+
+func (c *cancelObservingSummaryClient) Stream(ctx context.Context, _ llm.Request) (<-chan types.LLMEvent, error) {
+	out := make(chan types.LLMEvent)
+	go func() {
+		<-ctx.Done()
+		close(c.canceled)
+		close(out)
+	}()
+	return out, nil
+}
+
+func TestRequestSummaryCancelsStreamContextOnIdleTimeout(t *testing.T) {
+	client := &cancelObservingSummaryClient{canceled: make(chan struct{})}
+	loop := NewLoop(client)
+	loop.Config.StreamIdleTimeout = 20 * time.Millisecond
+
+	_, err := loop.requestSummary(context.Background(), "summarize", "test-model")
+	if err == nil || !strings.Contains(err.Error(), "went idle") {
+		t.Fatalf("requestSummary() err = %v, want idle timeout", err)
+	}
+	select {
+	case <-client.canceled:
+	case <-time.After(time.Second):
+		t.Fatal("requestSummary() did not cancel stream context on idle timeout")
+	}
+}
+
 func firstText(messages []types.Message) string {
 	for _, message := range messages {
 		for _, block := range message.Content {

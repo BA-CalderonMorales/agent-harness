@@ -278,6 +278,9 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, mode
 
 // requestSummary sends one summarizer request and returns its text.
 func (l *Loop) requestSummary(ctx context.Context, prompt, model string) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	req := llm.Request{
 		Messages: []types.Message{
 			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()},
