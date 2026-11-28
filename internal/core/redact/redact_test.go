@@ -76,6 +76,22 @@ func TestMessagesPreservesContentAndRedactsSecrets(t *testing.T) {
 	}
 }
 
+func TestStringRedactsQuotedCredentialKeys(t *testing.T) {
+	SetSecret("")
+	input := `{"password":"super-secret-value","api_key": "live key value","user":"alice"}`
+	got := String(input)
+	if strings.Contains(got, "super-secret-value") || strings.Contains(got, "live key value") {
+		t.Fatalf("quoted credential values leaked: %q", got)
+	}
+	if !strings.Contains(got, `"user":"alice"`) {
+		t.Fatalf("ordinary JSON field corrupted: %q", got)
+	}
+	plain := "Please enter your password before proceeding."
+	if String(plain) != plain {
+		t.Fatalf("ordinary prose altered: %q", String(plain))
+	}
+}
+
 func TestSetSecretConcurrentSafety(t *testing.T) {
 	defer SetSecret("")
 	var wg sync.WaitGroup
