@@ -243,6 +243,7 @@ func ApplyTheme(name string) bool {
 	ColorInfo, ColorText, ColorTextDim = p.Info, p.Text, p.TextDim
 	ColorSurface, ColorBorder, ColorMuted, ColorHighlight = p.Surface, p.Border, p.Muted, p.Highlight
 	buildStyles()
+	clearMarkdownCaches()
 	return true
 }
 
@@ -254,6 +255,7 @@ func (a *App) ApplyTheme(name string) bool {
 	ok := ApplyTheme(name)
 	if ok {
 		a.chatModel.refreshCursorStyle()
+		a.chatModel.refreshViewport()
 	}
 	return ok
 }

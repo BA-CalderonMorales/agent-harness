@@ -47,11 +47,25 @@ type renderCache struct {
 	order *list.List               // LRU front = most recent
 }
 
+const renderCacheInitialCap = 256
+
 func newRenderCache() *renderCache {
 	return &renderCache{
-		ents:  make(map[uint64]*list.Element, renderCacheCapacity),
+		ents:  make(map[uint64]*list.Element, renderCacheInitialCap),
 		order: list.New(),
 	}
+}
+
+// clear drops every cached render. Called when the active theme changes so
+// previously styled ANSI output is regenerated under the new palette.
+func (c *renderCache) clear() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.ents = make(map[uint64]*list.Element, renderCacheInitialCap)
+	c.order.Init()
+	c.mu.Unlock()
 }
 
 // contentHash is FNV-1a 64. A collision would serve a wrong render, but

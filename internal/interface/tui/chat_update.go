@@ -14,24 +14,26 @@ func (m ChatModel) Init() tea.Cmd {
 	return textarea.Blink
 }
 
-// settleCurrentTool records a terminal outcome when the provider stops
-// without sending the normal ToolDone event (for example, a transport
-// error). It deliberately keeps currentToolMsg intact for the caller's
-// cleanup path.
+// settleCurrentTool records a terminal outcome for every still-running tool
+// row when a turn cancels or stops without normal ToolDone events (including
+// parallel concurrency-safe tool bursts).
 func (m *ChatModel) settleCurrentTool(status ToolStatus) {
-	toolID := ""
+	activeID := ""
 	if m.currentToolMsg != nil {
-		toolID = m.currentToolMsg.ID
+		activeID = m.currentToolMsg.ID
 	}
-	if toolID == "" && m.currentTool != nil {
-		toolID = m.currentTool.ID
-	}
-	if toolID == "" {
-		return
+	if activeID == "" && m.currentTool != nil {
+		activeID = m.currentTool.ID
 	}
 	for i := range m.messages {
 		msg := &m.messages[i]
-		if !msg.IsTool || msg.ID != toolID || msg.ToolStatus == ToolStatusSuccess || msg.ToolStatus == ToolStatusError || msg.ToolStatus == ToolStatusComplete {
+		if !msg.IsTool {
+			continue
+		}
+		if msg.ToolStatus == ToolStatusSuccess || msg.ToolStatus == ToolStatusError || msg.ToolStatus == ToolStatusComplete {
+			continue
+		}
+		if msg.ToolStatus != ToolStatusRunning && msg.ID != activeID {
 			continue
 		}
 		started := msg.ToolStartedAt
@@ -40,14 +42,13 @@ func (m *ChatModel) settleCurrentTool(status ToolStatus) {
 		}
 		msg.ToolElapsed = time.Since(started)
 		command := msg.ToolDetail
-		if command == "" && m.toolAnimation != nil {
+		if command == "" && msg.ID == activeID && m.toolAnimation != nil {
 			command = m.toolAnimation.Command
 		}
 		msg.ToolDetail = command
 		msg.ToolStatus = status
 		msg.Content = m.formatToolContent(msg.ToolDisplayName, command, status, started, msg.ToolElapsed)
 		msg.bumpRev()
-		return
 	}
 }
 
@@ -378,24 +379,19 @@ func (m ChatModel) Update(msg tea.Msg) (model tea.Model, cmd tea.Cmd) {
 		}
 		for i := range m.messages {
 			if m.messages[i].ID == msg.ToolID && m.messages[i].IsTool {
-				command := m.extractCommandFromToolInput(m.messages[i].ToolName, nil)
-				if command == "" && m.toolAnimation != nil && m.currentToolMsg != nil &&
+				detail := m.messages[i].ToolDetail
+				if detail == "" && m.toolAnimation != nil && m.currentToolMsg != nil &&
 					m.currentToolMsg.ID == msg.ToolID {
-					command = m.toolAnimation.Command
+					detail = m.toolAnimation.Command
+					m.messages[i].ToolDetail = detail
 				}
 				if m.messages[i].ToolStartedAt.IsZero() {
 					m.messages[i].ToolStartedAt = m.messages[i].Timestamp
 				}
-				detail := command
-				if detail == "" {
-					detail = m.messages[i].ToolDetail
-				} else {
-					m.messages[i].ToolDetail = detail
-				}
 				m.messages[i].ToolElapsed = time.Since(m.messages[i].ToolStartedAt)
 				m.messages[i].Content = m.formatToolContent(m.messages[i].ToolDisplayName, detail, status, m.messages[i].ToolStartedAt, m.messages[i].ToolElapsed)
-				m.messages[i].bumpRev()
 				m.messages[i].ToolStatus = status
+				m.messages[i].bumpRev()
 				break
 			}
 		}

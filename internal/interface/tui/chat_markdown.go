@@ -134,6 +134,15 @@ func evictMarkdownRenderer(width int) {
 	delete(markdownRenderers, width)
 }
 
+// clearMarkdownCaches drops cached glamour renderers and rendered markdown
+// output when the palette changes so headings and links adopt the new theme.
+func clearMarkdownCaches() {
+	markdownRenderersMu.Lock()
+	clear(markdownRenderers)
+	markdownRenderersMu.Unlock()
+	renderCacheStore.clear()
+}
+
 // blockPrefixRE matches lines that start a markdown block: headings,
 // lists, blockquotes, tables. Soft breaks never cross these.
 var blockPrefixRE = regexp.MustCompile(`^(#{1,6}\s|[-*+]\s|\d+\.\s|>|\|)`)
