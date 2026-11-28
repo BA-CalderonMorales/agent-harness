@@ -138,13 +138,27 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				// The provider closed the stream without a stop event:
 				// the response is incomplete, and a truncated answer
 				// that looks complete is worse than an error naming it.
-				// The partial prose survives: emit it as a message so
-				// nothing the model said silently vanishes.
+				// Preserve all prose received so far (both text emitted
+				// before tool calls and the current tail) while excluding
+				// tool calls that will not be executed.
+				var partialBlocks []types.ContentBlock
+				receivedChars := 0
+				for _, b := range msg.Content {
+					if tb, ok := b.(types.TextBlock); ok && tb.Text != "" {
+						partialBlocks = append(partialBlocks, tb)
+						receivedChars += len(tb.Text)
+					}
+				}
 				if currentText.Len() > 0 {
+					tail := currentText.String()
+					partialBlocks = append(partialBlocks, types.TextBlock{Text: tail})
+					receivedChars += len(tail)
+				}
+				if len(partialBlocks) > 0 {
 					partial := types.Message{
 						UUID:      msg.UUID,
 						Role:      types.RoleAssistant,
-						Content:   []types.ContentBlock{types.TextBlock{Text: currentText.String()}},
+						Content:   partialBlocks,
 						Timestamp: time.Now(),
 					}
 					select {
@@ -155,7 +169,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				return nil, nil, fmt.Errorf(
 					"provider disconnected before completing the response (received %d chars)",
-					currentText.Len(),
+					receivedChars,
 				)
 			}
 

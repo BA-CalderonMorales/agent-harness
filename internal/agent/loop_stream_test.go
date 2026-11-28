@@ -319,3 +319,46 @@ func TestConsumeStreamEmitsTextDeltasBeforeTheFinalMessage(t *testing.T) {
 		t.Fatalf("durable message text = %q, want the assembled prose", got)
 	}
 }
+
+func TestConsumeStreamDisconnectPreservesPreAndPostToolProse(t *testing.T) {
+	input := []types.LLMEvent{
+		types.LLMMessageStart{ID: "message-disconnect"},
+		types.LLMTextDelta{Delta: "Before "},
+		types.LLMToolUseDelta{ID: "call-1", Name: "bash", Delta: `{"command":"pwd"}`},
+		types.LLMTextDelta{Delta: "After"},
+	}
+	events := make(chan types.LLMEvent, len(input))
+	for _, event := range input {
+		events <- event
+	}
+	close(events)
+	out := make(chan types.StreamEvent, len(input)+4)
+
+	_, _, err := (&Loop{}).consumeStream(context.Background(), events, out)
+	if err == nil || !strings.Contains(err.Error(), "received 12 chars") {
+		t.Fatalf("consumeStream() err = %v, want disconnect error reporting 12 chars", err)
+	}
+
+	var partial *types.Message
+	for len(out) > 0 {
+		if sm, ok := (<-out).(types.StreamMessage); ok {
+			m := sm.Message
+			partial = &m
+		}
+	}
+	if partial == nil {
+		t.Fatal("expected partial StreamMessage on unexpected disconnect")
+	}
+	var gotText strings.Builder
+	for _, block := range partial.Content {
+		switch b := block.(type) {
+		case types.TextBlock:
+			gotText.WriteString(b.Text)
+		default:
+			t.Fatalf("unexpected non-text block in partial disconnect message: %T", block)
+		}
+	}
+	if gotText.String() != "Before After" {
+		t.Fatalf("partial prose = %q, want %q", gotText.String(), "Before After")
+	}
+}
