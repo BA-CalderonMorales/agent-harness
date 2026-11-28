@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"fmt"
+	"io"
 	"os"
 	stdpath "path"
 	"path/filepath"
@@ -105,9 +106,9 @@ var FileReadTool = tools.NewTool(tools.Tool{
 			}}, nil
 		}
 
-		data, err := os.ReadFile(path)
+		data, readInfo, err := readFileBounded(path, maxBytes)
 		if err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to read file: %w", err)
+			return tools.ToolResult{}, err
 		}
 
 		content := string(data)
@@ -130,8 +131,8 @@ var FileReadTool = tools.NewTool(tools.Tool{
 			}
 		}
 
-		// Record read for stale-write protection
-		fs.DefaultStaleTracker.RecordRead(path, data, info)
+		// Record read for stale-write protection using the descriptor we read.
+		fs.DefaultStaleTracker.RecordRead(path, data, readInfo)
 
 		// Truncate large outputs to prevent context overflow
 		content = truncateReadOutput(content)
@@ -170,6 +171,40 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		return parts[len(parts)-1]
 	},
 })
+
+// readFileBounded opens path and reads at most maxBytes bytes, rejecting files
+// that grow past maxBytes after an earlier os.Stat before converting, hashing,
+// or caching them. Files of exactly maxBytes bytes are accepted.
+func readFileBounded(path string, maxBytes int64) ([]byte, os.FileInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if info.IsDir() {
+		return nil, nil, fmt.Errorf("%s is a directory; use ls or ls_recursive to inspect directories", path)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("cannot read non-regular file %s", path)
+	}
+	if info.Size() > maxBytes {
+		return nil, nil, fmt.Errorf("file %s is too large (%d bytes, limit %d bytes)", path, info.Size(), maxBytes)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, nil, fmt.Errorf("file %s is too large (>%d bytes, limit %d bytes)", path, maxBytes, maxBytes)
+	}
+	return data, info, nil
+}
 
 func resolveScreenshotPath(path string) string {
 	if _, err := os.Stat(path); err == nil {

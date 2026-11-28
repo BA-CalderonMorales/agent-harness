@@ -34,6 +34,23 @@ func TestFileReadBlocksUncleanDevicePathsDirsAndOversizedFiles(t *testing.T) {
 	if _, err := FileReadTool.Call(map[string]any{"file_path": bigPath}, ctx, nil, nil); err == nil || !strings.Contains(err.Error(), "too large") {
 		t.Fatalf("FileReadTool on oversized file = %v, want too large error", err)
 	}
+
+	exactPath := filepath.Join(dir, "exact.txt")
+	exactBody := strings.Repeat("e", 512)
+	if err := os.WriteFile(exactPath, []byte(exactBody), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fs.DefaultCache.InvalidatePath(exactPath) })
+	res, err := FileReadTool.Call(map[string]any{"file_path": exactPath}, ctx, nil, nil)
+	if err != nil {
+		t.Fatalf("FileReadTool on exact maxBytes file failed: %v", err)
+	}
+	if res.Data.(string) != exactBody {
+		t.Fatalf("exact maxBytes read len = %d, want 512", len(res.Data.(string)))
+	}
+	if _, _, err := readFileBounded(exactPath, 511); err == nil || !strings.Contains(err.Error(), "too large") {
+		t.Fatalf("readFileBounded(exactPath, 511) = %v, want too large error", err)
+	}
 }
 
 func TestFileReadCacheHitDoesNotCorruptStaleTracker(t *testing.T) {
