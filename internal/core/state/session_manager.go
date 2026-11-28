@@ -131,12 +131,12 @@ func (sm *SessionManager) SaveCurrent() (string, error) {
 		return "", err
 	}
 
-	// A file that does not exist yet starts with its header + all
-	// in-memory messages.
+	// A file that does not exist yet starts with its header + all in-memory messages.
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if err := sm.createSessionFile(path); err != nil {
 			return "", err
 		}
+		sm.needsRewrite = false
 		sm.appendOffset = len(sm.current.Messages)
 		sm.journalID = sm.current.ID
 		return path, nil

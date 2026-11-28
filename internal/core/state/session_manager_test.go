@@ -2,6 +2,7 @@ package state
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -256,5 +257,50 @@ func TestCountMessageEventsIgnoresEmbeddedPayloadMatches(t *testing.T) {
 	}
 	if n != 1 {
 		t.Fatalf("countMessageEventsChecked() = %d, want 1", n)
+	}
+}
+
+func TestAppendRollbackStatFailureMarksNeedsRewrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unlinking an open file path to fail os.Stat during rollback is POSIX-specific")
+	}
+	dir := t.TempDir()
+	manager, err := NewSessionManagerWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("test-model")
+	session.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "first"}}})
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("initial SaveCurrent() error = %v", err)
+	}
+
+	session.AddMessage(types.Message{Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "second"}}})
+	manager.appendFault = func() error {
+		if err := os.Remove(path); err != nil {
+			t.Errorf("remove during appendFault: %v", err)
+		}
+		return os.ErrPermission
+	}
+	if _, err := manager.SaveCurrent(); err == nil {
+		t.Fatal("SaveCurrent() = nil, want injected append error")
+	}
+	if !manager.needsRewrite {
+		t.Fatal("needsRewrite = false after rollback os.Stat failure, want true")
+	}
+	manager.appendFault = nil
+	if _, err := manager.SaveCurrent(); err != nil {
+		t.Fatalf("recovery SaveCurrent() error = %v", err)
+	}
+	if manager.needsRewrite {
+		t.Fatal("needsRewrite stayed true after successful recovery rewrite")
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("loadSessionFile() error = %v", err)
+	}
+	if len(loaded.Messages) != 2 {
+		t.Fatalf("loaded messages = %d, want 2 without duplicates", len(loaded.Messages))
 	}
 }

@@ -236,7 +236,15 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 			// appended to it, and truncating would erase their save; keep
 			// it and report instead (a duplicate is recoverable, a lost
 			// save is not).
-			if now, serr := os.Stat(path); serr != nil || now.Size() != size+out.n {
+			if now, serr := os.Stat(path); serr != nil {
+				// Unable to confirm file size after a failed append: do not
+				// truncate blindly, but force the next save to rewrite whole
+				// so retrying does not append duplicate messages.
+				sm.needsRewrite = true
+				retErr = fmt.Errorf("%w (could not inspect session file for rollback, the next save rewrites the session file: %v)", retErr, serr)
+				_ = f.Close()
+				return
+			} else if now.Size() != size+out.n {
 				retErr = fmt.Errorf("%w (the file changed during the save, so it was not rolled back)", retErr)
 				_ = f.Close()
 				return
