@@ -3,6 +3,7 @@ package tui
 import (
 	"strconv"
 	"strings"
+	"sync"
 )
 
 // Turn grouping: the agent's tool calls belong to its response, not to
@@ -448,11 +449,13 @@ const (
 	// thrash the markdown cache had (see chat_render_cache.go). 65536
 	// covers 10k events 6x over; per-block output stays capped at
 	// groupCacheMaxOutput so memory remains bounded.
-	groupCacheCapacity  = 65536
-	groupCacheMaxOutput = 1 << 20 // 1 MiB per block — beyond that, don't cache
+	groupCacheCapacity   = 65536
+	groupCacheInitialCap = 256
+	groupCacheMaxOutput  = 1 << 20 // 1 MiB per block — beyond that, don't cache
 )
 
 type groupCache struct {
+	mu   sync.Mutex
 	ents map[string]cachedGroup
 	lru  []string // signature strings, front = most recent
 }
@@ -465,10 +468,22 @@ type cachedGroup struct {
 }
 
 func newGroupCache() *groupCache {
-	return &groupCache{ents: make(map[string]cachedGroup, groupCacheCapacity)}
+	return &groupCache{ents: make(map[string]cachedGroup, groupCacheInitialCap)}
+}
+
+func (c *groupCache) clear() {
+	if c == nil {
+		return
+	}
+	c.mu.Lock()
+	c.ents = make(map[string]cachedGroup, groupCacheInitialCap)
+	c.lru = nil
+	c.mu.Unlock()
 }
 
 func (c *groupCache) get(sig string) (cachedGroup, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	g, ok := c.ents[sig]
 	return g, ok
 }
@@ -477,6 +492,8 @@ func (c *groupCache) put(sig, block string, refs []clickRef) {
 	if len(block) > groupCacheMaxOutput {
 		return
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if _, ok := c.ents[sig]; !ok {
 		c.lru = append([]string{sig}, c.lru...)
 	}

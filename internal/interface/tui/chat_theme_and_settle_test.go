@@ -4,13 +4,25 @@ import (
 	"errors"
 	"testing"
 	"time"
+
+	"github.com/charmbracelet/lipgloss"
+	"github.com/muesli/termenv"
 )
 
 func TestApplyThemeInvalidatesMarkdownCaches(t *testing.T) {
-	t.Cleanup(func() { ApplyTheme("default") })
+	prevProfile := lipgloss.ColorProfile()
+	lipgloss.SetColorProfile(termenv.TrueColor)
+	t.Cleanup(func() {
+		lipgloss.SetColorProfile(prevProfile)
+		ApplyTheme("default")
+	})
 
 	ApplyTheme("default")
-	_ = renderMarkdown("# Heading", 80)
+	chat := NewChatModel()
+	chat.width = 100
+	chat.height = 30
+	chat.AddMessage("assistant", "# Heading\n\nBody text")
+	before := chat.viewport.View()
 
 	markdownRenderersMu.Lock()
 	hadRenderer := len(markdownRenderers) > 0
@@ -18,8 +30,17 @@ func TestApplyThemeInvalidatesMarkdownCaches(t *testing.T) {
 	if !hadRenderer && !isTermux {
 		t.Fatal("expected markdown renderer to be cached before theme switch")
 	}
-	if _, ok := renderCacheStore.get("# Heading", 80); !ok {
+	renderCacheStore.mu.Lock()
+	hadRenderEntry := len(renderCacheStore.ents) > 0
+	renderCacheStore.mu.Unlock()
+	if !hadRenderEntry {
 		t.Fatal("expected rendered markdown to be cached before theme switch")
+	}
+	groupCacheStore.mu.Lock()
+	hadGroupEntry := len(groupCacheStore.ents) > 0
+	groupCacheStore.mu.Unlock()
+	if !hadGroupEntry {
+		t.Fatal("expected rendered turn group to be cached before theme switch")
 	}
 
 	if !ApplyTheme("nord") {
@@ -31,8 +52,23 @@ func TestApplyThemeInvalidatesMarkdownCaches(t *testing.T) {
 	if remainingRenderers != 0 {
 		t.Fatalf("markdownRenderers still had %d stale entries after ApplyTheme", remainingRenderers)
 	}
-	if _, ok := renderCacheStore.get("# Heading", 80); ok {
-		t.Fatal("stale rendered markdown survived ApplyTheme")
+	renderCacheStore.mu.Lock()
+	remainingRenders := len(renderCacheStore.ents)
+	renderCacheStore.mu.Unlock()
+	if remainingRenders != 0 {
+		t.Fatalf("renderCacheStore still had %d stale entries after ApplyTheme", remainingRenders)
+	}
+	groupCacheStore.mu.Lock()
+	remainingGroups := len(groupCacheStore.ents)
+	groupCacheStore.mu.Unlock()
+	if remainingGroups != 0 {
+		t.Fatalf("groupCacheStore still had %d stale entries after ApplyTheme", remainingGroups)
+	}
+
+	chat.refreshViewport()
+	after := chat.viewport.View()
+	if before == after {
+		t.Fatal("rendered chat viewport did not change after switching theme from default to nord")
 	}
 }
 
