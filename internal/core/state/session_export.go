@@ -4,12 +4,13 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 	"time"
+
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/redact"
+	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 // SaveExportToFile saves a redacted session export without changing the raw
@@ -71,7 +72,11 @@ func (s *Session) ExportToMarkdown() string {
 		if msg.Role == "system" {
 			continue
 		}
-		roleTitle := strings.ToUpper(string(msg.Role)[:1]) + string(msg.Role)[1:]
+		role := string(msg.Role)
+		roleTitle := "Unknown"
+		if len(role) > 0 {
+			roleTitle = strings.ToUpper(role[:1]) + role[1:]
+		}
 		fmt.Fprintf(&b, "## %s\n\n", roleTitle)
 		for _, block := range msg.Content {
 			switch v := block.(type) {
@@ -138,114 +143,27 @@ func (s *Session) ExportToText() string {
 
 func (s *Session) redactedExportSession() *Session {
 	cp := *s
-	cp.Model = redactExportString(cp.Model)
-	cp.Messages = make([]types.Message, 0, len(s.Messages))
-	for _, msg := range s.Messages {
-		msg.APIError = redactExportString(msg.APIError)
-		msg.StopReason = redactExportString(msg.StopReason)
-		msg.Model = redactExportString(msg.Model)
-		originalContent := msg.Content
-		msg.Content = make([]types.ContentBlock, 0, len(originalContent))
-		for _, block := range originalContent {
-			switch v := block.(type) {
-			case types.TextBlock:
-				msg.Content = append(msg.Content, types.TextBlock{Text: redactExportString(v.Text)})
-			case types.ToolUseBlock:
-				msg.Content = append(msg.Content, types.ToolUseBlock{ID: v.ID, Name: v.Name, Input: redactExportMap(v.Input)})
-			case types.ToolResultBlock:
-				msg.Content = append(msg.Content, types.ToolResultBlock{ToolUseID: v.ToolUseID, Content: redactExportString(v.Content), IsError: v.IsError})
-			case types.ThinkingBlock:
-				msg.Content = append(msg.Content, types.ThinkingBlock{Thinking: "<redacted>", Signature: "<redacted>"})
-			default:
-				msg.Content = append(msg.Content, block)
-			}
-		}
-		cp.Messages = append(cp.Messages, msg)
-	}
+	cp.Model = redact.String(cp.Model)
+	cp.Messages = redact.Messages(s.Messages)
 	return &cp
 }
 
 func redactExportMap(input map[string]any) map[string]any {
-	if input == nil {
-		return nil
-	}
-	out := make(map[string]any, len(input))
-	for k, v := range input {
-		if isSensitiveExportKey(k) {
-			out[k] = "<redacted>"
-			continue
-		}
-		out[k] = redactExportValue(v)
-	}
-	return out
+	return redact.Map(input)
 }
 
 func redactExportValue(v any) any {
-	switch value := v.(type) {
-	case string:
-		return redactExportString(value)
-	case map[string]any:
-		return redactExportMap(value)
-	case []any:
-		out := make([]any, len(value))
-		for i, item := range value {
-			out[i] = redactExportValue(item)
-		}
-		return out
-	default:
-		return value
-	}
+	return redact.Value(v)
 }
-
-func isSensitiveExportKey(key string) bool {
-	k := strings.ToLower(key)
-	return strings.Contains(k, "api_key") ||
-		strings.Contains(k, "apikey") ||
-		strings.Contains(k, "api-key") ||
-		strings.Contains(k, "token") ||
-		strings.Contains(k, "secret") ||
-		strings.Contains(k, "password") ||
-		strings.Contains(k, "authorization") ||
-		strings.Contains(k, "cookie")
-}
-
-var exportRedactions = []struct {
-	re   *regexp.Regexp
-	repl string
-}{
-	{regexp.MustCompile(`secret://(?:env|file|cmd):[^\r\n"'\x60]*`), `<secret-ref>`},
-	{regexp.MustCompile(`(?i)\b([A-Z0-9_]*(?:API[_-]?KEY|TOKEN|SECRET|PASSWORD)[A-Z0-9_]*)\s*[:=]\s*["']?[^"',\s}\]]+["']?`), `$1=<redacted>`},
-	{regexp.MustCompile(`(?i)\b(authorization["']?\s*[:=]\s*["']?(?:bearer|basic|token)\s+)[^\s"',;]+`), `$1<redacted>`},
-	{regexp.MustCompile(`(?i)\b(x-api-key|x-auth-token)["']?\s*[:=]\s*["']?[^"',\s}\]]+`), `$1=<redacted>`},
-	{regexp.MustCompile(`\b(sk-or-v1-[A-Za-z0-9._-]+|sk-ant-[A-Za-z0-9._-]+|sk-proj-[A-Za-z0-9._-]+|sk_live_[A-Za-z0-9]+|sk-[A-Za-z0-9._-]{20,}|github_pat_[A-Za-z0-9_]+|ghp_[A-Za-z0-9_]+|AKIA[0-9A-Z]{16}|xai-[A-Za-z0-9._-]+|AIza[0-9A-Za-z_-]{30,}|hf_[A-Za-z0-9]{20,}|glpat-[A-Za-z0-9_-]+|npm_[A-Za-z0-9]{20,}|pypi-[A-Za-z0-9._-]+)\b`), `<redacted>`},
-	{regexp.MustCompile(`-----BEGIN [A-Z ]*PRIVATE KEY-----[\s\S]*?-----END [A-Z ]*PRIVATE KEY-----`), `<redacted-private-key>`},
-	{regexp.MustCompile(`/data/data/com\.termux/files/home(?:/[^\s` + "`" + `"')\]}>,]*)*`), `<termux-home>`},
-	{regexp.MustCompile(`/data/data/com\.termux/files/usr(?:/[^\s` + "`" + `"')\]}>,]*)*`), `<termux-prefix>`},
-	{regexp.MustCompile(`/(?:home|Users)/[A-Za-z0-9._-]+(?:/[^\s` + "`" + `"')\]}>,]*)*`), `<user-home>`},
-	{regexp.MustCompile(`/root(?:/[^\s` + "`" + `"')\]}>,]*)*`), `<user-home>`},
-}
-
-// exportRedactSecret is the active API key, injected before export so
-// exact key material is scrubbed in addition to the pattern redactions.
-// Pattern lists can never know every provider key format; the exact key
-// always can.
-var exportRedactSecret string
 
 // SetExportRedactSecret registers the active API key for exact redaction
 // in session exports. An empty value clears it.
 func SetExportRedactSecret(secret string) {
-	exportRedactSecret = secret
+	redact.SetSecret(secret)
 }
 
 func redactExportString(value string) string {
-	out := value
-	if exportRedactSecret != "" {
-		out = strings.ReplaceAll(out, exportRedactSecret, "<redacted>")
-	}
-	for _, redaction := range exportRedactions {
-		out = redaction.re.ReplaceAllString(out, redaction.repl)
-	}
-	return out
+	return redact.String(value)
 }
 
 func exportIDPrefix(id string) string {
@@ -269,5 +187,3 @@ func LoadSession(path string) (*Session, error) {
 
 	return &session, nil
 }
-
-// Compact compacts the session based on the provided config
