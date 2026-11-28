@@ -174,7 +174,10 @@ func runSingleTool(ctx tools.Context, block types.ToolUseBlock, assistantMsg typ
 
 	// Admit the full result when it fits. Otherwise preserve the exact output
 	// out of band and admit only a bounded, retrievable receipt.
-	budget := tools.GetCurrentBudget()
+	budget := ctx.ContentBudget
+	if budget == nil {
+		budget = tools.GetCurrentBudget()
+	}
 	resultStr := fmt.Sprintf("%v", result.Data)
 	receiptLimit, admitted := budget.TryRecordResult(block.Name, len(resultStr), toolDef.MaxResultSizeChars)
 	for !admitted {

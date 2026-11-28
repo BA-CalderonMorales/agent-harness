@@ -154,6 +154,7 @@ type Context struct {
 	GlobLimits              GlobLimits
 	ToolDecisions           map[string]ToolDecision
 	ContentReplacement      any
+	ContentBudget           *ContentBudget
 	LoadedNestedMemoryPaths map[string]struct{}
 	DiscoveredSkillNames    map[string]struct{}
 	LocalDenialTracking     any

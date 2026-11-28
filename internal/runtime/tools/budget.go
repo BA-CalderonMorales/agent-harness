@@ -154,18 +154,31 @@ func (b *ContentBudget) GetTruncatedResult(toolName string, result string, toolM
 	return truncated + note, note
 }
 
+// NewDefaultContentBudget creates a fresh per-turn budget with the standard
+// read/search tool exemptions. Giving each agent loop iteration its own
+// budget keeps delegated sub-agents from clobbering the parent turn's count.
+func NewDefaultContentBudget() *ContentBudget {
+	b := NewContentBudget(DefaultMaxCharsPerTurn)
+	applyDefaultBudgetExemptions(b)
+	return b
+}
+
+func applyDefaultBudgetExemptions(b *ContentBudget) {
+	// Read/search tools are exempt - their content is essential
+	b.MarkToolExempt("read")
+	b.MarkToolExempt("glob")
+	b.MarkToolExempt("grep")
+	b.MarkToolExempt("search")
+	b.MarkToolExempt("web_fetch")
+	b.MarkToolExempt("web_search")
+}
+
 // Global budget instance for the current turn
 var currentBudget = NewContentBudget(DefaultMaxCharsPerTurn)
 
 // InitDefaultBudget sets up the default budget with standard exemptions.
 func InitDefaultBudget() {
-	// Read/search tools are exempt - their content is essential
-	currentBudget.MarkToolExempt("read")
-	currentBudget.MarkToolExempt("glob")
-	currentBudget.MarkToolExempt("grep")
-	currentBudget.MarkToolExempt("search")
-	currentBudget.MarkToolExempt("web_fetch")
-	currentBudget.MarkToolExempt("web_search")
+	applyDefaultBudgetExemptions(currentBudget)
 }
 
 // GetCurrentBudget returns the global budget instance.
