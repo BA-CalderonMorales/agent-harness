@@ -70,7 +70,7 @@ func TestFileReadCacheHitDoesNotCorruptStaleTracker(t *testing.T) {
 func TestFileEditNormalizesCurlyQuotesAndPreservesExecutableMode(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "script.sh")
-	initial := "#!/bin/sh\necho \u201chello\u201d\n"
+	initial := "#!/bin/sh\necho \u201chello\u201d\n# author=O\u2019Neil\n"
 	if err := os.WriteFile(path, []byte(initial), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -91,8 +91,9 @@ func TestFileEditNormalizesCurlyQuotesAndPreservesExecutableMode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(got), `echo "world"`) {
-		t.Fatalf("edited content = %q, want echo \"world\"", string(got))
+	want := "#!/bin/sh\necho \"world\"\n# author=O\u2019Neil\n"
+	if string(got) != want {
+		t.Fatalf("edited content = %q, want %q (unrelated curly quote must be preserved)", string(got), want)
 	}
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(path)
@@ -102,6 +103,34 @@ func TestFileEditNormalizesCurlyQuotesAndPreservesExecutableMode(t *testing.T) {
 		if info.Mode().Perm()&0o111 == 0 {
 			t.Fatalf("executable mode lost after edit: %o", info.Mode().Perm())
 		}
+	}
+
+	// Verify replace_all=true replaces every normalized match while still
+	// preserving unrelated curly quotes elsewhere in the file.
+	multiPath := filepath.Join(dir, "multi.txt")
+	multiInit := "a=\u201cx\u201d\nb=O\u2019Neil\nc=\u201cx\u201d\n"
+	if err := os.WriteFile(multiPath, []byte(multiInit), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fs.DefaultCache.InvalidatePath(multiPath) })
+	if _, err := FileReadTool.Call(map[string]any{"file_path": multiPath}, tools.Context{}, nil, nil); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FileEditTool.Call(map[string]any{
+		"file_path":   multiPath,
+		"old_string":  `"x"`,
+		"new_string":  `"y"`,
+		"replace_all": true,
+	}, tools.Context{}, nil, nil); err != nil {
+		t.Fatalf("replace_all curly-quote fallback failed: %v", err)
+	}
+	multiGot, err := os.ReadFile(multiPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	multiWant := "a=\"y\"\nb=O\u2019Neil\nc=\"y\"\n"
+	if string(multiGot) != multiWant {
+		t.Fatalf("replace_all content = %q, want %q", string(multiGot), multiWant)
 	}
 }
 
