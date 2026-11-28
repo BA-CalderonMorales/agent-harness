@@ -66,6 +66,12 @@ var FileEditTool = tools.NewTool(tools.Tool{
 			replaceAll = v
 		}
 
+		// Preserve existing file mode (e.g., 0755 executable scripts).
+		perm := os.FileMode(0644)
+		if existingInfo, statErr := os.Stat(path); statErr == nil {
+			perm = existingInfo.Mode().Perm()
+		}
+
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to read file: %w", err)
@@ -73,11 +79,12 @@ var FileEditTool = tools.NewTool(tools.Tool{
 
 		content := string(data)
 
-		// Normalize quotes for more forgiving matches
+		// Normalize curly quotes for forgiving matches when exact match misses.
+		exactMatch := strings.Contains(content, oldStr)
 		normalizedOld := normalizeQuotes(oldStr)
 		normalizedContent := normalizeQuotes(content)
 
-		if !strings.Contains(normalizedContent, normalizedOld) {
+		if !exactMatch && !strings.Contains(normalizedContent, normalizedOld) {
 			return tools.ToolResult{}, fmt.Errorf("old_string not found in file. The file may have changed — use the 'read' tool to see current contents, then try again with an exact match")
 		}
 
@@ -86,15 +93,19 @@ var FileEditTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{}, fmt.Errorf("stale write detected: %w; the file may have been modified by another process - please re-read and try again", err)
 		}
 
+		targetContent, targetOld := content, oldStr
+		if !exactMatch {
+			targetContent, targetOld = normalizedContent, normalizedOld
+		}
 		var updated string
 		if replaceAll {
-			updated = strings.ReplaceAll(content, oldStr, newStr)
+			updated = strings.ReplaceAll(targetContent, targetOld, newStr)
 		} else {
-			updated = strings.Replace(content, oldStr, newStr, 1)
+			updated = strings.Replace(targetContent, targetOld, newStr, 1)
 		}
 
 		// Write atomically: unique temp file then rename
-		if err := writeFileAtomic(path, []byte(updated), 0644); err != nil {
+		if err := writeFileAtomic(path, []byte(updated), perm); err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
 		}
 
@@ -122,13 +133,14 @@ var FileEditTool = tools.NewTool(tools.Tool{
 	},
 })
 
+var quoteNormalizer = strings.NewReplacer(
+	"\u2018", "'",
+	"\u2019", "'",
+	"\u201c", "\"",
+	"\u201d", "\"",
+)
+
 // normalizeQuotes converts curly quotes to straight quotes for forgiving matches.
 func normalizeQuotes(s string) string {
-	replacer := strings.NewReplacer(
-		"'", "'",
-		"'", "'",
-		"\"", "\"",
-		"\"", "\"",
-	)
-	return replacer.Replace(s)
+	return quoteNormalizer.Replace(s)
 }

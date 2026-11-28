@@ -53,7 +53,7 @@ func (c *ReadCache) Get(key ReadCacheKey) (string, bool) {
 
 	// Verify file hasn't changed on disk
 	info, err := os.Stat(key.Path)
-	if err != nil || info.ModTime() != key.Mtime {
+	if err != nil || !info.ModTime().UTC().Equal(key.Mtime) {
 		return "", false
 	}
 
@@ -86,13 +86,14 @@ func (c *ReadCache) Set(key ReadCacheKey, content string) {
 	}
 }
 
-// MakeKey creates a cache key from read parameters.
+// MakeKey creates a cache key from read parameters. Mtime is normalized to
+// UTC to strip any Go monotonic clock reading before use as a map key.
 func MakeKey(path string, offset, limit int, info os.FileInfo) ReadCacheKey {
 	return ReadCacheKey{
 		Path:   path,
 		Offset: offset,
 		Limit:  limit,
-		Mtime:  info.ModTime(),
+		Mtime:  info.ModTime().UTC(),
 	}
 }
 
@@ -112,11 +113,13 @@ func (c *ReadCache) InvalidatePath(path string) {
 var DefaultCache = NewReadCache(100)
 
 // FileVersion tracks file metadata for stale-write protection.
+// Only the SHA-256 hash and mtime are retained; storing full file bodies
+// kept an unbounded copy of every file read in memory for the whole session.
 type FileVersion struct {
-	Path    string
-	Mtime   time.Time
-	Hash    string // SHA256 hash of content for content-based comparison
-	Content string // Optional: store for Windows timestamp fallback
+	Path       string
+	Mtime      time.Time
+	Hash       string // SHA256 hash of content for content-based comparison
+	RecordedAt time.Time
 }
 
 // ComputeHash computes SHA256 hash of content.
@@ -125,16 +128,20 @@ func ComputeHash(content []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
+const defaultMaxTrackedFiles = 1024
+
 // StaleWriteTracker tracks file versions to detect concurrent modifications.
 type StaleWriteTracker struct {
 	mu       sync.RWMutex
 	versions map[string]FileVersion
+	maxSize  int
 }
 
 // NewStaleWriteTracker creates a new tracker.
 func NewStaleWriteTracker() *StaleWriteTracker {
 	return &StaleWriteTracker{
 		versions: make(map[string]FileVersion),
+		maxSize:  defaultMaxTrackedFiles,
 	}
 }
 
@@ -143,11 +150,29 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	maxSize := t.maxSize
+	if maxSize <= 0 {
+		maxSize = defaultMaxTrackedFiles
+	}
+	if _, exists := t.versions[path]; !exists && len(t.versions) >= maxSize {
+		var oldestPath string
+		var oldestTime time.Time
+		first := true
+		for p, v := range t.versions {
+			if first || v.RecordedAt.Before(oldestTime) {
+				oldestPath = p
+				oldestTime = v.RecordedAt
+				first = false
+			}
+		}
+		delete(t.versions, oldestPath)
+	}
+
 	t.versions[path] = FileVersion{
-		Path:    path,
-		Mtime:   info.ModTime(),
-		Hash:    ComputeHash(content),
-		Content: string(content), // Store for Windows fallback
+		Path:       path,
+		Mtime:      info.ModTime().UTC(),
+		Hash:       ComputeHash(content),
+		RecordedAt: time.Now(),
 	}
 }
 

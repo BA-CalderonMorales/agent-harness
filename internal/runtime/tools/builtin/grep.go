@@ -2,7 +2,11 @@ package builtin
 
 import (
 	"bufio"
+	"bytes"
+	"errors"
 	"fmt"
+	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -11,6 +15,13 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+const (
+	maxGrepMatches   = 500
+	maxGrepLineBytes = 1 << 20
+)
+
+var errGrepLimitReached = errors.New("grep match limit reached")
 
 // GrepTool searches file contents for a regex pattern.
 var GrepTool = tools.NewTool(tools.Tool{
@@ -53,20 +64,27 @@ var GrepTool = tools.NewTool(tools.Tool{
 		}
 
 		var matches []string
+		truncated := false
 		info, err := os.Stat(searchPath)
 		if err != nil {
 			return tools.ToolResult{}, err
 		}
 
 		if info.IsDir() {
-			_ = filepath.Walk(searchPath, func(path string, fi os.FileInfo, err error) error {
+			walkErr := filepath.WalkDir(searchPath, func(path string, d iofs.DirEntry, err error) error {
+				if ctx.AbortController != nil && ctx.AbortController.Err() != nil {
+					return ctx.AbortController.Err()
+				}
 				if err != nil {
 					return nil
 				}
-				if fi.IsDir() {
-					if isCommonIgnoredDir(fi.Name()) {
+				if d.IsDir() {
+					if path != searchPath && isCommonIgnoredDir(d.Name()) {
 						return filepath.SkipDir
 					}
+					return nil
+				}
+				if !d.Type().IsRegular() {
 					return nil
 				}
 				if include != "" {
@@ -75,16 +93,32 @@ var GrepTool = tools.NewTool(tools.Tool{
 						return nil
 					}
 				}
-				if lines := grepFile(path, re); len(lines) > 0 {
+				remaining := maxGrepMatches - len(matches)
+				if remaining <= 0 {
+					truncated = true
+					return errGrepLimitReached
+				}
+				lines, hitLimit := grepFile(path, re, remaining)
+				if len(lines) > 0 {
 					matches = append(matches, lines...)
+				}
+				if hitLimit {
+					truncated = true
+					return errGrepLimitReached
 				}
 				return nil
 			})
+			if walkErr != nil && !errors.Is(walkErr, errGrepLimitReached) {
+				return tools.ToolResult{}, walkErr
+			}
 		} else {
-			matches = grepFile(searchPath, re)
+			matches, truncated = grepFile(searchPath, re, maxGrepMatches)
 		}
 
 		result := strings.Join(matches, "\n")
+		if truncated {
+			result += fmt.Sprintf("\n\n[Output truncated: reached %d match limit; narrow the pattern or path]", maxGrepMatches)
+		}
 		if result == "" {
 			result = "(no matches found)"
 		}
@@ -103,36 +137,52 @@ var GrepTool = tools.NewTool(tools.Tool{
 		// Show just the filename or dir name
 		parts := strings.Split(path, "/")
 		name := parts[len(parts)-1]
-		if len(pattern) > 20 {
-			pattern = pattern[:17] + "..."
+		if r := []rune(pattern); len(r) > 20 {
+			pattern = string(r[:17]) + "..."
 		}
 		return fmt.Sprintf("Searching for '%s' in %s", pattern, name)
 	},
 	GetToolUseSummary: func(input map[string]any) string {
 		pattern := getString(input, "pattern")
-		if len(pattern) > 30 {
-			pattern = pattern[:27] + "..."
+		if r := []rune(pattern); len(r) > 30 {
+			pattern = string(r[:27]) + "..."
 		}
 		return pattern
 	},
 })
 
-func grepFile(path string, re *regexp.Regexp) []string {
+func grepFile(path string, re *regexp.Regexp, limit int) ([]string, bool) {
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, false
 	}
 	defer func() { _ = f.Close() }()
 
+	// Skip binary files by checking the first 512 bytes for a NUL byte.
+	var probe [512]byte
+	n, readErr := f.Read(probe[:])
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return nil, false
+	}
+	if bytes.IndexByte(probe[:n], 0) >= 0 {
+		return nil, false
+	}
+
+	reader := io.MultiReader(bytes.NewReader(probe[:n]), f)
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxGrepLineBytes)
+
 	var matches []string
-	scanner := bufio.NewScanner(f)
 	lineNum := 1
 	for scanner.Scan() {
 		line := scanner.Text()
 		if re.MatchString(line) {
+			if limit > 0 && len(matches) >= limit {
+				return matches, true
+			}
 			matches = append(matches, fmt.Sprintf("%s:%d:%s", path, lineNum, line))
 		}
 		lineNum++
 	}
-	return matches
+	return matches, false
 }

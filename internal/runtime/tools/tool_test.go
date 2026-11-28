@@ -191,3 +191,30 @@ func TestWrapToolErrorPreservesCodeMessageAndCause(t *testing.T) {
 		t.Fatalf("error string = %q, want code and cause", err.Error())
 	}
 }
+
+func TestToolRegistryAllToolsSortsMCPAndDeduplicatesAgainstBuiltIns(t *testing.T) {
+	reg := NewRegistry()
+	reg.RegisterBuiltIn(NewTool(Tool{Name: "read", Description: "builtin read"}))
+	reg.RegisterBuiltIn(NewTool(Tool{Name: "bash", Description: "builtin bash"}))
+	reg.RegisterMCP(NewTool(Tool{Name: "mcp_z_tool", Description: "z"}))
+	reg.RegisterMCP(NewTool(Tool{Name: "read", Description: "shadow read"}))
+	reg.RegisterMCP(NewTool(Tool{Name: "mcp_a_tool", Description: "a"}))
+
+	all := reg.AllTools()
+	gotNames := make([]string, len(all))
+	for i, tool := range all {
+		gotNames[i] = tool.Name
+	}
+	wantNames := []string{"read", "bash", "mcp_a_tool", "mcp_z_tool"}
+	if len(gotNames) != len(wantNames) {
+		t.Fatalf("AllTools() = %v, want %v", gotNames, wantNames)
+	}
+	for i := range wantNames {
+		if gotNames[i] != wantNames[i] {
+			t.Fatalf("AllTools()[%d] = %q, want %q (all=%v)", i, gotNames[i], wantNames[i], gotNames)
+		}
+	}
+	if all[0].Description != "builtin read" {
+		t.Fatalf("colliding MCP tool overwrote builtin: %q", all[0].Description)
+	}
+}

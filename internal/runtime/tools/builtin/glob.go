@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"path/filepath"
+	"strings"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
@@ -54,10 +55,12 @@ var GlobTool = tools.NewTool(tools.Tool{
 			matches = matches[:limit]
 		}
 
-		result := ""
+		var b strings.Builder
 		for _, m := range matches {
-			result += m + "\n"
+			b.WriteString(m)
+			b.WriteByte('\n')
 		}
+		result := b.String()
 		if result == "" {
 			result = "(no files found)"
 		}

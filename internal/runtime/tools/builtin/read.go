@@ -11,6 +11,10 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
+// defaultMaxReadFileBytes caps raw file reads so an accidental read of a
+// multi-gigabyte binary or log file cannot OOM the process.
+const defaultMaxReadFileBytes int64 = 10 << 20
+
 // blockedDevicePaths prevents reading blocking or infinite devices.
 var blockedDevicePaths = map[string]bool{
 	"/dev/zero": true, "/dev/random": true, "/dev/urandom": true,
@@ -45,15 +49,16 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if path == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path is required"}
 		}
-		if blockedDevicePaths[path] {
-			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
-		}
-		// UNC path security: reject SMB/NTLM credential leak vectors
+		// UNC path security: reject SMB/NTLM credential leak vectors before Clean.
 		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
 			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
 		}
+		cleanPath := filepath.Clean(path)
+		if blockedDevicePaths[cleanPath] {
+			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
+		}
 		// Block /proc/*/fd paths
-		if strings.HasPrefix(path, "/proc/") && strings.Contains(path, "/fd/") {
+		if strings.HasPrefix(cleanPath, "/proc/") && strings.Contains(cleanPath, "/fd/") {
 			return tools.ValidationResult{Valid: false, Message: "Reading process file descriptors is not allowed"}
 		}
 		return tools.ValidationResult{Valid: true}
@@ -73,12 +78,26 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to stat file: %w", err)
 		}
+		if info.IsDir() {
+			return tools.ToolResult{}, fmt.Errorf("%s is a directory; use ls or ls_recursive to inspect directories", path)
+		}
+		if !info.Mode().IsRegular() {
+			return tools.ToolResult{}, fmt.Errorf("cannot read non-regular file %s", path)
+		}
+		maxBytes := ctx.FileReadingLimits.MaxSizeBytes
+		if maxBytes <= 0 {
+			maxBytes = defaultMaxReadFileBytes
+		}
+		if info.Size() > maxBytes {
+			return tools.ToolResult{}, fmt.Errorf("file %s is too large (%d bytes, limit %d bytes)", path, info.Size(), maxBytes)
+		}
 
-		// Check cache first
+		// Check cache first. Do not overwrite DefaultStaleTracker with the
+		// cached slice/truncated text: the original read already recorded the
+		// full file hash, and replacing it with a partial slice causes false
+		// stale-write errors on subsequent edits.
 		cacheKey := fs.MakeKey(path, offset, limit, info)
 		if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
-			// Record this read for stale-write protection
-			fs.DefaultStaleTracker.RecordRead(path, []byte(cached), info)
 			return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
 				// Mark as cached read in context
 				return ctx

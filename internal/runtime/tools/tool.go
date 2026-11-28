@@ -2,6 +2,7 @@ package tools
 
 import (
 	"context"
+	"sort"
 
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
@@ -314,12 +315,30 @@ func (r *ToolRegistry) FindToolByName(name string) (Tool, bool) {
 	return Tool{}, false
 }
 
-// AllTools returns the combined tool list with built-ins first.
+// AllTools returns the combined tool list with built-ins first, followed by
+// deterministically sorted MCP tools. Built-in names win over colliding MCP
+// tool names, and stable partitioning preserves prompt cache prefixes.
 func (r *ToolRegistry) AllTools() []Tool {
-	// Keep partitions separate for cache stability, then concat
+	seen := make(map[string]struct{}, len(r.builtIns)+len(r.mcpTools))
 	out := make([]Tool, 0, len(r.builtIns)+len(r.mcpTools))
-	out = append(out, r.builtIns...)
-	out = append(out, r.mcpTools...)
+	for _, t := range r.builtIns {
+		if _, dup := seen[t.Name]; dup {
+			continue
+		}
+		seen[t.Name] = struct{}{}
+		out = append(out, t)
+	}
+	mcpSorted := append([]Tool(nil), r.mcpTools...)
+	sort.SliceStable(mcpSorted, func(i, j int) bool {
+		return mcpSorted[i].Name < mcpSorted[j].Name
+	})
+	for _, t := range mcpSorted {
+		if _, dup := seen[t.Name]; dup {
+			continue
+		}
+		seen[t.Name] = struct{}{}
+		out = append(out, t)
+	}
 	return out
 }
 

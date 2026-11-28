@@ -3,6 +3,7 @@ package builtin
 import (
 	"fmt"
 	"strings"
+	"unicode/utf8"
 )
 
 // Default max output sizes to prevent context window overflow
@@ -34,7 +35,11 @@ func truncateOutput(output string, maxChars, maxLines int, unitChars, unitLines 
 		truncatedByLines = true
 	}
 	if len(output) > maxChars {
-		output = output[:maxChars]
+		cut := maxChars
+		for cut > 0 && !utf8.RuneStart(output[cut]) {
+			cut--
+		}
+		output = output[:cut]
 		// Try to cut at last newline to avoid breaking mid-line
 		if idx := strings.LastIndex(output, "\n"); idx > maxChars/2 {
 			output = output[:idx]
