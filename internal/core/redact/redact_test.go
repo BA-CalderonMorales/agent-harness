@@ -90,6 +90,12 @@ func TestStringRedactsQuotedCredentialKeys(t *testing.T) {
 	if String(plain) != plain {
 		t.Fatalf("ordinary prose altered: %q", String(plain))
 	}
+	for _, truncated := range []string{`password="unclosed-secret-1`, `api_key='unclosed-secret-2`} {
+		redacted := String(truncated)
+		if strings.Contains(redacted, "unclosed-secret") {
+			t.Fatalf("unclosed quoted secret leaked: %q -> %q", truncated, redacted)
+		}
+	}
 }
 
 func TestValueRedactsTypedContainersWithoutMutatingInput(t *testing.T) {
