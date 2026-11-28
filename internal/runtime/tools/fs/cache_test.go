@@ -92,11 +92,33 @@ func TestStaleWriteTrackerDetectsModificationsAndStaysBounded(t *testing.T) {
 		t.Fatal("CheckStale(modified) = nil, want stale write error")
 	}
 
-	// Bounded size prevents unbounded session memory growth.
+	// Bounded size prevents unbounded session memory growth, while evicted
+	// baselines still fail CheckStale with a re-read error rather than acting
+	// like never-read files.
 	for i := 0; i < 10; i++ {
 		tracker.RecordRead(filepath.Join(dir, string(rune('a'+i))), []byte("x"), info)
 	}
 	if len(tracker.versions) > 3 {
 		t.Fatalf("tracker stored %d entries, want <= 3", len(tracker.versions))
+	}
+	if err := tracker.CheckStale(path); err == nil {
+		t.Fatal("CheckStale(evicted path) = nil, want reread-required error")
+	}
+	// A path that was never read is still allowed.
+	if err := tracker.CheckStale(filepath.Join(dir, "never-read.txt")); err != nil {
+		t.Fatalf("CheckStale(never-read) = %v, want nil", err)
+	}
+	// Re-reading clears the evicted state and restores normal tracking.
+	cur, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	curInfo, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracker.RecordRead(path, cur, curInfo)
+	if err := tracker.CheckStale(path); err != nil {
+		t.Fatalf("CheckStale(re-read path) = %v, want nil", err)
 	}
 }

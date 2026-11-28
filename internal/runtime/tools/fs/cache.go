@@ -134,6 +134,7 @@ const defaultMaxTrackedFiles = 1024
 type StaleWriteTracker struct {
 	mu       sync.RWMutex
 	versions map[string]FileVersion
+	evicted  map[string]struct{}
 	maxSize  int
 }
 
@@ -141,6 +142,7 @@ type StaleWriteTracker struct {
 func NewStaleWriteTracker() *StaleWriteTracker {
 	return &StaleWriteTracker{
 		versions: make(map[string]FileVersion),
+		evicted:  make(map[string]struct{}),
 		maxSize:  defaultMaxTrackedFiles,
 	}
 }
@@ -150,6 +152,12 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
+	if t.versions == nil {
+		t.versions = make(map[string]FileVersion)
+	}
+	if t.evicted == nil {
+		t.evicted = make(map[string]struct{})
+	}
 	maxSize := t.maxSize
 	if maxSize <= 0 {
 		maxSize = defaultMaxTrackedFiles
@@ -166,8 +174,10 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 			}
 		}
 		delete(t.versions, oldestPath)
+		t.evicted[oldestPath] = struct{}{}
 	}
 
+	delete(t.evicted, path)
 	t.versions[path] = FileVersion{
 		Path:       path,
 		Mtime:      info.ModTime().UTC(),
@@ -176,14 +186,19 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	}
 }
 
-// CheckStale returns an error if the file has been modified since the last read.
+// CheckStale returns an error if the file has been modified since the last read,
+// or if its read baseline was evicted and a fresh read is required.
 // On Windows, falls back to content comparison if timestamps are unreliable.
 func (t *StaleWriteTracker) CheckStale(path string) error {
 	t.mu.RLock()
 	expected, ok := t.versions[path]
+	_, wasEvicted := t.evicted[path]
 	t.mu.RUnlock()
 
 	if !ok {
+		if wasEvicted {
+			return fmt.Errorf("read baseline was evicted; re-read %s before editing or writing", path)
+		}
 		// No prior read recorded - allow the write
 		return nil
 	}
