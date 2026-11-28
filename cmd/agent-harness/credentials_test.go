@@ -124,6 +124,19 @@ func TestStoredKeyForProvider_EnvPinWins(t *testing.T) {
 	if !ok || key != "sk-omni-env" {
 		t.Fatalf("OMNIROUTE_API_KEY must pin omniroute, got (%q, %v)", key, ok)
 	}
+
+	// Switching from local or another provider via /login must resolve
+	// OMNIROUTE_API_KEY directly rather than returning the old provider's key.
+	appFromLocal := &App{config: &config.LayeredConfig{Provider: "local", APIKey: "local"}}
+	key, ok = appFromLocal.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("storedKeyForProvider(omniroute) from local = (%q, %v), want sk-omni-env", key, ok)
+	}
+	appFromOpenAI := &App{config: &config.LayeredConfig{Provider: "openai", APIKey: "sk-openai-other"}}
+	key, ok = appFromOpenAI.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("storedKeyForProvider(omniroute) from openai = (%q, %v), want sk-omni-env", key, ok)
+	}
 }
 
 // The local exception: local providers never resolve through the store
