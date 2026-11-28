@@ -7,6 +7,8 @@
 package redact
 
 import (
+	"fmt"
+	"reflect"
 	"regexp"
 	"strings"
 	"sync"
@@ -92,21 +94,106 @@ func Map(input map[string]any) map[string]any {
 	return out
 }
 
-// Value recursively redacts strings, maps, and slices.
+// Value recursively redacts strings, maps, slices, and typed containers
+// without mutating the input.
 func Value(v any) any {
+	if v == nil {
+		return nil
+	}
 	switch value := v.(type) {
 	case string:
 		return String(value)
+	case []byte:
+		if value == nil {
+			return nil
+		}
+		return []byte(String(string(value)))
 	case map[string]any:
 		return Map(value)
+	case map[string]string:
+		if value == nil {
+			return nil
+		}
+		out := make(map[string]string, len(value))
+		for k, val := range value {
+			if IsSensitiveKey(k) {
+				out[k] = "<redacted>"
+				continue
+			}
+			out[k] = String(val)
+		}
+		return out
 	case []any:
+		if value == nil {
+			return nil
+		}
 		out := make([]any, len(value))
 		for i, item := range value {
 			out[i] = Value(item)
 		}
 		return out
+	case []string:
+		if value == nil {
+			return nil
+		}
+		out := make([]string, len(value))
+		for i, item := range value {
+			out[i] = String(item)
+		}
+		return out
 	default:
-		return value
+		return redactReflectValue(v)
+	}
+}
+
+func redactReflectValue(v any) any {
+	rv := reflect.ValueOf(v)
+	switch rv.Kind() {
+	case reflect.String:
+		return String(rv.String())
+	case reflect.Pointer:
+		if rv.IsNil() {
+			return nil
+		}
+		elem := rv.Elem()
+		switch elem.Kind() {
+		case reflect.String, reflect.Slice, reflect.Array, reflect.Map:
+			return Value(elem.Interface())
+		default:
+			return v
+		}
+	case reflect.Slice:
+		if rv.IsNil() {
+			return nil
+		}
+		out := make([]any, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			out[i] = Value(rv.Index(i).Interface())
+		}
+		return out
+	case reflect.Array:
+		out := make([]any, rv.Len())
+		for i := 0; i < rv.Len(); i++ {
+			out[i] = Value(rv.Index(i).Interface())
+		}
+		return out
+	case reflect.Map:
+		if rv.IsNil() {
+			return nil
+		}
+		out := make(map[string]any, rv.Len())
+		iter := rv.MapRange()
+		for iter.Next() {
+			key := fmt.Sprint(iter.Key().Interface())
+			if IsSensitiveKey(key) {
+				out[key] = "<redacted>"
+				continue
+			}
+			out[key] = Value(iter.Value().Interface())
+		}
+		return out
+	default:
+		return v
 	}
 }
 

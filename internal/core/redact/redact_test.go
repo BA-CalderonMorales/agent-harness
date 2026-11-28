@@ -92,6 +92,46 @@ func TestStringRedactsQuotedCredentialKeys(t *testing.T) {
 	}
 }
 
+func TestValueRedactsTypedContainersWithoutMutatingInput(t *testing.T) {
+	SetSecret("opaque-live-value")
+	defer SetSecret("")
+
+	origSlice := []string{"opaque-live-value", "keep-me"}
+	origMap := map[string]string{"password": "pw-value", "note": "has opaque-live-value"}
+	nested := []map[string]string{{"token": "tok", "msg": "opaque-live-value"}}
+
+	redacted := Map(map[string]any{
+		"args":   origSlice,
+		"meta":   origMap,
+		"nested": nested,
+		"count":  42,
+	})
+
+	gotSlice := redacted["args"].([]string)
+	if gotSlice[0] != "<redacted>" || gotSlice[1] != "keep-me" {
+		t.Fatalf("redacted []string = %#v", gotSlice)
+	}
+	if origSlice[0] != "opaque-live-value" {
+		t.Fatal("Map mutated input []string")
+	}
+
+	gotMap := redacted["meta"].(map[string]string)
+	if gotMap["password"] != "<redacted>" || strings.Contains(gotMap["note"], "opaque-live-value") {
+		t.Fatalf("redacted map[string]string = %#v", gotMap)
+	}
+	if origMap["password"] != "pw-value" {
+		t.Fatal("Map mutated input map[string]string")
+	}
+
+	gotNested := redacted["nested"].([]any)[0].(map[string]string)
+	if gotNested["token"] != "<redacted>" || strings.Contains(gotNested["msg"], "opaque-live-value") {
+		t.Fatalf("redacted nested typed container = %#v", gotNested)
+	}
+	if redacted["count"] != 42 {
+		t.Fatalf("ordinary scalar altered: %#v", redacted["count"])
+	}
+}
+
 func TestSetSecretConcurrentSafety(t *testing.T) {
 	defer SetSecret("")
 	var wg sync.WaitGroup
