@@ -214,7 +214,7 @@ func (app *App) granularAllows(toolName string) bool {
 // and whether the tool maps to one at all.
 func (app *App) granularPermission(toolName string) (enabled, mapped bool) {
 	switch toolName {
-	case "read", "glob", "grep", "search", "web_fetch", "web_search":
+	case "read", "glob", "grep", "search", "ls", "ls_recursive", "find", "web_fetch", "web_search":
 		return app.config.PermRead, true
 	case "write", "edit":
 		return app.config.PermWrite, true
@@ -241,9 +241,8 @@ func (app *App) checkGranularPermissions(toolName string) tools.PermissionDecisi
 
 // syncGranularPermissions initializes granular toggles from the active permission mode.
 func (app *App) syncGranularPermissions() {
-	// If any granular permission is already set (non-zero), don't override
-	// (Simple heuristic: if all are false, it's likely first run/not configured)
-	if app.config.PermRead || app.config.PermWrite || app.config.PermDelete || app.config.PermExecute {
+	// Respect explicit settings (including all toggles turned off).
+	if app.config.PermExplicit || app.config.PermRead || app.config.PermWrite || app.config.PermDelete || app.config.PermExecute {
 		return
 	}
 
