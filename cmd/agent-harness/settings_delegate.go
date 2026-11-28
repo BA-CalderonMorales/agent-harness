@@ -167,7 +167,7 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	// persists via ~/.agent-harness/settings.json so this is optional.
 	credManager := config.NewCredentialManager()
 	if credManager.HasSecureCredentials() {
-		if err := credManager.UpdateDefaultModel(value); err != nil {
+		if err := credManager.UpdateDefaultModelForProvider(d.app.config.Provider, value); err != nil {
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
 			return
 		}

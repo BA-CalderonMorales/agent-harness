@@ -312,20 +312,38 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 	return nil
 }
 
-// UpdateDefaultModel updates the active provider's default model in secure
-// storage, keeping both the encrypted per-provider envelope and the top-level
-// header field in sync so LoadSecure returns the updated model on the next boot.
+// UpdateDefaultModel updates the stored active provider's default model in
+// secure storage, keeping both the encrypted per-provider envelope and the
+// top-level header field in sync so LoadSecure returns the updated model on
+// the next boot.
 func (cm *CredentialManager) UpdateDefaultModel(model string) error {
+	return cm.UpdateDefaultModelForProvider("", model)
+}
+
+// UpdateDefaultModelForProvider records model under provider in the encrypted
+// envelope. When provider matches the store's active provider (or is empty),
+// the top-level header Model is updated alongside it; when layered settings
+// selected a different provider, only that provider's entry is updated so the
+// store provider's saved model and header remain consistent.
+func (cm *CredentialManager) UpdateDefaultModelForProvider(provider, model string) error {
 	cfg, err := cm.LoadSecure()
 	if err != nil {
 		return err
 	}
-	cfg.Model = model
 	if cfg.ProviderModels == nil {
 		cfg.ProviderModels = map[string]string{}
 	}
-	if cfg.Provider != "" && model != "" {
-		cfg.ProviderModels[cfg.Provider] = model
+	targetProvider := provider
+	if targetProvider == "" {
+		targetProvider = cfg.Provider
+	}
+	if targetProvider == "" || targetProvider == cfg.Provider {
+		cfg.Model = model
+		if targetProvider != "" && model != "" {
+			cfg.ProviderModels[targetProvider] = model
+		}
+	} else if model != "" {
+		cfg.ProviderModels[targetProvider] = model
 	}
 	return cm.SaveSecure(cfg)
 }

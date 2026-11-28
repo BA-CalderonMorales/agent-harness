@@ -79,3 +79,35 @@ func TestUpdateDefaultModelPersistsAcrossEnvelopeReload(t *testing.T) {
 		t.Fatalf("APIKey = %q, want sk-test-123 preserved", reloaded.APIKey)
 	}
 }
+
+func TestUpdateDefaultModelForProviderDoesNotClobberStoreProvider(t *testing.T) {
+	dir := t.TempDir()
+	testenv.SetHome(t, dir)
+
+	cm := NewCredentialManager()
+	if err := cm.SaveSecure(&SecureConfig{
+		Provider: "openrouter",
+		APIKey:   "sk-or-123",
+		Model:    "openrouter-model",
+	}); err != nil {
+		t.Fatalf("SaveSecure: %v", err)
+	}
+
+	if err := cm.UpdateDefaultModelForProvider("nvidia", "nvidia-model"); err != nil {
+		t.Fatalf("UpdateDefaultModelForProvider: %v", err)
+	}
+
+	reloaded, err := NewCredentialManager().LoadSecure()
+	if err != nil {
+		t.Fatalf("LoadSecure: %v", err)
+	}
+	if reloaded.Provider != "openrouter" || reloaded.Model != "openrouter-model" {
+		t.Fatalf("store header changed: provider=%q model=%q", reloaded.Provider, reloaded.Model)
+	}
+	if reloaded.ProviderModels["openrouter"] != "openrouter-model" {
+		t.Fatalf("ProviderModels[openrouter] = %q, want openrouter-model preserved", reloaded.ProviderModels["openrouter"])
+	}
+	if reloaded.ProviderModels["nvidia"] != "nvidia-model" {
+		t.Fatalf("ProviderModels[nvidia] = %q, want nvidia-model", reloaded.ProviderModels["nvidia"])
+	}
+}
