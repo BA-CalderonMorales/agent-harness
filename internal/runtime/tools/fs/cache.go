@@ -128,23 +128,89 @@ func ComputeHash(content []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-const defaultMaxTrackedFiles = 1024
+const (
+	defaultMaxTrackedFiles = 1024
+	defaultMaxEvictedPaths = 4096
+	evictedFilterWords     = 1024 // 65,536 bits = 8 KiB fixed cap
+	evictedFilterBits      = evictedFilterWords * 64
+)
 
 // StaleWriteTracker tracks file versions to detect concurrent modifications.
 type StaleWriteTracker struct {
-	mu       sync.RWMutex
-	versions map[string]FileVersion
-	evicted  map[string]struct{}
-	maxSize  int
+	mu             sync.RWMutex
+	versions       map[string]FileVersion
+	evicted        map[string]struct{}
+	evictedOrder   []string
+	evictedFilter  [evictedFilterWords]uint64
+	hasSpilled     bool
+	maxSize        int
+	maxEvictedSize int
 }
 
 // NewStaleWriteTracker creates a new tracker.
 func NewStaleWriteTracker() *StaleWriteTracker {
 	return &StaleWriteTracker{
-		versions: make(map[string]FileVersion),
-		evicted:  make(map[string]struct{}),
-		maxSize:  defaultMaxTrackedFiles,
+		versions:       make(map[string]FileVersion),
+		evicted:        make(map[string]struct{}),
+		maxSize:        defaultMaxTrackedFiles,
+		maxEvictedSize: defaultMaxEvictedPaths,
 	}
+}
+
+func (t *StaleWriteTracker) recordEvicted(path string) {
+	if _, already := t.evicted[path]; already {
+		return
+	}
+	maxEvicted := t.maxEvictedSize
+	if maxEvicted <= 0 {
+		maxEvicted = defaultMaxEvictedPaths
+	}
+	for len(t.evicted) >= maxEvicted && len(t.evictedOrder) > 0 {
+		oldest := t.evictedOrder[0]
+		t.evictedOrder = t.evictedOrder[1:]
+		if _, present := t.evicted[oldest]; !present {
+			continue
+		}
+		delete(t.evicted, oldest)
+		t.addEvictedFilter(oldest)
+	}
+	t.evicted[path] = struct{}{}
+	t.evictedOrder = append(t.evictedOrder, path)
+	if len(t.evictedOrder) > maxEvicted*2 {
+		compacted := make([]string, 0, len(t.evicted))
+		for _, p := range t.evictedOrder {
+			if _, present := t.evicted[p]; present {
+				compacted = append(compacted, p)
+			}
+		}
+		t.evictedOrder = compacted
+	}
+}
+
+func (t *StaleWriteTracker) addEvictedFilter(path string) {
+	b1, b2 := evictedFilterIndices(path)
+	t.evictedFilter[b1/64] |= 1 << (b1 % 64)
+	t.evictedFilter[b2/64] |= 1 << (b2 % 64)
+	t.hasSpilled = true
+}
+
+func (t *StaleWriteTracker) isEvictedLocked(path string) bool {
+	if _, ok := t.evicted[path]; ok {
+		return true
+	}
+	if !t.hasSpilled {
+		return false
+	}
+	b1, b2 := evictedFilterIndices(path)
+	return (t.evictedFilter[b1/64]&(1<<(b1%64))) != 0 &&
+		(t.evictedFilter[b2/64]&(1<<(b2%64))) != 0
+}
+
+func evictedFilterIndices(path string) (uint64, uint64) {
+	sum := sha256.Sum256([]byte(path))
+	h1 := uint64(sum[0]) | uint64(sum[1])<<8 | uint64(sum[2])<<16 | uint64(sum[3])<<24
+	h2 := uint64(sum[4]) | uint64(sum[5])<<8 | uint64(sum[6])<<16 | uint64(sum[7])<<24
+	return h1 % evictedFilterBits, h2 % evictedFilterBits
 }
 
 // RecordRead records that a file was read at a specific version.
@@ -174,7 +240,7 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 			}
 		}
 		delete(t.versions, oldestPath)
-		t.evicted[oldestPath] = struct{}{}
+		t.recordEvicted(oldestPath)
 	}
 
 	delete(t.evicted, path)
@@ -186,13 +252,24 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	}
 }
 
+// NeedsFreshRead reports whether path has an evicted baseline and therefore
+// must bypass the read cache so re-reading restores a fresh stale-write baseline.
+func (t *StaleWriteTracker) NeedsFreshRead(path string) bool {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	if _, ok := t.versions[path]; ok {
+		return false
+	}
+	return t.isEvictedLocked(path)
+}
+
 // CheckStale returns an error if the file has been modified since the last read,
 // or if its read baseline was evicted and a fresh read is required.
 // On Windows, falls back to content comparison if timestamps are unreliable.
 func (t *StaleWriteTracker) CheckStale(path string) error {
 	t.mu.RLock()
 	expected, ok := t.versions[path]
-	_, wasEvicted := t.evicted[path]
+	wasEvicted := !ok && t.isEvictedLocked(path)
 	t.mu.RUnlock()
 
 	if !ok {

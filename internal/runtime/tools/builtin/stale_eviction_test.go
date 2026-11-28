@@ -68,4 +68,31 @@ func TestEvictedReadBaselineBlocksWriteAndEditUntilReRead(t *testing.T) {
 	if string(got) != "external change\n" {
 		t.Fatalf("target content = %q, want external change preserved", string(got))
 	}
+
+	// Verify that re-reading an UNCHANGED evicted file that is still present in
+	// DefaultCache bypasses the cache, restores the baseline, and unblocks edit.
+	cachedPath := filepath.Join(dir, "cached-unchanged.txt")
+	if err := os.WriteFile(cachedPath, []byte("hello unchanged\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { fs.DefaultCache.InvalidatePath(cachedPath) })
+	if _, err := FileReadTool.Call(map[string]any{"file_path": cachedPath}, tools.Context{}, nil, nil); err != nil {
+		t.Fatalf("initial read cachedPath: %v", err)
+	}
+	for i := 0; i < 1030; i++ {
+		fs.DefaultStaleTracker.RecordRead(filepath.Join(dir, fmt.Sprintf("evict-cached-%d.txt", i)), []byte("x"), otherInfo)
+	}
+	if !fs.DefaultStaleTracker.NeedsFreshRead(cachedPath) {
+		t.Fatal("expected cachedPath to need a fresh read after eviction")
+	}
+	if _, err := FileReadTool.Call(map[string]any{"file_path": cachedPath}, tools.Context{}, nil, nil); err != nil {
+		t.Fatalf("re-read cachedPath: %v", err)
+	}
+	if _, err := FileEditTool.Call(map[string]any{
+		"file_path":  cachedPath,
+		"old_string": "hello unchanged",
+		"new_string": "hello edited",
+	}, tools.Context{}, nil, nil); err != nil {
+		t.Fatalf("edit after re-reading cached evicted file failed: %v", err)
+	}
 }

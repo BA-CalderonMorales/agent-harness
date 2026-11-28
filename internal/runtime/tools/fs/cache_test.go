@@ -65,6 +65,7 @@ func TestStaleWriteTrackerDetectsModificationsAndStaysBounded(t *testing.T) {
 
 	tracker := NewStaleWriteTracker()
 	tracker.maxSize = 3
+	tracker.maxEvictedSize = 4
 	tracker.RecordRead(path, []byte("original"), info)
 
 	if err := tracker.CheckStale(path); err != nil {
@@ -100,6 +101,12 @@ func TestStaleWriteTrackerDetectsModificationsAndStaysBounded(t *testing.T) {
 	}
 	if len(tracker.versions) > 3 {
 		t.Fatalf("tracker stored %d entries, want <= 3", len(tracker.versions))
+	}
+	if len(tracker.evicted) > 4 {
+		t.Fatalf("evicted map grew to %d entries, want <= 4", len(tracker.evicted))
+	}
+	if !tracker.NeedsFreshRead(path) {
+		t.Fatal("NeedsFreshRead(evicted path) = false, want true")
 	}
 	if err := tracker.CheckStale(path); err == nil {
 		t.Fatal("CheckStale(evicted path) = nil, want reread-required error")

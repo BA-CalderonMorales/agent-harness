@@ -94,16 +94,17 @@ var FileReadTool = tools.NewTool(tools.Tool{
 			return tools.ToolResult{}, fmt.Errorf("file %s is too large (%d bytes, limit %d bytes)", path, info.Size(), maxBytes)
 		}
 
-		// Check cache first. Do not overwrite DefaultStaleTracker with the
-		// cached slice/truncated text: the original read already recorded the
-		// full file hash, and replacing it with a partial slice causes false
-		// stale-write errors on subsequent edits.
+		// Check cache first, unless this path's stale-write baseline was evicted
+		// and a fresh disk read is needed to restore it. On cache hits, do not
+		// overwrite DefaultStaleTracker with sliced/truncated cached text.
 		cacheKey := fs.MakeKey(path, offset, limit, info)
-		if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
-			return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
-				// Mark as cached read in context
-				return ctx
-			}}, nil
+		if !fs.DefaultStaleTracker.NeedsFreshRead(path) {
+			if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
+				return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
+					// Mark as cached read in context
+					return ctx
+				}}, nil
+			}
 		}
 
 		data, readInfo, err := readFileBounded(path, maxBytes)
