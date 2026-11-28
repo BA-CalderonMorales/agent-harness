@@ -21,12 +21,14 @@ type ReadCacheKey struct {
 type ReadCacheEntry struct {
 	Content   string
 	Timestamp time.Time
+	seq       uint64
 }
 
 // ReadCache is an LRU cache for file reads to preserve prompt cache tokens.
 type ReadCache struct {
 	mu      sync.RWMutex
 	entries map[ReadCacheKey]ReadCacheEntry
+	nextSeq uint64
 	maxSize int
 }
 
@@ -68,21 +70,23 @@ func (c *ReadCache) Set(key ReadCacheKey, content string) {
 	// Evict oldest if at capacity
 	if len(c.entries) >= c.maxSize {
 		var oldestKey ReadCacheKey
-		var oldestTime time.Time
+		var oldestSeq uint64
 		first := true
 		for k, v := range c.entries {
-			if first || v.Timestamp.Before(oldestTime) {
+			if first || v.seq < oldestSeq {
 				oldestKey = k
-				oldestTime = v.Timestamp
+				oldestSeq = v.seq
 				first = false
 			}
 		}
 		delete(c.entries, oldestKey)
 	}
 
+	c.nextSeq++
 	c.entries[key] = ReadCacheEntry{
 		Content:   content,
 		Timestamp: time.Now(),
+		seq:       c.nextSeq,
 	}
 }
 
@@ -120,6 +124,7 @@ type FileVersion struct {
 	Mtime      time.Time
 	Hash       string // SHA256 hash of content for content-based comparison
 	RecordedAt time.Time
+	seq        uint64
 }
 
 // ComputeHash computes SHA256 hash of content.
@@ -143,6 +148,7 @@ type StaleWriteTracker struct {
 	evictedOrder   []string
 	evictedFilter  [evictedFilterWords]uint64
 	hasSpilled     bool
+	nextSeq        uint64
 	maxSize        int
 	maxEvictedSize int
 }
@@ -230,12 +236,12 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	}
 	if _, exists := t.versions[path]; !exists && len(t.versions) >= maxSize {
 		var oldestPath string
-		var oldestTime time.Time
+		var oldestSeq uint64
 		first := true
 		for p, v := range t.versions {
-			if first || v.RecordedAt.Before(oldestTime) {
+			if first || v.seq < oldestSeq {
 				oldestPath = p
-				oldestTime = v.RecordedAt
+				oldestSeq = v.seq
 				first = false
 			}
 		}
@@ -244,11 +250,13 @@ func (t *StaleWriteTracker) RecordRead(path string, content []byte, info os.File
 	}
 
 	delete(t.evicted, path)
+	t.nextSeq++
 	t.versions[path] = FileVersion{
 		Path:       path,
 		Mtime:      info.ModTime().UTC(),
 		Hash:       ComputeHash(content),
 		RecordedAt: time.Now(),
+		seq:        t.nextSeq,
 	}
 }
 
