@@ -291,33 +291,48 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 				executor.AddTool(tu, *assistantMsg)
 			}
 
-			// Consume events until all tools are done. If ctx cancels, stop
-			// mutating loop state and stop forwarding, but keep draining
-			// executor.Events() so dispatchEvents never blocks on an unread
-			// channel.
-			done := make(chan struct{})
-			stopStateUpdates := false
+			// Consume events until all tools are done or cancellation stops
+			// forwarding. Waiting on forwardDone before returning guarantees
+			// this goroutine never touches out or state after Query closes out,
+			// while a background drain keeps executor.dispatchEvents from
+			// blocking if a slow tool ignores cancellation.
+			stopForward := make(chan struct{})
+			forwardDone := make(chan struct{})
+			drainExecutor := func() {
+				go func() {
+					for range executor.Events() {
+					}
+				}()
+			}
 			go func() {
-				defer close(done)
-				canceled := false
-				for ev := range executor.Events() {
-					if canceled {
-						continue
-					}
+				defer close(forwardDone)
+				for {
 					select {
-					case out <- ev:
-					case <-ctx.Done():
-						canceled = true
-						continue
-					}
-
-					// Update session messages for final results
-					if sm, ok := ev.(types.StreamMessage); ok {
-						l.mu.Lock()
-						if !stopStateUpdates {
+					case <-stopForward:
+						drainExecutor()
+						return
+					case ev, ok := <-executor.Events():
+						if !ok {
+							return
+						}
+						select {
+						case <-stopForward:
+							drainExecutor()
+							return
+						default:
+						}
+						select {
+						case out <- ev:
+						case <-stopForward:
+							drainExecutor()
+							return
+						case <-ctx.Done():
+							drainExecutor()
+							return
+						}
+						if sm, ok := ev.(types.StreamMessage); ok {
 							state.add(sm.Message)
 						}
-						l.mu.Unlock()
 					}
 				}
 			}()
@@ -326,13 +341,12 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			_, execErr := executor.GetRemainingResults(ctx)
 			executor.Close()
 			if ctx.Err() != nil {
-				l.mu.Lock()
-				stopStateUpdates = true
-				l.mu.Unlock()
+				close(stopForward)
+				<-forwardDone
 				out <- types.StreamError{Error: ctx.Err()}
 				return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 			}
-			<-done
+			<-forwardDone
 
 			if execErr != nil {
 				_ = execErr

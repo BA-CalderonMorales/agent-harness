@@ -208,6 +208,70 @@ func TestLoopIsolatesContentBudgetFromGlobalState(t *testing.T) {
 	}
 }
 
+func TestCancelStreamingToolStopsForwardingBeforeOutCloses(t *testing.T) {
+	started := make(chan struct{})
+	release := make(chan struct{})
+	slowTool := tools.NewTool(tools.Tool{
+		Name: "slow_stubborn",
+		Call: func(_ map[string]any, _ tools.Context, _ tools.CanUseToolFn, onProgress tools.OnProgress) (tools.ToolResult, error) {
+			close(started)
+			// Deliberately ignore ctx cancellation until released after Query exits.
+			<-release
+			if onProgress != nil {
+				onProgress("late progress after cancel")
+			}
+			return tools.ToolResult{Data: "late result"}, nil
+		},
+		MapResult: func(result any, id string) types.ToolResultBlock {
+			return types.ToolResultBlock{ToolUseID: id, Content: fmt.Sprint(result)}
+		},
+	})
+	client := &recordingLoopClient{
+		streams: [][]types.LLMEvent{
+			{
+				types.LLMMessageStart{ID: "m1"},
+				types.LLMToolUseDelta{ID: "t1", Name: "slow_stubborn", Delta: `{}`},
+				types.LLMMessageStop{StopReason: "tool_use", Model: "test-model"},
+			},
+		},
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	loop := NewLoop(client)
+	loop.Config.AutoCompactEnabled = false
+	loop.Config.StreamingToolExecution = true
+
+	stream, err := loop.Query(ctx, QueryParams{
+		SystemPrompt: "sys",
+		ToolUseContext: tools.Context{
+			AbortController: ctx,
+			Options:         tools.Options{MainLoopModel: "test-model", Tools: []tools.Tool{slowTool}},
+		},
+	})
+	if err != nil {
+		t.Fatalf("Query() error = %v", err)
+	}
+
+	<-started
+	cancel()
+
+	var terminal types.StreamTerminal
+	gotTerminal := false
+	for ev := range stream {
+		if st, ok := ev.(types.StreamTerminal); ok {
+			terminal, gotTerminal = st, true
+		}
+	}
+	// Release the stubborn tool AFTER stream (out) is closed; if forwarding had
+	// not stopped before closing out, emitting late events would panic.
+	close(release)
+	time.Sleep(20 * time.Millisecond)
+
+	if !gotTerminal || terminal.Reason != string(TerminalReasonUserInterrupt) {
+		t.Fatalf("terminal = (%+v, %v), want user_interrupt", terminal, gotTerminal)
+	}
+}
+
 type recordingLoopClient struct {
 	streams  [][]types.LLMEvent
 	requests []llm.Request
