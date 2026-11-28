@@ -81,6 +81,9 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 		childCtx.AskUser = app.requestUserQuestion
 	}
 	childLoop := app.newConfiguredLoop()
+	if childCtxLen := app.delegatedContextLength(childModel); childCtxLen > 0 {
+		childLoop.Config.BlockingTokenLimit = childCtxLen
+	}
 	childLoop.Config.DefaultMaxTurns = delegatedAgentMaxTurns
 	childLoop.Config.MaxToolCalls = delegatedAgentMaxTools
 	childLoop.Config.StreamingToolExecution = false
@@ -132,12 +135,32 @@ func (app *App) runDelegatedAgent(parent context.Context, prompt string, agentTy
 	return result.String(), nil
 }
 
+// delegatedContextLength resolves the context window for a delegated child's
+// model. Inherited models share the parent's resolved window; specialist
+// models use their own advertised/catalog window, falling back to the loop
+// default so a small parent window never starves a larger child model.
+func (app *App) delegatedContextLength(childModel string) int {
+	defaultLimit := agent.DefaultLoopConfig().BlockingTokenLimit
+	inherited := childModel == "" || (app.session != nil && childModel == app.session.Model)
+	if inherited {
+		if app.config != nil && app.config.ContextLength > 0 {
+			return app.config.ContextLength
+		}
+		return defaultLimit
+	}
+	if ctxLen := app.modelContextLength(childModel); ctxLen > 0 {
+		return ctxLen
+	}
+	return defaultLimit
+}
+
 // delegatedQueryParams is the query a sub-agent runs. It carries the active
 // session's record compaction lab, reasoning effort, temperature, and bounded
-// output budget so small-window local models never overflow on delegation.
+// output budget derived from the child model's context window.
 func (app *App) delegatedQueryParams(prompt, systemPrompt string, childTools []tools.Tool, canUseTool tools.CanUseToolFn, childCtx tools.Context) agent.QueryParams {
 	promptTokens := agent.EstimatePromptTokens(systemPrompt, childTools)
-	maxOutput := fitOutputBudget(app.config.ContextLength, promptTokens, len(prompt)/4+1, app.config.MaxTokens)
+	contextLen := app.delegatedContextLength(childCtx.Options.MainLoopModel)
+	maxOutput := fitOutputBudget(contextLen, promptTokens, len(prompt)/4+1, app.config.MaxTokens)
 	return agent.QueryParams{
 		Messages:         []types.Message{{UUID: generateUUID(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()}},
 		SystemPrompt:     systemPrompt,
