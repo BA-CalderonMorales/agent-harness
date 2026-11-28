@@ -12,14 +12,16 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
 const (
-	maxGrepMatches   = 500
-	maxGrepLineBytes = 1 << 20
+	maxGrepMatches     = 500
+	maxGrepLineBytes   = 1 << 20
+	maxGrepOutputBytes = 512 * 1024
 )
 
 var errGrepLimitReached = errors.New("grep match limit reached")
@@ -65,6 +67,7 @@ var GrepTool = tools.NewTool(tools.Tool{
 		}
 
 		var matches []string
+		usedBytes := 0
 		truncated := false
 		info, err := os.Stat(searchPath)
 		if err != nil {
@@ -96,16 +99,18 @@ var GrepTool = tools.NewTool(tools.Tool{
 					}
 				}
 				remaining := maxGrepMatches - len(matches)
-				if remaining <= 0 {
+				remainingBytes := maxGrepOutputBytes - usedBytes
+				if remaining <= 0 || remainingBytes <= 0 {
 					truncated = true
 					return errGrepLimitReached
 				}
-				lines, hitLimit, grepErr := grepFile(ctx.AbortController, path, re, remaining)
+				lines, addedBytes, hitLimit, grepErr := grepFile(ctx.AbortController, path, re, remaining, remainingBytes, len(matches) == 0)
 				if grepErr != nil {
 					return grepErr
 				}
 				if len(lines) > 0 {
 					matches = append(matches, lines...)
+					usedBytes += addedBytes
 				}
 				if hitLimit {
 					truncated = true
@@ -118,7 +123,7 @@ var GrepTool = tools.NewTool(tools.Tool{
 			}
 		} else {
 			var grepErr error
-			matches, truncated, grepErr = grepFile(ctx.AbortController, searchPath, re, maxGrepMatches)
+			matches, _, truncated, grepErr = grepFile(ctx.AbortController, searchPath, re, maxGrepMatches, maxGrepOutputBytes, true)
 			if grepErr != nil {
 				return tools.ToolResult{}, grepErr
 			}
@@ -126,7 +131,7 @@ var GrepTool = tools.NewTool(tools.Tool{
 
 		result := strings.Join(matches, "\n")
 		if truncated {
-			result += fmt.Sprintf("\n\n[Output truncated: reached %d match limit; narrow the pattern or path]", maxGrepMatches)
+			result += fmt.Sprintf("\n\n[Output truncated: reached %d match or %d KiB output limit; narrow the pattern or path]", maxGrepMatches, maxGrepOutputBytes/1024)
 		}
 		if result == "" {
 			result = "(no matches found)"
@@ -160,13 +165,13 @@ var GrepTool = tools.NewTool(tools.Tool{
 	},
 })
 
-func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit int) ([]string, bool, error) {
+func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit, maxBytes int, allowFirstClip bool) ([]string, int, bool, error) {
 	if ctx != nil && ctx.Err() != nil {
-		return nil, false, ctx.Err()
+		return nil, 0, false, ctx.Err()
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, false, nil
+		return nil, 0, false, nil
 	}
 	defer func() { _ = f.Close() }()
 
@@ -174,10 +179,10 @@ func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit int) ([
 	var probe [512]byte
 	n, readErr := f.Read(probe[:])
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
-		return nil, false, nil
+		return nil, 0, false, nil
 	}
 	if bytes.IndexByte(probe[:n], 0) >= 0 {
-		return nil, false, nil
+		return nil, 0, false, nil
 	}
 
 	reader := io.MultiReader(bytes.NewReader(probe[:n]), f)
@@ -185,19 +190,42 @@ func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit int) ([
 	scanner.Buffer(make([]byte, 0, 64*1024), maxGrepLineBytes)
 
 	var matches []string
+	usedBytes := 0
 	lineNum := 1
 	for scanner.Scan() {
 		if ctx != nil && ctx.Err() != nil {
-			return matches, false, ctx.Err()
+			return matches, usedBytes, false, ctx.Err()
 		}
 		line := scanner.Text()
 		if re.MatchString(line) {
 			if limit > 0 && len(matches) >= limit {
-				return matches, true, nil
+				return matches, usedBytes, true, nil
 			}
-			matches = append(matches, fmt.Sprintf("%s:%d:%s", path, lineNum, line))
+			entry := fmt.Sprintf("%s:%d:%s", path, lineNum, line)
+			entryBytes := len(entry) + 1
+			if maxBytes > 0 && usedBytes+entryBytes > maxBytes {
+				if allowFirstClip && len(matches) == 0 && usedBytes == 0 {
+					clipped := clipUTF8Bytes(entry, maxBytes)
+					matches = append(matches, clipped)
+					usedBytes += len(clipped) + 1
+				}
+				return matches, usedBytes, true, nil
+			}
+			matches = append(matches, entry)
+			usedBytes += entryBytes
 		}
 		lineNum++
 	}
-	return matches, false, nil
+	return matches, usedBytes, false, nil
+}
+
+func clipUTF8Bytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
