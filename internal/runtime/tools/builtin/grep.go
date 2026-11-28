@@ -3,6 +3,7 @@ package builtin
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -71,6 +72,7 @@ var GrepTool = tools.NewTool(tools.Tool{
 		}
 
 		if info.IsDir() {
+			cleanRoot := filepath.Clean(searchPath)
 			walkErr := filepath.WalkDir(searchPath, func(path string, d iofs.DirEntry, err error) error {
 				if ctx.AbortController != nil && ctx.AbortController.Err() != nil {
 					return ctx.AbortController.Err()
@@ -79,7 +81,7 @@ var GrepTool = tools.NewTool(tools.Tool{
 					return nil
 				}
 				if d.IsDir() {
-					if path != searchPath && isCommonIgnoredDir(d.Name()) {
+					if filepath.Clean(path) != cleanRoot && isCommonIgnoredDir(d.Name()) {
 						return filepath.SkipDir
 					}
 					return nil
@@ -98,7 +100,10 @@ var GrepTool = tools.NewTool(tools.Tool{
 					truncated = true
 					return errGrepLimitReached
 				}
-				lines, hitLimit := grepFile(path, re, remaining)
+				lines, hitLimit, grepErr := grepFile(ctx.AbortController, path, re, remaining)
+				if grepErr != nil {
+					return grepErr
+				}
 				if len(lines) > 0 {
 					matches = append(matches, lines...)
 				}
@@ -112,7 +117,11 @@ var GrepTool = tools.NewTool(tools.Tool{
 				return tools.ToolResult{}, walkErr
 			}
 		} else {
-			matches, truncated = grepFile(searchPath, re, maxGrepMatches)
+			var grepErr error
+			matches, truncated, grepErr = grepFile(ctx.AbortController, searchPath, re, maxGrepMatches)
+			if grepErr != nil {
+				return tools.ToolResult{}, grepErr
+			}
 		}
 
 		result := strings.Join(matches, "\n")
@@ -151,10 +160,13 @@ var GrepTool = tools.NewTool(tools.Tool{
 	},
 })
 
-func grepFile(path string, re *regexp.Regexp, limit int) ([]string, bool) {
+func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit int) ([]string, bool, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, false, ctx.Err()
+	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil, false
+		return nil, false, nil
 	}
 	defer func() { _ = f.Close() }()
 
@@ -162,10 +174,10 @@ func grepFile(path string, re *regexp.Regexp, limit int) ([]string, bool) {
 	var probe [512]byte
 	n, readErr := f.Read(probe[:])
 	if readErr != nil && !errors.Is(readErr, io.EOF) {
-		return nil, false
+		return nil, false, nil
 	}
 	if bytes.IndexByte(probe[:n], 0) >= 0 {
-		return nil, false
+		return nil, false, nil
 	}
 
 	reader := io.MultiReader(bytes.NewReader(probe[:n]), f)
@@ -175,14 +187,17 @@ func grepFile(path string, re *regexp.Regexp, limit int) ([]string, bool) {
 	var matches []string
 	lineNum := 1
 	for scanner.Scan() {
+		if ctx != nil && ctx.Err() != nil {
+			return matches, false, ctx.Err()
+		}
 		line := scanner.Text()
 		if re.MatchString(line) {
 			if limit > 0 && len(matches) >= limit {
-				return matches, true
+				return matches, true, nil
 			}
 			matches = append(matches, fmt.Sprintf("%s:%d:%s", path, lineNum, line))
 		}
 		lineNum++
 	}
-	return matches, false
+	return matches, false, nil
 }
