@@ -22,6 +22,8 @@ func newCredentialTestEnv(t *testing.T) *config.CredentialManager {
 	t.Setenv("AGENT_HARNESS_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
 	t.Setenv("NVIDIA_API_KEY", "")
+	t.Setenv("OMNIROUTE_API_KEY", "")
+	t.Setenv("OMNITROUTE_API_KEY", "")
 	return config.NewCredentialManager()
 }
 
@@ -93,6 +95,23 @@ func TestStoredKeyForProvider_EnvPinWins(t *testing.T) {
 	key, ok = app3.storedKeyForProvider("nvidia", cm)
 	if !ok || key != "sk-nv-env" {
 		t.Fatalf("NVIDIA_API_KEY must pin nvidia, got (%q, %v)", key, ok)
+	}
+
+	// Omniroute env vars must populate config.APIKey and pin omniroute.
+	t.Setenv("NVIDIA_API_KEY", "")
+	t.Setenv("OMNIROUTE_API_KEY", "sk-omni-env")
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	loadedCfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() with OMNIROUTE_API_KEY: %v", err)
+	}
+	if loadedCfg.APIKey != "sk-omni-env" {
+		t.Fatalf("config.APIKey = %q, want sk-omni-env", loadedCfg.APIKey)
+	}
+	app4 := &App{config: loadedCfg}
+	key, ok = app4.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("OMNIROUTE_API_KEY must pin omniroute, got (%q, %v)", key, ok)
 	}
 }
 
