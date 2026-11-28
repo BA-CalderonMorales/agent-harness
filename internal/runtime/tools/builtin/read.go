@@ -3,6 +3,7 @@ package builtin
 import (
 	"fmt"
 	"os"
+	stdpath "path"
 	"path/filepath"
 	"strings"
 
@@ -53,7 +54,7 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
 			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
 		}
-		cleanPath := filepath.Clean(path)
+		cleanPath := stdpath.Clean(filepath.ToSlash(path))
 		if blockedDevicePaths[cleanPath] {
 			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
 		}
