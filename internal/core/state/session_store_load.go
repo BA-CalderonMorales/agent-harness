@@ -18,12 +18,21 @@ import (
 
 // loadSessionFile folds a JSONL file back into a Session.
 func loadSessionFile(path string) (*Session, error) {
+	s, _, err := loadSessionFileWithDiskRecord(path)
+	return s, err
+}
+
+// loadSessionFileWithDiskRecord folds a JSONL file into a Session and also
+// reports the last record snapshot physically present on disk (before any
+// tail replay), so SessionManager can hydrate its journal cache in one read.
+func loadSessionFileWithDiskRecord(path string) (*Session, record.Record, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, record.Record{}, err
 	}
 
 	s := &Session{}
+	var diskRecord record.Record
 	haveRecord, recordCovers := false, 0
 	lines := strings.Split(string(data), "\n")
 	for lineNumber, line := range lines {
@@ -32,7 +41,7 @@ func loadSessionFile(path string) (*Session, error) {
 		}
 		var event storeEvent
 		if err := json.Unmarshal([]byte(line), &event); err != nil {
-			return nil, fmt.Errorf("session file %s is corrupt at line %d: %w", filepath.Base(path), lineNumber+1, err)
+			return nil, record.Record{}, fmt.Errorf("session file %s is corrupt at line %d: %w", filepath.Base(path), lineNumber+1, err)
 		}
 		switch event.Kind {
 		case "header":
@@ -41,7 +50,7 @@ func loadSessionFile(path string) (*Session, error) {
 			s.Turns, s.PlanMode, s.ToolLimit = event.Turns, event.PlanMode, event.ToolLimit
 		case "meta":
 			if event.Meta == nil {
-				return nil, fmt.Errorf("session file %s has an empty meta event at line %d", filepath.Base(path), lineNumber+1)
+				return nil, record.Record{}, fmt.Errorf("session file %s has an empty meta event at line %d", filepath.Base(path), lineNumber+1)
 			}
 			if event.Meta.Model != "" {
 				s.Model = event.Meta.Model
@@ -54,9 +63,10 @@ func loadSessionFile(path string) (*Session, error) {
 			s.ToolLimit = event.Meta.ToolLimit
 		case "record":
 			if event.Record == nil {
-				return nil, fmt.Errorf("session file %s has an empty record at line %d", filepath.Base(path), lineNumber+1)
+				return nil, record.Record{}, fmt.Errorf("session file %s has an empty record at line %d", filepath.Base(path), lineNumber+1)
 			}
 			s.Record = *event.Record
+			diskRecord = *event.Record
 			haveRecord = true
 			// A line without msgs (written before the field existed) covers
 			// every message read so far.
@@ -66,11 +76,11 @@ func loadSessionFile(path string) (*Session, error) {
 			}
 		case "message":
 			if event.Message == nil {
-				return nil, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)
+				return nil, record.Record{}, fmt.Errorf("session file %s has an empty message at line %d", filepath.Base(path), lineNumber+1)
 			}
 			var msg types.Message
 			if err := json.Unmarshal(*event.Message, &msg); err != nil {
-				return nil, fmt.Errorf("session file %s has a corrupt message at line %d: %w", filepath.Base(path), lineNumber+1, err)
+				return nil, record.Record{}, fmt.Errorf("session file %s has a corrupt message at line %d: %w", filepath.Base(path), lineNumber+1, err)
 			}
 			s.Messages = append(s.Messages, msg)
 		}
@@ -83,10 +93,10 @@ func loadSessionFile(path string) (*Session, error) {
 		}
 	}
 	if s.ID == "" {
-		return nil, fmt.Errorf("session file %s has no header", filepath.Base(path))
+		return nil, record.Record{}, fmt.Errorf("session file %s has no header", filepath.Base(path))
 	}
 	s.UpdatedAt = fileModTime(path)
-	return s, nil
+	return s, diskRecord, nil
 }
 
 func fileModTime(path string) time.Time {

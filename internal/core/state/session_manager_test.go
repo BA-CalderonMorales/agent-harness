@@ -190,3 +190,71 @@ func TestListSessionsWithIssuesRetainsReadableSessions(t *testing.T) {
 		t.Fatalf("unreadable = %d, want 1", unreadable)
 	}
 }
+
+func TestSetCurrentPreservesJournalCacheAndCompactionStillRewrites(t *testing.T) {
+	manager, err := NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+
+	session := manager.CreateSession("test-model")
+	session.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "one"}}})
+	session.AddMessage(types.Message{Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "two"}}})
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+
+	// Re-setting the active session must preserve journal state so subsequent
+	// appends do not re-read the whole file from disk.
+	manager.SetCurrent(session)
+	if manager.journalID != session.ID || manager.appendOffset != 2 {
+		t.Fatalf("SetCurrent(same) wiped journal: id=%q offset=%d", manager.journalID, manager.appendOffset)
+	}
+
+	// Shrinking messages (compaction) on the same session must still rewrite.
+	session.Messages = session.Messages[1:]
+	manager.SetCurrent(session)
+	if _, err := manager.SaveCurrent(); err != nil {
+		t.Fatalf("SaveCurrent(compacted) error = %v", err)
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("loadSessionFile() error = %v", err)
+	}
+	if len(loaded.Messages) != 1 {
+		t.Fatalf("compacted session has %d messages on disk, want 1", len(loaded.Messages))
+	}
+}
+
+func TestFormatSessionReportHandlesShortID(t *testing.T) {
+	manager, err := NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("test-model")
+	session.ID = "short"
+	report := manager.FormatSessionReport()
+	if !strings.Contains(report, "short") {
+		t.Fatalf("FormatSessionReport() = %q, want short ID", report)
+	}
+}
+
+func TestCountMessageEventsIgnoresEmbeddedPayloadMatches(t *testing.T) {
+	path := t.TempDir() + "/s.jsonl"
+	content := strings.Join([]string{
+		`{"type":"header","id":"abc"}`,
+		`{"type":"message","message":{"role":"user","content":[{"text":"literal {\"type\":\"message\"} inside text"}]}}`,
+		`{"type":"meta","meta":{"model":"{\"type\":\"message\"}"}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n, err := countMessageEventsChecked(path)
+	if err != nil {
+		t.Fatalf("countMessageEventsChecked() error = %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("countMessageEventsChecked() = %d, want 1", n)
+	}
+}
