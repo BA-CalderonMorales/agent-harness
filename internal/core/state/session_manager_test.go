@@ -2,6 +2,7 @@ package state
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -188,5 +189,118 @@ func TestListSessionsWithIssuesRetainsReadableSessions(t *testing.T) {
 	}
 	if unreadable != 1 {
 		t.Fatalf("unreadable = %d, want 1", unreadable)
+	}
+}
+
+func TestSetCurrentPreservesJournalCacheAndCompactionStillRewrites(t *testing.T) {
+	manager, err := NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+
+	session := manager.CreateSession("test-model")
+	session.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "one"}}})
+	session.AddMessage(types.Message{Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "two"}}})
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("SaveCurrent() error = %v", err)
+	}
+
+	// Re-setting the active session must preserve journal state so subsequent
+	// appends do not re-read the whole file from disk.
+	manager.SetCurrent(session)
+	if manager.journalID != session.ID || manager.appendOffset != 2 {
+		t.Fatalf("SetCurrent(same) wiped journal: id=%q offset=%d", manager.journalID, manager.appendOffset)
+	}
+
+	// Shrinking messages (compaction) on the same session must still rewrite.
+	session.Messages = session.Messages[1:]
+	manager.SetCurrent(session)
+	if _, err := manager.SaveCurrent(); err != nil {
+		t.Fatalf("SaveCurrent(compacted) error = %v", err)
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("loadSessionFile() error = %v", err)
+	}
+	if len(loaded.Messages) != 1 {
+		t.Fatalf("compacted session has %d messages on disk, want 1", len(loaded.Messages))
+	}
+}
+
+func TestFormatSessionReportHandlesShortID(t *testing.T) {
+	manager, err := NewSessionManagerWithDir(t.TempDir())
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("test-model")
+	session.ID = "short"
+	report := manager.FormatSessionReport()
+	if !strings.Contains(report, "short") {
+		t.Fatalf("FormatSessionReport() = %q, want short ID", report)
+	}
+}
+
+func TestCountMessageEventsIgnoresEmbeddedPayloadMatches(t *testing.T) {
+	path := t.TempDir() + "/s.jsonl"
+	content := strings.Join([]string{
+		`{"type":"header","id":"abc"}`,
+		`{"type":"message","message":{"role":"user","content":[{"text":"literal {\"type\":\"message\"} inside text"}]}}`,
+		`{"type":"meta","meta":{"model":"{\"type\":\"message\"}"}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	n, err := countMessageEventsChecked(path)
+	if err != nil {
+		t.Fatalf("countMessageEventsChecked() error = %v", err)
+	}
+	if n != 1 {
+		t.Fatalf("countMessageEventsChecked() = %d, want 1", n)
+	}
+}
+
+func TestAppendRollbackStatFailureMarksNeedsRewrite(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("unlinking an open file path to fail os.Stat during rollback is POSIX-specific")
+	}
+	dir := t.TempDir()
+	manager, err := NewSessionManagerWithDir(dir)
+	if err != nil {
+		t.Fatalf("NewSessionManagerWithDir() error = %v", err)
+	}
+	session := manager.CreateSession("test-model")
+	session.AddMessage(types.Message{Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: "first"}}})
+	path, err := manager.SaveCurrent()
+	if err != nil {
+		t.Fatalf("initial SaveCurrent() error = %v", err)
+	}
+
+	session.AddMessage(types.Message{Role: types.RoleAssistant, Content: []types.ContentBlock{types.TextBlock{Text: "second"}}})
+	manager.appendFault = func() error {
+		if err := os.Remove(path); err != nil {
+			t.Errorf("remove during appendFault: %v", err)
+		}
+		return os.ErrPermission
+	}
+	if _, err := manager.SaveCurrent(); err == nil {
+		t.Fatal("SaveCurrent() = nil, want injected append error")
+	}
+	if !manager.needsRewrite {
+		t.Fatal("needsRewrite = false after rollback os.Stat failure, want true")
+	}
+	manager.appendFault = nil
+	if _, err := manager.SaveCurrent(); err != nil {
+		t.Fatalf("recovery SaveCurrent() error = %v", err)
+	}
+	if manager.needsRewrite {
+		t.Fatal("needsRewrite stayed true after successful recovery rewrite")
+	}
+	loaded, err := loadSessionFile(path)
+	if err != nil {
+		t.Fatalf("loadSessionFile() error = %v", err)
+	}
+	if len(loaded.Messages) != 2 {
+		t.Fatalf("loaded messages = %d, want 2 without duplicates", len(loaded.Messages))
 	}
 }

@@ -155,3 +155,28 @@ func TestReadOnlyModeDeniesUnrelatedNonReadOnlyTool(t *testing.T) {
 		t.Fatalf("unrelated write tool in read-only mode = %s, want deny", decision.Behavior)
 	}
 }
+
+func TestGranularReadToggleCoversDirectoryListingAndFind(t *testing.T) {
+	app := &App{config: &config.LayeredConfig{
+		PermissionMode: config.PermissionWorkspaceWrite,
+		PermRead:       false,
+		PermWrite:      true,
+		PermExplicit:   true,
+	}}
+	for _, name := range []string{"ls", "ls_recursive", "find", "read", "glob", "grep"} {
+		if decision := app.checkPermissionMode(name); decision.Behavior != tools.Deny {
+			t.Errorf("%s with PermRead=false = %s, want deny", name, decision.Behavior)
+		}
+	}
+}
+
+func TestSyncGranularPermissionsRespectsExplicitAllOff(t *testing.T) {
+	app := &App{config: &config.LayeredConfig{
+		PermissionMode: config.PermissionDangerFullAccess,
+		PermExplicit:   true,
+	}}
+	app.syncGranularPermissions()
+	if app.config.PermRead || app.config.PermWrite || app.config.PermDelete || app.config.PermExecute {
+		t.Fatalf("syncGranularPermissions overrode explicit all-off toggles: %+v", app.config)
+	}
+}

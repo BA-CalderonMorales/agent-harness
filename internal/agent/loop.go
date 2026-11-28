@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+	"strings"
+
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
 	"github.com/BA-CalderonMorales/agent-harness/internal/core/diag"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
@@ -34,6 +37,69 @@ func NewLoop(client llm.Client) *Loop {
 	}
 }
 
+// LastTokenUsage returns the accumulated token usage for the latest query.
+func (l *Loop) LastTokenUsage() types.TokenUsage {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.LastUsage
+}
+
+func (l *Loop) resetLastUsage() {
+	l.mu.Lock()
+	l.LastUsage = types.TokenUsage{}
+	l.mu.Unlock()
+}
+
+func (l *Loop) addUsage(usage types.TokenUsage) {
+	l.mu.Lock()
+	l.LastUsage.InputTokens += usage.InputTokens
+	l.LastUsage.OutputTokens += usage.OutputTokens
+	l.LastUsage.CacheCreationInputTokens += usage.CacheCreationInputTokens
+	l.LastUsage.CacheReadInputTokens += usage.CacheReadInputTokens
+	l.mu.Unlock()
+}
+
+// buildLLMRequest builds a provider request with deterministic SystemContext
+// ordering (preserving prompt caches) and consistent parameters across both
+// primary turns and recovery retries.
+func buildLLMRequest(params QueryParams, state *loopState) llm.Request {
+	sysPrompt := params.SystemPrompt
+	if len(params.SystemContext) > 0 {
+		keys := make([]string, 0, len(params.SystemContext))
+		for k := range params.SystemContext {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		var b strings.Builder
+		b.WriteString(sysPrompt)
+		for _, k := range keys {
+			fmt.Fprintf(&b, "\n\n<%s>\n%s\n</%s>", k, params.SystemContext[k], k)
+		}
+		sysPrompt = b.String()
+	}
+
+	model := params.ToolUseContext.Options.MainLoopModel
+	if model == "" {
+		model = config.DefaultModel
+	}
+
+	maxTokens := 8192
+	if state.maxOutputTokensOverride > 0 {
+		maxTokens = state.maxOutputTokensOverride
+	}
+
+	return llm.Request{
+		Messages:        state.messages,
+		SystemPrompt:    sysPrompt,
+		Tools:           params.ToolUseContext.Options.Tools,
+		Model:           model,
+		MaxTokens:       maxTokens,
+		Temperature:     params.Temperature,
+		TemperatureSet:  params.TemperatureSet,
+		ReasoningEffort: params.ReasoningEffort,
+	}
+}
+
 // Query runs the full agent loop for a single user turn.
 // It yields StreamEvents so the caller can render progress in real time.
 //
@@ -43,6 +109,7 @@ func NewLoop(client llm.Client) *Loop {
 // the panic reaches bubbletea's goroutine handler and the whole TUI dies.
 func (l *Loop) Query(ctx context.Context, params QueryParams) (<-chan types.StreamEvent, error) {
 	out := make(chan types.StreamEvent, 16)
+	l.resetLastUsage()
 
 	go func() {
 		defer close(out)
@@ -97,8 +164,10 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 		// 1. Task Start
 		// (UI handled by stream renderer in caller)
 
-		// Reset content replacement budget for this turn
-		tools.ResetBudgetForNewTurn()
+		// Fresh isolated content replacement budget for this iteration so
+		// delegated sub-agents never clobber the parent turn's budget.
+		turnToolCtx := params.ToolUseContext
+		turnToolCtx.ContentBudget = tools.NewDefaultContentBudget()
 
 		// Yield stream start
 		select {
@@ -124,32 +193,7 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 		// Build the request only after compaction so this call uses the same
 		// bounded context that callers persist from StreamContextCompacted.
-		messagesForQuery := state.messages
-		sysPrompt := params.SystemPrompt
-		for k, v := range params.SystemContext {
-			sysPrompt += fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k)
-		}
-
-		// Determine model
-		model := params.ToolUseContext.Options.MainLoopModel
-		if model == "" {
-			model = config.DefaultModel
-		}
-
-		req := llm.Request{
-			Messages:        messagesForQuery,
-			SystemPrompt:    sysPrompt,
-			Tools:           params.ToolUseContext.Options.Tools,
-			Model:           model,
-			MaxTokens:       8192,
-			Temperature:     params.Temperature,
-			TemperatureSet:  params.TemperatureSet,
-			ReasoningEffort: params.ReasoningEffort,
-		}
-
-		if state.maxOutputTokensOverride > 0 {
-			req.MaxTokens = state.maxOutputTokensOverride
-		}
+		req := buildLLMRequest(params, state)
 
 		// Call LLM
 		var assistantMsg *types.Message
@@ -242,27 +286,53 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 
 		// Execute tools
 		if l.Config.StreamingToolExecution {
-			executor := NewStreamingToolExecutor(params.ToolUseContext.Options.Tools, params.CanUseTool, params.ToolUseContext)
+			executor := NewStreamingToolExecutor(params.ToolUseContext.Options.Tools, params.CanUseTool, turnToolCtx)
 			for _, tu := range toolUses {
 				executor.AddTool(tu, *assistantMsg)
 			}
 
-			// Consume events until all tools are done
-			done := make(chan struct{})
-			go func() {
-				defer close(done)
-				for ev := range executor.Events() {
-					select {
-					case out <- ev:
-					case <-ctx.Done():
-						return
+			// Consume events until all tools are done or cancellation stops
+			// forwarding. Waiting on forwardDone before returning guarantees
+			// this goroutine never touches out or state after Query closes out,
+			// while a background drain keeps executor.dispatchEvents from
+			// blocking if a slow tool ignores cancellation.
+			stopForward := make(chan struct{})
+			forwardDone := make(chan struct{})
+			drainExecutor := func() {
+				go func() {
+					for range executor.Events() {
 					}
-
-					// Update session messages for final results
-					if sm, ok := ev.(types.StreamMessage); ok {
-						l.mu.Lock()
-						state.add(sm.Message)
-						l.mu.Unlock()
+				}()
+			}
+			go func() {
+				defer close(forwardDone)
+				for {
+					select {
+					case <-stopForward:
+						drainExecutor()
+						return
+					case ev, ok := <-executor.Events():
+						if !ok {
+							return
+						}
+						select {
+						case <-stopForward:
+							drainExecutor()
+							return
+						default:
+						}
+						select {
+						case out <- ev:
+						case <-stopForward:
+							drainExecutor()
+							return
+						case <-ctx.Done():
+							drainExecutor()
+							return
+						}
+						if sm, ok := ev.(types.StreamMessage); ok {
+							state.add(sm.Message)
+						}
 					}
 				}
 			}()
@@ -270,14 +340,20 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 			// Wait for completion
 			_, execErr := executor.GetRemainingResults(ctx)
 			executor.Close()
-			<-done
+			if ctx.Err() != nil {
+				close(stopForward)
+				<-forwardDone
+				out <- types.StreamError{Error: ctx.Err()}
+				return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
+			}
+			<-forwardDone
 
 			if execErr != nil {
 				_ = execErr
 			}
 		} else {
 			// Batch execution
-			results, execErr := runToolsBatch(ctx, toolUses, *assistantMsg, params.ToolUseContext, params.CanUseTool)
+			results, execErr := runToolsBatch(ctx, toolUses, *assistantMsg, turnToolCtx, params.CanUseTool)
 			if execErr != nil {
 				_ = execErr
 			}
@@ -286,8 +362,13 @@ func (l *Loop) queryLoop(ctx context.Context, params QueryParams, state *loopSta
 				select {
 				case out <- types.StreamMessage{Message: msg}:
 				case <-ctx.Done():
+					out <- types.StreamError{Error: ctx.Err()}
 					return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 				}
+			}
+			if ctx.Err() != nil {
+				out <- types.StreamError{Error: ctx.Err()}
+				return Terminal{Reason: TerminalReasonUserInterrupt, Error: ctx.Err()}
 			}
 		}
 	}

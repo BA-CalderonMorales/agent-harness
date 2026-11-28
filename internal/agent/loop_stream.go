@@ -92,12 +92,11 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 	msg.Role = types.RoleAssistant
 	msg.Timestamp = time.Now()
 
-	var currentText string
+	var currentText strings.Builder
 	var pendingToolUse *types.ToolUseBlock
-	var toolInputBuffer string
+	var toolInputBuffer strings.Builder
 	var toolUses []types.ToolUseBlock
 	var currentReasoning strings.Builder
-	sawStop := false
 
 	// Announce a completed call at its position in the stream: prose
 	// deltas are already live, so waiting for the final message would
@@ -132,45 +131,46 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					return nil, nil, err
 				}
 				if pendingToolUse != nil {
-					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer.String()); err != nil {
 						return nil, nil, err
 					}
 				}
 				// The provider closed the stream without a stop event:
 				// the response is incomplete, and a truncated answer
 				// that looks complete is worse than an error naming it.
-				// The partial prose survives: emit it as a message so
-				// nothing the model said silently vanishes.
-				if !sawStop {
-					if currentText != "" {
-						partial := types.Message{
-							UUID:      msg.UUID,
-							Role:      types.RoleAssistant,
-							Content:   []types.ContentBlock{types.TextBlock{Text: currentText}},
-							Timestamp: time.Now(),
-						}
-						select {
-						case out <- types.StreamMessage{Message: partial}:
-						case <-ctx.Done():
-							return nil, nil, ctx.Err()
-						}
+				// Preserve all prose received so far (both text emitted
+				// before tool calls and the current tail) while excluding
+				// tool calls that will not be executed.
+				var partialBlocks []types.ContentBlock
+				receivedChars := 0
+				for _, b := range msg.Content {
+					if tb, ok := b.(types.TextBlock); ok && tb.Text != "" {
+						partialBlocks = append(partialBlocks, tb)
+						receivedChars += len(tb.Text)
 					}
-					return nil, nil, fmt.Errorf(
-						"provider disconnected before completing the response (received %d chars)",
-						len(currentText),
-					)
 				}
-				if pendingToolUse != nil {
-					msg.Content = append(msg.Content, *pendingToolUse)
-					toolUses = append(toolUses, *pendingToolUse)
+				if currentText.Len() > 0 {
+					tail := currentText.String()
+					partialBlocks = append(partialBlocks, types.TextBlock{Text: tail})
+					receivedChars += len(tail)
 				}
-				if currentText != "" {
-					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
+				if len(partialBlocks) > 0 {
+					partial := types.Message{
+						UUID:      msg.UUID,
+						Role:      types.RoleAssistant,
+						Content:   partialBlocks,
+						Timestamp: time.Now(),
+					}
+					select {
+					case out <- types.StreamMessage{Message: partial}:
+					case <-ctx.Done():
+						return nil, nil, ctx.Err()
+					}
 				}
-				if len(msg.Content) == 0 {
-					return nil, nil, fmt.Errorf("empty response from LLM: no content received")
-				}
-				return &msg, toolUses, nil
+				return nil, nil, fmt.Errorf(
+					"provider disconnected before completing the response (received %d chars)",
+					receivedChars,
+				)
 			}
 
 			switch e := ev.(type) {
@@ -200,7 +200,7 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 			case types.LLMTextDelta:
 				if pendingToolUse != nil {
-					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer.String()); err != nil {
 						return nil, nil, err
 					}
 					if err := emitTool(*pendingToolUse); err != nil {
@@ -209,8 +209,9 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 					pendingToolUse = nil
+					toolInputBuffer.Reset()
 				}
-				currentText += e.Delta
+				currentText.WriteString(e.Delta)
 				// Forward the fragment for live rendering. The final
 				// StreamMessage still carries the assembled prose for
 				// persistence and for callers that ignore deltas.
@@ -224,15 +225,15 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 			case types.LLMToolUseDelta:
 				// Keep narration ahead of the call it introduces in both
 				// the live transcript and the persisted provider history.
-				if currentText != "" {
-					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
-					currentText = ""
+				if currentText.Len() > 0 {
+					msg.Content = append(msg.Content, types.TextBlock{Text: currentText.String()})
+					currentText.Reset()
 				}
 				if pendingToolUse == nil {
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
-					toolInputBuffer = ""
+					toolInputBuffer.Reset()
 				} else if pendingToolUse.ID != e.ID {
-					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer.String()); err != nil {
 						return nil, nil, err
 					}
 					if err := emitTool(*pendingToolUse); err != nil {
@@ -242,9 +243,9 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					toolUses = append(toolUses, *pendingToolUse)
 
 					pendingToolUse = &types.ToolUseBlock{ID: e.ID, Name: e.Name}
-					toolInputBuffer = ""
+					toolInputBuffer.Reset()
 				}
-				toolInputBuffer += e.Delta
+				toolInputBuffer.WriteString(e.Delta)
 			case types.LLMMessageStop:
 				// OpenRouter reports a mid-stream rate limit with
 				// finish_reason "error". It is a failed turn, not a
@@ -254,9 +255,9 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 				}
 				msg.StopReason = e.StopReason
 				msg.Model = e.Model
-				l.LastUsage = e.Usage
+				l.addUsage(e.Usage)
 				if pendingToolUse != nil {
-					if err := finalizeToolInput(pendingToolUse, toolInputBuffer); err != nil {
+					if err := finalizeToolInput(pendingToolUse, toolInputBuffer.String()); err != nil {
 						return nil, nil, err
 					}
 					if err := emitTool(*pendingToolUse); err != nil {
@@ -265,9 +266,10 @@ func (l *Loop) consumeStream(ctx context.Context, events <-chan types.LLMEvent, 
 					msg.Content = append(msg.Content, *pendingToolUse)
 					toolUses = append(toolUses, *pendingToolUse)
 					pendingToolUse = nil
+					toolInputBuffer.Reset()
 				}
-				if currentText != "" {
-					msg.Content = append(msg.Content, types.TextBlock{Text: currentText})
+				if currentText.Len() > 0 {
+					msg.Content = append(msg.Content, types.TextBlock{Text: currentText.String()})
 				}
 				// Yield the assembled message
 				select {
@@ -314,7 +316,7 @@ func isMaxOutputTokensError(err error) bool {
 		return false
 	}
 	errStr := err.Error()
-	return contains(errStr, "max_output_tokens") || contains(errStr, "max_tokens")
+	return strings.Contains(errStr, "max_output_tokens") || strings.Contains(errStr, "max_tokens")
 }
 
 // promptTooLongPhrases are the ways providers say a request exceeded the
@@ -340,19 +342,6 @@ func isPromptTooLongError(err error) bool {
 	errStr := strings.ToLower(err.Error())
 	for _, phrase := range promptTooLongPhrases {
 		if strings.Contains(errStr, phrase) {
-			return true
-		}
-	}
-	return false
-}
-
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr, 0))
-}
-
-func containsAt(s, substr string, start int) bool {
-	for i := start; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
 			return true
 		}
 	}

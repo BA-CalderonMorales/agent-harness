@@ -165,7 +165,7 @@ func (l *Loop) compactMessages(ctx context.Context, state *loopState, force bool
 	)
 	diag.Info("context.compacted", fmt.Sprintf(
 		"summarized %d messages · tokens %d → %d · history now %d messages",
-		len(removedPrefix), current, after, len(state.messages)-len(removedPrefix)+1,
+		len(removedPrefix), current, after, len(state.messages),
 	))
 	return compactionOutcome{
 		Messages:     append([]types.Message(nil), compacted...),
@@ -278,6 +278,9 @@ func (l *Loop) summarizeMessages(ctx context.Context, msgs []types.Message, mode
 
 // requestSummary sends one summarizer request and returns its text.
 func (l *Loop) requestSummary(ctx context.Context, prompt, model string) (string, error) {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	req := llm.Request{
 		Messages: []types.Message{
 			{UUID: uuid.New().String(), Role: types.RoleUser, Content: []types.ContentBlock{types.TextBlock{Text: prompt}}, Timestamp: time.Now()},
@@ -292,10 +295,14 @@ func (l *Loop) requestSummary(ctx context.Context, prompt, model string) (string
 		return "", err
 	}
 
+	idle := time.NewTimer(l.idleWindow())
+	defer idle.Stop()
+
 	var result strings.Builder
 	for {
 		select {
 		case event, ok := <-stream:
+			_ = idle.Reset(l.idleWindow())
 			if !ok {
 				return strings.TrimSpace(result.String()), nil
 			}
@@ -305,11 +312,10 @@ func (l *Loop) requestSummary(ctx context.Context, prompt, model string) (string
 			case types.LLMError:
 				return result.String(), e.Error
 			}
+		case <-idle.C:
+			return result.String(), fmt.Errorf("context summarizer stream went idle for %s", l.idleWindow())
 		case <-ctx.Done():
 			return result.String(), ctx.Err()
 		}
 	}
 }
-
-// attemptRecovery tries to recover from recoverable errors.
-// Returns true with results if recovery succeeded, false with error if all attempts failed.

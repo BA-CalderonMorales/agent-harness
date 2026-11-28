@@ -25,7 +25,9 @@ while IFS= read -r -d '' file; do
 		over=$((over + 1))
 		printf '  [%s] %4d lines  %s\n' "over" "$lines" "${file#"$ROOT"/}"
 	fi
-done < <(find "$ROOT" -name '*.go' -not -name '*_test.go' -not -path '*/build/*' -not -path '*/.git/*' -print0)
+done < <(find "$ROOT" -mindepth 1 \
+	\( -name '.*' -o -name 'build' -o -name 'vendor' -o -name 'node_modules' -o -name 'tmp' \) -type d -prune -o \
+	-name '*.go' -not -name '*_test.go' -type f -print0)
 
 if ((over == 0)); then
 	printf '[ok] structure: %d source files, all within %d lines\n' "$total" "$BUDGET"

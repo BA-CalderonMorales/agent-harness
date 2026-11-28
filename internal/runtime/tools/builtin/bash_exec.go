@@ -23,6 +23,14 @@ func init() {
 	}
 }
 
+const (
+	// maxBashBufferBytes caps in-memory command output accumulation well above
+	// maxBashOutputChars so runaway commands (yes, huge logs) cannot OOM the
+	// process while stdout/stderr pipes continue draining cleanly.
+	maxBashBufferBytes  = 256 << 10
+	maxBashPendingBytes = 64 << 10
+)
+
 func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgress tools.OnProgress) (tools.ToolResult, error) {
 	timeout := time.Duration(timeoutMs) * time.Millisecond
 	execCtx, cancel := context.WithTimeout(ctx, timeout)
@@ -45,8 +53,9 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 	// drained before the command is considered complete.
 	var output strings.Builder
 	var outputMu sync.Mutex
-	stdout := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
-	stderr := &bashOutputWriter{output: &output, outputMu: &outputMu, onProgress: onProgress}
+	var bufferTruncated bool
+	stdout := &bashOutputWriter{output: &output, outputMu: &outputMu, truncated: &bufferTruncated, onProgress: onProgress}
+	stderr := &bashOutputWriter{output: &output, outputMu: &outputMu, truncated: &bufferTruncated, onProgress: onProgress}
 
 	cmd.Stdout, cmd.Stderr = stdout, stderr
 
@@ -70,6 +79,13 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 		result = " "
 	}
 
+	// Truncate command output BEFORE appending the failure/timeout marker so
+	// verbose failing commands never lose their exit status or timeout reason.
+	result = truncateBashOutput(result)
+	if bufferTruncated && !strings.Contains(result, "[Output truncated:") {
+		result += "\n\n[Output truncated: exceeded buffer limit]"
+	}
+
 	if err != nil {
 		if execCtx.Err() == context.DeadlineExceeded {
 			result += "\n[command timed out after " + timeout.String() + "]"
@@ -78,16 +94,29 @@ func runBashCommand(ctx context.Context, cmdStr string, timeoutMs int, onProgres
 		}
 	}
 
-	result = truncateBashOutput(result)
-
 	return tools.ToolResult{Data: result, IsError: err != nil}, nil
 }
 
 type bashOutputWriter struct {
 	output     *strings.Builder
 	outputMu   *sync.Mutex
+	truncated  *bool
 	onProgress tools.OnProgress
 	pending    []byte
+}
+
+func (w *bashOutputWriter) appendOutputLocked(s string) {
+	if w.output.Len() >= maxBashBufferBytes {
+		*w.truncated = true
+		return
+	}
+	remaining := maxBashBufferBytes - w.output.Len()
+	if len(s) > remaining {
+		w.output.WriteString(s[:remaining])
+		*w.truncated = true
+		return
+	}
+	w.output.WriteString(s)
 }
 
 func (w *bashOutputWriter) Write(p []byte) (int, error) {
@@ -100,9 +129,21 @@ func (w *bashOutputWriter) Write(p []byte) (int, error) {
 			break
 		}
 		line := strings.TrimSuffix(string(w.pending[:newline]), "\r")
-		w.output.WriteString(line + "\n")
+		w.appendOutputLocked(line + "\n")
 		w.pending = w.pending[newline+1:]
 		lines = append(lines, line)
+	}
+	// Compact pending slice so backing arrays from earlier chunks can be reused
+	// and an unterminated multi-megabyte stream cannot grow pending unboundedly.
+	if len(w.pending) == 0 {
+		w.pending = w.pending[:0]
+	} else if len(w.pending) > maxBashPendingBytes {
+		w.appendOutputLocked(string(w.pending))
+		w.pending = w.pending[:0]
+	} else if cap(w.pending) > maxBashPendingBytes && len(w.pending) < maxBashPendingBytes/4 {
+		compact := make([]byte, len(w.pending))
+		copy(compact, w.pending)
+		w.pending = compact
 	}
 	w.outputMu.Unlock()
 	if w.onProgress != nil {
@@ -118,7 +159,7 @@ func (w *bashOutputWriter) flush() {
 	w.outputMu.Lock()
 	tail := string(w.pending)
 	w.pending = nil
-	w.output.WriteString(tail)
+	w.appendOutputLocked(tail)
 	w.outputMu.Unlock()
 	if tail != "" && w.onProgress != nil {
 		w.onProgress(tail)

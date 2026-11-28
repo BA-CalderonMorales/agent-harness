@@ -2,6 +2,7 @@ package builtin
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -37,11 +38,7 @@ func TestRunBashCommandTimeoutDoesNotWaitForDescendantPipeHolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("result = %q: %v", output, err)
 	}
-	deadline := time.Now().Add(500 * time.Millisecond)
-	for time.Now().Before(deadline) && processExists(childPID) {
-		time.Sleep(5 * time.Millisecond)
-	}
-	if processExists(childPID) {
+	if !waitForProcessExit(childPID, 500*time.Millisecond) {
 		t.Fatalf("timed-out descendant process %d is still alive", childPID)
 	}
 }
@@ -77,11 +74,7 @@ func TestRunBashCommandCancellationKillsDescendantPipeHolder(t *testing.T) {
 
 	select {
 	case childPID := <-childPIDCh:
-		deadline := time.Now().Add(500 * time.Millisecond)
-		for time.Now().Before(deadline) && processExists(childPID) {
-			time.Sleep(5 * time.Millisecond)
-		}
-		if processExists(childPID) {
+		if !waitForProcessExit(childPID, 500*time.Millisecond) {
 			t.Fatalf("canceled descendant process %d is still alive", childPID)
 		}
 	default:
@@ -135,13 +128,44 @@ func descendantPID(output string) (int, error) {
 	return 0, fmt.Errorf("missing child PID")
 }
 
+func waitForProcessExit(pid int, timeout time.Duration) bool {
+	deadline := time.Now().Add(timeout)
+	for {
+		if !processExists(pid) {
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+}
+
 func processExists(pid int) bool {
 	process, err := os.FindProcess(pid)
 	if err != nil {
 		return false
 	}
-	if err := process.Signal(os.Signal(syscall.Signal(0))); err == nil {
-		return true
+	if err := process.Signal(os.Signal(syscall.Signal(0))); err != nil {
+		return false
 	}
-	return false
+	// On Linux containers where PID 1 does not immediately reap reparented
+	// grandchildren, a killed descendant remains a zombie (<defunct>) and
+	// Signal(0) still succeeds even though the process is already dead.
+	// If /proc/<pid>/status disappears between Signal(0) and ReadFile, the
+	// process finished exiting and was reaped.
+	if runtime.GOOS == "linux" {
+		status, err := os.ReadFile(fmt.Sprintf("/proc/%d/status", pid))
+		if errors.Is(err, os.ErrNotExist) {
+			return false
+		}
+		if err == nil {
+			for _, line := range strings.Split(string(status), "\n") {
+				if strings.HasPrefix(line, "State:") && strings.Contains(line, "Z") {
+					return false
+				}
+			}
+		}
+	}
+	return true
 }

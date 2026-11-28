@@ -100,12 +100,8 @@ func newApp() (*App, error) {
 		app.session.Model = app.config.Model
 		app.modelResetNote = sprintf("Model %s is not a %s model — switched to %s", previous, app.config.Provider, app.config.Model)
 	}
-	app.loop = agent.NewLoop(app.client)
 	applyCatalogContext(app.config, app.session.Model)
-	if app.config.ContextLength > 0 {
-		app.loop.Config.BlockingTokenLimit = app.config.ContextLength
-	}
-	app.loop.Config.StreamIdleTimeout = app.config.StreamIdleTimeout
+	app.loop = app.newConfiguredLoop()
 
 	return app, nil
 }

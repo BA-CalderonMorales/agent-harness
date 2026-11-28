@@ -1,6 +1,8 @@
 package state
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -147,13 +149,15 @@ func (sm *SessionManager) createSessionFile(path string) error {
 		_ = os.Remove(tmp)
 		return werr
 	}
-	if err := os.Rename(tmp, path); err != nil {
+	if err := renameReplacing(tmp, path); err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("failed to replace session file: %w", err)
 	}
 	sm.recordOnDisk = s.Record
 	return nil
 }
+
+var messageLinePrefix = []byte(`{"type":"message"`)
 
 // countMessageEvents counts message events already on disk — the
 // boundary between "append the delta" and "rewrite after compaction".
@@ -162,20 +166,47 @@ func countMessageEvents(path string) int {
 	return n
 }
 
-// countMessageEventsChecked is countMessageEvents that says when the file
-// could not be read, for callers that must not treat that as "no events".
+// countMessageEventsChecked streams the file line-by-line instead of loading
+// the full transcript into memory and checks the event prefix so message or
+// record payloads mentioning `"type":"message"` cannot skew the count.
 func countMessageEventsChecked(path string) (int, error) {
-	data, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		return 0, err
 	}
+	defer func() { _ = f.Close() }()
+
+	reader := bufio.NewReaderSize(f, 32*1024)
 	count := 0
-	for _, line := range strings.Split(string(data), "\n") {
-		if strings.Contains(line, `"type":"message"`) {
+	for {
+		line, err := reader.ReadBytes('\n')
+		if len(line) > 0 && bytes.HasPrefix(bytes.TrimSpace(line), messageLinePrefix) {
 			count++
 		}
+		if err == io.EOF {
+			return count, nil
+		}
+		if err != nil {
+			return 0, err
+		}
 	}
-	return count, nil
+}
+
+// renameReplacing atomically replaces path with tmp, retrying transiently on
+// Windows where another reader/indexer can briefly hold the destination open.
+func renameReplacing(tmp, path string) error {
+	const attempts = 10
+	var err error
+	for attempt := 0; attempt < attempts; attempt++ {
+		if err = os.Rename(tmp, path); err == nil {
+			return nil
+		}
+		if runtime.GOOS != "windows" {
+			return err
+		}
+		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+	}
+	return err
 }
 
 // appendSessionEventsFrom appends message and meta events for everything
@@ -205,7 +236,15 @@ func (sm *SessionManager) appendSessionEventsFrom(path string, from int) (retErr
 			// appended to it, and truncating would erase their save; keep
 			// it and report instead (a duplicate is recoverable, a lost
 			// save is not).
-			if now, serr := os.Stat(path); serr == nil && now.Size() != size+out.n {
+			if now, serr := os.Stat(path); serr != nil {
+				// Unable to confirm file size after a failed append: do not
+				// truncate blindly, but force the next save to rewrite whole
+				// so retrying does not append duplicate messages.
+				sm.needsRewrite = true
+				retErr = fmt.Errorf("%w (could not inspect session file for rollback, the next save rewrites the session file: %v)", retErr, serr)
+				_ = f.Close()
+				return
+			} else if now.Size() != size+out.n {
 				retErr = fmt.Errorf("%w (the file changed during the save, so it was not rolled back)", retErr)
 				_ = f.Close()
 				return

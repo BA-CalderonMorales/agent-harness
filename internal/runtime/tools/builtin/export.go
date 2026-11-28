@@ -1,12 +1,14 @@
 package builtin
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/BA-CalderonMorales/agent-harness/internal/core/redact"
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
@@ -59,11 +61,14 @@ var ExportTool = tools.NewTool(tools.Tool{
 		var content string
 		switch strings.ToLower(format) {
 		case "json":
-			data, err := json.MarshalIndent(redactExportMessages(ctx.Messages), "", "  ")
-			if err != nil {
+			var buf bytes.Buffer
+			enc := json.NewEncoder(&buf)
+			enc.SetEscapeHTML(false)
+			enc.SetIndent("", "  ")
+			if err := enc.Encode(redactExportMessages(ctx.Messages)); err != nil {
 				return tools.ToolResult{}, err
 			}
-			content = string(data)
+			content = buf.String()
 		case "markdown", "md":
 			content = exportMarkdown(ctx.Messages)
 		case "txt", "text":
@@ -83,24 +88,28 @@ var ExportTool = tools.NewTool(tools.Tool{
 })
 
 func exportMarkdown(msgs []types.Message) string {
-	var b string
-	b += "# Agent Harness Transcript\n\n"
-	b += fmt.Sprintf("Exported: %s\n\n", time.Now().Format(time.RFC3339))
+	var b strings.Builder
+	b.WriteString("# Agent Harness Transcript\n\n")
+	fmt.Fprintf(&b, "Exported: %s\n\n", time.Now().Format(time.RFC3339))
 	for _, m := range msgs {
-		b += fmt.Sprintf("## %s\n\n", m.Role)
+		fmt.Fprintf(&b, "## %s\n\n", m.Role)
 		for _, block := range m.Content {
-			if tb, ok := block.(types.TextBlock); ok {
-				b += redactExportString(tb.Text) + "\n\n"
-			} else if tu, ok := block.(types.ToolUseBlock); ok {
-				b += fmt.Sprintf("**Tool Use:** %s\n\n", tu.Name)
-				inputJSON, _ := json.MarshalIndent(redactExportMap(tu.Input), "", "  ")
-				b += "```json\n" + redactExportString(string(inputJSON)) + "\n```\n\n"
-			} else if tr, ok := block.(types.ToolResultBlock); ok {
-				b += fmt.Sprintf("**Tool Result:** %s\n\n", redactExportString(tr.Content))
+			switch v := block.(type) {
+			case types.TextBlock:
+				b.WriteString(redact.String(v.Text))
+				b.WriteString("\n\n")
+			case types.ToolUseBlock:
+				fmt.Fprintf(&b, "**Tool Use:** %s\n\n", v.Name)
+				inputJSON, _ := json.MarshalIndent(redact.Map(v.Input), "", "  ")
+				b.WriteString("```json\n")
+				b.WriteString(redact.String(string(inputJSON)))
+				b.WriteString("\n```\n\n")
+			case types.ToolResultBlock:
+				fmt.Fprintf(&b, "**Tool Result:** %s\n\n", redact.String(v.Content))
 			}
 		}
 	}
-	return b
+	return b.String()
 }
 
 func exportText(msgs []types.Message) string {
@@ -115,16 +124,16 @@ func exportText(msgs []types.Message) string {
 		for _, block := range m.Content {
 			switch v := block.(type) {
 			case types.TextBlock:
-				b.WriteString(redactExportString(v.Text))
+				b.WriteString(redact.String(v.Text))
 				b.WriteString("\n\n")
 			case types.ToolUseBlock:
 				fmt.Fprintf(&b, "[tool use: %s]\n", v.Name)
-				inputJSON, _ := json.MarshalIndent(redactExportMap(v.Input), "", "  ")
-				b.WriteString(redactExportString(string(inputJSON)))
+				inputJSON, _ := json.MarshalIndent(redact.Map(v.Input), "", "  ")
+				b.WriteString(redact.String(string(inputJSON)))
 				b.WriteString("\n\n")
 			case types.ToolResultBlock:
 				b.WriteString("[tool result]\n")
-				b.WriteString(redactExportString(v.Content))
+				b.WriteString(redact.String(v.Content))
 				b.WriteString("\n\n")
 			}
 		}
@@ -133,27 +142,5 @@ func exportText(msgs []types.Message) string {
 }
 
 func redactExportMessages(msgs []types.Message) []types.Message {
-	out := make([]types.Message, 0, len(msgs))
-	for _, msg := range msgs {
-		msg.APIError = redactExportString(msg.APIError)
-		msg.StopReason = redactExportString(msg.StopReason)
-		msg.Model = redactExportString(msg.Model)
-		msg.Content = make([]types.ContentBlock, 0, len(msg.Content))
-		for _, block := range msg.Content {
-			switch v := block.(type) {
-			case types.TextBlock:
-				msg.Content = append(msg.Content, types.TextBlock{Text: redactExportString(v.Text)})
-			case types.ToolUseBlock:
-				msg.Content = append(msg.Content, types.ToolUseBlock{ID: v.ID, Name: v.Name, Input: redactExportMap(v.Input)})
-			case types.ToolResultBlock:
-				msg.Content = append(msg.Content, types.ToolResultBlock{ToolUseID: v.ToolUseID, Content: redactExportString(v.Content), IsError: v.IsError})
-			case types.ThinkingBlock:
-				msg.Content = append(msg.Content, types.ThinkingBlock{Thinking: "<redacted>", Signature: "<redacted>"})
-			default:
-				msg.Content = append(msg.Content, block)
-			}
-		}
-		out = append(out, msg)
-	}
-	return out
+	return redact.Messages(msgs)
 }

@@ -263,7 +263,7 @@ func (app *App) runAgentTurn(input string, tuiApp *tui.App) {
 
 	// Feed provider-reported usage into the cost tracker, then close the turn.
 	if app.loop != nil {
-		usage := app.loop.LastUsage
+		usage := app.loop.LastTokenUsage()
 		app.costTracker.AddToCurrentTurn(agent.TokenUsage{
 			InputTokens:              usage.InputTokens,
 			OutputTokens:             usage.OutputTokens,

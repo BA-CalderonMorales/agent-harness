@@ -22,6 +22,8 @@ func newCredentialTestEnv(t *testing.T) *config.CredentialManager {
 	t.Setenv("AGENT_HARNESS_API_KEY", "")
 	t.Setenv("OPENROUTER_API_KEY", "")
 	t.Setenv("NVIDIA_API_KEY", "")
+	t.Setenv("OMNIROUTE_API_KEY", "")
+	t.Setenv("OMNITROUTE_API_KEY", "")
 	return config.NewCredentialManager()
 }
 
@@ -93,6 +95,47 @@ func TestStoredKeyForProvider_EnvPinWins(t *testing.T) {
 	key, ok = app3.storedKeyForProvider("nvidia", cm)
 	if !ok || key != "sk-nv-env" {
 		t.Fatalf("NVIDIA_API_KEY must pin nvidia, got (%q, %v)", key, ok)
+	}
+
+	// Omniroute env vars must populate config.APIKey and pin omniroute only
+	// when omniroute is the selected provider (never leaking into other providers).
+	t.Setenv("NVIDIA_API_KEY", "")
+	t.Setenv("OMNIROUTE_API_KEY", "sk-omni-env")
+	t.Setenv("AGENT_HARNESS_CONFIG_HOME", t.TempDir())
+	t.Setenv("AH_PROVIDER", "openai")
+	openaiCfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() with openai + OMNIROUTE_API_KEY: %v", err)
+	}
+	if openaiCfg.APIKey != "" {
+		t.Fatalf("OMNIROUTE_API_KEY leaked into openai config.APIKey = %q, want empty", openaiCfg.APIKey)
+	}
+
+	t.Setenv("AH_PROVIDER", "omniroute")
+	loadedCfg, err := config.NewLayeredLoader(t.TempDir()).Load()
+	if err != nil {
+		t.Fatalf("Load() with OMNIROUTE_API_KEY: %v", err)
+	}
+	if loadedCfg.APIKey != "sk-omni-env" {
+		t.Fatalf("config.APIKey = %q, want sk-omni-env", loadedCfg.APIKey)
+	}
+	app4 := &App{config: loadedCfg}
+	key, ok = app4.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("OMNIROUTE_API_KEY must pin omniroute, got (%q, %v)", key, ok)
+	}
+
+	// Switching from local or another provider via /login must resolve
+	// OMNIROUTE_API_KEY directly rather than returning the old provider's key.
+	appFromLocal := &App{config: &config.LayeredConfig{Provider: "local", APIKey: "local"}}
+	key, ok = appFromLocal.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("storedKeyForProvider(omniroute) from local = (%q, %v), want sk-omni-env", key, ok)
+	}
+	appFromOpenAI := &App{config: &config.LayeredConfig{Provider: "openai", APIKey: "sk-openai-other"}}
+	key, ok = appFromOpenAI.storedKeyForProvider("omniroute", cm)
+	if !ok || key != "sk-omni-env" {
+		t.Fatalf("storedKeyForProvider(omniroute) from openai = (%q, %v), want sk-omni-env", key, ok)
 	}
 }
 

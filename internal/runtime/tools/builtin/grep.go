@@ -2,15 +2,29 @@ package builtin
 
 import (
 	"bufio"
+	"bytes"
+	"context"
+	"errors"
 	"fmt"
+	"io"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+const (
+	maxGrepMatches     = 500
+	maxGrepLineBytes   = 1 << 20
+	maxGrepOutputBytes = 512 * 1024
+)
+
+var errGrepLimitReached = errors.New("grep match limit reached")
 
 // GrepTool searches file contents for a regex pattern.
 var GrepTool = tools.NewTool(tools.Tool{
@@ -53,20 +67,29 @@ var GrepTool = tools.NewTool(tools.Tool{
 		}
 
 		var matches []string
+		usedBytes := 0
+		truncated := false
 		info, err := os.Stat(searchPath)
 		if err != nil {
 			return tools.ToolResult{}, err
 		}
 
 		if info.IsDir() {
-			_ = filepath.Walk(searchPath, func(path string, fi os.FileInfo, err error) error {
+			cleanRoot := filepath.Clean(searchPath)
+			walkErr := filepath.WalkDir(searchPath, func(path string, d iofs.DirEntry, err error) error {
+				if ctx.AbortController != nil && ctx.AbortController.Err() != nil {
+					return ctx.AbortController.Err()
+				}
 				if err != nil {
 					return nil
 				}
-				if fi.IsDir() {
-					if isCommonIgnoredDir(fi.Name()) {
+				if d.IsDir() {
+					if filepath.Clean(path) != cleanRoot && isCommonIgnoredDir(d.Name()) {
 						return filepath.SkipDir
 					}
+					return nil
+				}
+				if !d.Type().IsRegular() {
 					return nil
 				}
 				if include != "" {
@@ -75,16 +98,41 @@ var GrepTool = tools.NewTool(tools.Tool{
 						return nil
 					}
 				}
-				if lines := grepFile(path, re); len(lines) > 0 {
+				remaining := maxGrepMatches - len(matches)
+				remainingBytes := maxGrepOutputBytes - usedBytes
+				if remaining <= 0 || remainingBytes <= 0 {
+					truncated = true
+					return errGrepLimitReached
+				}
+				lines, addedBytes, hitLimit, grepErr := grepFile(ctx.AbortController, path, re, remaining, remainingBytes, len(matches) == 0)
+				if grepErr != nil {
+					return grepErr
+				}
+				if len(lines) > 0 {
 					matches = append(matches, lines...)
+					usedBytes += addedBytes
+				}
+				if hitLimit {
+					truncated = true
+					return errGrepLimitReached
 				}
 				return nil
 			})
+			if walkErr != nil && !errors.Is(walkErr, errGrepLimitReached) {
+				return tools.ToolResult{}, walkErr
+			}
 		} else {
-			matches = grepFile(searchPath, re)
+			var grepErr error
+			matches, _, truncated, grepErr = grepFile(ctx.AbortController, searchPath, re, maxGrepMatches, maxGrepOutputBytes, true)
+			if grepErr != nil {
+				return tools.ToolResult{}, grepErr
+			}
 		}
 
 		result := strings.Join(matches, "\n")
+		if truncated {
+			result += fmt.Sprintf("\n\n[Output truncated: reached %d match or %d KiB output limit; narrow the pattern or path]", maxGrepMatches, maxGrepOutputBytes/1024)
+		}
 		if result == "" {
 			result = "(no matches found)"
 		}
@@ -103,36 +151,81 @@ var GrepTool = tools.NewTool(tools.Tool{
 		// Show just the filename or dir name
 		parts := strings.Split(path, "/")
 		name := parts[len(parts)-1]
-		if len(pattern) > 20 {
-			pattern = pattern[:17] + "..."
+		if r := []rune(pattern); len(r) > 20 {
+			pattern = string(r[:17]) + "..."
 		}
 		return fmt.Sprintf("Searching for '%s' in %s", pattern, name)
 	},
 	GetToolUseSummary: func(input map[string]any) string {
 		pattern := getString(input, "pattern")
-		if len(pattern) > 30 {
-			pattern = pattern[:27] + "..."
+		if r := []rune(pattern); len(r) > 30 {
+			pattern = string(r[:27]) + "..."
 		}
 		return pattern
 	},
 })
 
-func grepFile(path string, re *regexp.Regexp) []string {
+func grepFile(ctx context.Context, path string, re *regexp.Regexp, limit, maxBytes int, allowFirstClip bool) ([]string, int, bool, error) {
+	if ctx != nil && ctx.Err() != nil {
+		return nil, 0, false, ctx.Err()
+	}
 	f, err := os.Open(path)
 	if err != nil {
-		return nil
+		return nil, 0, false, nil
 	}
 	defer func() { _ = f.Close() }()
 
+	// Skip binary files by checking the first 512 bytes for a NUL byte.
+	var probe [512]byte
+	n, readErr := f.Read(probe[:])
+	if readErr != nil && !errors.Is(readErr, io.EOF) {
+		return nil, 0, false, nil
+	}
+	if bytes.IndexByte(probe[:n], 0) >= 0 {
+		return nil, 0, false, nil
+	}
+
+	reader := io.MultiReader(bytes.NewReader(probe[:n]), f)
+	scanner := bufio.NewScanner(reader)
+	scanner.Buffer(make([]byte, 0, 64*1024), maxGrepLineBytes)
+
 	var matches []string
-	scanner := bufio.NewScanner(f)
+	usedBytes := 0
 	lineNum := 1
 	for scanner.Scan() {
+		if ctx != nil && ctx.Err() != nil {
+			return matches, usedBytes, false, ctx.Err()
+		}
 		line := scanner.Text()
 		if re.MatchString(line) {
-			matches = append(matches, fmt.Sprintf("%s:%d:%s", path, lineNum, line))
+			if limit > 0 && len(matches) >= limit {
+				return matches, usedBytes, true, nil
+			}
+			entry := fmt.Sprintf("%s:%d:%s", path, lineNum, line)
+			entryBytes := len(entry) + 1
+			if maxBytes > 0 && usedBytes+entryBytes > maxBytes {
+				if allowFirstClip && len(matches) == 0 && usedBytes == 0 {
+					clipped := clipUTF8Bytes(entry, maxBytes)
+					matches = append(matches, clipped)
+					usedBytes += len(clipped) + 1
+				}
+				return matches, usedBytes, true, nil
+			}
+			matches = append(matches, entry)
+			usedBytes += entryBytes
 		}
 		lineNum++
 	}
-	return matches
+	return matches, usedBytes, false, nil
+}
+
+func clipUTF8Bytes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }

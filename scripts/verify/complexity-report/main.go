@@ -138,8 +138,15 @@ func analyze(root string, top, budget int) (*report, error) {
 			return err
 		}
 		if d.IsDir() {
-			switch d.Name() {
-			case ".git", "build", "node_modules", "vendor":
+			if path == root {
+				return nil
+			}
+			name := d.Name()
+			if strings.HasPrefix(name, ".") {
+				return fs.SkipDir
+			}
+			switch name {
+			case "build", "node_modules", "vendor", "tmp":
 				return fs.SkipDir
 			}
 			return nil

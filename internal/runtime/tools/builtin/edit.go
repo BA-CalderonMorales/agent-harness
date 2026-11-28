@@ -66,6 +66,12 @@ var FileEditTool = tools.NewTool(tools.Tool{
 			replaceAll = v
 		}
 
+		// Preserve existing file mode (e.g., 0755 executable scripts).
+		perm := os.FileMode(0644)
+		if existingInfo, statErr := os.Stat(path); statErr == nil {
+			perm = existingInfo.Mode().Perm()
+		}
+
 		data, err := os.ReadFile(path)
 		if err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to read file: %w", err)
@@ -73,11 +79,17 @@ var FileEditTool = tools.NewTool(tools.Tool{
 
 		content := string(data)
 
-		// Normalize quotes for more forgiving matches
-		normalizedOld := normalizeQuotes(oldStr)
-		normalizedContent := normalizeQuotes(content)
+		// Normalize curly quotes for forgiving matches when exact match misses,
+		// replacing only the matched span(s) in the original content so curly
+		// quotes elsewhere in the file are preserved untouched.
+		exactMatch := strings.Contains(content, oldStr)
+		var fallbackUpdated string
+		fallbackMatched := false
+		if !exactMatch {
+			fallbackUpdated, fallbackMatched = replaceWithNormalizedQuotes(content, oldStr, newStr, replaceAll)
+		}
 
-		if !strings.Contains(normalizedContent, normalizedOld) {
+		if !exactMatch && !fallbackMatched {
 			return tools.ToolResult{}, fmt.Errorf("old_string not found in file. The file may have changed — use the 'read' tool to see current contents, then try again with an exact match")
 		}
 
@@ -87,14 +99,18 @@ var FileEditTool = tools.NewTool(tools.Tool{
 		}
 
 		var updated string
-		if replaceAll {
-			updated = strings.ReplaceAll(content, oldStr, newStr)
+		if exactMatch {
+			if replaceAll {
+				updated = strings.ReplaceAll(content, oldStr, newStr)
+			} else {
+				updated = strings.Replace(content, oldStr, newStr, 1)
+			}
 		} else {
-			updated = strings.Replace(content, oldStr, newStr, 1)
+			updated = fallbackUpdated
 		}
 
 		// Write atomically: unique temp file then rename
-		if err := writeFileAtomic(path, []byte(updated), 0644); err != nil {
+		if err := writeFileAtomic(path, []byte(updated), perm); err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to write file: %w", err)
 		}
 
@@ -122,13 +138,77 @@ var FileEditTool = tools.NewTool(tools.Tool{
 	},
 })
 
+var quoteNormalizer = strings.NewReplacer(
+	"\u2018", "'",
+	"\u2019", "'",
+	"\u201c", "\"",
+	"\u201d", "\"",
+)
+
 // normalizeQuotes converts curly quotes to straight quotes for forgiving matches.
 func normalizeQuotes(s string) string {
-	replacer := strings.NewReplacer(
-		"'", "'",
-		"'", "'",
-		"\"", "\"",
-		"\"", "\"",
-	)
-	return replacer.Replace(s)
+	return quoteNormalizer.Replace(s)
+}
+
+func normalizeQuoteRune(r rune) rune {
+	switch r {
+	case '\u2018', '\u2019':
+		return '\''
+	case '\u201c', '\u201d':
+		return '"'
+	default:
+		return r
+	}
+}
+
+// replaceWithNormalizedQuotes finds matches of oldStr in content after
+// normalizing curly quotes, then replaces only the corresponding byte spans
+// in the original content so all bytes outside the match(es) stay untouched.
+func replaceWithNormalizedQuotes(content, oldStr, newStr string, replaceAll bool) (string, bool) {
+	normOld := normalizeQuotes(oldStr)
+	if normOld == "" {
+		return content, false
+	}
+	var norm strings.Builder
+	norm.Grow(len(content))
+	normToOrig := make([]int, 0, len(content)+1)
+	for origIdx, r := range content {
+		nr := normalizeQuoteRune(r)
+		start := norm.Len()
+		norm.WriteRune(nr)
+		for i := start; i < norm.Len(); i++ {
+			normToOrig = append(normToOrig, origIdx)
+		}
+	}
+	normToOrig = append(normToOrig, len(content))
+
+	normContent := norm.String()
+	var out strings.Builder
+	out.Grow(len(content))
+	searchFrom := 0
+	lastOrig := 0
+	matched := false
+	for {
+		rel := strings.Index(normContent[searchFrom:], normOld)
+		if rel < 0 {
+			break
+		}
+		matched = true
+		matchStartNorm := searchFrom + rel
+		matchEndNorm := matchStartNorm + len(normOld)
+		origStart := normToOrig[matchStartNorm]
+		origEnd := normToOrig[matchEndNorm]
+		out.WriteString(content[lastOrig:origStart])
+		out.WriteString(newStr)
+		lastOrig = origEnd
+		searchFrom = matchEndNorm
+		if !replaceAll {
+			break
+		}
+	}
+	if !matched {
+		return content, false
+	}
+	out.WriteString(content[lastOrig:])
+	return out.String(), true
 }

@@ -94,9 +94,7 @@ func NewSessionManagerWithDir(dir string) (*SessionManager, error) {
 // CreateSession creates a new session
 func (sm *SessionManager) CreateSession(model string) *Session {
 	sm.current = NewSession(model)
-	sm.appendOffset = 0
-	sm.journalID = ""
-	sm.recordOnDisk = record.Record{}
+	sm.appendOffset, sm.journalID, sm.recordOnDisk = 0, "", record.Record{}
 	return sm.current
 }
 
@@ -105,12 +103,19 @@ func (sm *SessionManager) GetCurrent() *Session {
 	return sm.current
 }
 
-// SetCurrent sets the current session
+// SetCurrent sets the current session, keeping journal state when re-setting
+// the already-journalled session so saves append deltas instead of re-reading.
 func (sm *SessionManager) SetCurrent(session *Session) {
+	if session != nil && sm.current == session && sm.journalID != "" && sm.journalID == session.ID {
+		return
+	}
 	sm.current = session
-	sm.appendOffset = 0
-	sm.journalID = ""
-	sm.recordOnDisk = record.Record{}
+	sm.appendOffset, sm.journalID, sm.recordOnDisk = 0, "", record.Record{}
+}
+
+func (sm *SessionManager) adoptLoadedSession(session *Session, diskRecord record.Record) {
+	sm.current = session
+	sm.journalID, sm.appendOffset, sm.recordOnDisk = session.ID, len(session.Messages), diskRecord
 }
 
 // SaveCurrent persists the current session by appending whatever is new
@@ -126,12 +131,12 @@ func (sm *SessionManager) SaveCurrent() (string, error) {
 		return "", err
 	}
 
-	// A file that does not exist yet starts with its header + all
-	// in-memory messages.
+	// A file that does not exist yet starts with its header + all in-memory messages.
 	if _, err := os.Stat(path); os.IsNotExist(err) {
 		if err := sm.createSessionFile(path); err != nil {
 			return "", err
 		}
+		sm.needsRewrite = false
 		sm.appendOffset = len(sm.current.Messages)
 		sm.journalID = sm.current.ID
 		return path, nil
@@ -169,12 +174,11 @@ func (sm *SessionManager) LoadSession(id string) (*Session, error) {
 	if err != nil {
 		return nil, err
 	}
-	session, err := loadSessionFile(path)
+	session, diskRecord, err := loadSessionFileWithDiskRecord(path)
 	if err != nil {
 		return nil, err
 	}
-
-	sm.current = session
+	sm.adoptLoadedSession(session, diskRecord)
 	return session, nil
 }
 
@@ -313,6 +317,7 @@ func (sm *SessionManager) DeleteSession(id string) error {
 	if err := os.Remove(path); err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
+	delete(sm.sessionMetas, path)
 	return nil
 }
 
@@ -352,12 +357,11 @@ func (sm *SessionManager) ResumeLatestSessionWithError() (*Session, error) {
 			latest, latestModTime = path, modTime
 		}
 	}
-	session, err := loadSessionFile(latest)
+	session, diskRecord, err := loadSessionFileWithDiskRecord(latest)
 	if err != nil {
 		return nil, fmt.Errorf("latest saved session could not be resumed: %w", err)
 	}
-
-	sm.current = session
+	sm.adoptLoadedSession(session, diskRecord)
 	return session, nil
 }
 
@@ -366,19 +370,17 @@ func (sm *SessionManager) FormatSessionReport() string {
 	if sm.current == nil {
 		return "No active session"
 	}
-
 	meta := sm.current.GetMetadata()
-
-	result := "Session\n"
-	result += fmt.Sprintf("  ID               %s\n", meta.ID[:8])
-	result += fmt.Sprintf("  Created          %s\n", meta.CreatedAt.Format("2006-01-02 15:04"))
-	result += fmt.Sprintf("  Updated          %s\n", meta.UpdatedAt.Format("2006-01-02 15:04"))
-	result += fmt.Sprintf("  Messages         %d\n", meta.MessageCount)
-	result += fmt.Sprintf("  Turns            %d\n", meta.Turns)
-	result += fmt.Sprintf("  Est. tokens      %d\n", meta.EstimatedTokens)
-	result += fmt.Sprintf("  Model            %s\n", sm.current.Model)
-
-	return result
+	return fmt.Sprintf(
+		"Session\n  ID               %s\n  Created          %s\n  Updated          %s\n  Messages         %d\n  Turns            %d\n  Est. tokens      %d\n  Model            %s\n",
+		exportIDPrefix(meta.ID),
+		meta.CreatedAt.Format("2006-01-02 15:04"),
+		meta.UpdatedAt.Format("2006-01-02 15:04"),
+		meta.MessageCount,
+		meta.Turns,
+		meta.EstimatedTokens,
+		sm.current.Model,
+	)
 }
 
 // FormatCompactReport returns a formatted compaction report

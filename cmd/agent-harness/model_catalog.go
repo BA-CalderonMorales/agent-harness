@@ -51,6 +51,43 @@ func (app *App) discoveryClient() (*llm.HTTPClient, bool) {
 	return &discovery, true
 }
 
+// modelContextLength returns the context window advertised for model by the
+// live provider or static catalog, or 0 when neither specifies a window.
+func (app *App) modelContextLength(model string) int {
+	if model == "" {
+		return 0
+	}
+	if discovery, ok := app.discoveryClient(); ok {
+		if infos, err := discovery.ListModelsDetailed(); err == nil {
+			for _, info := range infos {
+				if info.ID == model && info.ContextLength > 0 {
+					return info.ContextLength
+				}
+			}
+		}
+	}
+	provider := ""
+	if app.config != nil {
+		provider = app.config.Provider
+	}
+	for _, item := range getModelsForProvider(provider, model) {
+		if item.ID == model && item.ContextLen > 0 {
+			return item.ContextLen
+		}
+	}
+	for _, p := range []string{"openrouter", "openai", "anthropic", "fireworks", "nvidia", "omniroute", "ollama", "flm", "lemonade", "local"} {
+		if p == provider {
+			continue
+		}
+		for _, item := range getModelsForProvider(p, model) {
+			if item.ID == model && item.ContextLen > 0 {
+				return item.ContextLen
+			}
+		}
+	}
+	return 0
+}
+
 // applyModelContext sets config.ContextLength from the provider's own
 // advertised context_length for the model, falling back to the static
 // catalog when the live list is unreachable or silent. The catalog is
@@ -93,9 +130,7 @@ func (app *App) applyDiscoveredModelContext(tuiApp *tui.App, provider, model str
 		return
 	}
 	app.config.ContextLength = contextLength
-	if app.loop != nil {
-		app.loop.Config.BlockingTokenLimit = contextLength
-	}
+	app.syncLoopConfig(app.loop)
 	diag.Infof("model.context", "%s context window: %d tokens (provider-advertised)", model, contextLength)
 	app.refreshTelemetry(tuiApp)
 	app.commitConfigChange()

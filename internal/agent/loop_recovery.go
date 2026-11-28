@@ -3,8 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"github.com/BA-CalderonMorales/agent-harness/internal/core/config"
-	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/llm"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
 
@@ -71,30 +69,7 @@ func (l *Loop) attemptRecovery(ctx context.Context, params QueryParams, state *l
 
 // retryQuery re-executes the LLM query after recovery adjustments.
 func (l *Loop) retryQuery(ctx context.Context, params QueryParams, state *loopState, out chan<- types.StreamEvent) (bool, *types.Message, []types.ToolUseBlock, error) {
-	// Rebuild the request with potentially updated parameters
-	sysPrompt := params.SystemPrompt
-	for k, v := range params.SystemContext {
-		sysPrompt += fmt.Sprintf("\n\n<%s>\n%s\n</%s>", k, v, k)
-	}
-
-	model := params.ToolUseContext.Options.MainLoopModel
-	if model == "" {
-		model = config.DefaultModel
-	}
-
-	req := llm.Request{
-		Messages:       state.messages,
-		SystemPrompt:   sysPrompt,
-		Tools:          params.ToolUseContext.Options.Tools,
-		Model:          model,
-		MaxTokens:      8192,
-		Temperature:    params.Temperature,
-		TemperatureSet: params.TemperatureSet,
-	}
-
-	if state.maxOutputTokensOverride > 0 {
-		req.MaxTokens = state.maxOutputTokensOverride
-	}
+	req := buildLLMRequest(params, state)
 
 	llmEvents, err := l.Client.Stream(ctx, req)
 	if err != nil {

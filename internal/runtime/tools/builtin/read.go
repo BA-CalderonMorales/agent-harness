@@ -2,7 +2,9 @@ package builtin
 
 import (
 	"fmt"
+	"io"
 	"os"
+	stdpath "path"
 	"path/filepath"
 	"strings"
 
@@ -10,6 +12,10 @@ import (
 	"github.com/BA-CalderonMorales/agent-harness/internal/runtime/tools/fs"
 	"github.com/BA-CalderonMorales/agent-harness/pkg/types"
 )
+
+// defaultMaxReadFileBytes caps raw file reads so an accidental read of a
+// multi-gigabyte binary or log file cannot OOM the process.
+const defaultMaxReadFileBytes int64 = 10 << 20
 
 // blockedDevicePaths prevents reading blocking or infinite devices.
 var blockedDevicePaths = map[string]bool{
@@ -45,15 +51,16 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if path == "" {
 			return tools.ValidationResult{Valid: false, Message: "file_path is required"}
 		}
-		if blockedDevicePaths[path] {
-			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
-		}
-		// UNC path security: reject SMB/NTLM credential leak vectors
+		// UNC path security: reject SMB/NTLM credential leak vectors before Clean.
 		if strings.HasPrefix(path, `\\`) || strings.HasPrefix(path, "//") {
 			return tools.ValidationResult{Valid: false, Message: "UNC paths are not supported for security reasons"}
 		}
+		cleanPath := stdpath.Clean(filepath.ToSlash(path))
+		if blockedDevicePaths[cleanPath] {
+			return tools.ValidationResult{Valid: false, Message: "Reading this device path is not allowed"}
+		}
 		// Block /proc/*/fd paths
-		if strings.HasPrefix(path, "/proc/") && strings.Contains(path, "/fd/") {
+		if strings.HasPrefix(cleanPath, "/proc/") && strings.Contains(cleanPath, "/fd/") {
 			return tools.ValidationResult{Valid: false, Message: "Reading process file descriptors is not allowed"}
 		}
 		return tools.ValidationResult{Valid: true}
@@ -73,21 +80,36 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		if err != nil {
 			return tools.ToolResult{}, fmt.Errorf("failed to stat file: %w", err)
 		}
-
-		// Check cache first
-		cacheKey := fs.MakeKey(path, offset, limit, info)
-		if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
-			// Record this read for stale-write protection
-			fs.DefaultStaleTracker.RecordRead(path, []byte(cached), info)
-			return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
-				// Mark as cached read in context
-				return ctx
-			}}, nil
+		if info.IsDir() {
+			return tools.ToolResult{}, fmt.Errorf("%s is a directory; use ls or ls_recursive to inspect directories", path)
+		}
+		if !info.Mode().IsRegular() {
+			return tools.ToolResult{}, fmt.Errorf("cannot read non-regular file %s", path)
+		}
+		maxBytes := ctx.FileReadingLimits.MaxSizeBytes
+		if maxBytes <= 0 {
+			maxBytes = defaultMaxReadFileBytes
+		}
+		if info.Size() > maxBytes {
+			return tools.ToolResult{}, fmt.Errorf("file %s is too large (%d bytes, limit %d bytes)", path, info.Size(), maxBytes)
 		}
 
-		data, err := os.ReadFile(path)
+		// Check cache first, unless this path's stale-write baseline was evicted
+		// and a fresh disk read is needed to restore it. On cache hits, do not
+		// overwrite DefaultStaleTracker with sliced/truncated cached text.
+		cacheKey := fs.MakeKey(path, offset, limit, info)
+		if !fs.DefaultStaleTracker.NeedsFreshRead(path) {
+			if cached, ok := fs.DefaultCache.Get(cacheKey); ok {
+				return tools.ToolResult{Data: cached, ContextModifier: func(ctx tools.Context) tools.Context {
+					// Mark as cached read in context
+					return ctx
+				}}, nil
+			}
+		}
+
+		data, readInfo, err := readFileBounded(path, maxBytes)
 		if err != nil {
-			return tools.ToolResult{}, fmt.Errorf("failed to read file: %w", err)
+			return tools.ToolResult{}, err
 		}
 
 		content := string(data)
@@ -110,8 +132,8 @@ var FileReadTool = tools.NewTool(tools.Tool{
 			}
 		}
 
-		// Record read for stale-write protection
-		fs.DefaultStaleTracker.RecordRead(path, data, info)
+		// Record read for stale-write protection using the descriptor we read.
+		fs.DefaultStaleTracker.RecordRead(path, data, readInfo)
 
 		// Truncate large outputs to prevent context overflow
 		content = truncateReadOutput(content)
@@ -150,6 +172,40 @@ var FileReadTool = tools.NewTool(tools.Tool{
 		return parts[len(parts)-1]
 	},
 })
+
+// readFileBounded opens path and reads at most maxBytes bytes, rejecting files
+// that grow past maxBytes after an earlier os.Stat before converting, hashing,
+// or caching them. Files of exactly maxBytes bytes are accepted.
+func readFileBounded(path string, maxBytes int64) ([]byte, os.FileInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to stat file: %w", err)
+	}
+	if info.IsDir() {
+		return nil, nil, fmt.Errorf("%s is a directory; use ls or ls_recursive to inspect directories", path)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, nil, fmt.Errorf("cannot read non-regular file %s", path)
+	}
+	if info.Size() > maxBytes {
+		return nil, nil, fmt.Errorf("file %s is too large (%d bytes, limit %d bytes)", path, info.Size(), maxBytes)
+	}
+
+	data, err := io.ReadAll(io.LimitReader(f, maxBytes+1))
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read file: %w", err)
+	}
+	if int64(len(data)) > maxBytes {
+		return nil, nil, fmt.Errorf("file %s is too large (>%d bytes, limit %d bytes)", path, maxBytes, maxBytes)
+	}
+	return data, info, nil
+}
 
 func resolveScreenshotPath(path string) string {
 	if _, err := os.Stat(path); err == nil {

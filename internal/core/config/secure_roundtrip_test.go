@@ -47,3 +47,67 @@ func TestLoadSecureThenSaveSecureRoundTrip(t *testing.T) {
 		t.Fatalf("fresh round-trip mismatch: key=%q provider=%q", cfg2.APIKey, cfg2.Provider)
 	}
 }
+
+func TestUpdateDefaultModelPersistsAcrossEnvelopeReload(t *testing.T) {
+	dir := t.TempDir()
+	testenv.SetHome(t, dir)
+
+	cm := NewCredentialManager()
+	if err := cm.SaveSecure(&SecureConfig{
+		Provider: "openrouter",
+		APIKey:   "sk-test-123",
+		Model:    "old-model",
+	}); err != nil {
+		t.Fatalf("SaveSecure: %v", err)
+	}
+
+	if err := cm.UpdateDefaultModel("new-model"); err != nil {
+		t.Fatalf("UpdateDefaultModel: %v", err)
+	}
+
+	reloaded, err := NewCredentialManager().LoadSecure()
+	if err != nil {
+		t.Fatalf("LoadSecure after UpdateDefaultModel: %v", err)
+	}
+	if reloaded.Model != "new-model" {
+		t.Fatalf("Model = %q, want new-model", reloaded.Model)
+	}
+	if reloaded.ProviderModels["openrouter"] != "new-model" {
+		t.Fatalf("ProviderModels[openrouter] = %q, want new-model", reloaded.ProviderModels["openrouter"])
+	}
+	if reloaded.APIKey != "sk-test-123" {
+		t.Fatalf("APIKey = %q, want sk-test-123 preserved", reloaded.APIKey)
+	}
+}
+
+func TestUpdateDefaultModelForProviderDoesNotClobberStoreProvider(t *testing.T) {
+	dir := t.TempDir()
+	testenv.SetHome(t, dir)
+
+	cm := NewCredentialManager()
+	if err := cm.SaveSecure(&SecureConfig{
+		Provider: "openrouter",
+		APIKey:   "sk-or-123",
+		Model:    "openrouter-model",
+	}); err != nil {
+		t.Fatalf("SaveSecure: %v", err)
+	}
+
+	if err := cm.UpdateDefaultModelForProvider("nvidia", "nvidia-model"); err != nil {
+		t.Fatalf("UpdateDefaultModelForProvider: %v", err)
+	}
+
+	reloaded, err := NewCredentialManager().LoadSecure()
+	if err != nil {
+		t.Fatalf("LoadSecure: %v", err)
+	}
+	if reloaded.Provider != "openrouter" || reloaded.Model != "openrouter-model" {
+		t.Fatalf("store header changed: provider=%q model=%q", reloaded.Provider, reloaded.Model)
+	}
+	if reloaded.ProviderModels["openrouter"] != "openrouter-model" {
+		t.Fatalf("ProviderModels[openrouter] = %q, want openrouter-model preserved", reloaded.ProviderModels["openrouter"])
+	}
+	if reloaded.ProviderModels["nvidia"] != "nvidia-model" {
+		t.Fatalf("ProviderModels[nvidia] = %q, want nvidia-model", reloaded.ProviderModels["nvidia"])
+	}
+}

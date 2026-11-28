@@ -63,8 +63,8 @@ func (app *App) storedKeyForProvider(provider string, credManager *config.Creden
 	if provider == "" || config.IsLocalProvider(provider) {
 		return "", false
 	}
-	if envPinnedKey(provider) {
-		return app.config.APIKey, app.config.APIKey != ""
+	if key, ok := envKeyForProvider(provider); ok {
+		return key, true
 	}
 	if credManager.HasSecureCredentials() {
 		if secureCfg, err := credManager.LoadSecure(); err == nil {
@@ -84,22 +84,32 @@ func (app *App) storedKeyForProvider(provider string, credManager *config.Creden
 	return "", false
 }
 
-// envPinnedKey reports whether an environment variable explicitly pins
-// the key for this session. Generic vars apply to any provider;
-// provider-specific vars only to their own.
-func envPinnedKey(provider string) bool {
-	if os.Getenv("AH_API_KEY") != "" || os.Getenv("AGENT_HARNESS_API_KEY") != "" {
-		return true
+// envKeyForProvider resolves the environment-pinned API key for provider.
+// Generic vars apply to any provider; provider-specific vars resolve directly
+// from the environment so switching providers via /login works even when the
+// app booted on a different provider.
+func envKeyForProvider(provider string) (string, bool) {
+	if v := os.Getenv("AH_API_KEY"); v != "" {
+		return v, true
+	}
+	if v := os.Getenv("AGENT_HARNESS_API_KEY"); v != "" {
+		return v, true
 	}
 	switch provider {
 	case "openrouter":
-		return os.Getenv("OPENROUTER_API_KEY") != ""
+		v := os.Getenv("OPENROUTER_API_KEY")
+		return v, v != ""
 	case "nvidia":
-		return os.Getenv("NVIDIA_API_KEY") != ""
+		v := os.Getenv("NVIDIA_API_KEY")
+		return v, v != ""
 	case "omniroute":
-		return os.Getenv("OMNITROUTE_API_KEY") != ""
+		if v := os.Getenv("OMNIROUTE_API_KEY"); v != "" {
+			return v, true
+		}
+		v := os.Getenv("OMNITROUTE_API_KEY")
+		return v, v != ""
 	}
-	return false
+	return "", false
 }
 
 // applySecureConfig applies secure configuration values.

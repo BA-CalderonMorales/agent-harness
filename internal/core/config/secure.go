@@ -15,7 +15,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 )
 
 const (
@@ -313,134 +312,38 @@ func (cm *CredentialManager) SaveSecure(cfg *SecureConfig) error {
 	return nil
 }
 
-// MigrateFromLegacy migrates plaintext credentials to secure storage
-func (cm *CredentialManager) MigrateFromLegacy() (*SecureConfig, error) {
-	legacyPath := LegacyConfigPath()
-	data, err := os.ReadFile(legacyPath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read legacy config: %w", err)
-	}
-
-	var fileCfg FileConfig
-	if err := json.Unmarshal(data, &fileCfg); err != nil {
-		return nil, fmt.Errorf("failed to parse legacy config: %w", err)
-	}
-
-	if fileCfg.APIKey == "" {
-		return nil, fmt.Errorf("no API key found in legacy config")
-	}
-
-	// Migrate to secure storage
-	secureCfg := &SecureConfig{
-		Provider: fileCfg.Provider,
-		APIKey:   fileCfg.APIKey,
-		Model:    fileCfg.Model,
-	}
-
-	fmt.Println("Migrating credentials to secure storage...")
-	if err := cm.SaveSecure(secureCfg); err != nil {
-		return nil, fmt.Errorf("failed to migrate credentials: %w", err)
-	}
-
-	// Remove legacy file
-	if err := os.Remove(legacyPath); err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: failed to remove legacy config: %v\n", err)
-	}
-
-	fmt.Println("Credentials migrated successfully. Legacy config removed.")
-	return secureCfg, nil
+// UpdateDefaultModel updates the stored active provider's default model in
+// secure storage, keeping both the encrypted per-provider envelope and the
+// top-level header field in sync so LoadSecure returns the updated model on
+// the next boot.
+func (cm *CredentialManager) UpdateDefaultModel(model string) error {
+	return cm.UpdateDefaultModelForProvider("", model)
 }
-func (cm *CredentialManager) ClearSecureConfig() error {
-	if err := os.Remove(cm.configPath); err != nil && !os.IsNotExist(err) {
+
+// UpdateDefaultModelForProvider records model under provider in the encrypted
+// envelope. When provider matches the store's active provider (or is empty),
+// the top-level header Model is updated alongside it; when layered settings
+// selected a different provider, only that provider's entry is updated so the
+// store provider's saved model and header remain consistent.
+func (cm *CredentialManager) UpdateDefaultModelForProvider(provider, model string) error {
+	cfg, err := cm.LoadSecure()
+	if err != nil {
 		return err
 	}
-	return nil
-}
-
-// UpdateDefaultModel updates just the default model in secure storage
-// This is called when the user changes the model at runtime
-func (cm *CredentialManager) UpdateDefaultModel(model string) error {
-	// Load existing credentials
-	data, err := readPrivateFile(cm.configPath)
-	if err != nil {
-		return fmt.Errorf("failed to read secure config: %w", err)
+	if cfg.ProviderModels == nil {
+		cfg.ProviderModels = map[string]string{}
 	}
-
-	var store SecureStore
-	if err := json.Unmarshal(data, &store); err != nil {
-		return fmt.Errorf("failed to parse secure config: %w", err)
+	targetProvider := provider
+	if targetProvider == "" {
+		targetProvider = cfg.Provider
 	}
-
-	if store.Version != secureStoreVersion {
-		return fmt.Errorf("unsupported secure store version: %d", store.Version)
+	if targetProvider == "" || targetProvider == cfg.Provider {
+		cfg.Model = model
+		if targetProvider != "" && model != "" {
+			cfg.ProviderModels[targetProvider] = model
+		}
+	} else if model != "" {
+		cfg.ProviderModels[targetProvider] = model
 	}
-
-	// Update the model
-	store.Model = model
-
-	// Marshal and save
-	newData, err := json.MarshalIndent(store, "", "  ")
-	if err != nil {
-		return fmt.Errorf("failed to marshal store: %w", err)
-	}
-
-	if err := writeFileSecure(cm.configPath, newData, secureFilePerms); err != nil {
-		return fmt.Errorf("failed to write secure config: %w", err)
-	}
-
-	return nil
-}
-
-// GetEncryptionStatus returns the current encryption status
-func (cm *CredentialManager) GetEncryptionStatus() EncryptionStatus {
-	status := EncryptionStatus{
-		Method: EncryptionNone,
-	}
-
-	if cm.HasSecureCredentials() {
-		status.Method = EncryptionAES256GCM
-		status.HasCredentials = true
-	} else if cm.HasLegacyCredentials() {
-		status.Method = EncryptionPlaintext
-		status.HasCredentials = true
-	}
-
-	// Check for platform keychain (macOS)
-	if runtime.GOOS == "darwin" {
-		status.KeychainAvailable = isKeychainAvailable()
-	}
-
-	return status
-}
-
-// EncryptionStatus represents the current encryption state
-type EncryptionStatus struct {
-	Method            EncryptionMethod
-	HasCredentials    bool
-	KeychainAvailable bool
-}
-
-// EncryptionMethod represents the encryption method in use
-type EncryptionMethod int
-
-const (
-	EncryptionNone EncryptionMethod = iota
-	EncryptionPlaintext
-	EncryptionKeychain
-	EncryptionAES256GCM
-)
-
-func (e EncryptionMethod) String() string {
-	switch e {
-	case EncryptionNone:
-		return "No credentials stored"
-	case EncryptionPlaintext:
-		return "Plaintext (insecure - migration recommended)"
-	case EncryptionKeychain:
-		return "Platform Keychain"
-	case EncryptionAES256GCM:
-		return "AES-256-GCM"
-	default:
-		return "Unknown"
-	}
+	return cm.SaveSecure(cfg)
 }

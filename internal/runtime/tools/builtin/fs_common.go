@@ -1,11 +1,16 @@
 package builtin
 
-import "strings"
+import (
+	"path/filepath"
+	"strings"
+)
 
 // commonIgnoredDirs are directories that should be skipped during filesystem
 // walks to keep tool execution fast on large repositories.
 var commonIgnoredDirs = []string{
 	".git",
+	".claude",
+	".worktrees",
 	"node_modules",
 	".venv",
 	"venv",
@@ -13,6 +18,8 @@ var commonIgnoredDirs = []string{
 	"vendor",
 	"__pycache__",
 	".cache",
+	".next",
+	".nuxt",
 	"dist",
 	"build",
 	".idea",
@@ -23,7 +30,14 @@ var commonIgnoredDirs = []string{
 // isCommonIgnoredDir reports whether a directory name should be skipped
 // during recursive filesystem traversal.
 func isCommonIgnoredDir(name string) bool {
+	lower := strings.ToLower(name)
 	for _, d := range commonIgnoredDirs {
+		if strings.ContainsAny(d, "*?[") {
+			if matched, err := filepath.Match(strings.ToLower(d), lower); err == nil && matched {
+				return true
+			}
+			continue
+		}
 		if strings.EqualFold(name, d) {
 			return true
 		}

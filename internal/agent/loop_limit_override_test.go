@@ -141,7 +141,7 @@ func echoToolWithCounter(executed *atomic.Int32) tools.Tool {
 
 func containsText(m types.Message, substr string) bool {
 	for _, b := range m.Content {
-		if tb, ok := b.(types.TextBlock); ok && contains(tb.Text, substr) {
+		if tb, ok := b.(types.TextBlock); ok && strings.Contains(tb.Text, substr) {
 			return true
 		}
 	}

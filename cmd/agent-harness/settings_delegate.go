@@ -41,9 +41,7 @@ func (d *tuiSettingsDelegate) OnSettingChange(key, value string) {
 	case "context_length":
 		if n, err := strconv.Atoi(value); err == nil && n > 0 {
 			d.app.config.ContextLength = n
-			if d.app.loop != nil {
-				d.app.loop.Config.BlockingTokenLimit = n
-			}
+			d.app.syncLoopConfig(d.app.loop)
 			d.app.commitConfigChange()
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Context length updated to: %d", n), Type: "success"})
 		}
@@ -159,9 +157,7 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	// without this lookup a 1M-window hosted model kept the previous
 	// context budget, and both compaction and the context bar lied.
 	d.app.applyModelContext(value)
-	if d.app.loop != nil && d.app.config.ContextLength > 0 {
-		d.app.loop.Config.BlockingTokenLimit = d.app.config.ContextLength
-	}
+	d.app.syncLoopConfig(d.app.loop)
 	d.app.costTracker.SetModel(value)
 	d.tuiApp.Send(tui.ModelChangedMsg{Model: value})
 	d.app.refreshTelemetry(d.tuiApp)
@@ -171,7 +167,7 @@ func (d *tuiSettingsDelegate) handleModelChange(value string) {
 	// persists via ~/.agent-harness/settings.json so this is optional.
 	credManager := config.NewCredentialManager()
 	if credManager.HasSecureCredentials() {
-		if err := credManager.UpdateDefaultModel(value); err != nil {
+		if err := credManager.UpdateDefaultModelForProvider(d.app.config.Provider, value); err != nil {
 			d.tuiApp.Send(tui.StatusMsg{Text: sprintf("Warning: failed to save default model: %v", err), Type: "warning"})
 			return
 		}
